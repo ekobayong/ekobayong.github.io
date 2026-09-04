@@ -120,23 +120,23 @@ const html = `<!DOCTYPE html>
   .count { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim);
            white-space:nowrap; font-variant-numeric:tabular-nums; }
   .count b { color:var(--acc); font-weight:600; }
-  .list { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; margin-top:8px; }
-  @media (max-width:640px){ .list{ grid-template-columns:1fr; } }
+  .list { display:flex; flex-direction:column; gap:16px; margin-top:8px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:14px;
           overflow:hidden; box-shadow:var(--shadow);
           transition:border-color .2s, box-shadow .2s, transform .15s, background .2s;
           display:flex; flex-direction:column; }
   .card:hover { border-color:#c9c0ae; transform:translateY(-1px);
     box-shadow:0 2px 6px rgba(30,20,50,.06), 0 16px 34px -16px rgba(30,20,50,.20); }
-  .thumb { display:block; position:relative; background:#101016; height:212px; overflow:hidden; }
-  .thumb iframe { position:absolute; top:0; left:0; width:100%; height:100%;
-                  border:0; transform-origin:0 0; transform:scale(var(--zf,0.44));
-                  width:calc(100% / var(--zf,0.44)); height:calc(212px / var(--zf,0.44));
+  .thumb { display:block; position:relative; background:#101016; height:clamp(220px,44vw,460px);
+           overflow:hidden; cursor:pointer; }
+  .thumb .preview-iframe { position:absolute; top:0; left:0; width:100%; height:100%;
+                  border:0; transform-origin:0 0; transform:scale(var(--zf,0.5));
+                  width:calc(100% / var(--zf,0.5)); height:calc(clamp(220px,44vw,460px) / var(--zf,0.5));
                   pointer-events:none; }
   .thumb .open-btn { position:absolute; inset:0; display:grid; place-items:center; z-index:2;
                      opacity:0; transition:opacity .25s; text-decoration:none; }
   .thumb:hover .open-btn { opacity:1; }
-  .thumb .open-btn span { background:rgba(20,16,32,.85); color:#fff; font-size:12px; letter-spacing:.14em;
+  .thumb .open-btn span { background:rgba(20,16,32,.88); color:#fff; font-size:12px; letter-spacing:.14em;
     text-transform:uppercase; font-weight:600; padding:10px 18px; border-radius:999px;
     box-shadow:0 10px 26px rgba(0,0,0,.4); }
   .card-top { display:flex; gap:14px; align-items:flex-start; padding:16px 16px 12px; flex:1; }
@@ -160,11 +160,7 @@ const html = `<!DOCTYPE html>
   .prompt-label { font-size:10px; letter-spacing:.22em; text-transform:uppercase;
                   color:var(--acc3); font-weight:600; }
   .prompt-text { font-size:13px; color:#47402f; line-height:1.62; white-space:pre-wrap;
-                 margin-top:8px; max-height:210px; overflow:hidden; position:relative; }
-  .prompt-text.cut::after { content:""; position:absolute; left:0; right:0; bottom:0; height:46px;
-    background:linear-gradient(180deg, transparent, #f4f1ea); pointer-events:none; }
-  .card.open .prompt-text { max-height:none; }
-  .card.open .prompt-text.cut::after { display:none; }
+                 margin-top:8px; }
   .file-name { margin-top:10px; font-family:ui-monospace,Menlo,monospace; font-size:11px; color:var(--dim); }
   .empty { text-align:center; padding:60px 20px; color:var(--muted);
            border:1px dashed var(--line-strong); border-radius:14px;
@@ -223,13 +219,14 @@ const html = `<!DOCTYPE html>
     card.setAttribute("data-title", it.title.toLowerCase());
     card.setAttribute("data-file", it.file.toLowerCase());
 
-    var zf = window.innerWidth < 560 ? 0.36 : 0.5;
+    var zf = window.innerWidth < 640 ? 0.4 : 0.5;
     var thumb = document.createElement("div");
     thumb.className = "thumb";
     thumb.style.setProperty("--zf", zf);
     var frame = document.createElement("iframe");
+    frame.className = "preview-iframe";
     frame.setAttribute("loading", "lazy");
-    frame.setAttribute("title", it.file);
+    frame.setAttribute("title", "Preview of " + it.file);
     frame.setAttribute("src", it.file);
     var ob = document.createElement("a");
     ob.className = "open-btn";
@@ -246,13 +243,14 @@ const html = `<!DOCTYPE html>
 
     var actions = document.createElement("div");
     actions.className = "actions";
-    actions.innerHTML = '<a class="btn btn-open" href="' + it.file + '" target="_blank" rel="noopener">Open</a>' +
-      '<button class="btn btn-prompt" type="button" aria-expanded="false">Prompt</button>';
+    actions.innerHTML = '<a class="btn btn-open" href="' + it.file + '" target="_blank" rel="noopener">Open demo</a>' +
+      '<button class="btn btn-prompt" type="button" aria-expanded="false" aria-controls="prompt-' + it.num + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Prompt</span></button>';
 
     var panel = document.createElement("div");
     panel.className = "prompt-panel";
+    panel.id = "prompt-" + it.num;
     var pre = document.createElement("div");
-    pre.className = "prompt-text cut";
+    pre.className = "prompt-text";
     pre.textContent = it.prompt;
     panel.innerHTML = '<div class="prompt-label">Original prompt</div>';
     panel.appendChild(pre);
@@ -260,18 +258,27 @@ const html = `<!DOCTYPE html>
 
     card.appendChild(thumb); card.appendChild(top); card.appendChild(actions); card.appendChild(panel);
     frag.appendChild(card);
+
+    // direct handler on the button itself (and a fallback via delegation below)
+    actions.querySelector(".btn-prompt").addEventListener("click", function (ev) {
+      togglePrompt(ev, this);
+    });
   });
   list.appendChild(frag);
 
+  function togglePrompt(ev, btn) {
+    ev.preventDefault();
+    var card = btn.closest(".card");
+    var open = card.classList.toggle("open");
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    var span = btn.querySelector("span");
+    if (span) span.textContent = open ? "Hide prompt" : "Prompt";
+  }
+  // delegation fallback (covers clicks that hit the svg icon)
   list.addEventListener("click", function (ev) {
     var btn = ev.target.closest(".btn-prompt");
     if (!btn) return;
-    var open = btn.closest(".card").classList.toggle("open");
-    btn.setAttribute("aria-expanded", open ? "true" : "false");
-    if (open) {
-      var t = btn.closest(".card").querySelector(".prompt-text");
-      if (t) t.classList.remove("cut");
-    }
+    togglePrompt(ev, btn);
   });
 
   function apply() {
