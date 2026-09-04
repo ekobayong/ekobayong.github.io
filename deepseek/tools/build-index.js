@@ -45,7 +45,13 @@ if (items.length !== 100) {
   process.exit(1);
 }
 for (const it of items) {
-  it.bodyText = it.body.join("\n").replace(/^\n/, "").replace(/\s+$/, "") + "\n";
+  const raw = it.body.join("\n");
+  // drop the leading separator newline and the trailing "---" section marker,
+  // then normalize whitespace: the .txt ends with one newline, the embedded
+  // prompt has none (mirroring the muse-spark reference index)
+  const cleaned = raw.replace(/^\n+/, "").replace(/\n+---\n?$/, "").replace(/\s+$/, "");
+  it.promptText = cleaned;
+  it.bodyText = cleaned + "\n";
   if (!it.file) { console.error("missing file for #" + it.num); process.exit(1); }
   if (!it.txt) { console.error("missing txt for #" + it.num); process.exit(1); }
 }
@@ -70,8 +76,10 @@ const itemsJson = JSON.stringify(
     title: it.title,
     file: it.file,
     txt: it.txt,
-    prompt: it.bodyText
-  }))
+    prompt: it.promptText
+  })),
+  null,
+  1
 );
 
 const html = `<!DOCTYPE html>
@@ -79,7 +87,7 @@ const html = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fable-5.1 — 100 HTML Files (DeepSeek)</title>
+<title>Deepseek V4 Flash — 100 HTML Files</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%236d28d9'/%3E%3Ctext x='8' y='12' text-anchor='middle' font-size='11' fill='%23fff'%3E100%3C/text%3E%3C/svg%3E">
 <style>
   :root {
@@ -129,7 +137,7 @@ const html = `<!DOCTYPE html>
     box-shadow:0 2px 6px rgba(30,20,50,.06), 0 16px 34px -16px rgba(30,20,50,.20); }
   .thumb { display:block; position:relative; background:#101016; height:clamp(220px,44vw,460px);
            overflow:hidden; cursor:pointer; }
-  .thumb .preview-iframe { position:absolute; top:0; left:0; width:100%; height:100%;
+  .thumb .preview-iframe { position:absolute; top:0; left:0;
                   border:0; transform-origin:0 0; transform:scale(var(--zf,0.5));
                   width:calc(100% / var(--zf,0.5)); height:calc(clamp(220px,44vw,460px) / var(--zf,0.5));
                   pointer-events:none; }
@@ -145,7 +153,7 @@ const html = `<!DOCTYPE html>
   .title { font-size:15.5px; font-weight:650; letter-spacing:-.01em; line-height:1.28; flex:1; }
   .file-line { font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:11px; color:var(--dim);
                margin-top:5px; word-break:break-all; }
-  .actions { display:flex; gap:8px; padding:0 16px 14px; }
+  .actions { display:flex; gap:8px; padding:0 16px 14px; flex-wrap:wrap; }
   .btn { border:1px solid var(--line-strong); background:var(--card); color:var(--tx);
          font:inherit; font-size:12px; font-weight:600; letter-spacing:.06em; padding:9px 14px;
          border-radius:9px; cursor:pointer; text-decoration:none; display:inline-flex;
@@ -170,6 +178,12 @@ const html = `<!DOCTYPE html>
            gap:12px; flex-wrap:wrap; }
   footer code{ color:var(--muted); }
   @media (prefers-reduced-motion: reduce){ .card, .btn { transition:none; } }
+  .card { content-visibility:auto; contain-intrinsic-size:auto 660px; }
+  .preview-ph { position:absolute; inset:0; display:grid; place-items:center;
+    background:linear-gradient(135deg,#241d3d,#4338ca 45%,#0e7a5f); }
+  .preview-ph span { font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:64px;
+    font-weight:700; color:rgba(255,255,255,.28); letter-spacing:.05em; }
+  .thumb.live .preview-ph { display:none; }
 </style>
 </head>
 <body>
@@ -178,7 +192,7 @@ const html = `<!DOCTYPE html>
     <div class="eyebrow">Collection · 100 studies</div>
     <h1>Deepseek V4 Flash. <span>100 HTML Files</span></h1>
     <p class="lede">One hundred self-contained visual studies — generative art, physics, typography,
-      interfaces and scenes — generated with Fable 5.1. Open any piece in a new tab, or expand a
+      interfaces and scenes — generated with Deepseek V4 Flash. Open any piece in a new tab, or expand a
       card to read the original generation prompt.</p>
   </header>
 
@@ -194,7 +208,7 @@ const html = `<!DOCTYPE html>
   <div class="empty" id="empty">No matches — try another keyword.</div>
 
   <footer>
-    <span>Generated from <code>prompt.md</code> by <code>tools/build-index.js</code></span>
+    <span>Built from <code>prompt.md</code> · Deepseek V4 Flash</span>
     <span>Full prompts also available as separate <code>NNN-….txt</code> files</span>
   </footer>
 </div>
@@ -219,47 +233,36 @@ const html = `<!DOCTYPE html>
     card.setAttribute("data-title", it.title.toLowerCase());
     card.setAttribute("data-file", it.file.toLowerCase());
 
+    var num = String(it.n).padStart(3, "0");
     var zf = window.innerWidth < 640 ? 0.4 : 0.5;
     var thumb = document.createElement("div");
     thumb.className = "thumb";
     thumb.style.setProperty("--zf", zf);
-    var frame = document.createElement("iframe");
-    frame.className = "preview-iframe";
-    frame.setAttribute("loading", "lazy");
-    frame.setAttribute("title", "Preview of " + it.file);
-    frame.setAttribute("src", it.file);
+    thumb.setAttribute("data-src", it.file);
+    thumb.setAttribute("data-title", "Preview of " + it.file);
+    var ph = document.createElement("div");
+    ph.className = "preview-ph";
+    ph.innerHTML = "<span>" + num + "</span>";
     var ob = document.createElement("a");
     ob.className = "open-btn";
     ob.href = it.file;
     ob.target = "_blank";
     ob.rel = "noopener";
     ob.innerHTML = "<span>Open demo ↗</span>";
-    thumb.appendChild(frame); thumb.appendChild(ob);
-    // robust open: new tab first, falls back to same-frame navigation when popups are blocked
-    function openDemo(ev, url) {
-      ev.preventDefault();
-      var w = null;
-      try { w = window.open(url, "_blank", "noopener"); } catch (e) {}
-      if (!w) {
-        var target = new URL(url, document.baseURI).href;
-        try { window.location.href = target; } catch (e) {}
-      }
-    }
-    ob.addEventListener("click", function (ev) { openDemo(ev, it.file); });
-
+    thumb.appendChild(ph); thumb.appendChild(ob);
     var top = document.createElement("div");
     top.className = "card-top";
-    top.innerHTML = '<div class="num">' + String(it.n).padStart(3,"0") + '</div>' +
+    top.innerHTML = '<div class="num">' + num + '</div>' +
       '<div class="title">' + it.title.replace(/</g,"&lt;") + '<div class="file-line">' + it.file + '</div></div>';
 
     var actions = document.createElement("div");
     actions.className = "actions";
     actions.innerHTML = '<a class="btn btn-open" href="' + it.file + '" target="_blank" rel="noopener">Open demo</a>' +
-      '<button class="btn btn-prompt" type="button" aria-expanded="false" aria-controls="prompt-' + it.num + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Prompt</span></button>';
+      '<button class="btn btn-prompt" type="button" aria-expanded="false" aria-controls="prompt-' + num + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Prompt</span></button>';
 
     var panel = document.createElement("div");
     panel.className = "prompt-panel";
-    panel.id = "prompt-" + it.num;
+    panel.id = "prompt-" + num;
     var pre = document.createElement("div");
     pre.className = "prompt-text";
     pre.textContent = it.prompt;
@@ -270,15 +273,44 @@ const html = `<!DOCTYPE html>
     card.appendChild(thumb); card.appendChild(top); card.appendChild(actions); card.appendChild(panel);
     frag.appendChild(card);
 
-    // robust open on the "Open demo" button too
-    actions.querySelector(".btn-open").addEventListener("click", function (ev) { openDemo(ev, it.file); });
-
     // direct handler on the button itself (and a fallback via delegation below)
     actions.querySelector(".btn-prompt").addEventListener("click", function (ev) {
       togglePrompt(ev, this);
     });
   });
   list.appendChild(frag);
+
+  // Viewport-gated previews: mount an iframe only while its card is near the
+  // viewport and unmount it when far away — 100 live pages running at once
+  // freezes the tab, and loading="lazy" alone does not stop their scripts.
+  var RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function mountFrame(thumb) {
+    if (RM || thumb.querySelector("iframe")) return;
+    var frame = document.createElement("iframe");
+    frame.className = "preview-iframe";
+    frame.setAttribute("loading", "lazy");
+    frame.setAttribute("title", thumb.getAttribute("data-title") || "Preview");
+    frame.setAttribute("src", thumb.getAttribute("data-src"));
+    frame.addEventListener("error", function () { unmountFrame(thumb); });
+    thumb.insertBefore(frame, thumb.firstChild);
+    thumb.classList.add("live");
+  }
+  function unmountFrame(thumb) {
+    var f = thumb.querySelector("iframe");
+    if (f) f.remove();
+    thumb.classList.remove("live");
+  }
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) mountFrame(en.target);
+        else unmountFrame(en.target);
+      });
+    }, { rootMargin: "700px 0px" });
+    list.querySelectorAll(".thumb").forEach(function (t) { io.observe(t); });
+  } else {
+    list.querySelectorAll(".thumb").forEach(mountFrame);
+  }
 
   function togglePrompt(ev, btn) {
     ev.preventDefault();
@@ -303,7 +335,7 @@ const html = `<!DOCTYPE html>
       var hit = !term ||
         c.getAttribute("data-title").indexOf(term) !== -1 ||
         c.getAttribute("data-file").indexOf(term) !== -1 ||
-        String(i + 1).padStart(3, "0") === term.replace(/\D/g, "").padStart(3, "0");
+        String(i + 1).padStart(3, "0") === term.replace(/\\D/g, "").padStart(3, "0");
       c.style.display = hit ? "" : "none";
       if (hit) shown++;
     }
@@ -315,7 +347,8 @@ const html = `<!DOCTYPE html>
 })();
 </script>
 </body>
-</html>`;
+</html>
+`;
 
 fs.writeFileSync(OUT_HTML, html, "utf8");
 console.log("wrote " + OUT_HTML + " (" + (html.length / 1024).toFixed(1) + " kB)");
