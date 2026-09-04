@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ABYSSAL — Bioluminescent Deep-Sea Scene</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      min-height: 100dvh;
+      background: linear-gradient(180deg, #04102a 0%, #030b1d 48%, #020611 100%);
+      color: #c9dcf0;
+      font-family: system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      overflow: hidden;
+    }
+    .vignette {
+      position: fixed; inset: 0; pointer-events: none; z-index: 2;
+      box-shadow: inset 0 0 120px 40px rgba(0, 2, 10, 0.65);
+    }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 1; }
+    h1 {
+      position: fixed; top: 1.1rem; left: 1.2rem; z-index: 3;
+      font-weight: 200; letter-spacing: 0.62em; font-size: clamp(1.1rem, 3vw, 1.7rem);
+      color: #c9dcf0; text-shadow: 0 0 18px rgba(79, 227, 255, 0.55);
+    }
+    .cap {
+      position: fixed; top: 2.7rem; left: 1.2rem; z-index: 3;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.72rem; color: #7a93b0; letter-spacing: 0.08em;
+    }
+    .hud {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 3;
+      display: flex; flex-wrap: wrap; gap: 0.8rem 1.4rem; align-items: center;
+      padding: 0.55rem 1rem 0.7rem;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; color: #8fb0c8;
+      background: linear-gradient(transparent, rgba(0, 4, 16, 0.72));
+    }
+    .sweep {
+      width: 72px; height: 4px; background: #0a1a30; overflow: hidden; border-radius: 2px;
+    }
+    .sweep i {
+      display: block; height: 100%; width: 30%; background: #4fe3ff;
+      animation: sweep 2.8s linear infinite;
+    }
+    @keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+    .spec { display: flex; gap: 0.55rem; align-items: center; }
+    .spec b { width: 8px; height: 8px; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px currentColor; }
+    .hint {
+      position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      z-index: 4; font-size: 0.85rem; color: #c9dcf0; text-align: center;
+      background: rgba(4, 12, 28, 0.45); padding: 0.4rem 0.8rem; border-radius: 999px;
+      max-width: 90vw;
+    }
+    .hint.gone { opacity: 0; pointer-events: none; transition: opacity 700ms ease; }
+    @media (max-width: 375px) {
+      body { overflow-x: hidden; }
+      .hint { white-space: normal; }
+      h1 { letter-spacing: 0.4em; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sweep i { animation: none; width: 40%; }
+      .hint { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="sea"></canvas>
+  <div class="vignette"></div>
+  <h1>ABYSSAL</h1>
+  <p class="cap">Bathypelagic zone · no sunlight reaches here</p>
+  <p class="hint" id="hint">Move to stir the water · click to release a jellyfish</p>
+  <div class="hud">
+    <span id="depth">−3 400 m</span>
+    <div class="sweep"><i></i></div>
+    <span id="temp">2.4 °C</span>
+    <span id="press">34.1 MPa</span>
+    <span>Medusae <b id="jcount">3</b></span>
+    <span>Plankton <b id="pcount">190</b></span>
+    <div class="spec" aria-label="Emission spectrum">
+      Emission spectrum
+      <b style="background:#4fe3ff;color:#4fe3ff"></b>
+      <b style="background:#3fd9c4;color:#3fd9c4"></b>
+      <b style="background:#6a7dff;color:#6a7dff"></b>
+      <b style="background:#a56bff;color:#a56bff"></b>
+    </div>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    var HUES = [188, 168, 232, 268];
+    function hsl(h, s, l, a) {
+      return "hsla(" + h + "," + s + "%," + l + "%," + a + ")";
+    }
+    function init() {
+      var canvas = qs("#sea");
+      var hint = qs("#hint");
+      var depthEl = qs("#depth");
+      var tempEl = qs("#temp");
+      var pressEl = qs("#press");
+      var jcount = qs("#jcount");
+      var pcount = qs("#pcount");
+      if (!canvas || !hint || !depthEl || !tempEl || !pressEl || !jcount || !pcount) return;
+      var ctx = canvas.getContext ? canvas.getContext("2d") : null;
+      if (!ctx) return;
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var W = 1, H = 1, dpr = 1;
+      var ptr = { x: 0, y: 0, vx: 0, vy: 0, px: 0, py: 0 };
+      var t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : 0;
+      var nextSchool = 18 + Math.random() * 20;
+      var fish = [];
+      function resize() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        W = window.innerWidth || 800;
+        H = window.innerHeight || 600;
+        canvas.width = Math.floor(W * dpr);
+        canvas.height = Math.floor(H * dpr);
+        canvas.style.width = W + "px";
+        canvas.style.height = H + "px";
+      }
+      resize();
+      window.addEventListener("resize", resize);
+      var nPlank = reduce ? 90 : 190;
+      pcount.textContent = String(nPlank);
+      var plankton = [];
+      var i;
+      for (i = 0; i < nPlank; i++) {
+        plankton.push({
+          x: Math.random() * W, y: Math.random() * H,
+          hue: HUES[i % 4] + (Math.random() - 0.5) * 10,
+          ph: Math.random() * Math.PI * 2,
+          glow: 0, r: 0.7 + Math.random() * 1.4
+        });
+      }
+      function makeJelly(x, y, hue, r) {
+        var nTen = 7 + ((Math.random() * 8) | 0);
+        var nArm = 4;
+        var segs = 14 + ((Math.random() * 11) | 0);
+        var chains = [];
+        var c, s, kind, n;
+        for (c = 0; c < nTen + nArm; c++) {
+          kind = c < nTen ? "t" : "a";
+          n = kind === "t" ? segs : Math.max(10, segs - 4);
+          var pts = [];
+          for (s = 0; s < n; s++) pts.push({ x: x, y: y + s * r * 0.22, px: x, py: y + s * r * 0.22 });
+          chains.push({ kind: kind, pts: pts, off: (c / (nTen + nArm) - 0.5) * Math.PI * 0.9 });
+        }
+        return {
+          x: x, y: y, vx: 0, vy: -8, hue: hue, r: r,
+          phase: Math.random() * Math.PI * 2,
+          rate: (reduce ? 0.6 : 1.2) + Math.random() * 0.6,
+          chains: chains, born: t0
+        };
+      }
+      var jellies = [
+        makeJelly(W * 0.3, H * 0.55, 188, 48),
+        makeJelly(W * 0.62, H * 0.4, 168, 36),
+        makeJelly(W * 0.48, H * 0.72, 232, 58)
+      ];
+      function spawnSchool() {
+        var n = 10 + ((Math.random() * 13) | 0);
+        var fromLeft = Math.random() < 0.5;
+        var y = H * (0.35 + Math.random() * 0.3);
+        var spd = (60 + Math.random() * 50) * (fromLeft ? 1 : -1);
+        var k;
+        fish = [];
+        for (k = 0; k < n; k++) {
+          fish.push({
+            x: fromLeft ? -40 - k * 18 : W + 40 + k * 18,
+            y: y + Math.sin(k) * 28,
+            vx: spd, ph: Math.random() * 6,
+            s: 0.7 + Math.random() * 0.5
+          });
+        }
+      }
+      function drawShaft(t) {
+        var sway = Math.sin(t * 0.15) * 40 + Math.sin(t * 0.07) * 22;
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        var k, w0 = [W * 0.22, W * 0.14, W * 0.07];
+        for (k = 0; k < 3; k++) {
+          var g = ctx.createLinearGradient(0, -20, 0, H * 0.95);
+          g.addColorStop(0, "rgba(80,140,210,.09)");
+          g.addColorStop(1, "rgba(80,140,210,0)");
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          var top = W * 0.42 + sway * (0.4 + k * 0.2);
+          ctx.moveTo(top - w0[k], -20);
+          ctx.lineTo(top + w0[k], -20);
+          ctx.lineTo(top + w0[k] * 2.4 + 30, H * 0.95);
+          ctx.lineTo(top - w0[k] * 2.4 - 30, H * 0.95);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+      function drawPlankton(t, dt) {
+        plankton.forEach(function (p) {
+          var curx = Math.sin(p.y * 0.004 + t * 0.12) * 12 + Math.cos(p.x * 0.002 + t * 0.08) * 6;
+          var cury = Math.cos(p.x * 0.003 + t * 0.1) * 8;
+          p.x += curx * dt + (Math.random() - 0.5) * 8 * dt;
+          p.y += cury * dt + (Math.random() - 0.5) * 8 * dt;
+          var dx = p.x - ptr.x, dy = p.y - ptr.y, dist = Math.hypot(dx, dy);
+          var spd = Math.hypot(ptr.vx, ptr.vy);
+          if (dist < 140 && dist > 1) {
+            var f = (1 - dist / 140) * spd * 0.08;
+            p.x += (dx / dist) * f;
+            p.y += (dy / dist) * f;
+            p.glow = Math.min(1, p.glow + 0.35);
+          }
+          p.glow *= Math.exp(-dt * 1.8);
+          if (p.x < 0) p.x += W; if (p.x > W) p.x -= W;
+          if (p.y < 0) p.y += H; if (p.y > H) p.y -= H;
+          var tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * 2 + p.ph));
+          var rad = p.r * (1 + p.glow * 2.2);
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          if (p.glow > 0.05) {
+            var hg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rad * 6);
+            hg.addColorStop(0, hsl(p.hue, 80, 70, 0.18 * p.glow));
+            hg.addColorStop(1, hsl(p.hue, 80, 70, 0));
+            ctx.fillStyle = hg;
+            ctx.beginPath(); ctx.arc(p.x, p.y, rad * 6, 0, Math.PI * 2); ctx.fill();
+          }
+          ctx.fillStyle = hsl(p.hue, 85, 62 + p.glow * 20, 0.35 + tw * 0.4 + p.glow);
+          ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        });
+      }
+      function constrain(ch, pinX, pinY, len) {
+        var pts = ch.pts;
+        pts[0].x = pinX; pts[0].y = pinY;
+        var it, s, dx, dy, d, diff;
+        for (it = 0; it < 3; it++) {
+          for (s = 1; s < pts.length; s++) {
+            dx = pts[s].x - pts[s - 1].x;
+            dy = pts[s].y - pts[s - 1].y;
+            d = Math.hypot(dx, dy) || 1;
+            diff = (d - len) / d;
+            if (s === 1) {
+              pts[s].x -= dx * diff;
+              pts[s].y -= dy * diff;
+            } else {
+              pts[s - 1].x += dx * diff * 0.5;
+              pts[s - 1].y += dy * diff * 0.5;
+              pts[s].x -= dx * diff * 0.5;
+              pts[s].y -= dy * diff * 0.5;
+            }
+          }
+          pts[0].x = pinX; pts[0].y = pinY;
+        }
+      }
+      function drawJelly(j, t, dt) {
+        j.phase += j.rate * dt;
+        var pulse = Math.sin(j.phase);
+        var bw = 1 + 0.13 * pulse;
+        var bh = 1 / bw;
+        if (pulse < 0) j.vy -= 28 * dt * (-pulse);
+        j.vy += 10 * dt;
+        j.vx += Math.sin(t * 0.4 + j.hue) * 6 * dt;
+        j.vx *= Math.exp(-dt * 0.6);
+        j.vy *= Math.exp(-dt * 0.45);
+        j.x += j.vx * dt; j.y += j.vy * dt;
+        if (j.y + j.r < -20) j.y = H + j.r;
+        if (j.x < -80) j.x = W + 40;
+        if (j.x > W + 80) j.x = -40;
+        var rx = j.r * bw, ry = j.r * 0.62 * bh;
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        var halo = ctx.createRadialGradient(j.x, j.y, 0, j.x, j.y, j.r * 2.2);
+        halo.addColorStop(0, hsl(j.hue, 80, 70, 0.12));
+        halo.addColorStop(1, hsl(j.hue, 80, 70, 0));
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(j.x, j.y, j.r * 2.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(j.x, j.y, rx, ry, 0, Math.PI, 0);
+        ctx.bezierCurveTo(j.x + rx * 0.7, j.y + ry * 0.9, j.x - rx * 0.7, j.y + ry * 0.9, j.x - rx, j.y);
+        var body = ctx.createRadialGradient(j.x, j.y - ry * 0.4, 2, j.x, j.y, rx);
+        body.addColorStop(0, "rgba(255,255,255,0.55)");
+        body.addColorStop(0.35, hsl(j.hue, 85, 62, 0.4));
+        body.addColorStop(1, hsl(j.hue, 85, 50, 0));
+        ctx.fillStyle = body;
+        ctx.fill();
+        ctx.strokeStyle = hsl(j.hue, 90, 80, 0.55);
+        ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.ellipse(j.x, j.y, rx, ry * 0.22, 0, 0, Math.PI * 2); ctx.stroke();
+        var g;
+        for (g = 0; g < 4; g++) {
+          var ang = g * Math.PI / 2 + 0.4;
+          var gx = j.x + Math.cos(ang) * rx * 0.28;
+          var gy = j.y + Math.sin(ang) * ry * 0.2;
+          var gg = ctx.createRadialGradient(gx, gy, 0, gx, gy, 6);
+          gg.addColorStop(0, "rgba(255,255,255,0.7)");
+          gg.addColorStop(1, hsl(j.hue, 80, 70, 0));
+          ctx.fillStyle = gg;
+          ctx.beginPath(); ctx.arc(gx, gy, 6, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        ctx.beginPath(); ctx.ellipse(j.x - rx * 0.28, j.y - ry * 0.35, rx * 0.18, ry * 0.1, -0.5, 0, Math.PI * 2); ctx.fill();
+        j.chains.forEach(function (ch) {
+          var pinX = j.x + Math.sin(ch.off) * rx * 0.7;
+          var pinY = j.y + ry * 0.15;
+          var pts = ch.pts;
+          var s;
+          for (s = 1; s < pts.length; s++) {
+            var vx = pts[s].x - pts[s].px;
+            var vy = pts[s].y - pts[s].py;
+            pts[s].px = pts[s].x; pts[s].py = pts[s].y;
+            pts[s].x += vx * 0.985;
+            pts[s].y += vy * 0.985 + 18 * dt;
+            pts[s].x += Math.sin(t * 1.4 + s * 0.3 + ch.off) * 8 * dt;
+            var pdx = pts[s].x - ptr.x, pdy = pts[s].y - ptr.y, pd = Math.hypot(pdx, pdy);
+            if (pd < 80 && pd > 1) {
+              pts[s].x += (pdx / pd) * 30 * dt;
+              pts[s].y += (pdy / pd) * 30 * dt;
+            }
+          }
+          constrain(ch, pinX, pinY, j.r * 0.22);
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (s = 1; s < pts.length - 1; s++) {
+            var mx = (pts[s].x + pts[s + 1].x) / 2;
+            var my = (pts[s].y + pts[s + 1].y) / 2;
+            ctx.quadraticCurveTo(pts[s].x, pts[s].y, mx, my);
+          }
+          var last = pts[pts.length - 1];
+          ctx.lineTo(last.x, last.y);
+          var lg = ctx.createLinearGradient(pts[0].x, pts[0].y, last.x, last.y);
+          lg.addColorStop(0, hsl(j.hue, 80, 70, ch.kind === "a" ? 0.7 : 0.5));
+          lg.addColorStop(1, hsl(j.hue, 80, 70, 0));
+          ctx.strokeStyle = lg;
+          ctx.lineWidth = ch.kind === "a" ? 2.4 : 1.1;
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+      function drawFish(t, dt) {
+        fish.forEach(function (f) {
+          f.x += f.vx * dt;
+          f.y += Math.sin(t * 1.2 + f.ph) * 10 * dt;
+          var dir = f.vx > 0 ? 1 : -1;
+          ctx.save();
+          ctx.translate(f.x, f.y);
+          ctx.scale(dir * f.s, f.s);
+          ctx.fillStyle = "#071428";
+          ctx.beginPath();
+          ctx.moveTo(10, 0);
+          ctx.quadraticCurveTo(-2, -6, -12, 0);
+          ctx.quadraticCurveTo(-2, 6, 10, 0);
+          ctx.fill();
+          ctx.beginPath();
+          var tw = Math.sin(t * 12 + f.ph) * 4;
+          ctx.moveTo(-12, 0); ctx.lineTo(-18, tw); ctx.lineTo(-18, -tw); ctx.closePath();
+          ctx.fill();
+          ctx.globalCompositeOperation = "lighter";
+          var pg = ctx.createRadialGradient(6, 0, 0, 6, 0, 10);
+          pg.addColorStop(0, "rgba(79,227,255,0.85)");
+          pg.addColorStop(1, "rgba(79,227,255,0)");
+          ctx.fillStyle = pg;
+          ctx.beginPath(); ctx.arc(6, 0, 10, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = "rgba(79,227,255,0.7)";
+          ctx.beginPath(); ctx.arc(-2, 3, 1.1, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(-5, 3.4, 1, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(-8, 3.2, 0.9, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        });
+        fish = fish.filter(function (f) { return f.x > -80 && f.x < W + 80; });
+      }
+      var last = t0;
+      function frame(now) {
+        var t = (now - t0) / 1000;
+        var dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+        ptr.vx *= 0.86; ptr.vy *= 0.86;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, W, H);
+        drawShaft(t);
+        drawPlankton(t, dt);
+        if (t > nextSchool) {
+          spawnSchool();
+          nextSchool = t + 18 + Math.random() * 20;
+        }
+        drawFish(t, dt);
+        jellies.sort(function (a, b) { return a.r - b.r; });
+        jellies.forEach(function (j) { drawJelly(j, t, dt); });
+        var d = 3400 + Math.round(Math.sin(t * 0.07) * 6 + Math.sin(t * 0.19) * 3);
+        depthEl.textContent = "−" + String(d).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " m";
+        tempEl.textContent = (2.4 + Math.sin(t * 0.05) * 0.15).toFixed(1) + " °C";
+        pressEl.textContent = (34.1 + (d - 3400) * 0.01).toFixed(1) + " MPa";
+        jcount.textContent = String(jellies.length);
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      }
+      window.addEventListener("pointermove", function (ev) {
+        ptr.vx = ev.clientX - ptr.px; ptr.vy = ev.clientY - ptr.py;
+        ptr.px = ptr.x = ev.clientX; ptr.py = ptr.y = ev.clientY;
+      });
+      function click(ev) {
+        hint.classList.add("gone");
+        var hue = HUES[(Math.random() * 4) | 0] + (Math.random() - 0.5) * 14;
+        jellies.push(makeJelly(ev.clientX, ev.clientY, hue, 30 + Math.random() * 40));
+        if (jellies.length > 9) jellies.shift();
+        plankton.forEach(function (p) {
+          var dx = p.x - ev.clientX, dy = p.y - ev.clientY, d = Math.hypot(dx, dy);
+          if (d < 220 && d > 1) {
+            p.x += (dx / d) * 28; p.y += (dy / d) * 28; p.glow = 1;
+          }
+        });
+      }
+      window.addEventListener("click", click);
+      if (!reduce) setTimeout(function () { hint.classList.add("gone"); }, 9000);
+      else hint.classList.add("gone");
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

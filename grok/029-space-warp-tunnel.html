@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JUMPGATE — Hyperspace Warp Tunnel</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; background: #000; }
+    body { font-family: ui-monospace, "SF Mono", Consolas, "Courier New", monospace; color: #7fc4ff; }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    .letterbox {
+      position: fixed; left: 0; right: 0; height: 6vh; background: #000; z-index: 4; pointer-events: none;
+    }
+    .letterbox.top { top: 0; }
+    .letterbox.bot { bottom: 0; }
+    .vignette {
+      position: fixed; inset: 0; pointer-events: none; z-index: 3;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.72) 100%);
+    }
+    .scan {
+      position: fixed; inset: 0; pointer-events: none; z-index: 5;
+      background: repeating-linear-gradient(180deg, rgba(255,255,255,.04) 0 1px, transparent 1px 3px);
+      mix-blend-mode: overlay;
+    }
+    .hud { position: fixed; inset: 6vh 0; z-index: 6; pointer-events: none; color: #7fc4ff; text-shadow: 0 0 8px #3d8bff; }
+    .title {
+      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      text-align: center;
+    }
+    .title h1 {
+      font-weight: 200; letter-spacing: 0.5em; font-size: clamp(18px, 3vw, 28px);
+      color: #f4f8ff;
+    }
+    .title p { font-size: 11px; letter-spacing: 0.18em; margin-top: 6px; opacity: .7; transition: opacity 600ms ease; }
+    .title p.gone { opacity: 0; }
+    .corners { position: absolute; inset: 14px 18px; font-size: 11px; letter-spacing: 0.08em; }
+    .tl { position: absolute; top: 0; left: 0; }
+    .tr { position: absolute; top: 0; right: 0; text-align: right; }
+    .bl { position: absolute; bottom: 64px; left: 0; }
+    .br { position: absolute; bottom: 64px; right: 0; text-align: right; }
+    .speed {
+      position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+      text-align: center; width: min(420px, 80vw);
+    }
+    .speed .n {
+      font-weight: 200; font-size: clamp(28px, 6vw, 52px); color: #f4f8ff; letter-spacing: 0.08em;
+    }
+    .speed .n.hot { text-shadow: 0 0 16px #fff, 0 0 28px #7fc4ff; }
+    .bar { height: 4px; background: rgba(61,139,255,.2); margin: 8px 0; position: relative; }
+    .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #3d8bff, #7fc4ff, #f4f8ff); }
+    .stage { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: #8a5cff; }
+    .reticle {
+      position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
+      width: 160px; height: 160px;
+    }
+    .reticle .ring {
+      fill: none; stroke: #3d8bff; stroke-width: 1; opacity: .7;
+    }
+    .r1 { stroke-dasharray: 6 8; transform-origin: 80px 80px; animation: spin 14s linear infinite; }
+    .r2 { stroke-dasharray: 2 10; transform-origin: 80px 80px; animation: spin 22s linear infinite reverse; }
+    .dot { fill: #7fc4ff; animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 50% { opacity: .3; } }
+    @media (prefers-reduced-motion: reduce) {
+      .r1, .r2, .dot { animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="letterbox top"></div>
+  <div class="letterbox bot"></div>
+  <div class="vignette"></div>
+  <div class="scan"></div>
+  <div class="hud">
+    <div class="title">
+      <h1>JUMPGATE</h1>
+      <p id="prompt">hold mouse · touch · space to burn</p>
+    </div>
+    <div class="corners">
+      <div class="tl">VECTOR <span id="vector">000.0</span><br>GATE <span id="gate">JG-07</span><br>HULL <span id="hull">100%</span></div>
+      <div class="tr">DRIVE <span id="drive">IDLE</span><br>FPS <span id="fps">60</span><br>STARS <span id="stars">0</span></div>
+      <div class="bl">DISTANCE <span id="dist">0.00</span> LY<br>ELAPSED <span id="time">00:00</span></div>
+      <div class="br">SHAKE <span id="shake">0.00</span></div>
+    </div>
+    <svg class="reticle" viewBox="0 0 160 160" aria-hidden="true">
+      <circle class="ring r1" cx="80" cy="80" r="62"/>
+      <circle class="ring r2" cx="80" cy="80" r="44"/>
+      <g stroke="#7fc4ff" stroke-width="1">
+        <path d="M80 12 v14 M80 134 v14 M12 80 h14 M134 80 h14"/>
+      </g>
+      <circle class="dot" cx="80" cy="80" r="3"/>
+    </svg>
+    <div class="speed">
+      <div class="n" id="cnum">0.00<span style="font-size:.45em"> c</span></div>
+      <div class="bar"><i id="pbar"></i></div>
+      <div class="stage" id="stage">sublight</div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var canvas = qs("#c");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var reduce = false;
+      if (typeof window.matchMedia === "function") {
+        var mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+        reduce = !!(mq && mq.matches);
+      }
+      var W = 0, H = 0, dpr = 1, cx = 0, cy = 0;
+      var stars = [];
+      var rings = [];
+      var speed = 0, target = 0, holding = false;
+      var dist = 0, t0 = Date.now(), flash = 0, flashed = false;
+      var frames = 0, fps = 60, lastFps = Date.now();
+      var engaged = false;
+      var hull = 100;
+
+      function resize() {
+        dpr = window.devicePixelRatio ? Math.min(window.devicePixelRatio, 2) : 1;
+        W = window.innerWidth; H = window.innerHeight;
+        canvas.width = Math.floor(W * dpr);
+        canvas.height = Math.floor(H * dpr);
+        cx = W / 2; cy = H / 2;
+        seed();
+      }
+      function seed() {
+        var area = W * H;
+        var n = Math.round(350 + (1400 - 350) * Math.min(1, area / 1800000));
+        n = Math.max(350, Math.min(1400, n));
+        stars = [];
+        var i, col;
+        for (i = 0; i < n; i++) {
+          var r = Math.random();
+          col = r < 0.12 ? "#8a5cff" : (r < 0.67 ? "#3d8bff" : "#f4f8ff");
+          stars.push({
+            x: (Math.random() - 0.5) * 2400,
+            y: (Math.random() - 0.5) * 2400,
+            z: 200 + Math.random() * 2800,
+            c: col
+          });
+        }
+        rings = [];
+        for (i = 0; i < 14; i++) {
+          rings.push({ z: 200 + i * 200, a: i * 0.2 });
+        }
+        var el = qs("#stars");
+        if (el) el.textContent = String(stars.length);
+      }
+      function project(x, y, z) {
+        var f = 420;
+        var s = f / z;
+        return { x: cx + x * s, y: cy + y * s, s: s };
+      }
+      function octagon(z, a, color) {
+        var r = 220;
+        var i, p, pts = [];
+        for (i = 0; i < 8; i++) {
+          var ang = a + i * Math.PI / 4;
+          p = project(Math.cos(ang) * r, Math.sin(ang) * r, z);
+          pts.push(p);
+        }
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (i = 1; i < 8; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.closePath();
+        ctx.strokeStyle = color;
+        ctx.shadowColor = "#3d8bff";
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+        return pts;
+      }
+
+      function loop(now) {
+        frames++;
+        if (now - lastFps > 500) {
+          fps = Math.round(frames * 1000 / (now - lastFps));
+          frames = 0; lastFps = now;
+          var fpsEl = qs("#fps");
+          if (fpsEl) fpsEl.textContent = String(fps);
+        }
+        var approach = holding ? 0.045 : 0.018;
+        speed += (target - speed) * approach;
+        if (!holding && speed < 0.002) speed = 0;
+        dist += speed * 0.012;
+        var fade = 0.28 - speed * 0.18;
+        if (fade < 0.06) fade = 0.06;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = "rgba(0,0,0," + fade + ")";
+        ctx.fillRect(0, 0, W, H);
+
+        var shake = 0;
+        if (!reduce && speed > 0.75) shake = (speed - 0.75) / 0.25 * 6 * (Math.random() * 2 - 1);
+        var sx = reduce ? 0 : shake;
+        var sy = reduce ? 0 : (!reduce && speed > 0.75 ? (speed - 0.75) / 0.25 * 6 * (Math.random() * 2 - 1) : 0);
+        ctx.save();
+        ctx.translate(sx, sy);
+
+        ctx.globalCompositeOperation = "lighter";
+        var bloom = 40 + speed * 180;
+        var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, bloom);
+        g.addColorStop(0, "rgba(244,248,255," + (0.15 + speed * 0.7) + ")");
+        g.addColorStop(0.4, "rgba(61,139,255," + (0.08 + speed * 0.25) + ")");
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(cx, cy, bloom, 0, Math.PI * 2);
+        ctx.fill();
+
+        var i, s, z2, p1, p2, split;
+        var zspeed = 6 + speed * speed * 90;
+        for (i = 0; i < stars.length; i++) {
+          s = stars[i];
+          s.z -= zspeed;
+          if (s.z < 40) {
+            s.z = 200 + Math.random() * 2800;
+            s.x = (Math.random() - 0.5) * 2400;
+            s.y = (Math.random() - 0.5) * 2400;
+          }
+          p1 = project(s.x, s.y, s.z);
+          z2 = s.z + 40 + speed * 180;
+          p2 = project(s.x, s.y, z2);
+          split = (speed > 0.75) ? ((speed - 0.75) / 0.25) * 6 * (420 / s.z) : 0;
+          ctx.lineCap = "round";
+          ctx.lineWidth = 1.2;
+          if (split > 0.4) {
+            ctx.strokeStyle = "rgba(255,60,60,.45)";
+            ctx.beginPath(); ctx.moveTo(p1.x - split, p1.y); ctx.lineTo(p2.x - split, p2.y); ctx.stroke();
+            ctx.strokeStyle = "rgba(60,120,255,.45)";
+            ctx.beginPath(); ctx.moveTo(p1.x + split, p1.y); ctx.lineTo(p2.x + split, p2.y); ctx.stroke();
+          }
+          ctx.strokeStyle = s.c;
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.stroke();
+        }
+
+        var prevPts = null;
+        for (i = 0; i < rings.length; i++) {
+          rings[i].z -= zspeed * 0.55;
+          rings[i].a += 0.004 + speed * 0.02;
+          if (rings[i].z < 60) rings[i].z += 14 * 200;
+          var pts = octagon(rings[i].z, rings[i].a, "#3d8bff");
+          if (prevPts && i % 2 === 0) {
+            ctx.strokeStyle = "#8a5cff";
+            ctx.shadowColor = "#8a5cff";
+            var k;
+            for (k = 0; k < 8; k += 2) {
+              ctx.beginPath();
+              ctx.moveTo(pts[k].x, pts[k].y);
+              ctx.lineTo(prevPts[k].x, prevPts[k].y);
+              ctx.stroke();
+            }
+          }
+          prevPts = pts;
+        }
+        ctx.shadowBlur = 0;
+        ctx.restore();
+
+        if (speed > 0.93 && !flashed) { flash = 1; flashed = true; }
+        if (speed < 0.85) flashed = false;
+        if (flash > 0) {
+          ctx.globalCompositeOperation = "lighter";
+          ctx.fillStyle = "rgba(244,248,255," + flash + ")";
+          ctx.fillRect(0, 0, W, H);
+          flash *= 0.86;
+        }
+
+        var cVal = speed * 9.99;
+        var cnum = qs("#cnum");
+        var pbar = qs("#pbar");
+        var stage = qs("#stage");
+        var drive = qs("#drive");
+        var hullEl = qs("#hull");
+        var distEl = qs("#dist");
+        var timeEl = qs("#time");
+        var shakeEl = qs("#shake");
+        var vector = qs("#vector");
+        if (cnum) {
+          cnum.innerHTML = cVal.toFixed(2) + "<span style=\"font-size:.45em\"> c</span>";
+          if (speed >= 0.97) cnum.classList.add("hot"); else cnum.classList.remove("hot");
+        }
+        if (pbar) pbar.style.width = (speed * 100) + "%";
+        var label = "sublight";
+        if (speed > 0.93) label = "threshold";
+        else if (speed > 0.55) label = "hyperspace";
+        else if (speed > 0.18) label = "warp entry";
+        if (stage) stage.textContent = label;
+        var st = "IDLE";
+        if (holding && speed > 0.9) st = "MAX";
+        else if (holding) st = "BURN";
+        else if (speed > 0.02) st = "COAST";
+        if (drive) drive.textContent = st;
+        if (speed > 0.95) hull = Math.max(91, hull - 0.01);
+        else hull = Math.min(100, hull + 0.004);
+        if (hullEl) hullEl.textContent = Math.round(hull) + "%";
+        if (distEl) distEl.textContent = dist.toFixed(2);
+        var elapsed = Math.floor((Date.now() - t0) / 1000);
+        if (timeEl) timeEl.textContent = (elapsed < 600 ? "0" : "") + Math.floor(elapsed / 60) + ":" + (elapsed % 60 < 10 ? "0" : "") + (elapsed % 60);
+        if (shakeEl) shakeEl.textContent = Math.abs(sx).toFixed(2);
+        if (vector) vector.textContent = (speed * 359.9).toFixed(1);
+
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+      }
+
+      function down() {
+        holding = true; target = 1; engaged = true;
+        var p = qs("#prompt");
+        if (p) p.classList.add("gone");
+      }
+      function up() { holding = false; target = 0; }
+      window.addEventListener("mousedown", down);
+      window.addEventListener("mouseup", up);
+      window.addEventListener("touchstart", function (e) { e.preventDefault(); down(); }, { passive: false });
+      window.addEventListener("touchend", up);
+      window.addEventListener("keydown", function (e) {
+        if (e.code === "Space") { e.preventDefault(); down(); }
+      });
+      window.addEventListener("keyup", function (e) {
+        if (e.code === "Space") up();
+      });
+      window.addEventListener("resize", resize);
+      resize();
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

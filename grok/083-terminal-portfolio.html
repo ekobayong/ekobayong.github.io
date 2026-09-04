@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>nova@portfolio — zsh</title>
+  <style>
+    :root {
+      --bg: #1b1f3a;
+      --violet: #3b2a6b;
+      --teal: #0f4c5c;
+      --desk: #08090f;
+      --term: #12141f;
+      --text: #e8e6f0;
+      --user: #50fa7b;
+      --at: #9aa0b4;
+      --dir: #8be9fd;
+      --prompt: #ff79c6;
+      --accent: #bd93f9;
+      --err: #ff5555;
+      --muted: #8b90a5;
+      --chrome: rgba(28, 30, 44, 0.72);
+    }
+    html[data-theme="dracula"] {
+      --term: #282a36; --text: #f8f8f2; --user: #50fa7b; --dir: #8be9fd;
+      --prompt: #ff79c6; --accent: #bd93f9; --bg: #1b1f3a; --violet: #3b2a6b; --teal: #0f4c5c;
+    }
+    html[data-theme="solarized"] {
+      --term: #002b36; --text: #eee8d5; --user: #859900; --dir: #2aa198;
+      --prompt: #d33682; --accent: #b58900; --bg: #073642; --violet: #6c71c4; --teal: #268bd2;
+    }
+    html[data-theme="nord"] {
+      --term: #2e3440; --text: #eceff4; --user: #a3be8c; --dir: #88c0d0;
+      --prompt: #b48ead; --accent: #88c0d0; --bg: #3b4252; --violet: #5e81ac; --teal: #8fbcbb;
+    }
+    html[data-theme="paper"] {
+      --term: #fbf8f1; --text: #2b241c; --user: #3d7a4a; --dir: #1d6a7a;
+      --prompt: #b3541e; --accent: #b3541e; --bg: #e8dfd0; --violet: #c9b8a0; --teal: #8aa39a;
+      --err: #c23b22; --muted: #7a7268; --chrome: rgba(250, 246, 238, 0.78);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      min-height: 100dvh;
+      background:
+        radial-gradient(900px 500px at 18% 20%, var(--bg), transparent 60%),
+        radial-gradient(800px 520px at 82% 18%, var(--violet), transparent 58%),
+        radial-gradient(700px 480px at 50% 90%, var(--teal), transparent 55%),
+        var(--desk);
+      color: var(--text);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+      overflow-x: hidden;
+    }
+    .blob {
+      position: fixed; border-radius: 50%; filter: blur(70px); opacity: 0.45; pointer-events: none;
+      animation: drift 18s ease-in-out infinite alternate;
+    }
+    .blob.a { width: 340px; height: 340px; background: var(--violet); top: -40px; left: 8%; }
+    .blob.b { width: 420px; height: 280px; background: var(--teal); bottom: 8%; right: 4%; animation-delay: -7s; }
+    @keyframes drift {
+      from { transform: translate(0, 0) scale(1); }
+      to { transform: translate(40px, -28px) scale(1.08); }
+    }
+    .wrap {
+      min-height: 100dvh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 1.2rem 0.8rem 5.5rem;
+    }
+    .window {
+      width: min(980px, 100%);
+      height: min(680px, calc(100dvh - 7.2rem));
+      background: var(--term);
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: 0 40px 90px rgba(0,0,0,.55);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .chrome {
+      display: flex; align-items: center; gap: 0.7rem;
+      padding: 0.55rem 0.8rem 0.35rem;
+      background: var(--chrome);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-bottom: 1px solid rgba(255,255,255,.1);
+    }
+    .lights { display: flex; gap: 7px; }
+    .lights span { width: 12px; height: 12px; border-radius: 50%; display: block; }
+    .lights .r { background: #ff5f57; }
+    .lights .y { background: #febc2e; }
+    .lights .g { background: #28c840; }
+    .tabs { display: flex; gap: 4px; flex: 1; min-width: 0; }
+    .tab {
+      font-size: 0.72rem; padding: 0.28rem 0.7rem; border-radius: 8px 8px 0 0;
+      color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tab.active { background: var(--term); color: var(--text); }
+    .body {
+      flex: 1; overflow: auto; padding: 0.7rem 0.9rem 0.5rem;
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent;
+    }
+    .logo { color: var(--accent); text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent); white-space: pre; line-height: 1.05; font-size: 0.72rem; }
+    .line { white-space: pre-wrap; word-break: break-word; margin: 0.12rem 0; font-size: 0.84rem; }
+    .err { color: var(--err); }
+    .prompt-row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+    .u { color: var(--user); } .at { color: var(--at); } .d { color: var(--dir); } .gt { color: var(--prompt); }
+    #cmd {
+      flex: 1; min-width: 8rem; background: transparent; border: 0; outline: none;
+      color: var(--text); font: inherit; caret-color: transparent;
+    }
+    .cursor {
+      width: 0.62em; height: 1.05em; background: var(--accent); display: inline-block;
+      animation: blink 1.05s steps(1) infinite; vertical-align: text-bottom;
+    }
+    .window.unfocused .cursor { opacity: 0.35; animation: none; }
+    @keyframes blink { 50% { opacity: 0; } }
+    .help { display: grid; grid-template-columns: 1fr 1fr; gap: 0.15rem 1.2rem; margin: 0.3rem 0; }
+    .skills { display: grid; gap: 0.4rem; margin: 0.4rem 0 0.6rem; }
+    .skill { display: grid; grid-template-columns: 7.5rem 1fr 2.4rem; gap: 0.5rem; align-items: center; font-size: 0.78rem; }
+    .bar {
+      height: 10px; background: repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 6px, transparent 6px 10px);
+      border-radius: 3px; overflow: hidden;
+    }
+    .bar > i {
+      display: block; height: 100%; width: 0;
+      background: linear-gradient(90deg, var(--user), var(--accent));
+      transition: width 900ms cubic-bezier(.22,1,.36,1);
+    }
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin: 0.5rem 0; }
+    .card {
+      border: 1px solid rgba(255,255,255,.1); border-left: 3px solid var(--accent);
+      padding: 0.55rem 0.7rem; border-radius: 8px; background: rgba(255,255,255,.03);
+      animation: rise 480ms ease both;
+    }
+    .card:nth-child(2) { animation-delay: 70ms; border-left-color: var(--dir); }
+    .card:nth-child(3) { animation-delay: 140ms; border-left-color: var(--user); }
+    .card:nth-child(4) { animation-delay: 210ms; border-left-color: var(--prompt); }
+    .card:hover { transform: translateY(-3px); }
+    .card h3 { font-size: 0.9rem; margin-bottom: 0.2rem; }
+    .card p { color: var(--muted); font-size: 0.75rem; }
+    .pills { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.35rem; }
+    .pills span { font-size: 0.65rem; border: 1px solid rgba(255,255,255,.16); padding: 0.1rem 0.35rem; border-radius: 999px; color: var(--accent); }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    .kv { display: grid; grid-template-columns: 8rem 1fr; gap: 0.15rem 0.6rem; font-size: 0.82rem; }
+    .kv dt { color: var(--muted); }
+    .dock {
+      position: fixed; left: 50%; bottom: 0.7rem; transform: translateX(-50%);
+      display: flex; gap: 0.45rem; padding: 0.4rem 0.55rem;
+      background: rgba(18, 20, 32, 0.55); backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,.12); border-radius: 16px;
+    }
+    .dock button {
+      width: 44px; height: 44px; border: 0; border-radius: 12px; cursor: pointer;
+      background: linear-gradient(180deg, #6aa8ff, #3b5fd9); color: #fff;
+      display: grid; place-items: center; position: relative; transition: transform 160ms ease;
+    }
+    .dock button:nth-child(2) { background: linear-gradient(180deg, #7dffb0, #2f9e6a); }
+    .dock button:nth-child(3) { background: linear-gradient(180deg, #ffd27a, #d08a22); }
+    .dock button:nth-child(4) { background: linear-gradient(180deg, #ff9ad4, #c44a88); }
+    .dock button:nth-child(5) { background: linear-gradient(180deg, #c9a6ff, #6b4ad4); }
+    .dock button:hover { transform: scale(1.18) translateY(-6px); }
+    .dock button:hover::after {
+      content: attr(data-tip); position: absolute; bottom: 120%;
+      font-size: 0.68rem; background: rgba(8,10,18,.9); color: #fff; padding: 0.15rem 0.4rem; border-radius: 6px; white-space: nowrap;
+    }
+    .tap {
+      display: none; margin: 0.4rem auto; border: 0; border-radius: 999px;
+      background: var(--accent); color: #111; font: inherit; font-size: 0.75rem;
+      padding: 0.35rem 0.8rem; animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse { 50% { opacity: 0.55; } }
+    #matrix {
+      position: absolute; inset: 38px 0 0 0; display: none; width: 100%; height: calc(100% - 38px);
+    }
+    @media (max-width: 640px) {
+      .wrap { padding: 0; }
+      .window { height: calc(100dvh - 4.8rem); border-radius: 0; max-width: 100%; }
+      .cards, .help { grid-template-columns: 1fr; }
+      .tap { display: inline-block; }
+      .tap.gone { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .blob, .cursor, .tap { animation: none; }
+      .bar > i, .card { transition: none; animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="blob a"></div>
+  <div class="blob b"></div>
+  <div class="wrap">
+    <div class="window" id="win">
+      <div class="chrome">
+        <div class="lights" aria-hidden="true"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+        <div class="tabs">
+          <div class="tab active">nova@portfolio — zsh</div>
+          <div class="tab">notes.md</div>
+          <div class="tab">server.log</div>
+        </div>
+      </div>
+      <div class="body" id="term" tabindex="-1">
+        <pre class="logo" id="logo"></pre>
+        <div id="log"></div>
+        <div class="prompt-row" id="promptRow">
+          <span class="u">nova</span><span class="at">@</span><span class="u">portfolio</span>
+          <span class="d">~</span><span class="gt">❯</span>
+          <input id="cmd" type="text" autocomplete="off" spellcheck="false" aria-label="Terminal command">
+          <span class="cursor" id="caret"></span>
+        </div>
+        <button type="button" class="tap" id="tap">Tap to type</button>
+      </div>
+      <canvas id="matrix"></canvas>
+    </div>
+  </div>
+  <nav class="dock" aria-label="Dock">
+    <button type="button" data-cmd="ls" data-tip="Finder"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="12" rx="2" stroke="#fff" stroke-width="1.6"/><path d="M2 8h16" stroke="#fff"/></svg></button>
+    <button type="button" data-cmd="projects" data-tip="Projects"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="6" height="6" stroke="#083" stroke-width="1.5"/><rect x="11" y="3" width="6" height="6" stroke="#083" stroke-width="1.5"/><rect x="3" y="11" width="6" height="6" stroke="#083" stroke-width="1.5"/><rect x="11" y="11" width="6" height="6" stroke="#083" stroke-width="1.5"/></svg></button>
+    <button type="button" data-cmd="skills" data-tip="Skills"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 14l4-8 4 5 4-7" stroke="#5a3" stroke-width="1.7" fill="none"/></svg></button>
+    <button type="button" data-cmd="contact" data-tip="Contact"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="5" width="14" height="10" rx="1.5" stroke="#fff" stroke-width="1.5"/><path d="M3 6l7 5 7-5" stroke="#fff"/></svg></button>
+    <button type="button" data-cmd="theme nord" data-tip="Themes"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="6" stroke="#fff"/><path d="M10 4v12" stroke="#fff"/></svg></button>
+  </nav>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    var ASCII = [
+      " ███╗   ██╗ ██████╗ ██╗   ██╗ █████╗ ",
+      " ████╗  ██║██╔═══██╗██║   ██║██╔══██╗",
+      " ██╔██╗ ██║██║   ██║██║   ██║███████║",
+      " ██║╚██╗██║██║   ██║╚██╗ ██╔╝██╔══██║",
+      " ██║ ╚████║╚██████╔╝ ╚████╔╝ ██║  ██║",
+      " ╚═╝  ╚═══╝ ╚═════╝   ╚═══╝  ╚═╝  ╚═╝"
+    ];
+    var COMMANDS = ["help","about","skills","projects","contact","theme","matrix","clear","history","whoami","date","echo","ls","sudo"];
+    var THEMES = ["dracula","solarized","nord","paper"];
+    function init() {
+      var log = qs("#log");
+      var input = qs("#cmd");
+      var logo = qs("#logo");
+      var term = qs("#term");
+      var win = qs("#win");
+      var tap = qs("#tap");
+      var matrix = qs("#matrix");
+      if (!log || !input || !logo || !term || !win || !tap || !matrix) return;
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var history = [];
+      var hIdx = 0;
+      var matrixOn = false;
+      function print(html, cls) {
+        var d = document.createElement("div");
+        d.className = "line" + (cls ? " " + cls : "");
+        d.innerHTML = html;
+        log.appendChild(d);
+        term.scrollTop = term.scrollHeight;
+        return d;
+      }
+      function typeLogo(done) {
+        if (reduce) {
+          logo.textContent = ASCII.join("\n");
+          done();
+          return;
+        }
+        var line = 0, col = 0, acc = ["","","","","",""];
+        function tick() {
+          if (line >= ASCII.length) { done(); return; }
+          acc[line] += ASCII[line].charAt(col);
+          logo.textContent = acc.join("\n");
+          col += 2;
+          if (col >= ASCII[line].length) { line++; col = 0; }
+          setTimeout(tick, 12);
+        }
+        tick();
+      }
+      function help() {
+        var rows = [
+          ["help", "list commands"], ["about", "profile of Nova Reyes"],
+          ["skills", "animated skill bars"], ["projects", "selected work"],
+          ["contact", "email / GitHub / Mastodon / PGP"], ["theme <name>", "dracula solarized nord paper"],
+          ["matrix", "easter egg rain"], ["clear", "wipe the scrollback"],
+          ["history", "numbered command list"], ["whoami", "current user"],
+          ["date", "local clock"], ["echo", "print arguments"],
+          ["ls", "home listing"], ["sudo", "a joke, mostly"]
+        ];
+        var h = '<div class="help">';
+        rows.forEach(function (r) { h += "<div><span class='d'>" + r[0] + "</span> — " + r[1] + "</div>"; });
+        print(h + "</div>");
+      }
+      function about() {
+        print('<dl class="kv"><dt>name</dt><dd>Nova Reyes</dd><dt>role</dt><dd>creative engineer</dd><dt>city</dt><dd>Lisbon</dd><dt>focus</dt><dd>interfaces, tools, quiet systems</dd><dt>currently</dt><dd>shipping small instruments for the web</dd></dl>');
+      }
+      function skills() {
+        var items = [["TypeScript", 92], ["GLSL / canvas", 80], ["Rust", 64], ["Design systems", 88], ["Web Audio", 71]];
+        var wrap = document.createElement("div");
+        wrap.className = "skills";
+        items.forEach(function (it) {
+          var row = document.createElement("div");
+          row.className = "skill";
+          row.innerHTML = "<span>" + it[0] + "</span><div class='bar'><i style='width:0'></i></div><span>" + it[1] + "%</span>";
+          wrap.appendChild(row);
+        });
+        log.appendChild(wrap);
+        requestAnimationFrame(function () {
+          var bars = wrap.querySelectorAll("i");
+          items.forEach(function (it, i) { if (bars[i]) bars[i].style.width = it[1] + "%"; });
+        });
+        term.scrollTop = term.scrollHeight;
+      }
+      function projects() {
+        print('<div class="cards">' +
+          '<article class="card"><h3>Tidewater</h3><p>Tidal data as a living coastline of type.</p><div class="pills"><span>canvas</span><span>cartography</span></div></article>' +
+          '<article class="card"><h3>Lantern</h3><p>A reading lamp for long-form on the web.</p><div class="pills"><span>typography</span><span>a11y</span></div></article>' +
+          '<article class="card"><h3>Fieldnotes</h3><p>Offline-first notebook with ink physics.</p><div class="pills"><span>PWA</span><span>CRDT</span></div></article>' +
+          '<article class="card"><h3>Glasshouse</h3><p>A greenhouse dashboard of sensors and weather.</p><div class="pills"><span>IoT</span><span>charts</span></div></article>' +
+          "</div>");
+      }
+      function contact() {
+        print("email     nova.reyes@example.com<br>GitHub    github.com/novareyes<br>Mastodon  @nova@lisboa.social<br>PGP       4F3A 91C2 0B7E 6D18  AA41 77C0 12DE 9F4B");
+      }
+      function ls() {
+        print("about.txt  contact.md  projects/  skills.json  themes/");
+      }
+      function runMatrix() {
+        var ctx = matrix.getContext ? matrix.getContext("2d") : null;
+        if (!ctx) { print("matrix rain unavailable"); return; }
+        matrix.style.display = "block";
+        matrixOn = true;
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        function size() {
+          var r = matrix.getBoundingClientRect();
+          matrix.width = Math.floor(r.width * dpr);
+          matrix.height = Math.floor(r.height * dpr);
+        }
+        size();
+        var glyphs = "アイウエオカキクケコサシスセソタチツテナニヌネノ0123456789<>/$#*";
+        var cols = 42, drops = [];
+        var i;
+        for (i = 0; i < cols; i++) drops[i] = Math.random() * 20;
+        var green = getComputedStyle(document.documentElement).getPropertyValue("--user") || "#50fa7b";
+        var start = Date.now();
+        function rain() {
+          if (!matrixOn) return;
+          ctx.fillStyle = "rgba(0,0,0,0.12)";
+          ctx.fillRect(0, 0, matrix.width, matrix.height);
+          ctx.fillStyle = green;
+          ctx.font = 14 * dpr + "px ui-monospace, Menlo, monospace";
+          var cw = matrix.width / cols;
+          for (i = 0; i < cols; i++) {
+            var ch = glyphs.charAt(Math.floor(Math.random() * glyphs.length));
+            ctx.fillText(ch, i * cw, drops[i] * 16 * dpr);
+            if (drops[i] * 16 * dpr > matrix.height && Math.random() > 0.975) drops[i] = 0;
+            drops[i]++;
+          }
+          if (Date.now() - start > 7000) stopMatrix();
+          else if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(rain);
+        }
+        rain();
+      }
+      function stopMatrix() {
+        if (!matrixOn) return;
+        matrixOn = false;
+        matrix.style.display = "none";
+        print("wake up, nova — the rain was only a screensaver.");
+      }
+      function exec(raw) {
+        var line = (raw || "").replace(/^\s+|\s+$/g, "");
+        if (!line) return;
+        history.push(line);
+        hIdx = history.length;
+        print('<span class="u">nova</span><span class="at">@</span><span class="u">portfolio</span> <span class="d">~</span><span class="gt">❯</span> ' + line.replace(/</g, "&lt;"));
+        var parts = line.split(/\s+/);
+        var cmd = parts[0];
+        var arg = parts.slice(1).join(" ");
+        if (cmd === "help") help();
+        else if (cmd === "about") about();
+        else if (cmd === "skills") skills();
+        else if (cmd === "projects") projects();
+        else if (cmd === "contact") contact();
+        else if (cmd === "clear") { log.innerHTML = ""; }
+        else if (cmd === "history") {
+          history.forEach(function (h, i) { print((i + 1) + "  " + h.replace(/</g, "&lt;")); });
+        }
+        else if (cmd === "whoami") print("nova");
+        else if (cmd === "date") print(String(new Date()));
+        else if (cmd === "echo") print(arg.replace(/</g, "&lt;") || "");
+        else if (cmd === "ls") ls();
+        else if (cmd === "sudo") print("nova is not in the sudoers file. This incident will be reported to the cat.");
+        else if (cmd === "theme") {
+          var name = (parts[1] || "").toLowerCase();
+          if (THEMES.indexOf(name) === -1) print("theme: try dracula, solarized, nord, paper");
+          else {
+            document.documentElement.setAttribute("data-theme", name);
+            print("palette set to " + name);
+          }
+        }
+        else if (cmd === "matrix") runMatrix();
+        else print("zsh: command not found: " + cmd.replace(/</g, "&lt;"), "err");
+      }
+      function complete() {
+        var v = input.value;
+        var parts = v.split(/\s+/);
+        if (parts[0] === "theme" && parts.length <= 2) {
+          var p = (parts[1] || "");
+          var hits = THEMES.filter(function (t) { return t.indexOf(p) === 0; });
+          if (hits.length === 1) input.value = "theme " + hits[0];
+          else if (hits.length) print(hits.join("  "));
+          return;
+        }
+        var hits2 = COMMANDS.filter(function (c) { return c.indexOf(v) === 0; });
+        if (hits2.length === 1) input.value = hits2[0];
+        else if (hits2.length) print(hits2.join("  "));
+      }
+      input.addEventListener("keydown", function (ev) {
+        if (matrixOn) { ev.preventDefault(); stopMatrix(); return; }
+        if (ev.key === "Enter") { exec(input.value); input.value = ""; }
+        else if (ev.key === "Tab") { ev.preventDefault(); complete(); }
+        else if (ev.key === "ArrowUp") {
+          ev.preventDefault();
+          if (hIdx > 0) { hIdx--; input.value = history[hIdx] || ""; }
+        } else if (ev.key === "ArrowDown") {
+          ev.preventDefault();
+          if (hIdx < history.length - 1) { hIdx++; input.value = history[hIdx] || ""; }
+          else { hIdx = history.length; input.value = ""; }
+        } else if (ev.ctrlKey && (ev.key === "l" || ev.key === "L")) {
+          ev.preventDefault(); log.innerHTML = "";
+        } else if (ev.ctrlKey && (ev.key === "c" || ev.key === "C")) {
+          print("^C");
+          input.value = "";
+        }
+      });
+      win.addEventListener("focusin", function () { win.classList.remove("unfocused"); });
+      win.addEventListener("focusout", function () { win.classList.add("unfocused"); });
+      tap.addEventListener("click", function () { input.focus(); tap.classList.add("gone"); });
+      input.addEventListener("focus", function () { tap.classList.add("gone"); });
+      qsa(".dock button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var c = b.getAttribute("data-cmd");
+          if (c) exec(c);
+        });
+      });
+      document.addEventListener("pointerdown", function () { if (matrixOn) stopMatrix(); });
+      typeLogo(function () {
+        print("Last login: Thu Mar 12 09:41:07 on ttys003");
+        print("welcome to nova@portfolio — type <span class='d'>help</span> to begin.");
+        input.focus();
+      });
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

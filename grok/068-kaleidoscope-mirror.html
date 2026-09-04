@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kaleidoscope — Brass Eyepiece of Living Glass</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: #0e0c0a;
+      color: #e9dcc4;
+      font-family: Georgia, "Iowan Old Style", Palatino, serif;
+      min-height: 100%;
+      display: flex; flex-direction: column; align-items: center;
+      overflow: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed; inset: 0;
+      background: radial-gradient(circle at 50% 46%, #241c14, transparent 55%);
+      pointer-events: none;
+    }
+    .felt {
+      position: fixed; inset: 0; opacity: .12; mix-blend-mode: overlay; pointer-events: none;
+    }
+    header {
+      position: relative; z-index: 2; text-align: center; padding: 18px 16px 8px;
+    }
+    header h1 { font-size: clamp(26px, 4vw, 40px); font-weight: 400; }
+    header p {
+      font-family: system-ui, sans-serif;
+      font-size: 11px; letter-spacing: .24em; text-transform: uppercase;
+      color: rgba(233,220,196,.5); margin-top: 6px;
+    }
+    .eye {
+      position: relative; z-index: 2;
+      width: min(88vw, 74vh); height: min(88vw, 74vh);
+      border-radius: 50%;
+      box-shadow: 0 30px 70px rgba(0,0,0,.7), 0 0 0 1px #3a2a12;
+    }
+    .rim {
+      position: absolute; inset: 0; border-radius: 50%;
+      background: conic-gradient(#f3d58a, #c99a3c, #9c6a1e, #5a3a0c, #c99a3c, #f3d58a);
+      animation: sheen 40s linear infinite;
+    }
+    .rim::after {
+      content: "";
+      position: absolute; inset: 4%;
+      border-radius: 50%;
+      background: conic-gradient(from 20deg, #e8c56a, #8a5a18, #f3d58a, #5a3a0c, #c99a3c);
+      box-shadow: inset 0 0 18px rgba(0,0,0,.55), inset 0 2px 0 rgba(255,230,160,.35);
+    }
+    .rim::before {
+      content: "";
+      position: absolute; inset: 0; border-radius: 50%;
+      background: repeating-conic-gradient(rgba(0,0,0,.25) 0 2deg, transparent 2deg 4deg);
+      -webkit-mask-image: radial-gradient(circle, transparent 72%, #000 73% 92%, transparent 93%);
+      mask-image: radial-gradient(circle, transparent 72%, #000 73% 92%, transparent 93%);
+      pointer-events: none;
+    }
+    @keyframes sheen { to { transform: rotate(360deg); } }
+    .lens {
+      position: absolute; inset: 7%; border-radius: 50%; overflow: hidden;
+      background: #07050d; cursor: pointer;
+    }
+    #view { display: block; width: 100%; height: 100%; }
+    .vignette {
+      position: absolute; inset: 0; pointer-events: none; border-radius: 50%;
+      background:
+        radial-gradient(ellipse 40% 28% at 32% 28%, rgba(255,255,255,.18), transparent 50%),
+        radial-gradient(circle, transparent 52%, rgba(0,0,0,.55) 100%);
+    }
+    .glint {
+      position: absolute; inset: -10%; pointer-events: none;
+      background: linear-gradient(120deg, transparent 42%, rgba(255,255,255,.18) 50%, transparent 58%);
+      animation: glint 9s ease-in-out infinite;
+    }
+    @keyframes glint { 0%,100% { transform: translateX(-18%); } 50% { transform: translateX(18%); } }
+    footer {
+      position: relative; z-index: 2;
+      display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+      padding: 16px 12px 22px; max-width: 920px;
+    }
+    .pill {
+      background: linear-gradient(180deg, #e8c56a, #9c6a1e);
+      border-radius: 999px; padding: 4px;
+      box-shadow: 0 2px 0 #3a2408, inset 0 1px 0 rgba(255,240,200,.4);
+      display: flex; gap: 2px; align-items: center;
+    }
+    .pill button, .pill label {
+      background: transparent; border: 0; color: #2a1808;
+      font-family: system-ui, sans-serif; font-size: 11px; letter-spacing: .18em;
+      text-transform: uppercase; padding: 6px 10px; border-radius: 999px; cursor: pointer;
+    }
+    .pill button.on { background: #2a1808; color: #e9dcc4; }
+    .pill input[type="range"] { width: 90px; margin: 0 8px 0 0; }
+    #src { position: absolute; left: -9999px; top: 0; }
+    @media (prefers-reduced-motion: reduce) {
+      .rim, .glint { animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <svg class="felt" width="100%" height="100%" aria-hidden="true">
+    <filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/></filter>
+    <rect width="100%" height="100%" filter="url(#n)"/>
+  </svg>
+  <header>
+    <h1>Kaleidoscope</h1>
+    <p id="meta">Folds 8 · Shards 18</p>
+  </header>
+  <div class="eye" id="eye">
+    <div class="rim"></div>
+    <div class="lens" id="lens">
+      <canvas id="view"></canvas>
+      <div class="vignette"></div>
+      <div class="glint"></div>
+    </div>
+  </div>
+  <canvas id="src" width="600" height="600"></canvas>
+  <footer>
+    <div class="pill" id="folds">
+      <button type="button" data-n="6">6</button>
+      <button type="button" data-n="8" class="on">8</button>
+      <button type="button" data-n="10">10</button>
+      <button type="button" data-n="12">12</button>
+    </div>
+    <div class="pill" id="pals">
+      <button type="button" data-pal="jewel" class="on">Jewel</button>
+      <button type="button" data-pal="pastel">Pastel</button>
+      <button type="button" data-pal="neon">Neon</button>
+      <button type="button" data-pal="autumn">Autumn</button>
+    </div>
+    <div class="pill">
+      <label for="dens">Shard density</label>
+      <input type="range" id="dens" min="6" max="40" value="18">
+    </div>
+    <div class="pill">
+      <button type="button" id="shake">Shake</button>
+    </div>
+  </footer>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    var PALS = {
+      jewel: { cols: ["#7b1fa2","#c2185b","#0288d1","#00897b","#f9a825","#3949ab","#e53935"], bg: "#07050d", comp: "screen" },
+      pastel: { cols: ["#f8bbd0","#b3e5fc","#c8e6c9","#fff59d","#e1bee7","#ffe0b2","#b2dfdb"], bg: "#f7f1e6", comp: "multiply" },
+      neon: { cols: ["#39ff14","#ff073a","#00f0ff","#ff9d00","#ff00e6","#c6ff00","#7a5cff"], bg: "#020206", comp: "lighter" },
+      autumn: { cols: ["#8b2500","#d2691e","#daa520","#556b2f","#a0522d","#cd5c5c","#f4a460"], bg: "#1a0f08", comp: "source-over" }
+    };
+    function init() {
+      var view = qs("#view");
+      var src = qs("#src");
+      var lens = qs("#lens");
+      var eye = qs("#eye");
+      var dens = qs("#dens");
+      var shakeBtn = qs("#shake");
+      var meta = qs("#meta");
+      if (!view || !src || !lens || !eye) return;
+      var vctx = view.getContext("2d");
+      var sctx = src.getContext("2d");
+      if (!vctx || !sctx) return;
+      var reduced = false;
+      if (typeof window.matchMedia === "function") {
+        try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e1) {}
+      }
+      var N = 8, palKey = "jewel", shapes = [], kick = 1;
+      var ox = 0, oy = 0, tox = 0, toy = 0, rot = 0;
+      var SW = 600, SH = 600;
+      function sizeSource() {
+        var r = lens.getBoundingClientRect();
+        var d = Math.max(240, r.width * 1.5);
+        if (Math.abs(SW - d) > 8) {
+          SW = Math.floor(d); SH = Math.floor(d);
+          src.width = SW; src.height = SH;
+        }
+      }
+      function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+      function makeShape() {
+        var pal = PALS[palKey];
+        var kind = Math.random() < 0.55 ? "blob" : "shard";
+        return {
+          kind: kind,
+          x: Math.random() * SW, y: Math.random() * SH,
+          vx: (Math.random() - 0.5) * 0.6, vy: (Math.random() - 0.5) * 0.6,
+          r: 28 + Math.random() * 70, rot: Math.random() * Math.PI * 2,
+          vr: (Math.random() - 0.5) * 0.01, ph: Math.random() * Math.PI * 2,
+          a: pick(pal.cols), b: pick(pal.cols),
+          sides: 3 + Math.floor(Math.random() * 4),
+          jit: Array.from({ length: 6 }, function () { return 0.7 + Math.random() * 0.5; })
+        };
+      }
+      function rebuild(n) {
+        var i, next = [];
+        for (i = 0; i < n; i++) next.push(shapes[i] && i < shapes.length ? shapes[i] : makeShape());
+        shapes = next;
+      }
+      rebuild(18);
+      function drawSource(t) {
+        var pal = PALS[palKey];
+        sctx.setTransform(1, 0, 0, 1, 0, 0);
+        sctx.globalCompositeOperation = "source-over";
+        sctx.fillStyle = pal.bg;
+        sctx.fillRect(0, 0, SW, SH);
+        sctx.globalCompositeOperation = pal.comp;
+        var drift = reduced ? 0.3 : 1;
+        shapes.forEach(function (s) {
+          s.x += s.vx * kick * drift; s.y += s.vy * kick * drift;
+          s.rot += s.vr * kick * drift;
+          if (s.x < -s.r) s.x += SW + s.r * 2;
+          if (s.x > SW + s.r) s.x -= SW + s.r * 2;
+          if (s.y < -s.r) s.y += SH + s.r * 2;
+          if (s.y > SH + s.r) s.y -= SH + s.r * 2;
+          var br = s.r * (1 + 0.08 * Math.sin(t * 0.0015 + s.ph));
+          sctx.save();
+          sctx.translate(s.x, s.y);
+          sctx.rotate(s.rot);
+          if (s.kind === "blob") {
+            var g = sctx.createRadialGradient(-br * 0.2, -br * 0.25, 4, 0, 0, br);
+            g.addColorStop(0, s.a); g.addColorStop(0.45, s.b); g.addColorStop(1, "rgba(0,0,0,0)");
+            sctx.fillStyle = g;
+            sctx.beginPath(); sctx.arc(0, 0, br, 0, Math.PI * 2); sctx.fill();
+          } else {
+            var lg = sctx.createLinearGradient(-br, -br, br, br);
+            lg.addColorStop(0, s.a); lg.addColorStop(1, s.b);
+            sctx.fillStyle = lg;
+            sctx.beginPath();
+            var i, ang;
+            for (i = 0; i < s.sides; i++) {
+              ang = (i / s.sides) * Math.PI * 2;
+              var rr = br * s.jit[i];
+              var x = Math.cos(ang) * rr, y = Math.sin(ang) * rr;
+              if (i === 0) sctx.moveTo(x, y); else sctx.lineTo(x, y);
+            }
+            sctx.closePath(); sctx.fill();
+            sctx.strokeStyle = "rgba(255,255,255,.25)"; sctx.lineWidth = 1; sctx.stroke();
+          }
+          sctx.restore();
+        });
+        if (kick > 1) kick += (1 - kick) * 0.08;
+      }
+      function paintView() {
+        var r = lens.getBoundingClientRect();
+        var dpr = window.devicePixelRatio || 1;
+        var S = Math.max(1, Math.floor(r.width));
+        if (view.width !== Math.floor(S * dpr)) {
+          view.width = Math.floor(S * dpr);
+          view.height = Math.floor(S * dpr);
+        }
+        vctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        vctx.clearRect(0, 0, S, S);
+        var cx = S / 2, cy = S / 2, rad = S / 2;
+        var a = (Math.PI * 2) / N;
+        var i;
+        for (i = 0; i < N; i++) {
+          vctx.save();
+          vctx.beginPath();
+          vctx.moveTo(cx, cy);
+          vctx.arc(cx, cy, rad + 2, rot + i * a - 0.004, rot + (i + 1) * a + 0.004);
+          vctx.closePath();
+          vctx.clip();
+          vctx.translate(cx, cy);
+          if (i % 2 === 0) {
+            vctx.rotate(rot + i * a);
+          } else {
+            var c = rot + (i + 1) * a / 2 + i * a / 2;
+            /* reflection across the line at angle (i+1)*a/2 */
+            var mid = rot + (i + 0.5) * a;
+            vctx.rotate(mid);
+            vctx.scale(1, -1);
+            vctx.rotate(-mid);
+            vctx.rotate(rot + i * a);
+          }
+          var scale = (rad * 2) / SW;
+          vctx.drawImage(src, -SW / 2 * scale + ox, -SH / 2 * scale + oy, SW * scale, SH * scale);
+          vctx.restore();
+        }
+        vctx.save();
+        vctx.globalCompositeOperation = "overlay";
+        vctx.strokeStyle = "rgba(255,255,255,.28)";
+        vctx.lineWidth = 1;
+        for (i = 0; i < N; i++) {
+          vctx.beginPath();
+          vctx.moveTo(cx, cy);
+          vctx.lineTo(cx + Math.cos(rot + i * a) * rad, cy + Math.sin(rot + i * a) * rad);
+          vctx.stroke();
+        }
+        vctx.restore();
+      }
+      function loop(now) {
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+        ox += (tox - ox) * 0.08;
+        oy += (toy - oy) * 0.08;
+        if (!reduced) {
+          rot += 0.06 * 0.016;
+          tox += Math.sin(now * 0.00022) * 0.15;
+          toy += Math.cos(now * 0.00018) * 0.15;
+        }
+        sizeSource();
+        drawSource(now);
+        paintView();
+      }
+      function mapPointer(ev) {
+        var r = eye.getBoundingClientRect();
+        var nx = (ev.clientX - r.left) / r.width - 0.5;
+        var ny = (ev.clientY - r.top) / r.height - 0.5;
+        var rad = Math.min(r.width, r.height) / 2;
+        tox = nx * rad * 0.5;
+        toy = ny * rad * 0.5;
+      }
+      window.addEventListener("pointermove", function (ev) {
+        mapPointer(ev);
+        if (ev.pointerType === "touch") ev.preventDefault();
+      }, { passive: false });
+      qsa("#folds button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          N = parseInt(b.getAttribute("data-n"), 10) || 8;
+          qsa("#folds button").forEach(function (x) { x.classList.remove("on"); });
+          b.classList.add("on");
+          if (meta) meta.textContent = "Folds " + N + " · Shards " + shapes.length;
+        });
+      });
+      qsa("#pals button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          palKey = b.getAttribute("data-pal") || "jewel";
+          qsa("#pals button").forEach(function (x) { x.classList.remove("on"); });
+          b.classList.add("on");
+          shapes.forEach(function (s) {
+            s.a = pick(PALS[palKey].cols);
+            s.b = pick(PALS[palKey].cols);
+          });
+        });
+      });
+      if (dens) dens.addEventListener("input", function () {
+        rebuild(parseInt(dens.value, 10) || 18);
+        if (meta) meta.textContent = "Folds " + N + " · Shards " + shapes.length;
+      });
+      function doShake() {
+        shapes.forEach(function (s) {
+          Object.assign(s, makeShape(), { x: s.x, y: s.y });
+        });
+        kick = 3;
+      }
+      if (shakeBtn) shakeBtn.addEventListener("click", doShake);
+      lens.addEventListener("dblclick", doShake);
+      if (typeof window.ResizeObserver === "function") {
+        var ro = new ResizeObserver(function () { paintView(); });
+        ro.observe(lens);
+      } else {
+        window.addEventListener("resize", paintView);
+      }
+      sizeSource();
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

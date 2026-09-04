@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chladni Resonance</title>
+  <style>
+    :root {
+      --bg: #0b0c0e;
+      --panel: #1c1f24;
+      --panel2: #15171b;
+      --brass: #c9a24a;
+      --cream: #e6e1d6;
+      --muted: #8b8778;
+      --teal: #7fd1c0;
+      --num: #f0d68a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; background: var(--bg); color: var(--cream); }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      min-height: 100vh;
+    }
+    .plate-wrap {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .housing {
+      position: relative;
+      width: min(92vmin, 720px);
+      aspect-ratio: 1;
+      background: linear-gradient(145deg, #3a3224, #1a1710);
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 30px 60px rgba(0,0,0,0.45), inset 0 1px 0 rgba(240,214,138,0.25);
+    }
+    .bolt {
+      position: absolute; width: 22px; height: 22px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #f0d68a, #c9a24a 45%, #8f6f2a);
+      box-shadow: inset 0 -2px 4px rgba(0,0,0,0.35);
+    }
+    .bolt.tl { top: 10px; left: 10px; }
+    .bolt.tr { top: 10px; right: 10px; }
+    .bolt.bl { bottom: 10px; left: 10px; }
+    .bolt.br { bottom: 10px; right: 10px; }
+    canvas#plate {
+      display: block; width: 100%; height: 100%;
+      border-radius: 4px; cursor: crosshair;
+    }
+    .console {
+      background: linear-gradient(180deg, var(--panel), var(--panel2));
+      border-left: 1px solid #2a2e34;
+      padding: 22px 20px 28px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    h1 {
+      font-family: Georgia, "Iowan Old Style", Palatino, serif;
+      font-weight: 500;
+      font-size: 1.55rem;
+      letter-spacing: 0.02em;
+    }
+    .dials { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .dial {
+      background: #101215;
+      border: 1px solid #3a3428;
+      border-radius: 8px;
+      padding: 8px 6px;
+      text-align: center;
+    }
+    .dial span {
+      display: block;
+      font-family: "Courier New", ui-monospace, monospace;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .dial strong {
+      font-family: "Courier New", ui-monospace, monospace;
+      font-size: 1.35rem;
+      color: var(--num);
+      text-shadow: 0 0 10px rgba(240,214,138,0.55);
+      font-weight: 500;
+    }
+    .scope {
+      height: 64px;
+      background: #0a0c0e;
+      border: 1px solid #2c3338;
+      border-radius: 6px;
+    }
+    label.cap {
+      font-size: 0.78rem;
+      color: var(--muted);
+      display: flex; justify-content: space-between;
+    }
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none;
+      width: 100%; height: 6px; border-radius: 999px;
+      background: linear-gradient(90deg, #8f6f2a, #f0d68a, #c9a24a);
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #fff3c4, #c9a24a 55%, #8f6f2a);
+      border: 1px solid #6a5220; cursor: pointer;
+    }
+    .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .push {
+      appearance: none; border: 1px solid #4a3f28;
+      background: linear-gradient(#2a2e33, #1a1d21);
+      color: var(--cream);
+      border-radius: 6px;
+      padding: 10px 8px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      display: flex; align-items: center; gap: 8px; justify-content: center;
+    }
+    .led { width: 8px; height: 8px; border-radius: 50%; background: #3a3f44; box-shadow: inset 0 1px 2px #000; }
+    .push.on .led { background: #7fd1c0; box-shadow: 0 0 8px #7fd1c0; }
+    .push.warm .led { background: #c9a24a; box-shadow: 0 0 8px #c9a24a; }
+    .note {
+      font-family: Georgia, "Iowan Old Style", Palatino, serif;
+      font-size: 0.86rem;
+      line-height: 1.5;
+      color: var(--muted);
+      font-style: italic;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .console { border-left: 0; border-top: 1px solid #2a2e34; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .push { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div class="plate-wrap">
+      <div class="housing">
+        <span class="bolt tl"></span><span class="bolt tr"></span>
+        <span class="bolt bl"></span><span class="bolt br"></span>
+        <canvas id="plate" aria-label="Chladni plate"></canvas>
+      </div>
+    </div>
+    <aside class="console">
+      <h1>Chladni Resonance</h1>
+      <div class="dials">
+        <div class="dial"><span>mode n</span><strong id="nRead">3</strong></div>
+        <div class="dial"><span>mode m</span><strong id="mRead">2</strong></div>
+        <div class="dial"><span>Hertz</span><strong id="hzRead">430</strong></div>
+      </div>
+      <canvas class="scope" id="scope"></canvas>
+      <label class="cap">n <span id="nLab">3</span></label>
+      <input type="range" id="n" min="1" max="9" step="1" value="3">
+      <label class="cap">m <span id="mLab">2</span></label>
+      <input type="range" id="m" min="1" max="9" step="1" value="2">
+      <label class="cap">frequency blend <span id="bLab">0.00</span></label>
+      <input type="range" id="blend" min="0" max="1" step="0.01" value="0">
+      <label class="cap">grains <span id="gLab">8000</span></label>
+      <input type="range" id="grains" min="2000" max="30000" step="500" value="8000">
+      <div class="btns">
+        <button type="button" class="push" id="sweep"><span class="led"></span>Sweep</button>
+        <button type="button" class="push" id="tone"><span class="led"></span>Tone</button>
+        <button type="button" class="push" id="scatter"><span class="led"></span>Scatter sand</button>
+        <button type="button" class="push" id="random"><span class="led"></span>Random mode</button>
+      </div>
+      <p class="note">In 1787 Ernst Chladni drew a violin bow across a metal plate sprinkled with sand. Where the plate stood still, grains gathered into nodal figures — the first pictures of vibration.</p>
+    </aside>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var canvas = qs("#plate");
+      var scope = qs("#scope");
+      if (!canvas || !canvas.getContext) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var sctx = scope && scope.getContext ? scope.getContext("2d") : null;
+      var reduce = false;
+      if (typeof window.matchMedia === "function") {
+        reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      }
+      var n = 3, m = 2, blend = 0, count = 8000;
+      var xs, ys, vx, vy, settled;
+      function alloc(c) {
+        count = c;
+        xs = new Float32Array(c);
+        ys = new Float32Array(c);
+        vx = new Float32Array(c);
+        vy = new Float32Array(c);
+        settled = new Uint8Array(c);
+        scatter();
+      }
+      function scatter() {
+        var i;
+        for (i = 0; i < count; i++) {
+          xs[i] = Math.random(); ys[i] = Math.random();
+          vx[i] = 0; vy[i] = 0; settled[i] = 0;
+        }
+      }
+      alloc(8000);
+      function field(x, y, nn, mm) {
+        return Math.cos(nn * Math.PI * x) * Math.cos(mm * Math.PI * y) - Math.cos(mm * Math.PI * x) * Math.cos(nn * Math.PI * y);
+      }
+      function zAt(x, y) {
+        var a = field(x, y, n, m);
+        var b = field(x, y, Math.min(9, n + 1), Math.min(9, m + 1));
+        return a * (1 - blend) + b * blend;
+      }
+      function freq() { return 40 * (n * n + m * m) + 30; }
+      var nEl = qs("#n"), mEl = qs("#m"), bEl = qs("#blend"), gEl = qs("#grains");
+      var nRead = qs("#nRead"), mRead = qs("#mRead"), hzRead = qs("#hzRead");
+      var nLab = qs("#nLab"), mLab = qs("#mLab"), bLab = qs("#bLab"), gLab = qs("#gLab");
+      function sync() {
+        if (nRead) nRead.textContent = String(n);
+        if (mRead) mRead.textContent = String(m);
+        if (hzRead) hzRead.textContent = String(Math.round(freq()));
+        if (nLab) nLab.textContent = String(n);
+        if (mLab) mLab.textContent = String(m);
+        if (bLab) bLab.textContent = blend.toFixed(2);
+        if (gLab) gLab.textContent = String(count);
+      }
+      sync();
+      var flash = 0;
+      function onMode() { flash = 1; sync(); }
+      if (nEl) nEl.addEventListener("input", function () { n = parseInt(nEl.value, 10) || 1; onMode(); });
+      if (mEl) mEl.addEventListener("input", function () { m = parseInt(mEl.value, 10) || 1; onMode(); });
+      if (bEl) bEl.addEventListener("input", function () { blend = parseFloat(bEl.value) || 0; sync(); });
+      if (gEl) gEl.addEventListener("input", function () { alloc(parseInt(gEl.value, 10) || 8000); sync(); });
+      var sweeping = false, toneOn = false, audioCtx = null, osc = null, gain = null;
+      var sweepBtn = qs("#sweep"), toneBtn = qs("#tone"), scatterBtn = qs("#scatter"), randBtn = qs("#random");
+      if (sweepBtn) sweepBtn.addEventListener("click", function () {
+        sweeping = !sweeping;
+        sweepBtn.classList.toggle("on", sweeping);
+      });
+      if (toneBtn) toneBtn.addEventListener("click", function () {
+        toneOn = !toneOn;
+        toneBtn.classList.toggle("on", toneOn);
+        if (toneOn) {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (AC && !audioCtx) audioCtx = new AC();
+          if (audioCtx) {
+            if (audioCtx.state === "suspended" && audioCtx.resume) audioCtx.resume();
+            osc = audioCtx.createOscillator();
+            gain = audioCtx.createGain();
+            osc.type = "sine";
+            osc.frequency.value = freq();
+            gain.gain.value = 0.04;
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start();
+          }
+        } else if (osc) {
+          try { osc.stop(); } catch (e) {}
+          osc = null;
+        }
+      });
+      if (scatterBtn) scatterBtn.addEventListener("click", function () { scatter(); });
+      if (randBtn) randBtn.addEventListener("click", function () {
+        n = 1 + ((Math.random() * 9) | 0);
+        m = 1 + ((Math.random() * 9) | 0);
+        if (nEl) nEl.value = String(n);
+        if (mEl) mEl.value = String(m);
+        onMode();
+      });
+      var dpr = 1, W = 0, H = 0, shimmer = 0;
+      function resize() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var r = canvas.getBoundingClientRect();
+        W = Math.max(1, Math.floor(r.width * dpr));
+        H = Math.max(1, Math.floor(r.height * dpr));
+        canvas.width = W; canvas.height = H;
+        if (scope) {
+          var sr = scope.getBoundingClientRect();
+          scope.width = Math.max(1, Math.floor(sr.width * dpr));
+          scope.height = Math.max(1, Math.floor(sr.height * dpr));
+        }
+      }
+      resize();
+      window.addEventListener("resize", resize);
+      canvas.addEventListener("pointerdown", function (e) {
+        var r = canvas.getBoundingClientRect();
+        var px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
+        var i, dx, dy, d;
+        for (i = 0; i < count; i++) {
+          dx = xs[i] - px; dy = ys[i] - py; d = dx * dx + dy * dy;
+          if (d < 0.012) {
+            var inv = 1 / (Math.sqrt(d) + 0.01);
+            vx[i] += dx * inv * 0.08;
+            vy[i] += dy * inv * 0.08;
+            settled[i] = 0;
+          }
+        }
+      });
+      var phase = 0;
+      function sim() {
+        var i, x, y, z, zx, zy, amp, gx, gy, iters = reduce ? 1 : 2, it;
+        var eps = 0.01;
+        for (it = 0; it < iters; it++) {
+          for (i = 0; i < count; i++) {
+            x = xs[i]; y = ys[i];
+            z = zAt(x, y);
+            zx = (zAt(x + eps, y) - z) / eps;
+            zy = (zAt(x, y + eps) - z) / eps;
+            amp = Math.abs(z);
+            gx = (Math.random() - 0.5) * amp * 0.012 - zx * amp * 0.004;
+            gy = (Math.random() - 0.5) * amp * 0.012 - zy * amp * 0.004;
+            vx[i] = vx[i] * 0.82 + gx;
+            vy[i] = vy[i] * 0.82 + gy;
+            xs[i] = Math.max(0.01, Math.min(0.99, xs[i] + vx[i]));
+            ys[i] = Math.max(0.01, Math.min(0.99, ys[i] + vy[i]));
+            settled[i] = amp < 0.08 && Math.abs(vx[i]) + Math.abs(vy[i]) < 0.0015 ? 1 : 0;
+          }
+        }
+      }
+      function drawPlate() {
+        var img = ctx.createImageData(W, H);
+        var data = img.data;
+        var cell = 8, cx, cy, px, py, zz, a, idx, k;
+        for (cy = 0; cy < H; cy += cell) {
+          for (cx = 0; cx < W; cx += cell) {
+            px = cx / W; py = cy / H;
+            zz = Math.abs(zAt(px, py));
+            a = Math.min(70, zz * 90);
+            for (k = 0; k < cell && cy + (k >> 8) < H; k++) {}
+            var yy, xx;
+            for (yy = 0; yy < cell && cy + yy < H; yy++) {
+              for (xx = 0; xx < cell && cx + xx < W; xx++) {
+                idx = ((cy + yy) * W + (cx + xx)) * 4;
+                var brush = ((cy + yy) % 3 === 0) ? 14 : 0;
+                var vig = 1 - Math.min(1, Math.hypot(px - 0.5, py - 0.5) * 1.5) * 0.45;
+                var base = 36 + brush;
+                if ((cy + yy + cx + xx + ((shimmer * 40) | 0)) % 97 === 0) base += 18;
+                data[idx] = (base + a * 0.8) * vig;
+                data[idx + 1] = (base + 2 + a * 0.55) * vig;
+                data[idx + 2] = (base - 4 + a * 0.2) * vig;
+                data[idx + 3] = 255;
+              }
+            }
+          }
+        }
+        ctx.putImageData(img, 0, 0);
+        if (flash > 0) {
+          ctx.fillStyle = "rgba(201,162,74," + (flash * 0.28) + ")";
+          ctx.fillRect(0, 0, W, H);
+        }
+        var i, x, y;
+        for (i = 0; i < count; i++) {
+          x = xs[i] * W; y = ys[i] * H;
+          ctx.fillStyle = settled[i] ? "rgba(244,236,216,0.95)" : "rgba(244,236,216,0.45)";
+          ctx.fillRect(x, y, Math.max(1, dpr), Math.max(1, dpr));
+        }
+      }
+      function drawScope() {
+        if (!sctx || !scope) return;
+        var w = scope.width, h = scope.height;
+        sctx.fillStyle = "#0a0c0e";
+        sctx.fillRect(0, 0, w, h);
+        sctx.strokeStyle = "#7fd1c0";
+        sctx.beginPath();
+        var x, y, cycles = freq() / 80;
+        for (x = 0; x < w; x++) {
+          y = h * 0.5 + Math.sin(phase + (x / w) * Math.PI * 2 * Math.max(1, cycles * 0.08)) * (h * 0.32);
+          if (x === 0) sctx.moveTo(x, y); else sctx.lineTo(x, y);
+        }
+        sctx.stroke();
+      }
+      function frame(now) {
+        if (sweeping) {
+          blend += 0.004;
+          if (blend >= 1) {
+            blend = 0;
+            n = n >= 9 ? 1 : n + 1;
+            m = m >= 9 ? 1 : m + 1;
+            if (nEl) nEl.value = String(n);
+            if (mEl) mEl.value = String(m);
+            onMode();
+          }
+          if (bEl) bEl.value = blend.toFixed(2);
+          sync();
+        }
+        if (osc && osc.frequency) osc.frequency.setTargetAtTime(freq(), 0, 0.05);
+        flash = Math.max(0, flash - 0.04);
+        if (!reduce) shimmer += freq() * 0.00002;
+        if (!reduce) phase += freq() * 0.0004;
+        sim();
+        drawPlate();
+        drawScope();
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

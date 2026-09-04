@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dispersion — Gallery of Optics · Exhibit 07</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: #04050a;
+      color: #dce7f4;
+      font-family: system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      min-height: 100dvh;
+    }
+    canvas { display: block; width: 100%; height: 100%; position: fixed; inset: 0; }
+    .kicker {
+      position: fixed; top: 1.1rem; left: 1.2rem; z-index: 3;
+      font-size: 0.68rem; letter-spacing: 0.22em; text-transform: uppercase;
+      color: #8fd3ff; font-weight: 500;
+    }
+    h1 {
+      position: fixed; top: 2.15rem; left: 1.2rem; z-index: 3;
+      font-weight: 300; font-size: clamp(1.15rem, 2.6vw, 1.85rem);
+      line-height: 1.15; max-width: 16rem;
+    }
+    h1 strong { display: block; font-weight: 700; }
+    .panel {
+      position: fixed; z-index: 4;
+      background: rgba(14, 16, 24, 0.72);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+    }
+    .panel.explain {
+      left: 1.1rem; bottom: 1.1rem; max-width: 22rem;
+      font-size: 0.78rem; line-height: 1.45; color: #b7c4d6;
+    }
+    .panel.explain h2 {
+      font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase;
+      color: #8fd3ff; font-weight: 600; margin-bottom: 0.35rem;
+    }
+    .panel.explain code, .stats {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.72rem; color: #e8f4ff;
+    }
+    .stats { margin-top: 0.5rem; display: grid; gap: 0.18rem; }
+    .panel.controls {
+      right: 1.1rem; top: 1.1rem; display: flex; flex-direction: column; gap: 0.55rem;
+      min-width: 13.5rem;
+    }
+    label.row {
+      display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; cursor: pointer;
+    }
+    button {
+      appearance: none; border: 1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.06); color: #e8f4ff;
+      font: inherit; font-size: 0.78rem; padding: 0.4rem 0.7rem; border-radius: 8px; cursor: pointer;
+    }
+    button:hover { background: rgba(143, 211, 255, 0.16); }
+    .hint { position: fixed; right: 1.2rem; bottom: 1.2rem; z-index: 3; font-size: 0.72rem; color: #7e8ca0; }
+    .readout {
+      position: fixed; z-index: 5; pointer-events: none;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.72rem; color: #8fd3ff;
+      background: rgba(8,10,16,.88); border: 1px solid rgba(143,211,255,.35);
+      padding: 0.35rem 0.5rem; border-radius: 6px; display: none;
+    }
+    .mobile-note { display: none; }
+    @media (max-width: 700px) {
+      .hint { display: none; }
+      .panel.explain { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; max-width: none; padding: 0.5rem 0.7rem; }
+      .explain-full { display: none; }
+      .mobile-note { display: block; }
+      details summary { cursor: pointer; color: #8fd3ff; font-size: 0.78rem; }
+      h1 { max-width: 12rem; font-size: 1.05rem; }
+      .panel.controls { top: auto; bottom: 8.2rem; right: 0.6rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .panel { backdrop-filter: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <p class="kicker">Gallery of Optics · Exhibit 07</p>
+  <h1>Why the rainbow lives <strong>inside glass</strong></h1>
+  <div class="panel controls">
+    <label class="row"><input type="checkbox" id="artistic"> Artistic spread</label>
+    <label class="row" style="color:#9aa8ba;font-size:0.7rem">Physics-accurate when unchecked</label>
+    <label class="row"><input type="checkbox" id="second"> Second inverted prism</label>
+    <button type="button" id="reset">Reset layout</button>
+  </div>
+  <aside class="panel explain">
+    <div class="mobile-note">
+      <details>
+        <summary>Snell's law &amp; live stats</summary>
+        <p class="explain-body"></p>
+      </details>
+    </div>
+    <div class="explain-full">
+      <h2>Snell's law</h2>
+      <p>n₁ sin θ₁ = n₂ sin θ₂ at every surface. Cauchy's approximation n(λ) = 1.5046 + 0.0042/λ² (λ in µm) sets the glass index. Trace 40 monochromatic rays from 400 nm to 680 nm.</p>
+      <div class="stats" id="stats"></div>
+    </div>
+  </aside>
+  <p class="hint">Drag the lamp or prism · hover the screen for spectral lines</p>
+  <div class="readout" id="readout"></div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    var NAMES = [
+      { nm: 404, name: "violet" }, { nm: 434, name: "Hγ indigo" }, { nm: 450, name: "blue" },
+      { nm: 486, name: "Hβ cyan-blue" }, { nm: 510, name: "green" }, { nm: 546, name: "green-yellow" },
+      { nm: 589, name: "Na D yellow" }, { nm: 620, name: "orange" }, { nm: 656, name: "Hα red" }, { nm: 680, name: "deep red" }
+    ];
+    function wlName(nm) {
+      var best = NAMES[0], d = 999;
+      for (var i = 0; i < NAMES.length; i++) {
+        var dd = Math.abs(NAMES[i].nm - nm);
+        if (dd < d) { d = dd; best = NAMES[i]; }
+      }
+      var note = "";
+      if (Math.abs(nm - 656) < 8) note = " · nearby Hα 656";
+      else if (Math.abs(nm - 589) < 8) note = " · nearby Na D 589";
+      else if (Math.abs(nm - 486) < 8) note = " · nearby Hβ 486";
+      else if (Math.abs(nm - 434) < 8) note = " · nearby Hγ 434";
+      return best.name + note;
+    }
+    function cauchy(um, bMul) { return 1.5046 + (0.0042 * bMul) / (um * um); }
+    function bruton(wl) {
+      var r = 0, g = 0, b = 0, f = 1;
+      if (wl >= 380 && wl < 440) { r = -(wl - 440) / 60; b = 1; f = 0.3 + 0.7 * (wl - 380) / 60; }
+      else if (wl < 490) { g = (wl - 440) / 50; b = 1; }
+      else if (wl < 510) { g = 1; b = -(wl - 510) / 20; }
+      else if (wl < 580) { r = (wl - 510) / 70; g = 1; }
+      else if (wl < 645) { r = 1; g = -(wl - 645) / 65; }
+      else { r = 1; f = wl > 700 ? 0 : 0.3 + 0.7 * (780 - wl) / 135; if (wl > 700) f = Math.max(0, (780 - wl) / 80) * 0.3; if (wl <= 700) f = wl < 645 ? 1 : 0.3 + 0.7 * (780 - wl) / 135; }
+      if (wl >= 645 && wl <= 780) { r = 1; g = wl < 645 ? 1 : 0; if (wl < 700) f = 1; else f = 0.3 + 0.7 * (780 - wl) / 80; }
+      function gam(c) { return Math.round(255 * Math.pow(Math.max(0, c) * f, 0.8)); }
+      return { r: gam(r), g: gam(g), b: gam(b) };
+    }
+    function sub(a, b) { return { x: a.x - b.x, y: a.y - b.y }; }
+    function add(a, b) { return { x: a.x + b.x, y: a.y + b.y }; }
+    function mul(a, s) { return { x: a.x * s, y: a.y * s }; }
+    function dot(a, b) { return a.x * b.x + a.y * b.y; }
+    function len(a) { return Math.hypot(a.x, a.y); }
+    function norm(a) { var L = len(a) || 1; return { x: a.x / L, y: a.y / L }; }
+    function rot60(p, c, sign) {
+      var d = sub(p, c);
+      var a = sign * Math.PI / 3;
+      return add(c, { x: d.x * Math.cos(a) - d.y * Math.sin(a), y: d.x * Math.sin(a) + d.y * Math.cos(a) });
+    }
+    function prismVerts(c, s, inv) {
+      var h = s * Math.sqrt(3) / 2;
+      if (!inv) {
+        return [{ x: c.x, y: c.y - h * 0.62 }, { x: c.x + s / 2, y: c.y + h * 0.38 }, { x: c.x - s / 2, y: c.y + h * 0.38 }];
+      }
+      return [{ x: c.x, y: c.y + h * 0.62 }, { x: c.x - s / 2, y: c.y - h * 0.38 }, { x: c.x + s / 2, y: c.y - h * 0.38 }];
+    }
+    function sidesOf(v) {
+      return [
+        { a: v[0], b: v[1] }, { a: v[1], b: v[2] }, { a: v[2], b: v[0] }
+      ];
+    }
+    function intersectRaySeg(o, d, a, b) {
+      var v1 = sub(o, a), v2 = sub(b, a), v3 = { x: -d.y, y: d.x };
+      var den = dot(v2, v3);
+      if (Math.abs(den) < 1e-8) return null;
+      var t1 = (v2.x * v1.y - v2.y * v1.x) / den;
+      var t2 = dot(v1, v3) / den;
+      if (t1 > 1e-4 && t2 >= 0 && t2 <= 1) {
+        return { t: t1, p: add(o, mul(d, t1)), n: norm({ x: -(b.y - a.y), y: b.x - a.x }) };
+      }
+      return null;
+    }
+    function closestHit(o, d, sides) {
+      var best = null;
+      for (var i = 0; i < sides.length; i++) {
+        var h = intersectRaySeg(o, d, sides[i].a, sides[i].b);
+        if (!h) continue;
+        var n = h.n;
+        if (dot(n, d) > 0) n = mul(n, -1);
+        h.n = n;
+        if (!best || h.t < best.t) best = h;
+      }
+      return best;
+    }
+    function refract(d, n, n1, n2) {
+      var nd = norm(d), nn = n;
+      var cosi = -dot(nn, nd);
+      if (cosi < 0) { nn = mul(nn, -1); cosi = -dot(nn, nd); }
+      var eta = n1 / n2;
+      var k = 1 - eta * eta * (1 - cosi * cosi);
+      if (k < 0) {
+        return { tir: true, dir: norm(sub(nd, mul(nn, 2 * dot(nd, nn)))) };
+      }
+      return { tir: false, dir: norm(add(mul(nd, eta), mul(nn, eta * cosi - Math.sqrt(k)))) };
+    }
+    function fresnel(n1, n2, cosi) {
+      var r = (n1 - n2) / (n1 + n2);
+      return Math.min(0.18, r * r + 0.02);
+    }
+    function init() {
+      var canvas = qs("#stage");
+      var stats = qs("#stats");
+      var readout = qs("#readout");
+      var artistic = qs("#artistic");
+      var second = qs("#second");
+      var resetBtn = qs("#reset");
+      var explainBody = qs(".explain-body");
+      if (!canvas || !stats || !readout || !artistic || !second || !resetBtn) return;
+      var ctx = canvas.getContext ? canvas.getContext("2d") : null;
+      if (!ctx) return;
+      var off = document.createElement("canvas");
+      var octx = off.getContext("2d");
+      if (!octx) return;
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var lamp = { x: 0.16, y: 0.42 };
+      var prism = { x: 0.46, y: 0.44, s: 0.22 };
+      var prism2 = { x: 0.64, y: 0.44, s: 0.2 };
+      var W = 1, H = 1, dpr = 1;
+      var dragging = null, last = null;
+      var hoverNm = null, landings = [];
+      var t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : 0;
+      var defaults = { lamp: { x: 0.16, y: 0.42 }, prism: { x: 0.46, y: 0.44 }, prism2: { x: 0.64, y: 0.44 } };
+      function resize() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        W = window.innerWidth || 800;
+        H = window.innerHeight || 600;
+        canvas.width = off.width = Math.floor(W * dpr);
+        canvas.height = off.height = Math.floor(H * dpr);
+        canvas.style.width = W + "px";
+        canvas.style.height = H + "px";
+      }
+      resize();
+      window.addEventListener("resize", resize);
+      function px(p) { return { x: p.x * W, y: p.y * H }; }
+      function toNorm(x, y) { return { x: x / W, y: y / H }; }
+      function drawPrism(c, verts, time) {
+        c.save();
+        c.beginPath();
+        c.moveTo(verts[0].x, verts[0].y);
+        c.lineTo(verts[1].x, verts[1].y);
+        c.lineTo(verts[2].x, verts[2].y);
+        c.closePath();
+        var g = c.createLinearGradient(verts[0].x, verts[0].y, verts[1].x, verts[2].y);
+        g.addColorStop(0, "rgba(180,220,255,.16)");
+        g.addColorStop(1, "rgba(200,230,255,.14)");
+        c.fillStyle = g;
+        c.shadowColor = "rgba(120,190,255,.85)";
+        c.shadowBlur = 14;
+        c.fill();
+        c.shadowBlur = 0;
+        c.strokeStyle = "rgba(210,235,255,.7)";
+        c.lineWidth = 1.4 * dpr;
+        c.stroke();
+        var i;
+        for (i = 0; i < 3; i++) {
+          var rg = c.createRadialGradient(verts[i].x, verts[i].y, 0, verts[i].x, verts[i].y, 18 * dpr);
+          rg.addColorStop(0, "rgba(255,255,255,.55)");
+          rg.addColorStop(1, "rgba(180,220,255,0)");
+          c.fillStyle = rg;
+          c.beginPath();
+          c.arc(verts[i].x, verts[i].y, 18 * dpr, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.save();
+        c.clip();
+        c.globalCompositeOperation = "lighter";
+        for (i = 0; i < 3; i++) {
+          var mid = { x: (verts[i].x + verts[(i + 1) % 3].x) / 2, y: (verts[i].y + verts[(i + 1) % 3].y) / 2 };
+          c.beginPath();
+          c.strokeStyle = "rgba(180,220,255,.18)";
+          c.lineWidth = 1.2 * dpr;
+          var k, x0 = verts[i].x, y0 = verts[i].y;
+          c.moveTo(x0, y0);
+          for (k = 1; k <= 18; k++) {
+            var u = k / 18;
+            var x = verts[i].x + (verts[(i + 1) % 3].x - verts[i].x) * u;
+            var y = verts[i].y + (verts[(i + 1) % 3].y - verts[i].y) * u;
+            y += Math.sin(u * 8 + time * 0.8 + i) * 4;
+            c.lineTo(x, y);
+          }
+          c.stroke();
+        }
+        c.restore();
+        c.restore();
+      }
+      function traceAll(c, time) {
+        landings = [];
+        var bMul = artistic.checked ? 11 : 1;
+        var lampP = px(lamp);
+        var p1 = prismVerts(px(prism), prism.s * Math.min(W, H), false);
+        var prisms = [{ verts: p1, sides: sidesOf(p1) }];
+        if (second.checked) {
+          var p2 = prismVerts(px(prism2), prism2.s * Math.min(W, H), true);
+          prisms.push({ verts: p2, sides: sidesOf(p2) });
+        }
+        var screenX = W * 0.86;
+        var aim = norm(sub({ x: (p1[0].x + p1[1].x + p1[2].x) / 3, y: (p1[0].y + p1[1].y + p1[2].y) / 3 }, lampP));
+        c.save();
+        c.globalCompositeOperation = "lighter";
+        var n400 = cauchy(0.400, bMul), n680 = cauchy(0.680, bMul);
+        var angV = null, angR = null;
+        var nRays = 40;
+        for (var i = 0; i < nRays; i++) {
+          var nm = 400 + (280 * i) / (nRays - 1);
+          var nGlass = cauchy(nm / 1000, bMul);
+          var col = bruton(nm);
+          var dir = aim;
+          var o = lampP;
+          var path = [o];
+          var inside = false;
+          var nCur = 1;
+          var hops = 0;
+          var lastHit = null;
+          while (hops < 10) {
+            hops++;
+            var hit = null, which = -1;
+            var p;
+            for (p = 0; p < prisms.length; p++) {
+              var h = closestHit(o, dir, prisms[p].sides);
+              if (h && (!hit || h.t < hit.t)) { hit = h; which = p; }
+            }
+            var wallX = screenX;
+            var tWall = dir.x > 0.02 ? (wallX - o.x) / dir.x : -1;
+            if (tWall > 0 && (!hit || tWall < hit.t)) {
+              var land = add(o, mul(dir, tWall));
+              path.push(land);
+              landings.push({ y: land.y, nm: nm, col: col });
+              if (i === 0) angV = Math.atan2(dir.y, dir.x);
+              if (i === nRays - 1) angR = Math.atan2(dir.y, dir.x);
+              break;
+            }
+            if (!hit) {
+              path.push(add(o, mul(dir, W)));
+              break;
+            }
+            path.push(hit.p);
+            lastHit = hit;
+            var n1 = inside ? nGlass : 1;
+            var n2 = inside ? 1 : nGlass;
+            var rf = refract(dir, hit.n, n1, n2);
+            var Fr = fresnel(n1, n2, Math.abs(dot(norm(dir), hit.n)));
+            c.strokeStyle = "rgba(" + col.r + "," + col.g + "," + col.b + "," + (0.12 + Fr) + ")";
+            c.lineWidth = 0.7 * dpr;
+            var refl = norm(sub(dir, mul(hit.n, 2 * dot(dir, hit.n))));
+            c.beginPath();
+            c.moveTo(hit.p.x, hit.p.y);
+            c.lineTo(hit.p.x + refl.x * 28, hit.p.y + refl.y * 28);
+            c.stroke();
+            if (rf.tir) {
+              dir = rf.dir;
+            } else {
+              dir = rf.dir;
+              inside = !inside;
+            }
+            o = add(hit.p, mul(dir, 0.6));
+          }
+          c.beginPath();
+          c.moveTo(path[0].x, path[0].y);
+          for (var k = 1; k < path.length; k++) c.lineTo(path[k].x, path[k].y);
+          c.strokeStyle = "rgba(" + col.r + "," + col.g + "," + col.b + ",0.22)";
+          c.lineWidth = (inside ? 1.6 : 1.1) * dpr;
+          c.stroke();
+        }
+        c.restore();
+        var spread = (angV != null && angR != null) ? Math.abs(angV - angR) * 180 / Math.PI : 0;
+        stats.innerHTML = "<div>n(400 nm) = " + n400.toFixed(5) + "</div><div>n(680 nm) = " + n680.toFixed(5) + "</div><div>angular spread = " + spread.toFixed(3) + "°</div>";
+        if (explainBody) {
+          explainBody.innerHTML = "n₁ sin θ₁ = n₂ sin θ₂. Cauchy's approximation n(λ) = 1.5046 + 0.0042/λ².<br>n(400)=" + n400.toFixed(5) + " · n(680)=" + n680.toFixed(5) + " · spread " + spread.toFixed(3) + "°";
+        }
+        var bands = {};
+        for (i = 0; i < landings.length; i++) {
+          var yb = Math.round(landings[i].y / 6) * 6;
+          if (!bands[yb]) bands[yb] = { r: 0, g: 0, b: 0, n: 0, y: yb, nm: landings[i].nm };
+          bands[yb].r += landings[i].col.r;
+          bands[yb].g += landings[i].col.g;
+          bands[yb].b += landings[i].col.b;
+          bands[yb].n++;
+        }
+        Object.keys(bands).forEach(function (key) {
+          var B = bands[key];
+          var rg = c.createRadialGradient(screenX, B.y, 0, screenX, B.y, 18);
+          rg.addColorStop(0, "rgba(" + Math.round(B.r / B.n) + "," + Math.round(B.g / B.n) + "," + Math.round(B.b / B.n) + ",0.55)");
+          rg.addColorStop(1, "rgba(0,0,0,0)");
+          c.fillStyle = rg;
+          c.fillRect(screenX - 8, B.y - 16, 36, 32);
+        });
+        return { p1: p1, prisms: prisms, lampP: lampP, screenX: screenX, aim: aim };
+      }
+      function draw(now) {
+        var time = ((now || 0) - t0) / 1000;
+        var w = canvas.width, h = canvas.height;
+        octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        octx.clearRect(0, 0, W, H);
+        var bg = octx.createRadialGradient(W * 0.5, H * 0.42, 40, W * 0.5, H * 0.42, Math.max(W, H) * 0.7);
+        bg.addColorStop(0, "#0d1018");
+        bg.addColorStop(1, "#04050a");
+        octx.fillStyle = bg;
+        octx.fillRect(0, 0, W, H);
+        var geo = traceAll(octx, time);
+        drawPrism(octx, geo.p1, time);
+        if (second.checked && geo.prisms[1]) drawPrism(octx, geo.prisms[1].verts, time);
+        var lp = geo.lampP;
+        var lg = octx.createRadialGradient(lp.x, lp.y, 0, lp.x, lp.y, 70);
+        lg.addColorStop(0, "rgba(255,255,255,.95)");
+        lg.addColorStop(0.18, "rgba(255,250,230,.45)");
+        lg.addColorStop(1, "rgba(255,255,255,0)");
+        octx.fillStyle = lg;
+        octx.beginPath(); octx.arc(lp.x, lp.y, 70, 0, Math.PI * 2); octx.fill();
+        octx.strokeStyle = "rgba(255,255,255,.55)";
+        octx.setLineDash([4, 4]);
+        octx.beginPath(); octx.arc(lp.x, lp.y, 22, 0, Math.PI * 2); octx.stroke();
+        octx.setLineDash([]);
+        octx.fillStyle = "#fff";
+        octx.font = "10px system-ui, Helvetica Neue, sans-serif";
+        octx.letterSpacing = "0.18em";
+        octx.textAlign = "center";
+        octx.fillText("LAMP", lp.x, lp.y + 36);
+        var sx = geo.screenX;
+        octx.fillStyle = "rgba(255,255,255,.06)";
+        octx.fillRect(sx, H * 0.08, 10, H * 0.7);
+        octx.strokeStyle = "rgba(255,255,255,.22)";
+        octx.beginPath(); octx.moveTo(sx, H * 0.08); octx.lineTo(sx, H * 0.78); octx.stroke();
+        var ty;
+        octx.fillStyle = "rgba(220,231,244,.55)";
+        octx.font = "9px ui-monospace, Menlo, monospace";
+        octx.textAlign = "left";
+        for (ty = 0; ty <= 10; ty++) {
+          var yy = H * 0.08 + ty * (H * 0.7 / 10);
+          octx.fillRect(sx, yy, 14, 1);
+        }
+        octx.save();
+        octx.translate(sx + 28, H * 0.42);
+        octx.rotate(-Math.PI / 2);
+        octx.fillStyle = "#8fd3ff";
+        octx.font = "11px system-ui";
+        octx.textAlign = "center";
+        octx.fillText("PROJECTION SCREEN", 0, 0);
+        octx.restore();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(off, 0, 0);
+        var floor = H * 0.84;
+        ctx.save();
+        ctx.translate(0, floor * dpr);
+        ctx.scale(1, -0.28);
+        ctx.globalAlpha = 0.28;
+        ctx.filter = "blur(3px)";
+        ctx.drawImage(off, 0, -floor * dpr);
+        ctx.filter = "none";
+        ctx.restore();
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        var fade = ctx.createLinearGradient(0, floor, 0, H);
+        fade.addColorStop(0, "rgba(4,5,10,0.2)");
+        fade.addColorStop(1, "rgba(4,5,10,0.92)");
+        ctx.fillStyle = fade;
+        ctx.fillRect(0, floor, W, H - floor);
+        ctx.strokeStyle = "rgba(255,255,255,.12)";
+        ctx.beginPath(); ctx.moveTo(0, floor); ctx.lineTo(W, floor); ctx.stroke();
+        if (!reduce && typeof window.requestAnimationFrame === "function") {
+          window.requestAnimationFrame(draw);
+        }
+      }
+      function hitTest(x, y) {
+        var lp = px(lamp);
+        if (Math.hypot(x - lp.x, y - lp.y) < 28) return "lamp";
+        function inTri(c) {
+          var v = prismVerts(px(c), c.s * Math.min(W, H), c === prism2);
+          var a = v[0], b = v[1], cc = v[2], p = { x: x, y: y };
+          function sign(p1, p2, p3) { return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y); }
+          var b1 = sign(p, a, b) < 0, b2 = sign(p, b, cc) < 0, b3 = sign(p, cc, a) < 0;
+          return b1 === b2 && b2 === b3;
+        }
+        if (inTri(prism)) return "prism";
+        if (second.checked && inTri(prism2)) return "prism2";
+        return null;
+      }
+      canvas.addEventListener("pointerdown", function (ev) {
+        var r = canvas.getBoundingClientRect();
+        var x = ev.clientX - r.left, y = ev.clientY - r.top;
+        dragging = hitTest(x, y);
+        last = { x: x, y: y };
+        if (dragging) canvas.setPointerCapture(ev.pointerId);
+      });
+      canvas.addEventListener("pointermove", function (ev) {
+        var r = canvas.getBoundingClientRect();
+        var x = ev.clientX - r.left, y = ev.clientY - r.top;
+        if (dragging) {
+          var n = toNorm(x, y);
+          if (dragging === "lamp") lamp = { x: Math.max(0.04, Math.min(0.4, n.x)), y: Math.max(0.12, Math.min(0.72, n.y)) };
+          if (dragging === "prism") prism = { x: Math.max(0.28, Math.min(0.62, n.x)), y: Math.max(0.22, Math.min(0.7, n.y)), s: prism.s };
+          if (dragging === "prism2") prism2 = { x: Math.max(0.5, Math.min(0.78, n.x)), y: Math.max(0.22, Math.min(0.7, n.y)), s: prism2.s };
+          if (reduce) draw();
+        }
+        hoverNm = null;
+        var near = null, best = 40;
+        for (var i = 0; i < landings.length; i++) {
+          var dy = Math.abs(landings[i].y - y);
+          var dx = Math.abs(W * 0.86 - x);
+          if (dx < 40 && dy < best) { best = dy; near = landings[i]; }
+        }
+        if (near) {
+          hoverNm = near;
+          readout.style.display = "block";
+          readout.style.left = ev.clientX + 12 + "px";
+          readout.style.top = ev.clientY - 10 + "px";
+          readout.textContent = Math.round(near.nm) + " nm · " + wlName(near.nm);
+        } else {
+          readout.style.display = "none";
+        }
+      });
+      canvas.addEventListener("pointerup", function () { dragging = null; });
+      resetBtn.addEventListener("click", function () {
+        lamp = { x: defaults.lamp.x, y: defaults.lamp.y };
+        prism = { x: defaults.prism.x, y: defaults.prism.y, s: 0.22 };
+        prism2 = { x: defaults.prism2.x, y: defaults.prism2.y, s: 0.2 };
+        if (reduce) draw();
+      });
+      artistic.addEventListener("change", function () { if (reduce) draw(); });
+      second.addEventListener("change", function () { if (reduce) draw(); });
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(draw);
+      else draw(0);
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

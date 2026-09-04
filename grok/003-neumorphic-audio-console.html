@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Softdesk 4 — Neumorphic Audio Console</title>
+  <style>
+    :root {
+      --bg: #e0e5ec;
+      --hi: #ffffff;
+      --sh: #a3b1c6;
+      --shd: #8d9bb0;
+      --ink: #3d4a5c;
+      --mid: #6b7a90;
+      --dim: #97a4b8;
+      --coral: #ff7a59;
+      --teal: #4fd1c5;
+      --led-g: #5ee36a;
+      --led-a: #ffc857;
+      --led-r: #ff4d4d;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; }
+    body {
+      background: linear-gradient(180deg, #e6ebf2, var(--bg));
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      padding: 28px 18px 48px;
+    }
+    .mono { font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace; }
+    .shell { width: min(1280px, 100%); margin: 0 auto; }
+    header.top {
+      display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
+      margin-bottom: 28px;
+    }
+    .badge {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 18px; border-radius: 22px;
+      background: var(--bg);
+      box-shadow: 9px 9px 18px var(--sh), -9px -9px 18px var(--hi);
+    }
+    .badge h1 { font-size: 20px; letter-spacing: -0.03em; }
+    .badge p { font-size: 12px; color: var(--mid); }
+    .cpu {
+      padding: 10px 16px; border-radius: 999px;
+      background: var(--bg);
+      box-shadow: inset 5px 5px 10px var(--sh), inset -5px -5px 10px var(--hi);
+      font-size: 12px; color: var(--mid);
+    }
+    .desk {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr) 1.25fr;
+      gap: 16px;
+    }
+    .strip, .master {
+      border-radius: 28px;
+      background: var(--bg);
+      box-shadow: 9px 9px 18px var(--sh), -9px -9px 18px var(--hi);
+      padding: 18px 14px 20px;
+    }
+    .ch-name { text-align: center; font-weight: 650; margin-bottom: 14px; letter-spacing: 0.04em; }
+    .knob-row { display: flex; justify-content: space-around; gap: 8px; margin-bottom: 14px; }
+    .knob-wrap { text-align: center; }
+    .knob-wrap label { display: block; font-size: 11px; color: var(--mid); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.12em; }
+    .knob {
+      --deg: -135deg;
+      --arc: 0deg;
+      width: 72px; height: 72px; border-radius: 50%;
+      background: var(--bg);
+      box-shadow: 5px 5px 10px var(--sh), -5px -5px 10px var(--hi);
+      margin: 0 auto;
+      position: relative;
+      touch-action: none;
+      cursor: ns-resize;
+    }
+    .knob.pressed { box-shadow: inset 5px 5px 10px var(--sh), inset -5px -5px 10px var(--hi); transform: scale(0.97); }
+    .knob::before {
+      content: "";
+      position: absolute; inset: -4px;
+      border-radius: 50%;
+      background: conic-gradient(from -135deg, var(--teal) 0 var(--arc), transparent var(--arc) 270deg, transparent 0);
+      mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+      pointer-events: none;
+    }
+    .knob-inner {
+      position: absolute; inset: 12px; border-radius: 50%;
+      box-shadow: inset 4px 4px 8px var(--sh), inset -4px -4px 8px var(--hi);
+    }
+    .pointer {
+      position: absolute; left: 50%; top: 8px; width: 3px; height: 18px;
+      background: var(--coral); border-radius: 2px;
+      transform-origin: 50% 28px;
+      transform: translateX(-50%) rotate(var(--deg));
+    }
+    .knob-val { margin-top: 6px; font-size: 12px; color: var(--mid); }
+    .toggles { display: flex; justify-content: center; gap: 10px; margin: 10px 0 16px; }
+    .tog {
+      border: 0; background: transparent; cursor: pointer; color: var(--mid); font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .tog .track {
+      width: 42px; height: 22px; border-radius: 999px; margin: 0 auto 4px;
+      background: var(--bg);
+      box-shadow: inset 5px 5px 10px var(--sh), inset -5px -5px 10px var(--hi);
+      position: relative;
+    }
+    .tog .thumb {
+      position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+      background: var(--bg);
+      box-shadow: 3px 3px 6px var(--sh), -3px -3px 6px var(--hi);
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+    .tog[aria-pressed="true"] .thumb { transform: translateX(20px); background: var(--coral); }
+    .fader-row { display: flex; justify-content: center; gap: 12px; height: 220px; }
+    .fader {
+      --pos: 70%;
+      width: 42px; height: 220px; border-radius: 16px;
+      background: var(--bg);
+      box-shadow: inset 5px 5px 10px var(--sh), inset -5px -5px 10px var(--hi);
+      position: relative;
+      touch-action: none;
+      cursor: ns-resize;
+    }
+    .fader .track {
+      position: absolute; left: 18px; top: 14px; bottom: 14px; width: 6px; border-radius: 4px;
+      background: #c5ced8;
+    }
+    .fader .fill {
+      position: absolute; left: 18px; bottom: 14px; width: 6px; border-radius: 4px;
+      background: var(--teal);
+      height: calc(var(--pos) - 8%);
+    }
+    .cap {
+      position: absolute; left: 4px; width: 34px; height: 46px; border-radius: 10px;
+      background: var(--bg);
+      box-shadow: 5px 5px 10px var(--sh), -5px -5px 10px var(--hi);
+      bottom: calc(var(--pos) - 23px);
+      display: flex; flex-direction: column; justify-content: center; gap: 3px; align-items: center;
+    }
+    .cap span { width: 16px; height: 2px; background: var(--dim); border-radius: 1px; }
+    .cap.pressed { box-shadow: inset 5px 5px 10px var(--sh), inset -5px -5px 10px var(--hi); }
+    .meter {
+      width: 18px; height: 220px; border-radius: 12px; padding: 6px 3px;
+      background: var(--bg);
+      box-shadow: inset 5px 5px 10px var(--sh), inset -5px -5px 10px var(--hi);
+      display: flex; flex-direction: column-reverse; gap: 3px;
+    }
+    .seg { flex: 1; border-radius: 2px; background: #cfd6df; opacity: 0.45; }
+    .seg.on.g { background: var(--led-g); opacity: 1; }
+    .seg.on.a { background: var(--led-a); opacity: 1; }
+    .seg.on.r { background: var(--led-r); opacity: 1; }
+    .db { text-align: center; margin-top: 10px; font-size: 12px; color: var(--mid);
+      padding: 6px 8px; border-radius: 10px;
+      box-shadow: inset 5px 5px 10px var(--sh), inset -5px -5px 10px var(--hi);
+    }
+    .master { display: flex; flex-direction: column; gap: 12px; }
+    .tc {
+      text-align: center; font-size: 20px; letter-spacing: 0.08em;
+      padding: 12px; border-radius: 14px;
+      box-shadow: inset 5px 5px 10px var(--sh), inset -5px -5px 10px var(--hi);
+    }
+    .transport { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .tbtn {
+      height: 44px; border: 0; border-radius: 12px; cursor: pointer;
+      background: var(--bg); color: var(--ink);
+      box-shadow: 5px 5px 10px var(--sh), -5px -5px 10px var(--hi);
+    }
+    .tbtn:active, .tbtn.down { box-shadow: inset 5px 5px 10px var(--sh), inset -5px -5px 10px var(--hi); }
+    .tbtn.play.on { color: var(--teal); }
+    .tbtn.rec.on { color: var(--led-r); }
+    .scenes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .scene {
+      border: 0; padding: 10px 6px; border-radius: 12px; cursor: pointer;
+      background: var(--bg); color: var(--mid); font-size: 12px;
+      box-shadow: 5px 5px 10px var(--sh), -5px -5px 10px var(--hi);
+    }
+    .scene.on { color: var(--coral); box-shadow: inset 5px 5px 10px var(--sh), inset -5px -5px 10px var(--hi); }
+    .master-faders { display: flex; justify-content: center; gap: 10px; height: 220px; }
+    .hint { margin-top: 22px; color: var(--mid); font-size: 13px; line-height: 1.6; }
+    kbd {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 11px;
+      padding: 2px 6px; border-radius: 6px;
+      background: var(--bg);
+      box-shadow: 3px 3px 6px var(--sh), -3px -3px 6px var(--hi);
+    }
+    .knob:focus-visible, .fader:focus-visible, .tog:focus-visible, .tbtn:focus-visible, .scene:focus-visible {
+      outline: 2px solid var(--teal); outline-offset: 3px;
+    }
+    @media (min-width: 1800px) {
+      .knob { width: 88px; height: 88px; }
+      body { font-size: 18px; }
+    }
+    @media (max-width: 1000px) {
+      .desk { grid-template-columns: 1fr 1fr; }
+      .master { grid-column: 1 / -1; }
+    }
+    @media (max-width: 480px) {
+      .desk { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .thumb, .cap, .fill { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="top">
+      <div class="badge">
+        <svg width="28" height="22" viewBox="0 0 28 22" aria-hidden="true">
+          <rect x="1" y="12" width="4" height="8" rx="1" fill="#4fd1c5"/>
+          <rect x="8" y="6" width="4" height="14" rx="1" fill="#3d4a5c"/>
+          <rect x="15" y="2" width="4" height="18" rx="1" fill="#ff7a59"/>
+          <rect x="22" y="8" width="4" height="12" rx="1" fill="#4fd1c5"/>
+        </svg>
+        <div>
+          <h1>Softdesk 4</h1>
+          <p>Four-channel soft-UI mixer</p>
+        </div>
+      </div>
+      <div class="cpu mono" id="cpu">48 kHz · 256 · CPU 12%</div>
+    </header>
+    <div class="desk" id="desk"></div>
+    <p class="hint">Drag knobs vertically (180px = full turn) and faders along the trough. <kbd>Shift</kbd> for fine control. Mouse wheel and arrows adjust; <kbd>Home</kbd>/<kbd>End</kbd> jump; double-click resets. <kbd>Space</kbd> toggles play. Mute / Solo are toggles with a sliding thumb.</p>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var desk = qs("#desk");
+      if (!desk) return;
+      var names = ["Vocal", "Keys", "Bass", "Drums"];
+      var state = {
+        playing: false, rec: false, frames: 0, width: 50, master: 75,
+        scene: "Verse",
+        ch: names.map(function (n, i) {
+          return { name: n, gain: [62, 54, 70, 66][i], pan: [0, -18, 12, 8][i], mute: false, solo: false, fader: [72, 64, 78, 70][i], peak: 0, level: 0, l: 0, r: 0 };
+        })
+      };
+      var scenes = {
+        Verse: [72, 64, 78, 70],
+        Chorus: [80, 74, 82, 86],
+        Bridge: [58, 70, 62, 48]
+      };
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+      function dbFromPos(p) {
+        if (p <= 0) return "-∞";
+        var db = (p / 100) * 72 - 60;
+        return (db >= 0 ? "+" : "") + db.toFixed(1);
+      }
+      function panLabel(p) {
+        if (Math.abs(p) < 4) return "C";
+        return p < 0 ? ("L" + Math.round(-p)) : ("R" + Math.round(p));
+      }
+      function setKnob(el, value, min, max) {
+        if (!el) return;
+        var t = (value - min) / (max - min);
+        var deg = -135 + t * 270;
+        el.style.setProperty("--deg", deg + "deg");
+        el.style.setProperty("--arc", (t * 270) + "deg");
+      }
+
+      names.forEach(function (n, i) {
+        var art = document.createElement("article");
+        art.className = "strip";
+        art.innerHTML =
+          '<div class="ch-name">' + n + '</div>' +
+          '<div class="knob-row">' +
+            '<div class="knob-wrap"><label>Gain</label><div class="knob" data-ch="' + i + '" data-p="gain" tabindex="0"><div class="knob-inner"></div><div class="pointer"></div></div><div class="knob-val mono" data-read="gain-' + i + '"></div></div>' +
+            '<div class="knob-wrap"><label>Pan</label><div class="knob" data-ch="' + i + '" data-p="pan" tabindex="0"><div class="knob-inner"></div><div class="pointer"></div></div><div class="knob-val mono" data-read="pan-' + i + '"></div></div>' +
+          '</div>' +
+          '<div class="toggles">' +
+            '<button type="button" class="tog" data-ch="' + i + '" data-t="mute" aria-pressed="false"><div class="track"><div class="thumb"></div></div>Mute</button>' +
+            '<button type="button" class="tog" data-ch="' + i + '" data-t="solo" aria-pressed="false"><div class="track"><div class="thumb"></div></div>Solo</button>' +
+          '</div>' +
+          '<div class="fader-row">' +
+            '<div class="fader" data-ch="' + i + '" tabindex="0"><div class="track"></div><div class="fill"></div><div class="cap"><span></span><span></span><span></span></div></div>' +
+            '<div class="meter" data-meter="' + i + '"></div>' +
+          '</div>' +
+          '<div class="db mono" data-db="' + i + '"></div>';
+        desk.appendChild(art);
+        var meter = art.querySelector("[data-meter]");
+        if (meter) {
+          for (var s = 0; s < 14; s++) {
+            var seg = document.createElement("div");
+            seg.className = "seg" + (s >= 12 ? " r" : s >= 9 ? " a" : " g");
+            meter.appendChild(seg);
+          }
+        }
+      });
+
+      var master = document.createElement("section");
+      master.className = "master";
+      master.innerHTML =
+        '<div class="tc mono" id="tc">00:00:00.00</div>' +
+        '<div class="transport">' +
+          '<button type="button" class="tbtn" id="rew" aria-label="return to start">⏮</button>' +
+          '<button type="button" class="tbtn" id="stop" aria-label="stop">■</button>' +
+          '<button type="button" class="tbtn play" id="play" aria-label="play">▶</button>' +
+          '<button type="button" class="tbtn rec" id="rec" aria-label="record">●</button>' +
+        '</div>' +
+        '<div class="knob-wrap"><label>Stereo Width</label><div class="knob" id="width" tabindex="0"><div class="knob-inner"></div><div class="pointer"></div></div><div class="knob-val mono" id="width-val"></div></div>' +
+        '<div class="master-faders">' +
+          '<div class="meter" id="mL"></div>' +
+          '<div class="fader" id="mf" tabindex="0"><div class="track"></div><div class="fill"></div><div class="cap"><span></span><span></span><span></span></div></div>' +
+          '<div class="meter" id="mR"></div>' +
+        '</div>' +
+        '<div class="db mono" id="mdb"></div>' +
+        '<div class="scenes">' +
+          '<button type="button" class="scene on" data-scene="Verse">Verse</button>' +
+          '<button type="button" class="scene" data-scene="Chorus">Chorus</button>' +
+          '<button type="button" class="scene" data-scene="Bridge">Bridge</button>' +
+        '</div>';
+      desk.appendChild(master);
+      ["mL", "mR"].forEach(function (id) {
+        var m = qs("#" + id);
+        if (!m) return;
+        for (var s = 0; s < 14; s++) {
+          var seg = document.createElement("div");
+          seg.className = "seg" + (s >= 12 ? " r" : s >= 9 ? " a" : " g");
+          m.appendChild(seg);
+        }
+      });
+
+      function paint() {
+        state.ch.forEach(function (c, i) {
+          setKnob(qs('.knob[data-ch="' + i + '"][data-p="gain"]'), c.gain, 0, 100);
+          setKnob(qs('.knob[data-ch="' + i + '"][data-p="pan"]'), c.pan, -100, 100);
+          var g = qs('[data-read="gain-' + i + '"]');
+          var p = qs('[data-read="pan-' + i + '"]');
+          if (g) g.textContent = Math.round(c.gain) + "%";
+          if (p) p.textContent = panLabel(c.pan);
+          var f = qs('.fader[data-ch="' + i + '"]');
+          if (f) f.style.setProperty("--pos", c.fader + "%");
+          var db = qs('[data-db="' + i + '"]');
+          if (db) db.textContent = dbFromPos(c.fader) + " dB";
+        });
+        setKnob(qs("#width"), state.width, 0, 100);
+        var wv = qs("#width-val");
+        if (wv) wv.textContent = Math.round(state.width) + "%";
+        var mf = qs("#mf");
+        if (mf) mf.style.setProperty("--pos", state.master + "%");
+        var mdb = qs("#mdb");
+        if (mdb) mdb.textContent = dbFromPos(state.master) + " dB";
+      }
+      paint();
+
+      function bindDrag(el, onMove, onEnd) {
+        if (!el) return;
+        el.addEventListener("pointerdown", function (e) {
+          el.classList.add("pressed");
+          var cap = el.querySelector(".cap");
+          if (cap) cap.classList.add("pressed");
+          if (el.setPointerCapture) el.setPointerCapture(e.pointerId);
+          var lastY = e.clientY;
+          function move(ev) {
+            onMove(ev.clientY - lastY, ev);
+            lastY = ev.clientY;
+          }
+          function up() {
+            el.classList.remove("pressed");
+            if (cap) cap.classList.remove("pressed");
+            el.removeEventListener("pointermove", move);
+            el.removeEventListener("pointerup", up);
+            if (onEnd) onEnd();
+          }
+          el.addEventListener("pointermove", move);
+          el.addEventListener("pointerup", up);
+        });
+      }
+
+      desk.querySelectorAll(".knob").forEach(function (knob) {
+        var ch = knob.getAttribute("data-ch");
+        var prop = knob.getAttribute("data-p");
+        function apply(delta, fine) {
+          var scale = fine ? 0.15 : 1;
+          if (knob.id === "width") {
+            state.width = clamp(state.width - delta / 180 * 100 * scale, 0, 100);
+          } else if (prop === "gain") {
+            state.ch[+ch].gain = clamp(state.ch[+ch].gain - delta / 180 * 100 * scale, 0, 100);
+          } else if (prop === "pan") {
+            state.ch[+ch].pan = clamp(state.ch[+ch].pan - delta / 180 * 200 * scale, -100, 100);
+          }
+          paint();
+        }
+        bindDrag(knob, function (dy, ev) { apply(dy, ev.shiftKey); });
+        knob.addEventListener("wheel", function (e) {
+          e.preventDefault();
+          apply(e.deltaY * 0.15, e.shiftKey);
+        }, { passive: false });
+        knob.addEventListener("keydown", function (e) {
+          var step = e.shiftKey ? 1 : 4;
+          if (e.key === "ArrowUp") apply(-step, false);
+          if (e.key === "ArrowDown") apply(step, false);
+          if (e.key === "Home") { if (prop === "pan") state.ch[+ch].pan = -100; else if (knob.id === "width") state.width = 0; else state.ch[+ch].gain = 0; paint(); }
+          if (e.key === "End") { if (prop === "pan") state.ch[+ch].pan = 100; else if (knob.id === "width") state.width = 100; else state.ch[+ch].gain = 100; paint(); }
+        });
+        knob.addEventListener("dblclick", function () {
+          if (knob.id === "width") state.width = 50;
+          else if (prop === "gain") state.ch[+ch].gain = 60;
+          else state.ch[+ch].pan = 0;
+          paint();
+        });
+      });
+
+      desk.querySelectorAll(".fader").forEach(function (fader) {
+        var ch = fader.getAttribute("data-ch");
+        function apply(delta, fine) {
+          var scale = fine ? 0.15 : 1;
+          var h = fader.getBoundingClientRect().height || 220;
+          var dv = -delta / h * 100 * scale;
+          if (fader.id === "mf") state.master = clamp(state.master + dv, 0, 100);
+          else state.ch[+ch].fader = clamp(state.ch[+ch].fader + dv, 0, 100);
+          paint();
+        }
+        bindDrag(fader, function (dy, ev) { apply(dy, ev.shiftKey); });
+        fader.addEventListener("wheel", function (e) {
+          e.preventDefault();
+          apply(e.deltaY * 0.2, e.shiftKey);
+        }, { passive: false });
+        fader.addEventListener("keydown", function (e) {
+          var step = e.shiftKey ? 1 : 4;
+          if (e.key === "ArrowUp") apply(-8, false);
+          if (e.key === "ArrowDown") apply(8, false);
+          if (e.key === "Home") { if (fader.id === "mf") state.master = 0; else state.ch[+ch].fader = 0; paint(); }
+          if (e.key === "End") { if (fader.id === "mf") state.master = 100; else state.ch[+ch].fader = 100; paint(); }
+        });
+        fader.addEventListener("dblclick", function () {
+          if (fader.id === "mf") state.master = 75;
+          else state.ch[+ch].fader = 70;
+          paint();
+        });
+      });
+
+      desk.querySelectorAll(".tog").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var i = +btn.getAttribute("data-ch");
+          var t = btn.getAttribute("data-t");
+          state.ch[i][t] = !state.ch[i][t];
+          btn.setAttribute("aria-pressed", state.ch[i][t] ? "true" : "false");
+        });
+      });
+
+      var playBtn = qs("#play");
+      var stopBtn = qs("#stop");
+      var rewBtn = qs("#rew");
+      var recBtn = qs("#rec");
+      function setPlay(on) {
+        state.playing = on;
+        if (playBtn) playBtn.classList.toggle("on", on);
+        if (playBtn) playBtn.classList.toggle("down", on);
+      }
+      if (playBtn) playBtn.addEventListener("click", function () { setPlay(!state.playing); });
+      if (stopBtn) stopBtn.addEventListener("click", function () { setPlay(false); state.rec = false; if (recBtn) recBtn.classList.remove("on", "down"); });
+      if (rewBtn) rewBtn.addEventListener("click", function () { state.frames = 0; });
+      if (recBtn) recBtn.addEventListener("click", function () {
+        state.rec = !state.rec;
+        recBtn.classList.toggle("on", state.rec);
+        recBtn.classList.toggle("down", state.rec);
+        if (state.rec) setPlay(true);
+      });
+      window.addEventListener("keydown", function (e) {
+        if (e.code === "Space" && e.target === document.body) {
+          e.preventDefault();
+          setPlay(!state.playing);
+        }
+      });
+
+      desk.querySelectorAll(".scene").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var name = btn.getAttribute("data-scene");
+          if (!name || !scenes[name]) return;
+          desk.querySelectorAll(".scene").forEach(function (b) { b.classList.remove("on"); });
+          btn.classList.add("on");
+          state.scene = name;
+          var target = scenes[name];
+          if (reduce) {
+            target.forEach(function (v, i) { state.ch[i].fader = v; });
+            paint();
+            return;
+          }
+          var start = state.ch.map(function (c) { return c.fader; });
+          var t0 = performance.now();
+          function anim(now) {
+            var t = clamp((now - t0) / 600, 0, 1);
+            var e = 1 - Math.pow(1 - t, 3);
+            target.forEach(function (v, i) { state.ch[i].fader = start[i] + (v - start[i]) * e; });
+            paint();
+            if (t < 1 && typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(anim);
+          }
+          if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(anim);
+        });
+      });
+
+      function lightMeter(el, level, peak) {
+        if (!el) return;
+        var segs = el.querySelectorAll(".seg");
+        var n = Math.round(level * 14);
+        var p = Math.round(peak * 14);
+        segs.forEach(function (s, i) {
+          var on = i < n || i === p - 1;
+          s.classList.toggle("on", on);
+        });
+      }
+
+      var cpuEl = qs("#cpu");
+      var tc = qs("#tc");
+      var last = performance.now();
+      function engine(now) {
+        var dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        var anySolo = state.ch.some(function (c) { return c.solo; });
+        var sumL = 0, sumR = 0;
+        state.ch.forEach(function (c, i) {
+          var env = 0.55 + 0.35 * Math.sin(now / 900 + i) + 0.15 * Math.sin(now / 180 + i * 2);
+          var beat = 0.5 + 0.5 * Math.max(0, Math.sin(now / 140 + i * 0.7));
+          var jitter = 0.08 * Math.sin(now / 37 + i * 5);
+          var sig = (env * 0.6 + beat * 0.4 + jitter) * (c.gain / 100) * (c.fader / 100);
+          var audible = state.playing && !c.mute && (!anySolo || c.solo);
+          if (!audible) sig = 0;
+          c.level = c.level * 0.82 + sig * 0.18;
+          c.peak = Math.max(c.level, c.peak * 0.96);
+          var pan = (c.pan + 100) / 200;
+          c.l = c.level * (1 - pan);
+          c.r = c.level * pan;
+          sumL += c.l; sumR += c.r;
+          lightMeter(qs('[data-meter="' + i + '"]'), audible ? c.level : c.level * 0.2, c.peak);
+        });
+        var mid = (sumL + sumR) * 0.5;
+        var side = (sumL - sumR) * (state.width / 100);
+        var mGain = state.master / 100;
+        var outL = (mid + side) * mGain;
+        var outR = (mid - side) * mGain;
+        if (!state.playing) { outL = outR = 0; }
+        lightMeter(qs("#mL"), Math.min(1, outL), Math.min(1, outL + 0.05));
+        lightMeter(qs("#mR"), Math.min(1, outR), Math.min(1, outR + 0.05));
+        if (state.playing) state.frames += dt * 25;
+        var f = Math.floor(state.frames);
+        var ff = f % 25, sec = Math.floor(f / 25) % 60, min = Math.floor(f / 1500) % 60, hr = Math.floor(f / 90000);
+        if (tc) tc.textContent = [hr, min, sec].map(function (n) { return String(n).padStart(2, "0"); }).join(":") + "." + String(ff).padStart(2, "0");
+        if (cpuEl) {
+          var cpu = state.playing ? (11 + Math.round(8 * Math.sin(now / 400) + 6 * Math.random())) : 4;
+          cpuEl.textContent = "48 kHz · 256 · CPU " + cpu + "%";
+        }
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(engine);
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(engine);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sumi — Ink Drops in Still Water</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: #e7edf0;
+      font-family: Georgia, "Iowan Old Style", Palatino, serif;
+      color: #1f2a6b;
+      overflow: hidden;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    #bg { z-index: 0; }
+    #ink { z-index: 1; mix-blend-mode: multiply; }
+    .brand {
+      position: fixed; top: 28px; left: 28px; z-index: 5;
+      display: flex; gap: 14px; align-items: flex-start; pointer-events: none;
+    }
+    .rule {
+      width: 1px; height: 72px;
+      background: linear-gradient(180deg, currentColor, transparent);
+      position: relative;
+    }
+    .rule::before {
+      content: ""; position: absolute; top: -3px; left: -3px;
+      width: 7px; height: 7px; border-radius: 50%; background: currentColor;
+    }
+    .brand h1 { font-size: clamp(22px, 2.6vw, 34px); font-weight: 400; line-height: 1; }
+    .brand .sub {
+      font-family: system-ui, sans-serif;
+      font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+      color: #5a6a78; margin-top: 6px;
+    }
+    .vert {
+      writing-mode: vertical-rl;
+      font-size: 12px; letter-spacing: .28em;
+      color: #5a6a78; margin-left: 8px;
+    }
+    .hint {
+      position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%);
+      z-index: 5; font-style: italic; color: #6a7a88;
+      animation: breathe 3.6s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes breathe { 0%,100% { opacity: .25; } 50% { opacity: .8; } }
+    .hint.gone { display: none; }
+    .count {
+      position: fixed; right: 22px; bottom: 22px; z-index: 5;
+      font-family: system-ui, sans-serif; font-size: 11px; letter-spacing: .18em;
+      text-transform: uppercase; color: #5a6a78;
+    }
+    .dock {
+      position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+      z-index: 6;
+      background: rgba(255,255,255,.72);
+      backdrop-filter: blur(10px);
+      border-radius: 999px;
+      padding: 10px 14px;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 10px 28px rgba(30,40,50,.12);
+    }
+    .sw {
+      width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer;
+      box-shadow: inset 0 2px 4px rgba(255,255,255,.4), inset 0 -3px 5px rgba(0,0,0,.25);
+    }
+    .sw.on { box-shadow: inset 0 2px 4px rgba(255,255,255,.4), 0 0 0 2px #fff, 0 0 0 4px currentColor; }
+    .dock button.act, .seg button {
+      background: transparent; border: 0; cursor: pointer;
+      font-family: system-ui, sans-serif; font-size: 11px; letter-spacing: .18em;
+      text-transform: uppercase; color: #3a4a58; padding: 6px 10px;
+    }
+    .seg { display: flex; border: 1px solid rgba(30,40,50,.15); border-radius: 999px; overflow: hidden; }
+    .seg button.on { background: #1f2a6b; color: #fff; }
+    #drain.pulse { animation: pulse 0.8s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .4; } }
+    @media (prefers-reduced-motion: reduce) {
+      .hint { animation: none; opacity: .7; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="bg"></canvas>
+  <canvas id="ink"></canvas>
+  <div class="brand" id="brand">
+    <div class="rule" id="rule"></div>
+    <div>
+      <h1>Sumi</h1>
+      <div class="sub">ink drops in water</div>
+    </div>
+    <div class="vert">墨 · still water · slow breath</div>
+  </div>
+  <p class="hint" id="hint">touch the water</p>
+  <div class="dock">
+    <button type="button" class="sw on" data-ink="indigo" style="background:#1f2a6b;color:#1f2a6b" title="Indigo"></button>
+    <button type="button" class="sw" data-ink="vermilion" style="background:#c8402a;color:#c8402a" title="Vermilion"></button>
+    <button type="button" class="sw" data-ink="sepia" style="background:#6b4a2b;color:#6b4a2b" title="Sepia"></button>
+    <button type="button" class="sw" data-ink="black" style="background:#14141a;color:#14141a" title="Black"></button>
+    <button type="button" class="sw" data-ink="teal" style="background:#157a7a;color:#157a7a" title="Teal"></button>
+    <div class="seg" id="med">
+      <button type="button" data-med="water" class="on">Water</button>
+      <button type="button" data-med="paper">Paper</button>
+    </div>
+    <button type="button" class="act" id="drain">Drain</button>
+  </div>
+  <div class="count" id="count">0 drops</div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    /* permutation Perlin */
+    var P = new Uint8Array(512);
+    (function () {
+      var p = [151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180];
+      var i;
+      for (i = 0; i < 256; i++) { P[i] = p[i]; P[i + 256] = p[i]; }
+    })();
+    function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+    function lerp(a, b, t) { return a + t * (b - a); }
+    function grad(h, x, y, z) {
+      var u = (h & 1) ? -x : x;
+      var v = (h & 2) ? -y : y;
+      if ((h & 12) === 0) return u + ((h & 4) ? -z : z);
+      if ((h & 12) === 4) return v + ((h & 4) ? -z : z);
+      return u + v;
+    }
+    function noise(x, y, z) {
+      var X = Math.floor(x) & 255, Y = Math.floor(y) & 255, Z = Math.floor(z) & 255;
+      x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
+      var u = fade(x), v = fade(y), w = fade(z);
+      var A = P[X] + Y, AA = P[A] + Z, AB = P[A + 1] + Z;
+      var B = P[X + 1] + Y, BA = P[B] + Z, BB = P[B + 1] + Z;
+      return lerp(
+        lerp(lerp(grad(P[AA], x, y, z), grad(P[BA], x - 1, y, z), u),
+             lerp(grad(P[AB], x, y - 1, z), grad(P[BB], x - 1, y - 1, z), u), v),
+        lerp(lerp(grad(P[AA + 1], x, y, z - 1), grad(P[BA + 1], x - 1, y, z - 1), u),
+             lerp(grad(P[AB + 1], x, y - 1, z - 1), grad(P[BB + 1], x - 1, y - 1, z - 1), u), v), w);
+    }
+    var INKS = {
+      indigo: [31, 42, 107],
+      vermilion: [200, 64, 42],
+      sepia: [107, 74, 43],
+      black: [20, 20, 26],
+      teal: [21, 122, 122]
+    };
+    function init() {
+      var bg = qs("#bg");
+      var ink = qs("#ink");
+      var hint = qs("#hint");
+      var countEl = qs("#count");
+      var drainBtn = qs("#drain");
+      var rule = qs("#rule");
+      if (!bg || !ink) return;
+      var bctx = bg.getContext("2d");
+      var ictx = ink.getContext("2d");
+      if (!bctx || !ictx) return;
+      var reduced = false;
+      if (typeof window.matchMedia === "function") {
+        try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e1) {}
+      }
+      var W = 0, H = 0, dpr = 1;
+      var medium = "water";
+      var inkKey = "indigo";
+      var particles = [];
+      var sprites = {};
+      var drops = 0;
+      var draining = false, drainT = 0;
+      var dragging = false, lastDrop = 0;
+      var tOff = 0;
+      var swirlBuf = document.createElement("canvas");
+      var swirlCtx = swirlBuf.getContext("2d");
+      function bake(key) {
+        var c = document.createElement("canvas");
+        c.width = 64; c.height = 64;
+        var g = c.getContext("2d");
+        if (!g) return c;
+        var rgb = INKS[key];
+        var grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+        if (medium === "paper") {
+          grd.addColorStop(0, "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ",1)");
+          grd.addColorStop(0.45, "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ",.45)");
+          grd.addColorStop(1, "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ",0)");
+        } else {
+          grd.addColorStop(0, "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ",1)");
+          grd.addColorStop(0.22, "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ",.7)");
+          grd.addColorStop(0.55, "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ",.18)");
+          grd.addColorStop(1, "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ",0)");
+        }
+        g.fillStyle = grd;
+        g.fillRect(0, 0, 64, 64);
+        return c;
+      }
+      function bakeAll() {
+        var k;
+        for (k in INKS) if (Object.prototype.hasOwnProperty.call(INKS, k)) sprites[k] = bake(k);
+      }
+      function paintBg() {
+        bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (medium === "paper") {
+          bctx.fillStyle = "#f3ead8";
+          bctx.fillRect(0, 0, W, H);
+          var i;
+          for (i = 0; i < 60; i++) {
+            var x = Math.random() * W, y = Math.random() * H, r = 40 + Math.random() * 120;
+            var g = bctx.createRadialGradient(x, y, 0, x, y, r);
+            g.addColorStop(0, "rgba(180,150,100,.08)");
+            g.addColorStop(1, "rgba(180,150,100,0)");
+            bctx.fillStyle = g;
+            bctx.beginPath(); bctx.arc(x, y, r, 0, Math.PI * 2); bctx.fill();
+          }
+          bctx.strokeStyle = "rgba(120,95,60,.12)";
+          for (i = 0; i < 2800; i++) {
+            var fx = Math.random() * W, fy = Math.random() * H;
+            bctx.beginPath();
+            bctx.moveTo(fx, fy);
+            bctx.lineTo(fx + (Math.random() - 0.5) * 8, fy + (Math.random() - 0.5) * 2);
+            bctx.stroke();
+          }
+          bctx.strokeStyle = "rgba(255,255,255,.35)";
+          for (i = 0; i < 900; i++) {
+            var wx = Math.random() * W, wy = Math.random() * H;
+            bctx.beginPath();
+            bctx.moveTo(wx, wy);
+            bctx.lineTo(wx + (Math.random() - 0.5) * 6, wy + 1);
+            bctx.stroke();
+          }
+        } else {
+          var g2 = bctx.createRadialGradient(W * 0.5, H * 0.45, 20, W * 0.5, H * 0.5, Math.max(W, H) * 0.7);
+          g2.addColorStop(0, "#f1f5f6");
+          g2.addColorStop(0.45, "#e3eaee");
+          g2.addColorStop(1, "#cfd9df");
+          bctx.fillStyle = g2;
+          bctx.fillRect(0, 0, W, H);
+          var j;
+          for (j = 0; j < 40; j++) {
+            bctx.strokeStyle = "rgba(255,255,255,.06)";
+            bctx.lineWidth = 1;
+            bctx.beginPath();
+            bctx.ellipse(Math.random() * W, Math.random() * H, 20 + Math.random() * 70, 8 + Math.random() * 18, Math.random() * Math.PI, 0, Math.PI * 2);
+            bctx.stroke();
+          }
+        }
+      }
+      function resize() {
+        dpr = window.devicePixelRatio || 1;
+        W = window.innerWidth; H = window.innerHeight;
+        [bg, ink].forEach(function (c) {
+          c.width = Math.floor(W * dpr);
+          c.height = Math.floor(H * dpr);
+          c.style.width = W + "px";
+          c.style.height = H + "px";
+        });
+        paintBg();
+        ictx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      function curl(x, y, z) {
+        var e = 1.2;
+        var n1 = noise(x, y + e, z) - noise(x, y - e, z);
+        var n2 = noise(x + e, y, z) - noise(x - e, y, z);
+        return { x: n1, y: -n2 };
+      }
+      function drop(x, y) {
+        var area = (W * H) / (1280 * 720);
+        var n = Math.floor((380 + Math.random() * 240) * Math.max(0.55, Math.min(1.4, area)));
+        var vmin = medium === "paper" ? 14 : 30;
+        var vmax = medium === "paper" ? 40 : 120;
+        var i, a, sp;
+        for (i = 0; i < n; i++) {
+          a = Math.random() * Math.PI * 2;
+          sp = vmin + Math.random() * (vmax - vmin);
+          particles.push({
+            x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+            age: 0, life: 4 + Math.random() * 6, key: inkKey,
+            blot: i < 18
+          });
+        }
+        drops += 1;
+        if (countEl) countEl.textContent = drops + (drops === 1 ? " drop" : " drops");
+        if (hint) hint.classList.add("gone");
+      }
+      function setInk(k) {
+        inkKey = k;
+        qsa(".sw").forEach(function (b) {
+          b.classList.toggle("on", b.getAttribute("data-ink") === k);
+        });
+        if (rule) rule.style.color = "rgb(" + INKS[k].join(",") + ")";
+        var brand = qs("#brand");
+        if (brand) brand.style.color = "rgb(" + INKS[k].join(",") + ")";
+      }
+      window.addEventListener("pointerdown", function (ev) {
+        if (ev.target.closest && ev.target.closest(".dock")) return;
+        dragging = true;
+        drop(ev.clientX, ev.clientY);
+        lastDrop = Date.now();
+      });
+      window.addEventListener("pointermove", function (ev) {
+        if (!dragging) return;
+        var now = Date.now();
+        if (now - lastDrop >= 220) {
+          drop(ev.clientX, ev.clientY);
+          lastDrop = now;
+        }
+      });
+      window.addEventListener("pointerup", function () { dragging = false; });
+      qsa(".sw").forEach(function (b) {
+        b.addEventListener("click", function () { setInk(b.getAttribute("data-ink") || "indigo"); });
+      });
+      qsa("#med button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          medium = b.getAttribute("data-med") || "water";
+          qsa("#med button").forEach(function (x) { x.classList.remove("on"); });
+          b.classList.add("on");
+          bakeAll();
+          paintBg();
+        });
+      });
+      if (drainBtn) drainBtn.addEventListener("click", function () {
+        draining = true; drainT = reduced ? 2.2 : 7;
+        drainBtn.classList.add("pulse");
+      });
+      document.addEventListener("keydown", function (ev) {
+        var map = { "1": "indigo", "2": "vermilion", "3": "sepia", "4": "black", "5": "teal" };
+        if (map[ev.key]) setInk(map[ev.key]);
+        if (ev.key === "d" || ev.key === "D") { if (drainBtn) drainBtn.click(); }
+        if (ev.key === "p" || ev.key === "P") {
+          medium = medium === "water" ? "paper" : "water";
+          qsa("#med button").forEach(function (x) {
+            x.classList.toggle("on", x.getAttribute("data-med") === medium);
+          });
+          bakeAll(); paintBg();
+        }
+      });
+      var last = 0;
+      function frame(now) {
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+        var dt = Math.min(0.05, (now - last) / 1000) || 0.016;
+        last = now;
+        tOff += dt * 0.15;
+        ictx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (medium === "water" && !reduced && swirlCtx) {
+          if (swirlBuf.width !== ink.width || swirlBuf.height !== ink.height) {
+            swirlBuf.width = ink.width;
+            swirlBuf.height = ink.height;
+          }
+          swirlCtx.setTransform(1, 0, 0, 1, 0, 0);
+          swirlCtx.clearRect(0, 0, swirlBuf.width, swirlBuf.height);
+          swirlCtx.drawImage(ink, 0, 0);
+          ictx.save();
+          ictx.globalCompositeOperation = "copy";
+          ictx.translate(W / 2 + Math.sin(now * 0.0007) * 0.4, H / 2 + Math.cos(now * 0.0005) * 0.3);
+          ictx.rotate(0.0002);
+          ictx.scale(1.0004, 1.0004);
+          ictx.translate(-W / 2, -H / 2);
+          ictx.drawImage(swirlBuf, 0, 0, W, H);
+          ictx.restore();
+        }
+        if (draining) {
+          drainT -= dt;
+          ictx.globalCompositeOperation = "destination-out";
+          ictx.fillStyle = "rgba(0,0,0,0.018)";
+          ictx.fillRect(0, 0, W, H);
+          ictx.globalCompositeOperation = "source-over";
+          if (drainT <= 0) {
+            ictx.clearRect(0, 0, W, H);
+            particles = [];
+            draining = false;
+            if (drainBtn) drainBtn.classList.remove("pulse");
+          }
+        }
+        ictx.globalCompositeOperation = "multiply";
+        var cx = W / 2, cy = H / 2;
+        var fr = medium === "paper" ? 0.90 : 0.965;
+        particles = particles.filter(function (p) {
+          p.age += dt;
+          var n1 = curl(p.x / 42, p.y / 42, tOff);
+          var n2 = curl(p.x / 240, p.y / 240, tOff * 0.4);
+          p.vx += (n1.x * 28 + n2.x * 18) * dt * 60;
+          p.vy += (n1.y * 28 + n2.y * 18) * dt * 60;
+          var dx = p.x - cx, dy = p.y - cy;
+          p.vx += -dy * 0.00008;
+          p.vy += dx * 0.00008;
+          p.vx *= fr; p.vy *= fr;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          var u = Math.min(1, p.age / p.life);
+          var a0 = medium === "paper" ? 0.045 : 0.07;
+          var a = a0 * (1 - u);
+          var sz = (p.blot ? 22 : 10) + u * (p.blot ? 36 : 28);
+          var spr = sprites[p.key];
+          if (spr && a > 0.002) {
+            ictx.globalAlpha = a;
+            ictx.drawImage(spr, p.x - sz / 2, p.y - sz / 2, sz, sz);
+          }
+          return p.age < p.life;
+        });
+        ictx.globalAlpha = 1;
+        ictx.globalCompositeOperation = "source-over";
+      }
+      window.addEventListener("resize", resize);
+      bakeAll();
+      setInk("indigo");
+      resize();
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

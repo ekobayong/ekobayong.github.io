@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Breathe — Living Gradient Mesh</title>
+  <style>
+    :root {
+      --base: #1a1030;
+      --c1: #ff6b57;
+      --c2: #7b4dff;
+      --c3: #14b8a6;
+      --c4: #f5b942;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      background: var(--base);
+      color: #fff;
+      font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+      transition: background 2.2s ease;
+    }
+    .mesh {
+      position: fixed; inset: -20%;
+      filter: blur(clamp(50px, 7vw, 120px)) saturate(1.15);
+      pointer-events: none;
+    }
+    .blob {
+      position: absolute; border-radius: 50%;
+      mix-blend-mode: screen;
+      width: 58vmax; height: 58vmax;
+      will-change: transform;
+    }
+    .b1 { background: var(--c1); width: 70vmax; height: 70vmax; transition: background 2.2s ease; }
+    .b2 { background: var(--c2); width: 62vmax; height: 62vmax; transition: background 2.2s ease; }
+    .b3 { background: var(--c3); width: 54vmax; height: 54vmax; transition: background 2.2s ease; }
+    .b4 { background: var(--c4); width: 66vmax; height: 66vmax; transition: background 2.2s ease; }
+    .b5 { background: var(--c1); width: 48vmax; height: 48vmax; opacity: 0.7; transition: background 2.2s ease; }
+    canvas#grain {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+      opacity: 0.22; mix-blend-mode: overlay; pointer-events: none; z-index: 2;
+    }
+    .vignette {
+      position: fixed; inset: 0; z-index: 3; pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.55) 100%);
+    }
+    .word-wrap {
+      position: fixed; inset: 0; z-index: 4; display: grid; place-items: center; pointer-events: none;
+    }
+    .word-stage { text-align: center; position: relative; min-height: 30vh; width: 100%; }
+    .word {
+      position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%);
+      font-family: "Iowan Old Style", Palatino, Georgia, serif;
+      font-style: italic; font-weight: 300;
+      font-size: clamp(3.4rem, 15vw, 15rem);
+      letter-spacing: -0.02em;
+      text-shadow: 0 0 48px rgba(255,255,255,0.35);
+      white-space: nowrap;
+    }
+    .word.out { animation: word-out 1.6s ease-out forwards; }
+    .word.in { animation: word-in 1.6s ease-out forwards; }
+    .caption {
+      position: absolute; left: 50%; top: 68%; transform: translateX(-50%);
+      font-size: 0.72rem; letter-spacing: 0.28em; text-transform: uppercase;
+      color: rgba(255,255,255,0.7); width: 90%;
+      transition: opacity 0.8s ease;
+    }
+    header.bar, footer.bar {
+      position: fixed; left: 0; right: 0; z-index: 5;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 18px 22px; gap: 12px;
+      font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace;
+      font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: rgba(255,255,255,0.7);
+    }
+    header.bar { top: 0; }
+    footer.bar { bottom: 0; pointer-events: auto; }
+    .pills {
+      display: flex; gap: 6px; padding: 4px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.06);
+    }
+    .pills button {
+      border: 0; background: transparent; color: inherit; font: inherit;
+      padding: 8px 14px; border-radius: 999px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .pills button.active { background: rgba(255,255,255,0.16); }
+    .dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: conic-gradient(var(--d1) 0 25%, var(--d2) 0 50%, var(--d3) 0 75%, var(--d4) 0);
+      transition: transform 0.45s cubic-bezier(0.22, 1.4, 0.36, 1);
+    }
+    .pills button:hover .dot { transform: scale(1.28) rotate(90deg); }
+    .pause {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.45); background: transparent; color: #fff;
+      display: grid; place-items: center; cursor: pointer;
+      transition: transform 0.4s cubic-bezier(0.22, 1.4, 0.36, 1);
+    }
+    .pause:hover { transform: scale(1.12); }
+    .hint { opacity: 0.65; }
+    @keyframes word-out {
+      to { opacity: 0; transform: translate(-50%, calc(-50% - 12px)) scale(1.015); filter: blur(10px); }
+    }
+    @keyframes word-in {
+      from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)) scale(0.985); filter: blur(8px); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: none; }
+    }
+    @media (max-width: 640px) {
+      .hide-sm { display: none; }
+      .pills button { padding: 8px 10px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .word.out, .word.in { animation-duration: 0.6s; }
+      .dot, .pause { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="mesh" id="mesh" aria-hidden="true">
+    <div class="blob b1" data-blob="0"></div>
+    <div class="blob b2" data-blob="1"></div>
+    <div class="blob b3" data-blob="2"></div>
+    <div class="blob b4" data-blob="3"></div>
+    <div class="blob b5" data-blob="4"></div>
+  </div>
+  <canvas id="grain"></canvas>
+  <div class="vignette"></div>
+  <header class="bar">
+    <span>Breathe</span>
+    <span class="hide-sm">A living gradient · no. 009</span>
+    <span id="pal-name">Dawn</span>
+  </header>
+  <div class="word-wrap">
+    <div class="word-stage">
+      <div class="word" id="word-a">breathe</div>
+      <div class="word" id="word-b" hidden></div>
+      <p class="caption" id="caption">in through the nose, four counts</p>
+    </div>
+  </div>
+  <footer class="bar">
+    <div class="pills" id="pills">
+      <button type="button" class="active" data-p="Dawn"><span class="dot" style="--d1:#ff6b57;--d2:#7b4dff;--d3:#14b8a6;--d4:#f5b942"></span> Dawn</button>
+      <button type="button" data-p="Reef"><span class="dot" style="--d1:#00c2c7;--d2:#2748ff;--d3:#5be7a9;--d4:#ff7ab6"></span> Reef</button>
+      <button type="button" data-p="Ember"><span class="dot" style="--d1:#ff4d2e;--d2:#9c1a5b;--d3:#ff9f1c;--d4:#ffd166"></span> Ember</button>
+    </div>
+    <button type="button" class="pause" id="pause" aria-label="pause">
+      <svg id="icon-pause" width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="1" width="3.5" height="12" fill="currentColor"/><rect x="8.5" y="1" width="3.5" height="12" fill="currentColor"/></svg>
+      <svg id="icon-play" width="14" height="14" viewBox="0 0 14 14" hidden><path fill="currentColor" d="M3 1.5v11l9-5.5z"/></svg>
+    </button>
+    <span class="hint hide-sm">space · pause  1 2 3 · palette</span>
+  </footer>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    function init() {
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var paused = false;
+      var palettes = {
+        Dawn: { base: "#1a1030", c: ["#ff6b57", "#7b4dff", "#14b8a6", "#f5b942"] },
+        Reef: { base: "#03131f", c: ["#00c2c7", "#2748ff", "#5be7a9", "#ff7ab6"] },
+        Ember: { base: "#1c0a0a", c: ["#ff4d2e", "#9c1a5b", "#ff9f1c", "#ffd166"] }
+      };
+      function setPalette(name) {
+        var p = palettes[name];
+        if (!p) return;
+        var root = document.documentElement;
+        root.style.setProperty("--base", p.base);
+        root.style.setProperty("--c1", p.c[0]);
+        root.style.setProperty("--c2", p.c[1]);
+        root.style.setProperty("--c3", p.c[2]);
+        root.style.setProperty("--c4", p.c[3]);
+        var label = qs("#pal-name");
+        if (label) label.textContent = name;
+        qsa("#pills button").forEach(function (b) {
+          b.classList.toggle("active", b.getAttribute("data-p") === name);
+        });
+      }
+      var pills = qs("#pills");
+      if (pills) {
+        pills.addEventListener("click", function (e) {
+          var btn = e.target.closest("button");
+          if (btn) setPalette(btn.getAttribute("data-p"));
+        });
+      }
+      window.addEventListener("keydown", function (e) {
+        if (e.key === "1") setPalette("Dawn");
+        if (e.key === "2") setPalette("Reef");
+        if (e.key === "3") setPalette("Ember");
+        if (e.code === "Space") { e.preventDefault(); togglePause(); }
+      });
+
+      var blobs = qsa("[data-blob]");
+      var specs = [
+        { px: 29, py: 41, ox: 0.2, oy: 1.1, rot: 40, sc: 0.1, x0: 8, y0: 4 },
+        { px: 37, py: 23, ox: 1.4, oy: 0.3, rot: 53, sc: 0.12, x0: 42, y0: 18 },
+        { px: 47, py: 31, ox: 2.2, oy: 2.8, rot: 61, sc: 0.08, x0: 20, y0: 48 },
+        { px: 33, py: 53, ox: 0.7, oy: 1.9, rot: 28, sc: 0.14, x0: 58, y0: 30 },
+        { px: 43, py: 27, ox: 3.1, oy: 0.6, rot: 36, sc: 0.09, x0: 30, y0: 62 }
+      ];
+      function easeSin(t) {
+        var s = Math.sin(t);
+        return Math.sign(s) * Math.pow(Math.abs(s), 0.8);
+      }
+      function place(now) {
+        blobs.forEach(function (el, i) {
+          var s = specs[i];
+          if (!s) return;
+          var t = now / 1000;
+          var x = 50 + s.x0 * 0.15 + easeSin(t * (Math.PI * 2 / s.px) + s.ox) * 22;
+          var y = 50 + s.y0 * 0.1 + easeSin(t * (Math.PI * 2 / s.py) + s.oy) * 18;
+          var r = (t / s.rot) * 360;
+          var sc = 1 + Math.sin(t * (Math.PI * 2 / 11) + i) * (0.08 + i * 0.01);
+          el.style.transform = "translate(" + x + "vw," + y + "vh) rotate(" + r + "deg) scale(" + sc + ")";
+        });
+      }
+      place(reduce ? 0 : 1);
+
+      var grain = qs("#grain");
+      var gctx = grain ? grain.getContext("2d") : null;
+      var frames = [];
+      var fi = 0;
+      var lastGrain = 0;
+      function buildGrain() {
+        if (!grain || !gctx) return;
+        var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        var w = Math.floor((window.innerWidth || 800) * dpr);
+        var h = Math.floor((window.innerHeight || 600) * dpr);
+        grain.width = w; grain.height = h;
+        frames = [];
+        var n = reduce ? 1 : 4;
+        for (var f = 0; f < n; f++) {
+          var img = gctx.createImageData(w, h);
+          var d = img.data;
+          for (var i = 0; i < d.length; i += 4) {
+            var v = 110 + Math.random() * 90;
+            d[i] = d[i + 1] = d[i + 2] = v;
+            d[i + 3] = 255;
+          }
+          frames.push(img);
+        }
+        gctx.putImageData(frames[0], 0, 0);
+      }
+      var grainTimer;
+      window.addEventListener("resize", function () {
+        clearTimeout(grainTimer);
+        grainTimer = setTimeout(buildGrain, 180);
+      });
+      buildGrain();
+
+      var words = ["breathe", "drift", "soften", "become", "linger", "unfold", "return"];
+      var caps = [
+        "in through the nose, four counts",
+        "let the thought pass like weather",
+        "unclench the jaw, drop the shoulders",
+        "allow the colour to change you",
+        "stay with the afterimage",
+        "open without arriving",
+        "come back to the first breath"
+      ];
+      var wi = 0;
+      var wordA = qs("#word-a");
+      var wordB = qs("#word-b");
+      var caption = qs("#caption");
+      var showingA = true;
+      var wordEvery = reduce ? 9000 : 5200;
+      var lastWord = performance.now();
+      function swapWord() {
+        wi = (wi + 1) % words.length;
+        var incoming = showingA ? wordB : wordA;
+        var outgoing = showingA ? wordA : wordB;
+        if (!incoming || !outgoing) return;
+        incoming.hidden = false;
+        incoming.textContent = words[wi];
+        incoming.classList.remove("out"); incoming.classList.add("in");
+        outgoing.classList.remove("in"); outgoing.classList.add("out");
+        if (caption) {
+          caption.style.opacity = "0";
+          setTimeout(function () {
+            caption.textContent = caps[wi];
+            caption.style.opacity = "1";
+          }, 400);
+        }
+        setTimeout(function () { outgoing.hidden = true; outgoing.classList.remove("out"); }, reduce ? 600 : 1600);
+        showingA = !showingA;
+      }
+
+      var pauseBtn = qs("#pause");
+      var iconP = qs("#icon-pause");
+      var iconL = qs("#icon-play");
+      function togglePause() {
+        paused = !paused;
+        if (iconP) iconP.hidden = paused;
+        if (iconL) iconL.hidden = !paused;
+        if (pauseBtn) pauseBtn.setAttribute("aria-label", paused ? "play" : "pause");
+      }
+      if (pauseBtn) pauseBtn.addEventListener("click", togglePause);
+
+      function loop(now) {
+        if (!paused) {
+          if (!reduce) place(now);
+          if (!reduce && gctx && frames.length && now - lastGrain > 50) {
+            fi = (fi + 1) % frames.length;
+            gctx.putImageData(frames[fi], 0, 0);
+            lastGrain = now;
+          }
+          if (now - lastWord > wordEvery) { lastWord = now; swapWord(); }
+        }
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aurum Exchange</title>
+  <style>
+    :root {
+      --bg: #07080a;
+      --foot: #0c0e12;
+      --mint: #2ee59d;
+      --rose: #ff5c7a;
+      --gold: #d4af37;
+      --text: #e8e6df;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; background: var(--bg); color: var(--text); }
+    body {
+      font-family: ui-sans-serif, system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      overflow-x: hidden;
+    }
+    .grain {
+      position: fixed; inset: 0; pointer-events: none; z-index: 8;
+      background: radial-gradient(circle, rgba(255,255,255,0.035) 0.6px, transparent 0.8px);
+      background-size: 3px 3px;
+      opacity: 0.5;
+    }
+    #sonar { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
+    .wrap { position: relative; z-index: 1; min-height: 100vh; padding-bottom: 38px; }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 22px 10px; gap: 1rem; flex-wrap: wrap;
+    }
+    .wordmark {
+      font-weight: 300; letter-spacing: 0.28em; text-transform: uppercase; font-size: 0.95rem;
+    }
+    .wordmark span { letter-spacing: 0.12em; opacity: 0.7; }
+    .feed { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.55; }
+    .pills { display: flex; gap: 0; border: 1px solid rgba(212,175,55,0.35); border-radius: 999px; overflow: hidden; }
+    .pills button {
+      appearance: none; border: 0; background: transparent; color: var(--text);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+      font-size: 11px; padding: 6px 12px; cursor: pointer; letter-spacing: 0.08em;
+    }
+    .pills button.active { background: rgba(212,175,55,0.22); color: var(--gold); }
+    .live {
+      display: flex; align-items: center; gap: 8px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+      font-variant-numeric: tabular-nums; font-size: 12px; opacity: 0.8;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); animation: blink 1.2s steps(2) infinite; }
+    @keyframes blink { 50% { opacity: 0.2; } }
+    .grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+      padding: 8px 18px 16px;
+    }
+    .col { display: flex; flex-direction: column; gap: 12px; }
+    .panel {
+      position: relative;
+      background: rgba(12,14,18,0.55);
+      border: 1px solid rgba(212,175,55,0.28);
+      border-radius: 10px;
+      overflow: hidden;
+      min-height: 160px;
+    }
+    .panel::before {
+      content: "";
+      position: absolute; left: 0; right: 0; top: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      opacity: 0.7;
+    }
+    .ph {
+      font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+      opacity: 0.55; padding: 10px 14px 0;
+    }
+    .stats {
+      display: flex; flex-wrap: wrap; gap: 18px;
+      padding: 8px 14px 6px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+      font-variant-numeric: tabular-nums;
+    }
+    .last { font-size: 34px; font-weight: 300; text-shadow: 0 0 18px rgba(212,175,55,0.35); }
+    .lab { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.45; }
+    .val { font-size: 14px; }
+    #chart { display: block; width: 100%; height: 360px; }
+    #depth { display: block; width: 100%; height: 220px; }
+    .heat {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 0.8fr;
+      grid-template-rows: repeat(4, 1fr);
+      gap: 4px;
+      padding: 10px;
+      min-height: 240px;
+    }
+    .cell {
+      background: rgba(46,229,157,0.12);
+      border-radius: 4px;
+      padding: 8px;
+      display: flex; flex-direction: column; justify-content: space-between;
+      font-size: 11px; transition: transform 1.2s ease, background 1.2s ease, color 1.2s ease;
+      cursor: default;
+    }
+    .cell:hover { transform: scale(1.04); outline: 1px solid var(--gold); z-index: 2; }
+    .cell strong { font-weight: 500; }
+    .cell .pct { font-family: ui-monospace, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+    footer.tape {
+      position: fixed; left: 0; right: 0; bottom: 0; height: 38px;
+      background: var(--foot);
+      border-top: 1px solid rgba(212,175,55,0.25);
+      overflow: hidden; z-index: 4;
+    }
+    footer.tape::before, footer.tape::after {
+      content: ""; position: absolute; top: 0; bottom: 0; width: 48px; z-index: 2; pointer-events: none;
+    }
+    footer.tape::before { left: 0; background: linear-gradient(90deg, var(--foot), transparent); }
+    footer.tape::after { right: 0; background: linear-gradient(270deg, var(--foot), transparent); }
+    .marquee {
+      display: flex; width: max-content;
+      animation: tape 48s linear infinite;
+      height: 38px; align-items: center;
+    }
+    .marquee:hover { animation-play-state: paused; }
+    @keyframes tape { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    .tick {
+      display: inline-flex; gap: 8px; padding: 0 18px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+      font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap;
+    }
+    .up { color: var(--mint); }
+    .dn { color: var(--rose); }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      #chart { height: 280px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .marquee { animation-duration: 96s; }
+      .dot { animation: none; }
+      .cell { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="sonar"></canvas>
+  <div class="grain"></div>
+  <div class="wrap">
+    <header>
+      <div>
+        <div class="wordmark">AURUM Exchange</div>
+        <div class="feed">Synthetic feed · AUR/USD</div>
+      </div>
+      <div class="pills" role="group" aria-label="timeframe">
+        <button type="button" data-tf="1m">1m</button>
+        <button type="button" data-tf="5m" class="active">5m</button>
+        <button type="button" data-tf="1h">1h</button>
+      </div>
+      <div class="live"><span class="dot"></span><span id="clock">00:00:00</span></div>
+    </header>
+    <div class="grid">
+      <section class="panel">
+        <div class="ph">Price</div>
+        <div class="stats">
+          <div><div class="lab">LAST</div><div class="last" id="last">1240.00</div></div>
+          <div><div class="lab">CHANGE</div><div class="val" id="chg">+0.00</div></div>
+          <div><div class="lab">HIGH</div><div class="val" id="high">1240.00</div></div>
+          <div><div class="lab">LOW</div><div class="val" id="low">1240.00</div></div>
+          <div><div class="lab">VOLATILITY</div><div class="val" id="vol">0.00%</div></div>
+        </div>
+        <canvas id="chart"></canvas>
+      </section>
+      <div class="col">
+        <section class="panel">
+          <div class="ph">Depth of market</div>
+          <canvas id="depth"></canvas>
+        </section>
+        <section class="panel">
+          <div class="ph">Sector heat</div>
+          <div class="heat" id="heat"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <footer class="tape"><div class="marquee" id="tape"></div></footer>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var reduce = false;
+      if (typeof window.matchMedia === "function") {
+        reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      }
+      var N = 32000, ticks = new Float32Array(N), tickI = 0, lastP = 1240, sigma = 0.6;
+      var omega = 0.0008, alpha = 0.08, beta = 0.9;
+      function stepPrice(p, sig) {
+        var r = sig * (Math.random() * 2 - 1) * 0.35;
+        r += (1240 - p) * 0.00015;
+        var ns = Math.sqrt(Math.max(1e-6, omega + alpha * r * r + beta * sig * sig));
+        return { p: p + r, s: ns, r: r };
+      }
+      var i, s;
+      for (i = 0; i < N; i++) {
+        s = stepPrice(lastP, sigma);
+        lastP = s.p; sigma = s.s; ticks[i] = lastP;
+      }
+      tickI = N;
+      var buf = ticks;
+      var sectors = [
+        { n: "Photonics", w: 3, v: 0 }, { n: "Orbital Freight", w: 2, v: 0 },
+        { n: "Synthetic Biology", w: 2, v: 0 }, { n: "Desalination", w: 1, v: 0 },
+        { n: "Fusion Utilities", w: 3, v: 0 }, { n: "Quantum Fabs", w: 2, v: 0 },
+        { n: "Vertical Farms", w: 1, v: 0 }, { n: "Cartography", w: 1, v: 0 },
+        { n: "Cold Storage", w: 1, v: 0 }, { n: "Lunar Leisure", w: 2, v: 0 },
+        { n: "Textiles", w: 1, v: 0 }, { n: "Timber", w: 1, v: 0 }
+      ];
+      var symbols = ["AUR","PHTN","ORBF","SYNB","DSAL","FUSN","QFAB","VFRM","CART","COLD","LUNA","TXTL","TMBR","HELX","MIRA","ZEPH"];
+      var ticker = symbols.map(function (sym, idx) {
+        return { sym: sym, p: 20 + idx * 7.3 + Math.random() * 8, ch: 0, el: null };
+      });
+      var heat = qs("#heat");
+      if (heat) {
+        sectors.forEach(function (sec, idx) {
+          var d = document.createElement("div");
+          d.className = "cell";
+          d.style.gridRow = "span " + (sec.w > 2 ? 2 : 1);
+          d.innerHTML = "<strong>" + sec.n + "</strong><span class='pct' id='sec" + idx + "'>0.00%</span>";
+          heat.appendChild(d);
+          sec.el = d;
+          sec.pctEl = qs("#sec" + idx, d);
+        });
+      }
+      var tape = qs("#tape");
+      function paintTape() {
+        if (!tape) return;
+        var html = "", k, t;
+        for (k = 0; k < 2; k++) {
+          for (t = 0; t < ticker.length; t++) {
+            var up = ticker[t].ch >= 0;
+            html += '<span class="tick" data-i="' + t + '"><b>' + ticker[t].sym + "</b> " + ticker[t].p.toFixed(2) + ' <span class="' + (up ? "up" : "dn") + '">' + (up ? "▲" : "▼") + " " + Math.abs(ticker[t].ch).toFixed(2) + "</span></span>";
+          }
+        }
+        tape.innerHTML = html;
+      }
+      paintTape();
+      function updateTapeInPlace() {
+        if (!tape) return;
+        var nodes = tape.querySelectorAll(".tick");
+        var k;
+        for (k = 0; k < nodes.length; k++) {
+          var idx = parseInt(nodes[k].getAttribute("data-i"), 10);
+          var t = ticker[idx];
+          if (!t) continue;
+          var up = t.ch >= 0;
+          nodes[k].innerHTML = "<b>" + t.sym + "</b> " + t.p.toFixed(2) + ' <span class="' + (up ? "up" : "dn") + '">' + (up ? "▲" : "▼") + " " + Math.abs(t.ch).toFixed(2) + "</span>";
+        }
+      }
+      var tf = 300, tfName = "5m";
+      var pills = document.querySelectorAll(".pills button");
+      for (i = 0; i < pills.length; i++) {
+        pills[i].addEventListener("click", function () {
+          var v = this.getAttribute("data-tf");
+          tfName = v;
+          tf = v === "1m" ? 60 : v === "1h" ? 3600 : 300;
+          candleCache = null;
+          var k;
+          for (k = 0; k < pills.length; k++) pills[k].classList.toggle("active", pills[k] === this);
+          drawChart();
+        });
+      }
+      var bids = [], asks = [];
+      for (i = 0; i < 22; i++) {
+        bids.push({ p: lastP - (i + 1) * 0.4, s: 20 + Math.random() * 80 });
+        asks.push({ p: lastP + (i + 1) * 0.4, s: 20 + Math.random() * 80 });
+      }
+      var sonar = qs("#sonar"), chart = qs("#chart"), depth = qs("#depth");
+      var sctx = sonar && sonar.getContext ? sonar.getContext("2d") : null;
+      var cctx = chart && chart.getContext ? chart.getContext("2d") : null;
+      var dctx = depth && depth.getContext ? depth.getContext("2d") : null;
+      var dpr = 1, rings = [];
+      function sizeCanvas(cv) {
+        if (!cv) return;
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var r = cv.getBoundingClientRect();
+        var w = Math.max(1, Math.floor((r.width || window.innerWidth) * dpr));
+        var h = Math.max(1, Math.floor((r.height || window.innerHeight) * dpr));
+        cv.width = w; cv.height = h;
+      }
+      function resize() {
+        sizeCanvas(sonar); sizeCanvas(chart); sizeCanvas(depth);
+        drawChart(); drawDepth();
+      }
+      window.addEventListener("resize", resize);
+      resize();
+      var lastEl = qs("#last"), chgEl = qs("#chg"), hiEl = qs("#high"), loEl = qs("#low"), volEl = qs("#vol"), clock = qs("#clock");
+      var candleCache = null, cacheKey = "";
+      function candles() {
+        var slot = Math.max(8, Math.floor((chart ? chart.getBoundingClientRect().width : 400) / 7));
+        var key = tf + ":" + slot + ":" + tickI;
+        if (candleCache && cacheKey === key) return candleCache;
+        var bucket = Math.max(1, Math.round(tf / 7.5));
+        var out = [];
+        var start = Math.max(0, N - slot * bucket);
+        var o = buf[start], h = o, l = o, c = o, vol = 0, n = 0, t;
+        for (t = start; t < N; t++) {
+          var p = buf[t];
+          if (n === 0) { o = p; h = p; l = p; }
+          h = Math.max(h, p); l = Math.min(l, p); c = p; vol += Math.abs(p - (t ? buf[t - 1] : p)); n++;
+          if (n >= bucket) { out.push({ o: o, h: h, l: l, c: c, v: vol }); n = 0; vol = 0; }
+        }
+        if (n) out.push({ o: o, h: h, l: l, c: c, v: vol });
+        candleCache = out; cacheKey = key;
+        return out;
+      }
+      function drawChart() {
+        if (!cctx || !chart) return;
+        var w = chart.width, h = chart.height;
+        cctx.setTransform(1, 0, 0, 1, 0, 0);
+        cctx.clearRect(0, 0, w, h);
+        var cs = candles();
+        if (!cs.length) return;
+        var min = 1e9, max = -1e9, i2, cd;
+        for (i2 = 0; i2 < cs.length; i2++) { min = Math.min(min, cs[i2].l); max = Math.max(max, cs[i2].h); }
+        var pad = (max - min) * 0.08 || 1;
+        min -= pad; max += pad;
+        function Y(p) { return 16 * dpr + (1 - (p - min) / (max - min)) * (h - 40 * dpr); }
+        var step = nice(max - min);
+        cctx.font = 10 * dpr + "px ui-monospace, Menlo, Consolas, monospace";
+        cctx.textAlign = "right";
+        var g;
+        for (g = Math.ceil(min / step) * step; g < max; g += step) {
+          var y = Y(g);
+          cctx.strokeStyle = "rgba(212,175,55,0.18)";
+          cctx.beginPath(); cctx.moveTo(0, y); cctx.lineTo(w - 44 * dpr, y); cctx.stroke();
+          cctx.fillStyle = "rgba(232,230,223,0.45)";
+          cctx.fillText(g.toFixed(1), w - 8 * dpr, y - 2);
+        }
+        var slotW = (w - 50 * dpr) / cs.length;
+        var vmax = 1;
+        for (i2 = 0; i2 < cs.length; i2++) vmax = Math.max(vmax, cs[i2].v);
+        for (i2 = 0; i2 < cs.length; i2++) {
+          cd = cs[i2];
+          var x = i2 * slotW + slotW * 0.5;
+          var up = cd.c >= cd.o;
+          var col = up ? "#2ee59d" : "#ff5c7a";
+          cctx.fillStyle = "rgba(232,230,223,0.12)";
+          cctx.fillRect(x - slotW * 0.2, h - 18 * dpr - (cd.v / vmax) * 28 * dpr, slotW * 0.4, (cd.v / vmax) * 28 * dpr);
+          cctx.strokeStyle = col;
+          cctx.lineWidth = 1;
+          cctx.beginPath(); cctx.moveTo(x, Y(cd.h)); cctx.lineTo(x, Y(cd.l)); cctx.stroke();
+          var y1 = Y(Math.max(cd.o, cd.c)), y2 = Y(Math.min(cd.o, cd.c));
+          var bw = slotW * 0.55;
+          if (up) {
+            cctx.strokeRect(x - bw / 2, y1, bw, Math.max(1, y2 - y1));
+          } else {
+            cctx.fillStyle = col;
+            cctx.fillRect(x - bw / 2, y1, bw, Math.max(1, y2 - y1));
+          }
+          if (i2 === cs.length - 1) {
+            cctx.save();
+            cctx.shadowColor = col;
+            cctx.shadowBlur = 18 * dpr;
+            cctx.fillStyle = col;
+            cctx.beginPath(); cctx.arc(x, Y(cd.c), 3 * dpr, 0, Math.PI * 2); cctx.fill();
+            cctx.restore();
+          }
+        }
+        var last = buf[N - 1];
+        cctx.setLineDash([4 * dpr, 4 * dpr]);
+        cctx.strokeStyle = "#d4af37";
+        cctx.beginPath(); cctx.moveTo(0, Y(last)); cctx.lineTo(w - 50 * dpr, Y(last)); cctx.stroke();
+        cctx.setLineDash([]);
+        var tag = last >= cs[0].o ? "#2ee59d" : "#ff5c7a";
+        cctx.fillStyle = tag;
+        cctx.fillRect(w - 48 * dpr, Y(last) - 8 * dpr, 46 * dpr, 14 * dpr);
+        cctx.fillStyle = "#07080a";
+        cctx.textAlign = "center";
+        cctx.fillText(last.toFixed(2), w - 25 * dpr, Y(last) + 3 * dpr);
+        cctx.fillStyle = "rgba(232,230,223,0.45)";
+        cctx.textAlign = "left";
+        cctx.fillText("-12m", 8 * dpr, h - 4 * dpr);
+        cctx.textAlign = "right";
+        cctx.fillText("now", w - 52 * dpr, h - 4 * dpr);
+      }
+      function nice(span) {
+        var exp = Math.pow(10, Math.floor(Math.log(span) / Math.LN10));
+        var f = span / exp;
+        var nf = f < 2 ? 0.5 : f < 5 ? 1 : 2;
+        return nf * exp / 4;
+      }
+      function drawDepth() {
+        if (!dctx || !depth) return;
+        var w = depth.width, h = depth.height;
+        dctx.clearRect(0, 0, w, h);
+        var mid = w * 0.5, rowH = h / 22, breath = 0.85 + 0.15 * Math.sin(Date.now() / 1400);
+        var maxS = 1, i3;
+        for (i3 = 0; i3 < 22; i3++) maxS = Math.max(maxS, bids[i3].s, asks[i3].s);
+        for (i3 = 0; i3 < 22; i3++) {
+          var y = i3 * rowH + 2;
+          var bw = (bids[i3].s / maxS) * (mid - 20) * breath;
+          var aw = (asks[i3].s / maxS) * (mid - 20) * breath;
+          var bg = dctx.createLinearGradient(mid, 0, mid - bw, 0);
+          bg.addColorStop(0, "rgba(46,229,157,0.7)"); bg.addColorStop(1, "rgba(46,229,157,0.12)");
+          dctx.fillStyle = bg; dctx.fillRect(mid - bw, y, bw, rowH - 3);
+          var ag = dctx.createLinearGradient(mid, 0, mid + aw, 0);
+          ag.addColorStop(0, "rgba(255,92,122,0.7)"); ag.addColorStop(1, "rgba(255,92,122,0.12)");
+          dctx.fillStyle = ag; dctx.fillRect(mid, y, aw, rowH - 3);
+          if (i3 % 4 === 0) {
+            dctx.fillStyle = "rgba(232,230,223,0.5)";
+            dctx.font = 9 * dpr + "px ui-monospace, Menlo, Consolas, monospace";
+            dctx.textAlign = "center";
+            dctx.fillText(bids[i3].p.toFixed(1), mid, y + rowH * 0.7);
+          }
+        }
+        dctx.strokeStyle = "#d4af37";
+        dctx.beginPath(); dctx.moveTo(mid, 0); dctx.lineTo(mid, h); dctx.stroke();
+      }
+      function spawnRing(up, mag) {
+        rings.push({
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+          r: 4, max: 30 + mag * 80, a: 0.28, up: up, echo: 0
+        });
+      }
+      var lastTick = 0, interval = reduce ? 360 : 130, session0 = buf[0];
+      var hi = lastP, lo = lastP;
+      function frame(now) {
+        if (now - lastTick >= interval) {
+          lastTick = now;
+          s = stepPrice(lastP, sigma);
+          lastP = s.p; sigma = s.s;
+          for (i = 0; i < N - 1; i++) buf[i] = buf[i + 1];
+          buf[N - 1] = lastP;
+          tickI++;
+          candleCache = null;
+          hi = Math.max(hi, lastP); lo = Math.min(lo, lastP);
+          spawnRing(s.r >= 0, Math.abs(s.r));
+          var si = (Math.random() * sectors.length) | 0;
+          sectors[si].v += s.r * (0.4 + Math.random());
+          var ti = (Math.random() * ticker.length) | 0;
+          ticker[ti].p = Math.max(1, ticker[ti].p + s.r * (0.3 + Math.random()));
+          ticker[ti].ch += s.r * 0.4;
+          if (ticker[0]) { ticker[0].p = lastP; ticker[0].ch = lastP - session0; }
+          updateTapeInPlace();
+          if (lastEl) lastEl.textContent = lastP.toFixed(2);
+          if (chgEl) {
+            var ch = lastP - session0;
+            chgEl.textContent = (ch >= 0 ? "+" : "") + ch.toFixed(2);
+            chgEl.className = "val " + (ch >= 0 ? "up" : "dn");
+          }
+          if (hiEl) hiEl.textContent = hi.toFixed(2);
+          if (loEl) loEl.textContent = lo.toFixed(2);
+          if (volEl) volEl.textContent = (sigma * 12).toFixed(2) + "%";
+          sectors.forEach(function (sec) {
+            if (!sec.el) return;
+            var pct = sec.v;
+            var a = Math.min(0.72, 0.1 + Math.abs(pct) * 0.08);
+            sec.el.style.background = pct >= 0 ? "rgba(46,229,157," + a + ")" : "rgba(255,92,122," + a + ")";
+            sec.el.style.color = a > 0.4 ? "#07080a" : "#e8e6df";
+            if (sec.pctEl) sec.pctEl.textContent = (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%";
+          });
+          for (i = 0; i < 22; i++) {
+            bids[i].s = Math.max(4, bids[i].s + (Math.random() - 0.5) * 6);
+            asks[i].s = Math.max(4, asks[i].s + (Math.random() - 0.5) * 6);
+            bids[i].p = lastP - (i + 1) * 0.4;
+            asks[i].p = lastP + (i + 1) * 0.4;
+          }
+          drawChart();
+        }
+        if (clock) {
+          var d = new Date();
+          clock.textContent = ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2) + ":" + ("0" + d.getSeconds()).slice(-2);
+        }
+        if (sctx && sonar) {
+          sctx.setTransform(1, 0, 0, 1, 0, 0);
+          sctx.clearRect(0, 0, sonar.width, sonar.height);
+          sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          var r, j;
+          for (j = rings.length - 1; j >= 0; j--) {
+            r = rings[j];
+            r.r += 0.9; r.a -= 0.004; r.echo += 0.6;
+            if (r.a <= 0) { rings.splice(j, 1); continue; }
+            sctx.strokeStyle = r.up ? "rgba(46,229,157," + r.a + ")" : "rgba(255,92,122," + r.a + ")";
+            sctx.beginPath(); sctx.arc(r.x, r.y, Math.min(r.r, r.max), 0, Math.PI * 2); sctx.stroke();
+            sctx.strokeStyle = r.up ? "rgba(46,229,157," + (r.a * 0.5) + ")" : "rgba(255,92,122," + (r.a * 0.5) + ")";
+            sctx.beginPath(); sctx.arc(r.x, r.y, Math.min(r.echo, r.max * 0.55), 0, Math.PI * 2); sctx.stroke();
+          }
+        }
+        drawDepth();
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

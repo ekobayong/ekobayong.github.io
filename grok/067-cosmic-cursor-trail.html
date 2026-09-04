@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stardust — Cosmic Cursor Trail</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #000; overflow: hidden; }
+    body { font-family: system-ui, sans-serif; color: #e8e8f0; }
+    canvas { display: block; position: fixed; inset: 0; }
+    body.desktop { cursor: none; }
+    .ring {
+      position: fixed; width: 14px; height: 14px; border: 1.5px solid #fff;
+      border-radius: 50%; pointer-events: none; z-index: 20;
+      mix-blend-mode: difference; transform: translate(-50%, -50%);
+    }
+    .ring.hold {
+      width: 42px; height: 42px; border-style: dashed;
+      animation: spin 1.2s linear infinite;
+    }
+    @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+    .title {
+      position: fixed; top: 22px; left: 24px; z-index: 5; pointer-events: none;
+    }
+    .title h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: 28px; }
+    .title p { font-size: 10px; letter-spacing: .32em; text-transform: uppercase; opacity: .6; margin-top: 4px; }
+    .hint {
+      position: fixed; top: 22px; right: 24px; z-index: 5;
+      font-size: 12px; opacity: .7; max-width: 220px; text-align: right;
+      transition: opacity .8s ease;
+    }
+    .hint.gone { opacity: 0; pointer-events: none; }
+    .dock {
+      position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+      z-index: 5;
+      background: rgba(14,14,22,.72);
+      border: 1px solid rgba(255,255,255,.14);
+      backdrop-filter: blur(14px);
+      border-radius: 999px;
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 12px;
+    }
+    .dock button {
+      background: transparent; color: #e8e8f0; border: 0;
+      font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+      padding: 6px 10px; border-radius: 999px; cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .dock button.on { background: #e8e8f0; color: #111; }
+    .sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .grp { display: flex; gap: 2px; padding: 0 4px; border-right: 1px solid rgba(255,255,255,.12); }
+    .grp:last-child { border-right: 0; }
+    @media (max-width: 640px) {
+      .ring { display: none !important; }
+      body.desktop { cursor: auto; }
+      .dock .lab { display: none; }
+      .hint { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ring.hold { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="ring" id="ring"></div>
+  <div class="title">
+    <h1>Stardust</h1>
+    <p>cosmic cursor trail</p>
+  </div>
+  <div class="hint" id="hint">Move to paint · hold for a vortex · 1–4 brushes · C clear · S save</div>
+  <div class="dock">
+    <div class="grp" id="brushes">
+      <button type="button" data-brush="dust" class="on"><span class="sw" style="background:#9fd8ff"></span><span class="lab">Dust</span></button>
+      <button type="button" data-brush="ribbons"><span class="sw" style="background:#ff9fe5"></span><span class="lab">Ribbons</span></button>
+      <button type="button" data-brush="embers"><span class="sw" style="background:#ffb060"></span><span class="lab">Embers</span></button>
+      <button type="button" data-brush="ink"><span class="sw" style="background:#e8e8f0"></span><span class="lab">Ink</span></button>
+    </div>
+    <div class="grp" id="fades">
+      <button type="button" data-fade="0.012" title="slow fade">
+        <svg width="16" height="10" viewBox="0 0 16 10"><path d="M1 8 C4 2 12 2 15 8" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+      <button type="button" data-fade="0.045" class="on" title="mid fade">
+        <svg width="16" height="10" viewBox="0 0 16 10"><path d="M1 7 C5 3 11 3 15 7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+      </button>
+      <button type="button" data-fade="0.14" title="fast fade">
+        <svg width="16" height="10" viewBox="0 0 16 10"><path d="M1 6 L15 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+      </button>
+    </div>
+    <div class="grp">
+      <button type="button" id="btnClear" title="Clear (C)">
+        <svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 4h8l-.7 8H3.7L3 4zm2-2h4l.5 2H4.5L5 2z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+        <span class="lab">Clear</span>
+      </button>
+      <button type="button" id="btnSave" title="Save PNG (S)">
+        <svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 2h6l2 2v8H3V2zm2 7h4v3H5V9z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+        <span class="lab">Save PNG</span>
+      </button>
+    </div>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    function init() {
+      var canvas = qs("#c");
+      var ring = qs("#ring");
+      var hint = qs("#hint");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d", { alpha: false });
+      if (!ctx) return;
+      var reduced = false;
+      if (typeof window.matchMedia === "function") {
+        try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e1) {}
+      }
+      var W = 0, H = 0, dpr = 1;
+      var particles = [];
+      var brush = "dust";
+      var fade = reduced ? 0.08 : 0.045;
+      var hue = 210;
+      var px = 0, py = 0, ppx = 0, ppy = 0, hasP = false;
+      var vx = 0, vy = 0;
+      var cx = 0, cy = 0, cvx = 0, cvy = 0;
+      var trail = [];
+      var holding = false, holdT = 0;
+      var lastMove = 0;
+      var ghost = false;
+      var shock = null;
+      var moved = false;
+      if (window.innerWidth >= 640) document.body.classList.add("desktop");
+      function resize() {
+        var tmp = document.createElement("canvas");
+        tmp.width = canvas.width; tmp.height = canvas.height;
+        var tctx = tmp.getContext("2d");
+        if (tctx && canvas.width) tctx.drawImage(canvas, 0, 0);
+        dpr = window.devicePixelRatio || 1;
+        W = window.innerWidth; H = window.innerHeight;
+        canvas.width = Math.floor(W * dpr);
+        canvas.height = Math.floor(H * dpr);
+        canvas.style.width = W + "px";
+        canvas.style.height = H + "px";
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (tctx && tmp.width) ctx.drawImage(tmp, 0, 0, W, H);
+        else { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H); }
+      }
+      function spawn(x, y, inheritedVx, inheritedVy) {
+        var p = {
+          x: x, y: y, px: x, py: y,
+          vx: inheritedVx * 0.35 + (Math.random() - 0.5) * 1.6,
+          vy: inheritedVy * 0.35 + (Math.random() - 0.5) * 1.6,
+          life: 1, drag: 0.96, kind: brush,
+          hue: hue + (Math.random() * 36 - 18),
+          r: 1, a: 1
+        };
+        if (brush === "dust") { p.r = 0.6 + Math.random() * 1.6; p.drag = 0.97; p.ph = Math.random() * 6; }
+        if (brush === "ribbons") { p.life = 1.6; p.drag = 0.985; p.r = 1.2; }
+        if (brush === "embers") { p.hue = 8 + Math.random() * 34; p.vy -= 0.4; p.drag = 0.94; p.r = 1.4 + Math.random() * 2; }
+        if (brush === "ink") { p.r = 6 + Math.random() * 16; p.a = 0.04; p.drag = 0.92; p.life = 0.8; }
+        particles.push(p);
+      }
+      function along(x0, y0, x1, y1) {
+        var dx = x1 - x0, dy = y1 - y0, dist = Math.hypot(dx, dy);
+        var steps = Math.min(40, Math.max(1, Math.floor(dist / 3)));
+        var i;
+        for (i = 0; i < steps; i++) {
+          var t = i / steps;
+          spawn(x0 + dx * t, y0 + dy * t, vx, vy);
+        }
+      }
+      function onMove(x, y) {
+        lastMove = (performance && performance.now) ? performance.now() : Date.now();
+        ghost = false;
+        if (!moved && hint) { hint.classList.add("gone"); moved = true; }
+        vx = x - (hasP ? ppx : x); vy = y - (hasP ? ppy : y);
+        if (hasP) along(ppx, ppy, x, y);
+        else spawn(x, y, 0, 0);
+        ppx = px = x; ppy = py = y; hasP = true;
+        if (ring) { ring.style.left = x + "px"; ring.style.top = y + "px"; }
+      }
+      window.addEventListener("pointermove", function (ev) {
+        onMove(ev.clientX, ev.clientY);
+      });
+      window.addEventListener("pointerdown", function (ev) {
+        holding = true; holdT = 0;
+        onMove(ev.clientX, ev.clientY);
+        if (ring) ring.classList.add("hold");
+      });
+      window.addEventListener("pointerup", function () {
+        if (holding) {
+          var k = Math.min(1.2, holdT) / 1.2;
+          particles.forEach(function (p) {
+            var dx = p.x - px, dy = p.y - py, d = Math.hypot(dx, dy);
+            if (d < 260 && d > 0.1) {
+              p.vx += (dx / d) * 6 * k;
+              p.vy += (dy / d) * 6 * k;
+            }
+          });
+          var n = 160 + Math.floor(k * 260), i;
+          for (i = 0; i < n; i++) {
+            var ang = Math.random() * Math.PI * 2, sp = 4 + Math.random() * 10;
+            spawn(px, py, Math.cos(ang) * sp, Math.sin(ang) * sp);
+          }
+          shock = { x: px, y: py, r: 8, a: 0.8 };
+        }
+        holding = false; holdT = 0;
+        if (ring) ring.classList.remove("hold");
+      });
+      qsa("#brushes button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          brush = b.getAttribute("data-brush") || "dust";
+          qsa("#brushes button").forEach(function (x) { x.classList.remove("on"); });
+          b.classList.add("on");
+        });
+      });
+      qsa("#fades button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          fade = parseFloat(b.getAttribute("data-fade")) || 0.045;
+          if (reduced) fade = Math.max(0.08, fade);
+          qsa("#fades button").forEach(function (x) { x.classList.remove("on"); });
+          b.classList.add("on");
+        });
+      });
+      var btnClear = qs("#btnClear"), btnSave = qs("#btnSave");
+      if (btnClear) btnClear.addEventListener("click", function () {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+        particles = [];
+      });
+      if (btnSave) btnSave.addEventListener("click", function () {
+        var a = document.createElement("a");
+        a.href = canvas.toDataURL("image/png");
+        a.download = "stardust-" + Date.now() + ".png";
+        a.click();
+      });
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "1") { brush = "dust"; syncBrush(); }
+        if (ev.key === "2") { brush = "ribbons"; syncBrush(); }
+        if (ev.key === "3") { brush = "embers"; syncBrush(); }
+        if (ev.key === "4") { brush = "ink"; syncBrush(); }
+        if (ev.key === "c" || ev.key === "C") { if (btnClear) btnClear.click(); }
+        if (ev.key === "s" || ev.key === "S") { if (btnSave) btnSave.click(); }
+      });
+      function syncBrush() {
+        qsa("#brushes button").forEach(function (x) {
+          if (x.getAttribute("data-brush") === brush) x.classList.add("on");
+          else x.classList.remove("on");
+        });
+      }
+      var last = 0;
+      function frame(now) {
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+        var dt = Math.min(0.05, (now - last) / 1000) || 0.016;
+        last = now;
+        hue = (hue + 14 * dt) % 360;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = "rgba(0,0,0," + fade + ")";
+        ctx.fillRect(0, 0, W, H);
+        if (holding) {
+          holdT += dt;
+          var swirl = Math.min(1, holdT / 1.2);
+          particles.forEach(function (p) {
+            var dx = px - p.x, dy = py - p.y, d = Math.hypot(dx, dy);
+            if (d < 260 && d > 1) {
+              p.vx += (dx / d) * 0.35 * swirl;
+              p.vy += (dy / d) * 0.35 * swirl;
+              p.vx += -dy / d * 0.55 * swirl;
+              p.vy += dx / d * 0.55 * swirl;
+            }
+          });
+          var i;
+          for (i = 0; i < 3; i++) spawn(px + (Math.random() - 0.5) * 16, py + (Math.random() - 0.5) * 16, 0, 0);
+        }
+        if (now - lastMove > 2600) {
+          ghost = true;
+          var t = now * 0.00045;
+          var gx = W * 0.5 + Math.sin(3 * t + Math.PI / 2) * W * 0.28 + Math.sin(t * 1.7) * 18;
+          var gy = H * 0.5 + Math.sin(2 * t) * H * 0.22 + Math.cos(t * 1.3) * 14;
+          onMove(gx, gy);
+          lastMove = now - 2600;
+        }
+        var stiffness = 120, damp = 0.82;
+        var ax = (px - cx) * stiffness * dt;
+        var ay = (py - cy) * stiffness * dt;
+        cvx = (cvx + ax) * damp; cvy = (cvy + ay) * damp;
+        cx += cvx * dt * 12; cy += cvy * dt * 12;
+        trail.push({ x: cx, y: cy });
+        if (trail.length > 28) trail.shift();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.lineCap = "round";
+        if (trail.length > 1) {
+          var k;
+          for (k = 1; k < trail.length; k++) {
+            var u = k / trail.length;
+            ctx.strokeStyle = "hsla(" + ((hue + 180) % 360) + ",90%," + (50 + u * 30) + "%," + (0.15 + u * 0.7) + ")";
+            ctx.lineWidth = 0.6 + u * 3.2;
+            ctx.beginPath();
+            ctx.moveTo(trail[k - 1].x, trail[k - 1].y);
+            ctx.lineTo(trail[k].x, trail[k].y);
+            ctx.stroke();
+          }
+        }
+        var hg = ctx.createRadialGradient(cx, cy, 0, cx, cy, 18);
+        hg.addColorStop(0, "rgba(255,255,255,.95)");
+        hg.addColorStop(0.35, "hsla(" + hue + ",90%,70%,.5)");
+        hg.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = hg;
+        ctx.beginPath(); ctx.arc(cx, cy, 18, 0, Math.PI * 2); ctx.fill();
+        particles = particles.filter(function (p) {
+          p.px = p.x; p.py = p.y;
+          p.vx *= p.drag; p.vy *= p.drag;
+          if (p.kind === "dust") {
+            p.x += Math.sin((now * 0.003) + (p.ph || 0)) * 0.25;
+          }
+          if (p.kind === "embers") {
+            p.vy -= 0.04;
+            p.a = 0.4 + Math.sin(now * 0.02 + p.x) * 0.3;
+            p.life -= dt * 1.4;
+          } else p.life -= dt * (p.kind === "ribbons" ? 0.25 : 0.55);
+          p.x += p.vx; p.y += p.vy;
+          if (p.kind === "ink") {
+            ctx.globalCompositeOperation = "source-over";
+            ctx.fillStyle = "rgba(220,220,230," + (0.045 * Math.max(0, p.life)) + ")";
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+            ctx.globalCompositeOperation = "lighter";
+          } else if (p.kind === "ribbons") {
+            ctx.strokeStyle = "hsla(" + p.hue + ",90%,68%," + (0.55 * Math.max(0, p.life)) + ")";
+            ctx.lineWidth = 1.1;
+            ctx.beginPath(); ctx.moveTo(p.px, p.py); ctx.lineTo(p.x, p.y); ctx.stroke();
+          } else {
+            var a = Math.max(0, p.life) * (p.kind === "embers" ? Math.max(0.2, p.a) : 1);
+            ctx.fillStyle = "hsla(" + p.hue + ",90%,68%," + (0.18 * a) + ")";
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 3.2, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "hsla(" + p.hue + ",90%,72%," + (0.35 * a) + ")";
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 1.8, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "hsla(" + p.hue + ",90%,80%," + (0.8 * a) + ")";
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+          }
+          return p.life > 0;
+        });
+        if (shock) {
+          shock.r += 280 * dt; shock.a -= 1.2 * dt;
+          ctx.strokeStyle = "rgba(255,255,255," + Math.max(0, shock.a) + ")";
+          ctx.lineWidth = 1.2;
+          ctx.beginPath(); ctx.arc(shock.x, shock.y, shock.r, 0, Math.PI * 2); ctx.stroke();
+          if (shock.a <= 0) shock = null;
+        }
+      }
+      window.addEventListener("resize", resize);
+      document.body.style.touchAction = "none";
+      resize();
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

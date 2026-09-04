@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Synapse — a living neural network</title>
+  <style>
+    :root { --cyan: #35f0ff; --mag: #ff3fd1; --muted: #7f93c4; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse 50% 40% at 0% 0%, rgba(53,240,255,.12), transparent 50%),
+        radial-gradient(ellipse 50% 40% at 100% 100%, rgba(255,63,209,.12), transparent 50%),
+        linear-gradient(180deg, #0a1230, #050a1a);
+      color: #d8e4ff;
+      font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+      padding: 22px 18px 40px;
+    }
+    body::before {
+      content: "";
+      position: fixed; inset: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(120,180,255,.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(120,180,255,.05) 1px, transparent 1px);
+      background-size: 48px 48px;
+      -webkit-mask-image: radial-gradient(ellipse at 50% 40%, #000 40%, transparent 75%);
+      mask-image: radial-gradient(ellipse at 50% 40%, #000 40%, transparent 75%);
+    }
+    header { max-width: 1200px; margin: 0 auto 18px; position: relative; z-index: 1; }
+    header h1 {
+      font-size: clamp(22px, 3vw, 32px); font-weight: 600;
+    }
+    header h1 strong {
+      background: linear-gradient(90deg, var(--cyan), var(--mag));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      font-weight: 800;
+    }
+    header p { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .layout {
+      display: grid; grid-template-columns: 1fr 340px; gap: 16px;
+      max-width: 1200px; margin: 0 auto; position: relative; z-index: 1;
+    }
+    .card {
+      background: rgba(12,20,52,0.72);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(120,160,255,0.14);
+      border-radius: 14px;
+      box-shadow: 0 18px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08);
+      padding: 14px 14px 12px;
+    }
+    .card h2 {
+      font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--muted);
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+    }
+    .card h2 span { font-family: "Courier New", monospace; color: var(--cyan); letter-spacing: 0; font-size: 12px; text-transform: none; }
+    .net-wrap { position: relative; }
+    #net { width: 100%; height: min(62vh, 560px); display: block; }
+    .layers {
+      display: grid; grid-template-columns: repeat(5, 1fr); text-align: center;
+      font-size: 11px; color: var(--muted); letter-spacing: .08em; margin-top: 6px;
+    }
+    .side { display: flex; flex-direction: column; gap: 12px; }
+    label.ctrl { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+    input[type="range"] {
+      -webkit-appearance: none; width: 100%; height: 6px; border-radius: 4px;
+      background: linear-gradient(90deg, var(--cyan), var(--mag));
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+      background: #fff; box-shadow: 0 0 8px var(--cyan); cursor: pointer;
+    }
+    select, .btns button {
+      background: rgba(8,14,36,.8); color: #d8e4ff; border: 1px solid rgba(120,160,255,.25);
+      border-radius: 8px; padding: 8px 10px; font-size: 12px; cursor: pointer;
+    }
+    .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .btns button.wide { grid-column: 1 / -1; }
+    #btnTrain.active { box-shadow: 0 0 14px rgba(53,240,255,.45); color: var(--cyan); }
+    #loss { width: 100%; height: 120px; display: block; }
+    .bound-wrap { position: relative; }
+    #bound { width: 100%; aspect-ratio: 1; image-rendering: pixelated; display: block; border-radius: 8px; }
+    .pill {
+      position: absolute; top: 8px; right: 8px;
+      background: rgba(8,14,36,.8); border: 1px solid rgba(120,160,255,.3);
+      color: #d8e4ff; border-radius: 999px; padding: 4px 10px; font-size: 11px; cursor: pointer;
+    }
+    footer { max-width: 1200px; margin: 18px auto 0; font-size: 12px; color: var(--muted); position: relative; z-index: 1; }
+    @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><strong>Synapse</strong> — a living neural network</h1>
+    <p>2 → 6 → 6 → 4 → 1, tanh hidden units, sigmoid output, trained with real backpropagation in your browser.</p>
+  </header>
+  <div class="layout">
+    <section class="card net-wrap">
+      <h2>Network <span id="hud">epoch 0 · acc —</span></h2>
+      <canvas id="net"></canvas>
+      <div class="layers"><span>Input</span><span>Hidden 1</span><span>Hidden 2</span><span>Hidden 3</span><span>Output</span></div>
+    </section>
+    <aside class="side">
+      <section class="card">
+        <h2>Controls</h2>
+        <div class="btns">
+          <button type="button" id="btnFwd" class="wide">Forward pass</button>
+          <button type="button" id="btnTrain">Train / Pause</button>
+          <button type="button" id="btnStep">Step ×1 epoch</button>
+          <button type="button" id="btnReset">Reset weights</button>
+        </div>
+        <label class="ctrl" for="lr">Learning rate <span id="lrOut">0.08</span></label>
+        <input type="range" id="lr" min="0.005" max="0.5" step="0.005" value="0.08">
+        <label class="ctrl" for="epf">Epochs per frame <span id="epfOut">4</span></label>
+        <input type="range" id="epf" min="1" max="12" step="1" value="4">
+        <label class="ctrl" for="ds">Dataset</label>
+        <select id="ds">
+          <option value="xor">XOR quadrants</option>
+          <option value="circle">Circle in square</option>
+          <option value="moons">Two moons</option>
+        </select>
+      </section>
+      <section class="card">
+        <h2>Loss <span id="lossCap">epoch 0</span></h2>
+        <canvas id="loss"></canvas>
+      </section>
+      <section class="card bound-wrap">
+        <h2>Decision boundary</h2>
+        <canvas id="bound" width="72" height="72"></canvas>
+        <button type="button" class="pill" id="btnHide">Hide</button>
+      </section>
+    </aside>
+  </div>
+  <footer>Everything is computed live with no libraries.</footer>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function tanh(x) { var e = Math.exp(2 * x); return (e - 1) / (e + 1); }
+    function sig(x) { if (x < -20) return 0; if (x > 20) return 1; return 1 / (1 + Math.exp(-x)); }
+    function init() {
+      var netC = qs("#net"), lossC = qs("#loss"), boundC = qs("#bound");
+      if (!netC || !lossC || !boundC) return;
+      var nctx = netC.getContext("2d");
+      var lctx = lossC.getContext("2d");
+      var bctx = boundC.getContext("2d");
+      if (!nctx || !lctx || !bctx) return;
+      var reduced = false;
+      if (typeof window.matchMedia === "function") {
+        try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e1) {}
+      }
+      var sizes = [2, 6, 6, 4, 1];
+      var W = [], B = [];
+      function xavier() {
+        W = []; B = [];
+        var L;
+        for (L = 0; L < sizes.length - 1; L++) {
+          var fan = sizes[L], out = sizes[L + 1], s = Math.sqrt(2 / (fan + out));
+          W[L] = []; B[L] = [];
+          var i, j;
+          for (i = 0; i < out; i++) {
+            W[L][i] = []; B[L][i] = 0;
+            for (j = 0; j < fan; j++) W[L][i][j] = (Math.random() * 2 - 1) * s;
+          }
+        }
+      }
+      xavier();
+      function forward(x) {
+        var acts = [x.slice()], z, a, L, i, j, s;
+        for (L = 0; L < W.length; L++) {
+          z = []; a = [];
+          for (i = 0; i < W[L].length; i++) {
+            s = B[L][i];
+            for (j = 0; j < W[L][i].length; j++) s += W[L][i][j] * acts[L][j];
+            z[i] = s;
+            a[i] = (L === W.length - 1) ? sig(s) : tanh(s);
+          }
+          acts.push(a);
+        }
+        return acts;
+      }
+      function trainBatch(data, lr, batch) {
+        var n = data.length, k, t, acts, L, i, j, deltas, dw, db, last;
+        var idx, x, y, pred, err;
+        dw = []; db = [];
+        for (L = 0; L < W.length; L++) {
+          dw[L] = []; db[L] = [];
+          for (i = 0; i < W[L].length; i++) {
+            dw[L][i] = []; db[L][i] = 0;
+            for (j = 0; j < W[L][i].length; j++) dw[L][i][j] = 0;
+          }
+        }
+        var loss = 0, acc = 0;
+        for (k = 0; k < batch; k++) {
+          idx = Math.floor(Math.random() * n);
+          x = data[idx].x; y = data[idx].y;
+          acts = forward(x);
+          pred = acts[acts.length - 1][0];
+          err = pred - y;
+          loss += -(y * Math.log(pred + 1e-8) + (1 - y) * Math.log(1 - pred + 1e-8));
+          if ((pred >= 0.5 ? 1 : 0) === y) acc += 1;
+          deltas = [];
+          last = W.length - 1;
+          deltas[last] = [err];
+          for (L = last - 1; L >= 0; L--) {
+            deltas[L] = [];
+            for (i = 0; i < sizes[L + 1]; i++) {
+              s = 0;
+              for (j = 0; j < sizes[L + 2]; j++) s += W[L + 1][j][i] * deltas[L + 1][j];
+              var a = acts[L + 1][i];
+              deltas[L][i] = s * (1 - a * a);
+            }
+          }
+          for (L = 0; L < W.length; L++) {
+            for (i = 0; i < W[L].length; i++) {
+              db[L][i] += deltas[L][i];
+              for (j = 0; j < W[L][i].length; j++) dw[L][i][j] += deltas[L][i] * acts[L][j];
+            }
+          }
+        }
+        for (L = 0; L < W.length; L++) {
+          for (i = 0; i < W[L].length; i++) {
+            B[L][i] -= lr * db[L][i] / batch;
+            for (j = 0; j < W[L][i].length; j++) W[L][i][j] -= lr * dw[L][i][j] / batch;
+          }
+        }
+        return { loss: loss / batch, acc: acc / batch };
+      }
+      function makeData(kind) {
+        var pts = [], i, x, y, lab;
+        for (i = 0; i < 200; i++) {
+          x = Math.random() * 2 - 1; y = Math.random() * 2 - 1;
+          if (kind === "circle") lab = (x * x + y * y < 0.45) ? 1 : 0;
+          else if (kind === "moons") {
+            var t = Math.random() * Math.PI, s = Math.random() < 0.5 ? 1 : -1;
+            x = Math.cos(t) + (s < 0 ? 0.5 : 0) + (Math.random() - 0.5) * 0.18;
+            y = Math.sin(t) * s + (s < 0 ? 0.35 : 0) + (Math.random() - 0.5) * 0.18;
+            x = Math.max(-1, Math.min(1, x)); y = Math.max(-1, Math.min(1, y));
+            lab = s > 0 ? 1 : 0;
+          } else lab = (x * y > 0) ? 1 : 0;
+          pts.push({ x: [x, y], y: lab });
+        }
+        return pts;
+      }
+      var data = makeData("xor");
+      var epoch = 0, lastAcc = 0, lastLoss = 0, sample = data[0], acts = forward(sample.x);
+      var hist = [];
+      var training = false, pulse = null, frameN = 0;
+      var nodes = [];
+      function layoutNet() {
+        var r = netC.getBoundingClientRect();
+        var dpr = window.devicePixelRatio || 1;
+        netC.width = Math.floor(r.width * dpr);
+        netC.height = Math.floor(r.height * dpr);
+        nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        var w = r.width, h = r.height;
+        nodes = [];
+        var L, i;
+        for (L = 0; L < sizes.length; L++) {
+          nodes[L] = [];
+          for (i = 0; i < sizes[L]; i++) {
+            nodes[L][i] = {
+              x: w * (0.1 + L * 0.2),
+              y: h * (0.12 + (i + 0.5) * 0.76 / sizes[L])
+            };
+          }
+        }
+      }
+      function maxAbsW() {
+        var m = 0.001, L, i, j;
+        for (L = 0; L < W.length; L++) for (i = 0; i < W[L].length; i++) for (j = 0; j < W[L][i].length; j++)
+          m = Math.max(m, Math.abs(W[L][i][j]));
+        return m;
+      }
+      function drawNet() {
+        var r = netC.getBoundingClientRect();
+        nctx.clearRect(0, 0, r.width, r.height);
+        var mw = maxAbsW(), L, i, j, a, b, wgt, mag, col;
+        nctx.lineCap = "round";
+        for (L = 0; L < W.length; L++) {
+          for (i = 0; i < W[L].length; i++) {
+            for (j = 0; j < W[L][i].length; j++) {
+              a = nodes[L][j]; b = nodes[L + 1][i];
+              if (!a || !b) continue;
+              wgt = W[L][i][j]; mag = Math.abs(wgt) / mw;
+              col = wgt >= 0 ? "53,240,255" : "255,63,209";
+              nctx.strokeStyle = "rgba(" + col + "," + (0.12 + 0.7 * mag) + ")";
+              nctx.lineWidth = 0.4 + 3.2 * mag;
+              nctx.beginPath();
+              nctx.moveTo(a.x, a.y);
+              nctx.bezierCurveTo(a.x + (b.x - a.x) * 0.45, a.y, b.x - (b.x - a.x) * 0.45, b.y, b.x, b.y);
+              nctx.stroke();
+            }
+          }
+        }
+        if (pulse && pulse.dots) {
+          pulse.dots.forEach(function (d) {
+            nctx.beginPath();
+            nctx.fillStyle = d.c;
+            nctx.shadowColor = d.c; nctx.shadowBlur = 8;
+            nctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); nctx.fill();
+            nctx.shadowBlur = 0;
+          });
+        }
+        for (L = 0; L < nodes.length; L++) {
+          for (i = 0; i < nodes[L].length; i++) {
+            var nd = nodes[L][i];
+            var v = (acts[L] && acts[L][i] != null) ? acts[L][i] : 0;
+            var lit = !pulse || pulse.layer >= L;
+            var neg = L > 0 && L < nodes.length - 1 && v < 0;
+            var g = nctx.createRadialGradient(nd.x - 4, nd.y - 5, 2, nd.x, nd.y, 16);
+            g.addColorStop(0, "#fff");
+            g.addColorStop(0.18, lit ? (neg ? "#ff9adf" : "#9af6ff") : "#6a7aa8");
+            g.addColorStop(1, lit ? (neg ? "#7a1a5a" : "#163a6a") : "#12182c");
+            nctx.shadowColor = neg ? "rgba(255,63,209,.7)" : "rgba(53,240,255,.7)";
+            nctx.shadowBlur = 6 + Math.abs(v) * 14;
+            nctx.beginPath(); nctx.fillStyle = g; nctx.arc(nd.x, nd.y, 14, 0, Math.PI * 2); nctx.fill();
+            nctx.shadowBlur = 0;
+            nctx.strokeStyle = neg ? "#ff3fd1" : "#35f0ff";
+            nctx.lineWidth = 1.4; nctx.stroke();
+            nctx.fillStyle = "#fff";
+            nctx.font = "10px Courier New, monospace";
+            nctx.textAlign = "center"; nctx.textBaseline = "middle";
+            nctx.fillText(v.toFixed(2), nd.x, nd.y);
+          }
+        }
+        nctx.fillStyle = "#7f93c4";
+        nctx.font = "11px Courier New, monospace";
+        nctx.textAlign = "left";
+        if (nodes[0][0]) nctx.fillText("x₁", nodes[0][0].x - 28, nodes[0][0].y);
+        if (nodes[0][1]) nctx.fillText("x₂", nodes[0][1].x - 28, nodes[0][1].y);
+        var outN = nodes[4][0];
+        if (outN) {
+          var p = acts[4] ? acts[4][0] : 0;
+          nctx.fillText("P(class 1) = " + p.toFixed(3), outN.x + 20, outN.y - 8);
+          nctx.fillText("target " + sample.y, outN.x + 20, outN.y + 10);
+        }
+      }
+      function drawLoss() {
+        var r = lossC.getBoundingClientRect();
+        var dpr = window.devicePixelRatio || 1;
+        lossC.width = Math.floor(r.width * dpr);
+        lossC.height = Math.floor(r.height * dpr);
+        lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        var w = r.width, h = r.height;
+        lctx.clearRect(0, 0, w, h);
+        lctx.strokeStyle = "rgba(127,147,196,.25)";
+        lctx.lineWidth = 1;
+        var g;
+        for (g = 0; g < 4; g++) {
+          var y = 10 + g * (h - 20) / 3;
+          lctx.beginPath(); lctx.moveTo(28, y); lctx.lineTo(w - 8, y); lctx.stroke();
+          lctx.fillStyle = "#7f93c4"; lctx.font = "9px Courier New, monospace";
+          lctx.fillText((1 - g / 3).toFixed(1), 2, y + 3);
+        }
+        if (hist.length < 2) return;
+        var maxL = 1;
+        hist.forEach(function (v) { if (v > maxL) maxL = v; });
+        var grd = lctx.createLinearGradient(0, 0, 0, h);
+        grd.addColorStop(0, "rgba(255,63,209,.45)");
+        grd.addColorStop(1, "rgba(53,240,255,0)");
+        lctx.beginPath();
+        hist.forEach(function (v, i) {
+          var x = 28 + i * (w - 40) / Math.max(1, hist.length - 1);
+          var y = 10 + (1 - v / maxL) * (h - 20);
+          if (i === 0) lctx.moveTo(x, y); else lctx.lineTo(x, y);
+        });
+        lctx.lineTo(28 + (hist.length - 1) * (w - 40) / Math.max(1, hist.length - 1), h - 10);
+        lctx.lineTo(28, h - 10); lctx.closePath(); lctx.fillStyle = grd; lctx.fill();
+        var lg = lctx.createLinearGradient(0, 0, w, 0);
+        lg.addColorStop(0, "#ff3fd1"); lg.addColorStop(1, "#35f0ff");
+        lctx.beginPath();
+        hist.forEach(function (v, i) {
+          var x = 28 + i * (w - 40) / Math.max(1, hist.length - 1);
+          var y = 10 + (1 - v / maxL) * (h - 20);
+          if (i === 0) lctx.moveTo(x, y); else lctx.lineTo(x, y);
+        });
+        lctx.strokeStyle = lg; lctx.lineWidth = 1.6; lctx.shadowColor = "#35f0ff"; lctx.shadowBlur = 6; lctx.stroke();
+        lctx.shadowBlur = 0;
+        var lx = 28 + (hist.length - 1) * (w - 40) / Math.max(1, hist.length - 1);
+        var ly = 10 + (1 - hist[hist.length - 1] / maxL) * (h - 20);
+        lctx.fillStyle = "#fff"; lctx.beginPath(); lctx.arc(lx, ly, 3, 0, Math.PI * 2); lctx.fill();
+      }
+      function drawBound() {
+        var img = bctx.createImageData(72, 72);
+        var x, y, k = 0, p, r, g, b;
+        for (y = 0; y < 72; y++) {
+          for (x = 0; x < 72; x++) {
+            p = forward([(x / 71) * 2 - 1, 1 - (y / 71) * 2])[4][0];
+            if (p < 0.5) {
+              var t = p / 0.5;
+              r = lerp(255, 10, t); g = lerp(63, 18, t); b = lerp(209, 48, t);
+            } else {
+              var t2 = (p - 0.5) / 0.5;
+              r = lerp(10, 53, t2); g = lerp(18, 240, t2); b = lerp(48, 255, t2);
+            }
+            img.data[k++] = r; img.data[k++] = g; img.data[k++] = b; img.data[k++] = 255;
+          }
+        }
+        bctx.putImageData(img, 0, 0);
+        var sc = boundC.getBoundingClientRect().width / 72;
+        bctx.save();
+        data.forEach(function (pt) {
+          var px = (pt.x[0] + 1) / 2 * 72;
+          var py = (1 - pt.x[1]) / 2 * 72;
+          bctx.fillStyle = pt.y ? "#35f0ff" : "#ff3fd1";
+          bctx.strokeStyle = "#050a1a";
+          bctx.lineWidth = 0.6;
+          bctx.beginPath(); bctx.arc(px, py, 1.4, 0, Math.PI * 2); bctx.fill(); bctx.stroke();
+        });
+        if (sample) {
+          bctx.strokeStyle = "#fff"; bctx.lineWidth = 1.2;
+          bctx.beginPath();
+          bctx.arc((sample.x[0] + 1) / 2 * 72, (1 - sample.x[1]) / 2 * 72, 3.2, 0, Math.PI * 2);
+          bctx.stroke();
+        }
+        bctx.restore();
+      }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function startPulse(useCurrent) {
+        if (!useCurrent) sample = data[Math.floor(Math.random() * data.length)];
+        acts = forward(sample.x);
+        if (reduced) { pulse = null; drawNet(); return; }
+        pulse = { t0: (performance && performance.now) ? performance.now() : Date.now(), layer: 0, dots: [] };
+      }
+      function stepEpoch() {
+        var lrEl = qs("#lr"); var ep = 1;
+        var res = trainBatch(data, lrEl ? parseFloat(lrEl.value) : 0.08, 16);
+        epoch += 1; lastLoss = res.loss; lastAcc = res.acc;
+        hist.push(res.loss);
+        if (hist.length > 600) {
+          var ds = [];
+          var i;
+          for (i = 0; i < hist.length; i += 2) ds.push(hist[i]);
+          hist = ds;
+        }
+        var hud = qs("#hud"); var cap = qs("#lossCap");
+        if (hud) hud.textContent = "epoch " + epoch + " · acc " + Math.round(lastAcc * 100) + "% · sample [" + sample.x[0].toFixed(2) + "," + sample.x[1].toFixed(2) + "]";
+        if (cap) cap.textContent = "epoch " + epoch;
+      }
+      var btnFwd = qs("#btnFwd"), btnTrain = qs("#btnTrain"), btnStep = qs("#btnStep"), btnReset = qs("#btnReset");
+      var ds = qs("#ds"), lr = qs("#lr"), epf = qs("#epf"), btnHide = qs("#btnHide");
+      if (btnFwd) btnFwd.addEventListener("click", startPulse);
+      if (btnTrain) btnTrain.addEventListener("click", function () {
+        training = !training;
+        btnTrain.classList.toggle("active", training);
+      });
+      if (btnStep) btnStep.addEventListener("click", function () { stepEpoch(); drawLoss(); drawBound(); drawNet(); });
+      if (btnReset) btnReset.addEventListener("click", function () {
+        xavier(); epoch = 0; hist = []; lastAcc = 0;
+        acts = forward(sample.x); drawNet(); drawLoss(); drawBound();
+      });
+      if (ds) ds.addEventListener("change", function () {
+        data = makeData(ds.value); xavier(); epoch = 0; hist = [];
+        sample = data[0]; acts = forward(sample.x); drawNet(); drawLoss(); drawBound();
+      });
+      if (lr) lr.addEventListener("input", function () {
+        var o = qs("#lrOut"); if (o) o.textContent = parseFloat(lr.value).toFixed(3);
+      });
+      if (epf) epf.addEventListener("input", function () {
+        var o = qs("#epfOut"); if (o) o.textContent = epf.value;
+      });
+      if (btnHide) btnHide.addEventListener("click", function () {
+        var hide = boundC.style.display === "none";
+        boundC.style.display = hide ? "block" : "none";
+        btnHide.textContent = hide ? "Hide" : "Show";
+      });
+      boundC.addEventListener("click", function (ev) {
+        var r = boundC.getBoundingClientRect();
+        var x = ((ev.clientX - r.left) / r.width) * 2 - 1;
+        var y = 1 - ((ev.clientY - r.top) / r.height) * 2;
+        var best = null, bd = 1e9;
+        data.forEach(function (pt) {
+          var d = (pt.x[0] - x) * (pt.x[0] - x) + (pt.x[1] - y) * (pt.x[1] - y);
+          if (d < bd) { bd = d; best = pt; }
+        });
+        if (best && bd < 0.04) sample = best;
+        else sample = { x: [x, y], y: 0 };
+        startPulse(true);
+      });
+      function loop(now) {
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+        frameN += 1;
+        if (training) {
+          var n = epf ? parseInt(epf.value, 10) : 4, k;
+          for (k = 0; k < n; k++) stepEpoch();
+          if (frameN % 3 === 0) drawBound();
+          drawLoss();
+        }
+        if (pulse) {
+          var elapsed = now - pulse.t0;
+          var layerDur = 520;
+          pulse.layer = Math.min(4, Math.floor(elapsed / layerDur));
+          pulse.dots = [];
+          var L = Math.min(pulse.layer, W.length - 1);
+          var u = (elapsed % layerDur) / layerDur;
+          if (pulse.layer < 4) {
+            var i, j;
+            for (i = 0; i < W[L].length; i++) {
+              for (j = 0; j < W[L][i].length; j++) {
+                var a = nodes[L][j], b = nodes[L + 1][i];
+                if (!a || !b) continue;
+                var t = u;
+                var mx = a.x + (b.x - a.x) * t, my = a.y + (b.y - a.y) * t;
+                var prod = (acts[L][j] || 0) * W[L][i][j];
+                pulse.dots.push({
+                  x: mx, y: my, r: 1.4 + Math.min(5, Math.abs(prod) * 4),
+                  c: prod >= 0 ? "rgba(53,240,255,.95)" : "rgba(255,63,209,.95)"
+                });
+              }
+            }
+          }
+          if (elapsed > layerDur * 4) pulse = null;
+        }
+        drawNet();
+      }
+      window.addEventListener("resize", function () { layoutNet(); drawNet(); drawLoss(); });
+      layoutNet();
+      drawNet(); drawLoss(); drawBound();
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

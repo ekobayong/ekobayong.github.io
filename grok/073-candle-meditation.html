@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Still Flame</title>
+  <style>
+    :root {
+      --glow: 0.55;
+      --breath: 1;
+      --bend: 0;
+      --parchment: #e9d8c3;
+      --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, ui-serif, serif;
+      --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      min-height: 100%;
+      background: #120a07;
+      color: var(--parchment);
+      font-family: var(--serif);
+      overflow: hidden;
+    }
+    .wall {
+      position: fixed; inset: 0;
+      background: radial-gradient(ellipse at 50% 38%, #2a1710 0%, #120a07 70%);
+      pointer-events: none;
+    }
+    .glow-layer {
+      position: fixed; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse at 50% 58%, rgba(255,150,60, calc(var(--glow) * 0.42)) 0%, transparent 46%),
+        radial-gradient(ellipse at 50% 92%, rgba(255,120,40, calc(var(--glow) * 0.18)) 0%, transparent 50%);
+    }
+    .vignette {
+      position: fixed; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 42%, rgba(8,4,2,0.72) 100%);
+    }
+    .table {
+      position: fixed;
+      left: -10%; right: -10%;
+      bottom: -8%;
+      height: 32vh;
+      background: linear-gradient(#1c0f0a, #100804);
+      transform: perspective(600px) rotateX(28deg);
+      transform-origin: center top;
+    }
+    .table::after {
+      content: "";
+      position: absolute;
+      left: 50%; top: 8%;
+      width: 46vmin; height: 18vmin;
+      transform: translateX(-50%);
+      background: radial-gradient(ellipse, rgba(255,150,60, calc(var(--glow) * 0.45)), transparent 70%);
+      filter: blur(18px);
+    }
+    .stage {
+      position: relative;
+      z-index: 2;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 4vmin 4vmin 8vmin;
+    }
+    h1 {
+      font-weight: 300;
+      letter-spacing: 0.34em;
+      text-transform: uppercase;
+      font-size: clamp(0.85rem, 2.2vmin, 1.15rem);
+      margin-bottom: 1.2rem;
+    }
+    .cue {
+      min-height: 2.2em;
+      text-align: center;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      font-size: clamp(1rem, 3.2vmin, 1.6rem);
+      font-weight: 300;
+      opacity: 0.92;
+      transition: opacity 1.2s ease;
+    }
+    .count {
+      font-family: var(--sans);
+      font-variant-numeric: tabular-nums;
+      font-size: 0.85rem;
+      letter-spacing: 0.18em;
+      opacity: 0.7;
+      margin-bottom: 1.4rem;
+    }
+    .wrap {
+      position: relative;
+      width: min(64vmin, 420px);
+      height: min(64vmin, 420px);
+      display: grid;
+      place-items: center;
+    }
+    .ring { position: absolute; inset: 0; }
+    .candle {
+      position: relative;
+      width: 9.2vmin;
+      height: 28vmin;
+      margin-top: 10vmin;
+      cursor: pointer;
+    }
+    .wax {
+      position: absolute;
+      left: 0; right: 0; bottom: 0; top: 4vmin;
+      background: linear-gradient(90deg, #c9a789, #f2dcc2 22%, #fbe9d4 50%, #e3c5a6 78%, #b8977a);
+      border-radius: 1.2vmin 1.2vmin 0.6vmin 0.6vmin;
+      box-shadow: inset 0 0 18px rgba(255,220,170,0.35), 0 8px 24px rgba(0,0,0,0.35);
+    }
+    .wax::before {
+      content: "";
+      position: absolute;
+      left: 6%; right: 6%; top: -1.1vmin;
+      height: 2.2vmin;
+      background: radial-gradient(ellipse at 50% 40%, #fff6e8, #e8c9a4);
+      border-radius: 50%;
+      box-shadow: 0 0 12px rgba(255,200,120,0.35);
+    }
+    .drip {
+      position: absolute;
+      top: 3.4vmin;
+      width: 1.6vmin;
+      background: linear-gradient(#fbe9d4, #d7b08a);
+      border-radius: 0 0 1vmin 1vmin;
+      height: var(--h, 3vmin);
+      opacity: 0.9;
+    }
+    .drip.a { left: 18%; }
+    .drip.b { left: 48%; width: 1.3vmin; }
+    .drip.c { right: 16%; left: auto; }
+    .wick {
+      position: absolute;
+      left: 50%; top: 1.1vmin;
+      width: 0.45vmin; height: 2.6vmin;
+      margin-left: -0.22vmin;
+      background: #2a1a12;
+      border-radius: 1px;
+      z-index: 2;
+    }
+    .ember {
+      position: absolute;
+      left: 50%; top: 0.4vmin;
+      width: 0.7vmin; height: 0.7vmin;
+      margin-left: -0.35vmin;
+      background: #ff9b3d;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #ff9b3d;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .flame {
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% - 3.2vmin);
+      width: 8vmin;
+      height: 16vmin;
+      transform-origin: 50% 100%;
+      transform: translateX(-50%) scale(calc(var(--breath) * (1 - 0.45 * var(--bend)))) skewX(calc(-28deg * var(--bend))) rotate(calc(-14deg * var(--bend)));
+      z-index: 3;
+      filter: hue-rotate(var(--hue, 0deg));
+    }
+    .fg, .fo, .fm, .fc, .fb {
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      transform-origin: 50% 100%;
+    }
+    .fg {
+      width: 18vmin; height: 22vmin;
+      background: radial-gradient(ellipse at 50% 70%, rgba(255,140,40,0.55), transparent 70%);
+      filter: blur(10px);
+      mix-blend-mode: screen;
+    }
+    .fo {
+      width: 7.2vmin; height: 14vmin;
+      border-radius: 50% / 62% 62% 38% 38%;
+      background: linear-gradient(#ffb347, #ff5a1f 80%);
+      filter: blur(1.2px);
+      animation: flickA 0.18s linear infinite;
+    }
+    .fm {
+      width: 4.4vmin; height: 10.5vmin;
+      border-radius: 50% / 62% 62% 38% 38%;
+      background: linear-gradient(#fff4b0, #ffcc4a);
+      animation: flickB 0.14s linear infinite;
+    }
+    .fc {
+      width: 1.7vmin; height: 7.2vmin;
+      border-radius: 50% / 62% 62% 38% 38%;
+      background: linear-gradient(#fffdf2, #ffe27a);
+      animation: flickC 0.11s linear infinite;
+    }
+    .fb {
+      width: 2.4vmin; height: 2.4vmin;
+      bottom: -0.2vmin;
+      background: radial-gradient(circle, #6ec7ff, transparent 70%);
+      mix-blend-mode: screen;
+    }
+    .out .flame { transform: translateX(-50%) scale(0); opacity: 0; }
+    .controls {
+      margin-top: 2.4rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.85rem;
+      z-index: 4;
+    }
+    .chips { display: flex; gap: 0.45rem; flex-wrap: wrap; justify-content: center; }
+    .chip, .begin {
+      font-family: var(--sans);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      background: rgba(233,216,195,0.08);
+      color: var(--parchment);
+      border: 1px solid rgba(233,216,195,0.22);
+      border-radius: 999px;
+      padding: 0.45rem 0.85rem;
+      cursor: pointer;
+    }
+    .chip.active, .begin { background: rgba(233,216,195,0.18); }
+    .begin { padding: 0.55rem 1.4rem; letter-spacing: 0.18em; text-transform: uppercase; }
+    .status {
+      font-family: var(--sans);
+      font-variant-numeric: tabular-nums;
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      opacity: 0.75;
+    }
+    #smoke {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      z-index: 5;
+    }
+    @media (max-height: 640px) {
+      .candle { height: 22vmin; }
+      h1 { margin-bottom: 0.4rem; }
+      .controls { margin-top: 1rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .fo, .fm, .fc { animation: none; }
+      .flame { filter: none; }
+      .cue { transition-duration: 0.2s; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wall"></div>
+  <div class="glow-layer"></div>
+  <div class="table"></div>
+  <div class="vignette"></div>
+  <canvas id="smoke"></canvas>
+  <main class="stage">
+    <h1>Still Flame</h1>
+    <div class="cue" id="cue">Breathe in</div>
+    <div class="count" id="sec">4</div>
+    <div class="wrap">
+      <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+        <circle cx="100" cy="100" r="88" fill="none" stroke="rgba(233,216,195,0.12)" stroke-width="1.2"/>
+        <circle cx="100" cy="100" r="80" fill="none" stroke="rgba(233,216,195,0.18)" stroke-width="1" stroke-dasharray="3 7"/>
+        <circle id="arc" cx="100" cy="100" r="80" fill="none" stroke="#e9b57a" stroke-width="2.2" stroke-linecap="round"
+          stroke-dasharray="502.4" stroke-dashoffset="502.4" transform="rotate(-90 100 100)"/>
+      </svg>
+      <div class="candle" id="candle">
+        <div class="flame" id="flame">
+          <div class="fg"></div>
+          <div class="fo"></div>
+          <div class="fm"></div>
+          <div class="fc"></div>
+          <div class="fb"></div>
+        </div>
+        <div class="ember" id="ember"></div>
+        <div class="wick"></div>
+        <div class="drip a" id="dripA"></div>
+        <div class="drip b" id="dripB"></div>
+        <div class="drip c" id="dripC"></div>
+        <div class="wax"></div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="chips" role="group" aria-label="Breathing pattern">
+        <button type="button" class="chip active" data-p="478">4·7·8</button>
+        <button type="button" class="chip" data-p="box">Box</button>
+        <button type="button" class="chip" data-p="calm">Calm</button>
+      </div>
+      <button type="button" class="begin" id="begin">Begin</button>
+      <div class="status"><span id="timer">00:00</span> · cycles <span id="cycles">0</span></div>
+    </div>
+  </main>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var root = document.documentElement;
+      var cue = qs("#cue");
+      var secEl = qs("#sec");
+      var begin = qs("#begin");
+      var timerEl = qs("#timer");
+      var cyclesEl = qs("#cycles");
+      var candle = qs("#candle");
+      var ember = qs("#ember");
+      var arc = qs("#arc");
+      var canvas = qs("#smoke");
+      var reduce = false;
+      if (typeof window.matchMedia === "function") {
+        reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      }
+      if (!reduce) {
+        var style = document.createElement("style");
+        function kf(name) {
+          var s = "@keyframes " + name + "{";
+          var k;
+          for (k = 0; k <= 7; k++) {
+            s += (k * 12.5) + "%{transform:translateX(calc(-50% + " + ((Math.random() - 0.5) * 6).toFixed(2) + "px)) scale(" + (0.94 + Math.random() * 0.12).toFixed(3) + ") skewX(" + ((Math.random() - 0.5) * 6).toFixed(2) + "deg);}";
+          }
+          return s + "}";
+        }
+        style.textContent = kf("flickA") + kf("flickB") + kf("flickC");
+        document.head.appendChild(style);
+      }
+      var patterns = {
+        "478": [{ name: "Breathe in", t: 4 }, { name: "Hold", t: 7 }, { name: "Breathe out", t: 8 }],
+        box: [{ name: "Breathe in", t: 4 }, { name: "Hold", t: 4 }, { name: "Breathe out", t: 4 }, { name: "Rest", t: 4 }],
+        calm: [{ name: "Breathe in", t: 5 }, { name: "Breathe out", t: 7 }, { name: "Rest", t: 2 }]
+      };
+      var pattern = patterns["478"];
+      var running = false, phase = 0, phaseT = 0, sessionT = 0, cycles = 0;
+      var breath = 1, breathFrom = 0.78, breathTo = 0.78, bend = 0, bendT = 0;
+      var lit = true, blowing = false, blowHold = 0, flicker = 0.55, hue = 0;
+      var chips = document.querySelectorAll(".chip");
+      var i;
+      for (i = 0; i < chips.length; i++) {
+        chips[i].addEventListener("click", function () {
+          var p = this.getAttribute("data-p");
+          if (!patterns[p]) return;
+          pattern = patterns[p];
+          phase = 0; phaseT = 0;
+          var k;
+          for (k = 0; k < chips.length; k++) chips[k].classList.toggle("active", chips[k] === this);
+        });
+      }
+      if (begin) {
+        begin.addEventListener("click", function () {
+          running = !running;
+          begin.textContent = running ? "Pause" : "Begin";
+          if (running) { phase = 0; phaseT = 0; }
+        });
+      }
+      function ease(u) { return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; }
+      function setBreathTargets(name) {
+        if (name === "Breathe in") { breathFrom = breath; breathTo = 1.32; }
+        else if (name === "Breathe out") { breathFrom = breath; breathTo = 0.78; }
+        else { breathFrom = breath; breathTo = breath; }
+      }
+      setBreathTargets(pattern[0].name);
+      var ctx = null, dpr = 1, smoke = [], smoking = 0;
+      function resize() {
+        if (!canvas || !canvas.getContext) return;
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(window.innerWidth * dpr);
+        canvas.height = Math.floor(window.innerHeight * dpr);
+        canvas.style.width = window.innerWidth + "px";
+        canvas.style.height = window.innerHeight + "px";
+        ctx = canvas.getContext("2d");
+      }
+      resize();
+      window.addEventListener("resize", resize);
+      function extinguish() {
+        lit = false;
+        blowing = false;
+        bendT = 0;
+        if (candle) candle.classList.add("out");
+        if (ember) {
+          ember.style.opacity = "1";
+          ember.style.transition = "opacity 2.8s ease";
+          window.setTimeout(function () { if (ember) ember.style.opacity = "0"; }, 80);
+        }
+        smoking = reduce ? 1.2 : 5;
+        var r = candle ? candle.getBoundingClientRect() : { left: window.innerWidth / 2, top: window.innerHeight / 2, width: 0 };
+        var n, p;
+        for (n = 0; n < (reduce ? 18 : 48); n++) {
+          smoke.push({
+            x: r.left + r.width * 0.5,
+            y: r.top + 8,
+            vx: (Math.random() - 0.5) * 0.4,
+            vy: -0.4 - Math.random() * 0.7,
+            life: 1,
+            r: 6 + Math.random() * 10,
+            ph: Math.random() * 6
+          });
+        }
+      }
+      function relight() {
+        lit = true;
+        if (candle) candle.classList.remove("out");
+        if (ember) { ember.style.transition = "none"; ember.style.opacity = "0"; }
+        breath = 1.5;
+        window.setTimeout(function () { breathTo = 1; }, 120);
+      }
+      function isUi(t) {
+        if (!t || !t.closest) return false;
+        return !!t.closest("button");
+      }
+      window.addEventListener("pointerdown", function (e) {
+        if (isUi(e.target)) return;
+        if (!lit) { relight(); return; }
+        blowing = true; blowHold = 0;
+      });
+      window.addEventListener("pointerup", function () { blowing = false; });
+      window.addEventListener("keydown", function (e) {
+        if (e.code !== "Space") return;
+        e.preventDefault();
+        if (!lit) { relight(); return; }
+        if (isUi(e.target)) return;
+        blowing = true;
+      });
+      window.addEventListener("keyup", function (e) {
+        if (e.code === "Space") blowing = false;
+      });
+      if (candle) {
+        candle.addEventListener("click", function (e) {
+          e.stopPropagation();
+          if (!lit) relight();
+        });
+      }
+      var last = 0, start = 0, dripT = 0;
+      function frame(now) {
+        var dt = Math.min(0.05, (now - (last || now)) / 1000);
+        last = now;
+        if (!start) start = now;
+        dripT += dt;
+        if (lit) {
+          var da = qs("#dripA"), db = qs("#dripB"), dc = qs("#dripC");
+          if (da) da.style.setProperty("--h", (3 + Math.min(8, dripT / 40)) + "vmin");
+          if (db) db.style.setProperty("--h", (2.2 + Math.min(6, dripT / 55)) + "vmin");
+          if (dc) dc.style.setProperty("--h", (2.6 + Math.min(7, dripT / 48)) + "vmin");
+        }
+        if (running && lit) {
+          sessionT += dt;
+          phaseT += dt;
+          var ph = pattern[phase];
+          var u = Math.min(1, phaseT / ph.t);
+          breath = breathFrom + (breathTo - breathFrom) * ease(u);
+          if (cue) cue.textContent = ph.name;
+          if (secEl) secEl.textContent = String(Math.max(0, Math.ceil(ph.t - phaseT)));
+          if (arc) {
+            var circ = 502.4;
+            var total = 0, acc = 0, q;
+            for (q = 0; q < pattern.length; q++) total += pattern[q].t;
+            for (q = 0; q < phase; q++) acc += pattern[q].t;
+            arc.style.strokeDashoffset = String(circ * (1 - (acc + phaseT) / total));
+          }
+          if (phaseT >= ph.t) {
+            phase = (phase + 1) % pattern.length;
+            phaseT = 0;
+            if (phase === 0) cycles += 1;
+            setBreathTargets(pattern[phase].name);
+          }
+        }
+        if (blowing && lit) {
+          bendT = Math.min(1, bendT + dt * 1.6);
+          blowHold += dt;
+          if (blowHold > 1.5) extinguish();
+        } else {
+          bendT = Math.max(0, bendT - dt * 2.2);
+        }
+        bend += (bendT - bend) * 0.18;
+        flicker += ((0.45 + Math.random() * 0.2) - flicker) * 0.12;
+        var glow = lit ? flicker * (0.55 + breath * 0.4) * (1 - bend * 0.55) : 0;
+        hue = reduce ? 0 : (hue + dt * 8) % 20;
+        root.style.setProperty("--breath", breath.toFixed(3));
+        root.style.setProperty("--bend", bend.toFixed(3));
+        root.style.setProperty("--glow", glow.toFixed(3));
+        if (!reduce) root.style.setProperty("--hue", hue + "deg");
+        if (timerEl) {
+          var m = Math.floor(sessionT / 60), s = Math.floor(sessionT % 60);
+          timerEl.textContent = (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+        }
+        if (cyclesEl) cyclesEl.textContent = String(cycles);
+        if (ctx && smoking > 0) {
+          smoking -= dt;
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+          var p, j;
+          for (j = smoke.length - 1; j >= 0; j--) {
+            p = smoke[j];
+            p.x += p.vx + Math.sin((now / 400) + p.ph) * 0.35;
+            p.y += p.vy;
+            p.life -= dt / (reduce ? 1.2 : 5);
+            p.r += dt * 6;
+            if (p.life <= 0) { smoke.splice(j, 1); continue; }
+            var g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+            g.addColorStop(0, "rgba(160,160,160," + (0.22 * p.life) + ")");
+            g.addColorStop(1, "rgba(160,160,160,0)");
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (ctx && smoke.length) {
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+          smoke.length = 0;
+        }
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DOT BOMB — Pop-Art Halftone Studio</title>
+  <style>
+    :root {
+      --yellow: #ffe600;
+      --paper: #fffaf0;
+      --ink: #0a0a0a;
+      --cyan: #00b7eb;
+      --red: #e4002b;
+      --magenta: #ec008c;
+      --sans: "Arial Black", Impact, "Arial Narrow", system-ui, sans-serif;
+      --body: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--yellow);
+      background-image: radial-gradient(circle, rgba(10,10,10,.12) 1.2px, transparent 1.4px);
+      background-size: 14px 14px;
+      color: var(--ink);
+      font-family: var(--body);
+      min-height: 100vh;
+    }
+    header.mast {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 22px; background: var(--cyan); border-bottom: 4px solid var(--ink);
+    }
+    h1 {
+      font-family: var(--sans); font-weight: 900; text-transform: uppercase;
+      font-size: clamp(28px, 6vw, 56px); color: var(--yellow);
+      -webkit-text-stroke: 2px #0a0a0a;
+      text-shadow: 5px 5px 0 #0a0a0a;
+      transform: rotate(-2deg); letter-spacing: -.02em;
+    }
+    .mast p { font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+    .studio {
+      display: grid; grid-template-columns: minmax(280px, 1fr) 320px; gap: 22px;
+      max-width: 1180px; margin: 22px auto; padding: 0 16px 40px;
+    }
+    .canvas-panel {
+      position: relative; background: var(--paper); border: 4px solid var(--ink);
+      box-shadow: 10px 10px 0 var(--ink); padding: 16px;
+    }
+    .sticker {
+      position: absolute; font-family: var(--sans); font-size: 11px; letter-spacing: .08em;
+      text-transform: uppercase; background: var(--magenta); color: #fff;
+      border: 3px solid var(--ink); padding: 6px 10px;
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+    .sticker.issue { top: 8px; left: 8px; transform: rotate(-8deg); }
+    .sticker.drag { top: 8px; right: 8px; transform: rotate(7deg); background: var(--cyan); color: var(--ink); }
+    canvas#stage { width: 100%; height: auto; display: block; background: var(--paper); cursor: grab; }
+    .flash {
+      position: absolute; inset: 16px; display: grid; place-items: center;
+      background: rgba(255,230,0,.55); font-family: var(--sans); font-size: 28px;
+      letter-spacing: .08em; pointer-events: none; opacity: 0; transition: opacity .15s;
+    }
+    .flash.on { opacity: 1; }
+    .panel {
+      background: var(--paper); border: 4px solid var(--ink);
+      box-shadow: 10px 10px 0 var(--ink); padding: 16px;
+    }
+    .panel h2 { font-family: var(--sans); font-size: 16px; letter-spacing: .06em; text-transform: uppercase; margin: 12px 0 8px; }
+    .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+    button {
+      font-family: var(--sans); font-size: 12px; letter-spacing: .04em; text-transform: uppercase;
+      background: #fff; color: var(--ink); border: 3px solid var(--ink);
+      box-shadow: 4px 4px 0 var(--ink); padding: 8px 10px; cursor: pointer;
+    }
+    button:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--ink); }
+    button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+    button[aria-pressed="true"], button.active { background: var(--ink); color: var(--yellow); }
+    .go { background: var(--red); color: #fff; width: 100%; margin-top: 10px; }
+    label.ctl { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin: 10px 0 4px; }
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none; width: 100%; height: 14px;
+      background: #fff; border: 3px solid var(--ink);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+      background: var(--cyan); border: 3px solid var(--ink); cursor: pointer;
+    }
+    input[type="text"] {
+      width: 100%; border: 3px solid var(--ink); padding: 8px; font: inherit; font-weight: 700;
+      text-transform: uppercase; margin-top: 6px;
+    }
+    .swatches { display: grid; gap: 8px; }
+    .swatch { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; }
+    .chips { display: flex; gap: 4px; }
+    .chips i { width: 14px; height: 14px; border: 2px solid var(--ink); display: block; }
+    .how {
+      max-width: 1180px; margin: 0 auto 40px; padding: 18px 22px;
+      background: var(--cyan); border: 4px solid var(--ink); box-shadow: 10px 10px 0 var(--ink);
+    }
+    .how h2 { font-family: var(--sans); text-transform: uppercase; margin-bottom: 8px; }
+    #textField { display: none; }
+    #textField.show { display: block; }
+    @media (max-width: 860px) { .studio { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) {
+      button, .flash { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="mast">
+    <h1>DOT BOMB!</h1>
+    <p>Pop-art halftone studio · Issue 01</p>
+  </header>
+  <div class="studio">
+    <div class="canvas-panel">
+      <span class="sticker issue">Issue #01</span>
+      <span class="sticker drag">Drag the bubble</span>
+      <canvas id="stage" width="720" height="720" aria-label="Halftone canvas"></canvas>
+      <div class="flash" id="flash">Screening…</div>
+    </div>
+    <aside class="panel">
+      <h2>Source</h2>
+      <div class="seg" id="sources">
+        <button type="button" data-src="portrait" aria-pressed="true">Portrait</button>
+        <button type="button" data-src="shapes" aria-pressed="false">Bold shapes</button>
+        <button type="button" data-src="text" aria-pressed="false">Big text</button>
+      </div>
+      <div id="textField">
+        <input type="text" id="bigText" value="POW!" aria-label="Big text">
+      </div>
+      <h2>Screen</h2>
+      <label class="ctl">Dot size <span id="dotOut">9 px</span></label>
+      <input type="range" id="dotSize" min="5" max="22" value="9">
+      <label class="ctl">Screen angle <span id="angOut">15°</span></label>
+      <input type="range" id="angle" min="0" max="90" value="15">
+      <label class="ctl">Contrast <span id="conOut">1.10</span></label>
+      <input type="range" id="contrast" min="50" max="220" value="110">
+      <label class="ctl">Outline weight <span id="outOut">2</span></label>
+      <input type="range" id="outline" min="0" max="6" value="2">
+      <h2>Palette</h2>
+      <div class="swatches" id="palettes">
+        <button type="button" class="swatch" data-pal="cmyk" aria-pressed="true">Classic CMYK
+          <span class="chips"><i style="background:#00aeef"></i><i style="background:#ec008c"></i><i style="background:#fff200"></i><i style="background:#141414"></i></span>
+        </button>
+        <button type="button" class="swatch" data-pal="neon" aria-pressed="false">Warhol Neon
+          <span class="chips"><i style="background:#00f0ff"></i><i style="background:#ff2bd6"></i><i style="background:#7b2cff"></i></span>
+        </button>
+        <button type="button" class="swatch" data-pal="news" aria-pressed="false">Newsprint
+          <span class="chips"><i style="background:#2a2520"></i></span>
+        </button>
+        <button type="button" class="swatch" data-pal="duo" aria-pressed="false">Duotone
+          <span class="chips"><i style="background:#1c1c6e"></i><i style="background:#ff4d00"></i></span>
+        </button>
+      </div>
+      <h2>Bubble</h2>
+      <input type="text" id="bubbleText" value="POW!" aria-label="Bubble text">
+      <div class="seg" style="margin-top:8px" id="bubbleStyle">
+        <button type="button" data-bub="burst" aria-pressed="true">Burst</button>
+        <button type="button" data-bub="speech" aria-pressed="false">Speech</button>
+        <button type="button" data-bub="none" aria-pressed="false">None</button>
+      </div>
+      <button type="button" class="go" id="download">Download PNG</button>
+    </aside>
+  </div>
+  <section class="how">
+    <h2>How the screens work</h2>
+    <p>Each channel is sampled on a rotated lattice — cyan at the base angle, magenta +60°, yellow −15°, black +30°. Dot radius grows with the square root of ink density so midtones stay open. A Sobel edge pass on luminance is dilated into comic outlines. Ben-Day fills are the same idea as the yellow page: a regular grid of dots that the eye blends into colour.</p>
+  </section>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    function init() {
+      var canvas = qs("#stage");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var flash = qs("#flash");
+      var source = "portrait";
+      var pal = "cmyk";
+      var bub = "burst";
+      var bubbleXY = { x: 520, y: 140 };
+      var dragging = false;
+      var raf = 0;
+      var dirty = true;
+      var srcCanvas = document.createElement("canvas");
+      srcCanvas.width = 720; srcCanvas.height = 720;
+      var sctx = srcCanvas.getContext("2d");
+      if (!sctx) return;
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      function fit() {
+        var w = canvas.clientWidth || 720;
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(w * dpr);
+        dirty = true; schedule();
+      }
+      function drawPortrait(c, W) {
+        c.fillStyle = "#fffaf0"; c.fillRect(0, 0, W, W);
+        var g = c.createLinearGradient(0, 0, W, W);
+        g.addColorStop(0, "#00b7eb"); g.addColorStop(1, "#ffe600");
+        c.fillStyle = g; c.fillRect(0, 0, W, W);
+        c.save();
+        for (var i = -W; i < W * 2; i += 18) {
+          c.strokeStyle = "rgba(10,10,10,.12)"; c.lineWidth = 8;
+          c.beginPath(); c.moveTo(i, 0); c.lineTo(i + W, W); c.stroke();
+        }
+        c.restore();
+        c.fillStyle = "#111";
+        c.beginPath(); c.ellipse(W * .5, W * .42, W * .28, W * .34, 0, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.ellipse(W * .5, W * .28, W * .3, W * .18, 0, Math.PI, Math.PI * 2); c.fill();
+        var face = c.createRadialGradient(W * .46, W * .4, 20, W * .5, W * .46, W * .26);
+        face.addColorStop(0, "#f7c7a8"); face.addColorStop(1, "#d48a6a");
+        c.fillStyle = face;
+        c.beginPath(); c.ellipse(W * .5, W * .48, W * .22, W * .26, 0, 0, Math.PI * 2); c.fill();
+        c.fillStyle = "rgba(236,0,140,.25)";
+        c.beginPath(); c.ellipse(W * .4, W * .52, 28, 16, 0, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.ellipse(W * .6, W * .52, 28, 16, 0, 0, Math.PI * 2); c.fill();
+        function eye(x) {
+          c.fillStyle = "#fff"; c.beginPath(); c.ellipse(x, W * .46, 22, 14, 0, 0, Math.PI * 2); c.fill();
+          c.fillStyle = "#1a4fa3"; c.beginPath(); c.arc(x, W * .46, 9, 0, Math.PI * 2); c.fill();
+          c.fillStyle = "#0a0a0a"; c.beginPath(); c.arc(x, W * .46, 5, 0, Math.PI * 2); c.fill();
+          c.fillStyle = "#fff"; c.beginPath(); c.arc(x + 3, W * .44, 2.4, 0, Math.PI * 2); c.fill();
+        }
+        eye(W * .42); eye(W * .58);
+        c.fillStyle = "#e4002b";
+        c.beginPath(); c.ellipse(W * .5, W * .62, 28, 12, 0, 0, Math.PI); c.fill();
+        c.fillStyle = "#fff"; c.beginPath(); c.ellipse(W * .48, W * .61, 8, 3, -.2, 0, Math.PI * 2); c.fill();
+        c.fillStyle = "#ffe600"; c.beginPath(); c.arc(W * .74, W * .52, 10, 0, Math.PI * 2); c.fill();
+        c.fillStyle = "#e4002b";
+        c.beginPath(); c.moveTo(W * .28, W * .72); c.quadraticCurveTo(W * .5, W * .68, W * .72, W * .72);
+        c.lineTo(W * .86, W); c.lineTo(W * .14, W); c.closePath(); c.fill();
+      }
+      function drawShapes(c, W) {
+        var g = c.createLinearGradient(0, 0, W, W);
+        g.addColorStop(0, "#7b2cff"); g.addColorStop(1, "#00b7eb");
+        c.fillStyle = g; c.fillRect(0, 0, W, W);
+        c.fillStyle = "#0a0a0a";
+        c.beginPath(); c.moveTo(0, 0); c.lineTo(W * .55, 0); c.lineTo(0, W * .7); c.fill();
+        var rg = c.createRadialGradient(W * .68, W * .38, 10, W * .68, W * .38, W * .22);
+        rg.addColorStop(0, "#ff8ad8"); rg.addColorStop(1, "#ec008c");
+        c.fillStyle = rg; c.beginPath(); c.arc(W * .68, W * .38, W * .22, 0, Math.PI * 2); c.fill();
+        c.fillStyle = "#00b7eb";
+        c.beginPath(); c.moveTo(W * .18, W * .78); c.lineTo(W * .42, W * .42); c.lineTo(W * .55, W * .86); c.fill();
+        var sg = c.createLinearGradient(W * .5, W * .55, W * .85, W * .9);
+        sg.addColorStop(0, "#ffe600"); sg.addColorStop(1, "#ff8a00");
+        c.fillStyle = sg; c.fillRect(W * .52, W * .58, W * .28, W * .28);
+        c.fillStyle = "#e4002b"; c.beginPath(); c.arc(W * .28, W * .28, 54, 0, Math.PI * 2); c.fill();
+        c.fillStyle = "#fff";
+        for (var i = 0; i < 12; i++) {
+          c.beginPath(); c.arc(80 + (i % 4) * 40, 500 + Math.floor(i / 4) * 40, 8, 0, Math.PI * 2); c.fill();
+        }
+      }
+      function drawText(c, W) {
+        var rg = c.createRadialGradient(W / 2, W / 2, 20, W / 2, W / 2, W * .7);
+        rg.addColorStop(0, "#ffe600"); rg.addColorStop(.5, "#ff8a00"); rg.addColorStop(1, "#e4002b");
+        c.fillStyle = rg; c.fillRect(0, 0, W, W);
+        for (var i = 0; i < 24; i++) {
+          c.strokeStyle = "rgba(255,255,255,.25)"; c.beginPath();
+          c.moveTo(W / 2, W / 2); c.lineTo(W / 2 + Math.cos(i / 24 * Math.PI * 2) * W, W / 2 + Math.sin(i / 24 * Math.PI * 2) * W); c.stroke();
+        }
+        var t = (qs("#bigText") && qs("#bigText").value) || "POW!";
+        c.save();
+        c.translate(W / 2, W / 2); c.rotate(-0.18);
+        c.font = "900 140px Impact, Arial Black, sans-serif";
+        c.textAlign = "center"; c.textBaseline = "middle";
+        c.lineWidth = 16; c.strokeStyle = "#0a0a0a"; c.strokeText(t, 0, 0);
+        var tg = c.createLinearGradient(-200, -40, 200, 40);
+        tg.addColorStop(0, "#00b7eb"); tg.addColorStop(1, "#ec008c");
+        c.fillStyle = tg; c.fillText(t, 0, 0);
+        c.restore();
+      }
+      function contrastPx(v, k) {
+        return Math.max(0, Math.min(255, (v - 128) * k + 128));
+      }
+      function rgbToCmyk(r, g, b) {
+        r /= 255; g /= 255; b /= 255;
+        var k = 1 - Math.max(r, g, b);
+        if (k >= 0.999) return { c: 0, m: 0, y: 0, k: 1 };
+        return { c: (1 - r - k) / (1 - k), m: (1 - g - k) / (1 - k), y: (1 - b - k) / (1 - k), k: k };
+      }
+      function sample(data, x, y, W) {
+        x = Math.max(0, Math.min(W - 1, x | 0));
+        y = Math.max(0, Math.min(W - 1, y | 0));
+        var i = (y * W + x) * 4;
+        return [data[i], data[i + 1], data[i + 2]];
+      }
+      function screenChannel(out, W, data, getInk, color, angleDeg, cell, composite) {
+        out.save();
+        out.globalCompositeOperation = composite;
+        out.fillStyle = color;
+        out.beginPath();
+        var ang = angleDeg * Math.PI / 180;
+        var ca = Math.cos(ang), sa = Math.sin(ang);
+        var pad = cell * 2;
+        for (var y = -pad; y < W + pad; y += cell) {
+          for (var x = -pad; x < W + pad; x += cell) {
+            var gx = x * ca - y * sa;
+            var gy = x * sa + y * ca;
+            if (gx < -cell || gy < -cell || gx > W + cell || gy > W + cell) continue;
+            var rgb = sample(data, gx, gy, W);
+            var ink = getInk(rgb[0], rgb[1], rgb[2]);
+            var r = cell * 0.52 * Math.sqrt(Math.max(0, Math.min(1, ink)));
+            if (r < 0.35) continue;
+            out.moveTo(gx + r, gy);
+            out.arc(gx, gy, r, 0, Math.PI * 2);
+          }
+        }
+        out.fill();
+        out.restore();
+      }
+      function sobel(lum, W, weight) {
+        var out = new Float32Array(W * W);
+        for (var y = 1; y < W - 1; y++) {
+          for (var x = 1; x < W - 1; x++) {
+            var i = y * W + x;
+            var gx = -lum[i - W - 1] - 2 * lum[i - 1] - lum[i + W - 1] + lum[i - W + 1] + 2 * lum[i + 1] + lum[i + W + 1];
+            var gy = -lum[i - W - 1] - 2 * lum[i - W] - lum[i - W + 1] + lum[i + W - 1] + 2 * lum[i + W] + lum[i + W + 1];
+            out[i] = Math.sqrt(gx * gx + gy * gy);
+          }
+        }
+        return out;
+      }
+      function drawBurst(c, x, y, text) {
+        c.save(); c.translate(x, y);
+        c.beginPath();
+        for (var i = 0; i < 14; i++) {
+          var a = i / 14 * Math.PI * 2;
+          var r = i % 2 ? 86 : 54;
+          var px = Math.cos(a) * r, py = Math.sin(a) * r;
+          if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+        }
+        c.closePath();
+        c.fillStyle = "#ffe600"; c.fill();
+        c.lineWidth = 6; c.strokeStyle = "#fff"; c.stroke();
+        c.lineWidth = 4; c.strokeStyle = "#0a0a0a"; c.stroke();
+        c.fillStyle = "#e4002b";
+        c.font = "900 28px Impact, Arial Black, sans-serif";
+        c.textAlign = "center"; c.textBaseline = "middle";
+        c.strokeStyle = "#0a0a0a"; c.lineWidth = 4; c.strokeText(text, 0, 0);
+        c.fillText(text, 0, 0);
+        c.restore();
+      }
+      function drawSpeech(c, x, y, text) {
+        c.save();
+        c.fillStyle = "#fff"; c.strokeStyle = "#0a0a0a"; c.lineWidth = 5;
+        c.beginPath(); c.ellipse(x, y, 90, 48, 0, 0, Math.PI * 2); c.fill(); c.stroke();
+        c.beginPath(); c.moveTo(x - 20, y + 40); c.lineTo(x - 50, y + 78); c.lineTo(x + 8, y + 42); c.closePath(); c.fill(); c.stroke();
+        c.fillStyle = "#0a0a0a";
+        c.font = "900 22px Impact, Arial Black, sans-serif";
+        c.textAlign = "center"; c.textBaseline = "middle";
+        c.fillText(text, x, y);
+        c.restore();
+      }
+      function render() {
+        dirty = false;
+        if (flash) flash.classList.add("on");
+        var W = 720;
+        if (source === "portrait") drawPortrait(sctx, W);
+        else if (source === "shapes") drawShapes(sctx, W);
+        else drawText(sctx, W);
+        var img = sctx.getImageData(0, 0, W, W);
+        var data = img.data;
+        var kCon = (qs("#contrast") ? Number(qs("#contrast").value) : 110) / 100;
+        var lum = new Float32Array(W * W);
+        for (var i = 0; i < W * W; i++) {
+          var o = i * 4;
+          data[o] = contrastPx(data[o], kCon);
+          data[o + 1] = contrastPx(data[o + 1], kCon);
+          data[o + 2] = contrastPx(data[o + 2], kCon);
+          lum[i] = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
+        }
+        var cell = qs("#dotSize") ? Number(qs("#dotSize").value) : 9;
+        var base = qs("#angle") ? Number(qs("#angle").value) : 15;
+        var ow = qs("#outline") ? Number(qs("#outline").value) : 2;
+        var papers = { cmyk: "#fffaf0", neon: "#ffe600", news: "#efe6d0", duo: "#fff3d6" };
+        var scale = canvas.width / W;
+        ctx.setTransform(scale, 0, 0, scale, 0, 0);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = papers[pal] || "#fffaf0";
+        ctx.fillRect(0, 0, W, W);
+        var mix = pal === "neon" ? "source-over" : "multiply";
+        if (pal === "cmyk") {
+          screenChannel(ctx, W, data, function (r, g, b) { return rgbToCmyk(r, g, b).c; }, "#00aeef", base + 0, cell, mix);
+          screenChannel(ctx, W, data, function (r, g, b) { return rgbToCmyk(r, g, b).m; }, "#ec008c", base + 60, cell, mix);
+          screenChannel(ctx, W, data, function (r, g, b) { return rgbToCmyk(r, g, b).y; }, "#fff200", base - 15, cell, mix);
+          screenChannel(ctx, W, data, function (r, g, b) { return rgbToCmyk(r, g, b).k; }, "#141414", base + 30, cell, mix);
+        } else if (pal === "neon") {
+          screenChannel(ctx, W, data, function (r, g, b) { return 1 - (0.299 * r + 0.587 * g + 0.114 * b) / 255; }, "#00f0ff", base, cell, mix);
+          screenChannel(ctx, W, data, function (r, g, b) { return rgbToCmyk(r, g, b).m; }, "#ff2bd6", base + 45, cell, mix);
+          screenChannel(ctx, W, data, function (r, g, b) { return rgbToCmyk(r, g, b).c; }, "#7b2cff", base + 90, cell, mix);
+        } else if (pal === "news") {
+          screenChannel(ctx, W, data, function (r, g, b) { return 1 - (0.299 * r + 0.587 * g + 0.114 * b) / 255; }, "#2a2520", base + 30, cell, mix);
+        } else {
+          screenChannel(ctx, W, data, function (r, g, b) { var L = (0.299 * r + 0.587 * g + 0.114 * b) / 255; return Math.max(0, 0.55 - L); }, "#1c1c6e", base, cell, mix);
+          screenChannel(ctx, W, data, function (r, g, b) { var L = (0.299 * r + 0.587 * g + 0.114 * b) / 255; return Math.max(0, 0.85 - L) * 0.7; }, "#ff4d00", base + 30, cell, mix);
+        }
+        if (ow > 0) {
+          var edges = sobel(lum, W, ow);
+          ctx.save();
+          ctx.globalCompositeOperation = "source-over";
+          ctx.fillStyle = "#0a0a0a";
+          var thr = 90;
+          for (var pass = 0; pass < ow; pass++) {
+            var ox = (pass % 3) - 1, oy = ((pass / 3) | 0) - 1;
+            ctx.beginPath();
+            for (var y = 1; y < W; y += 2) {
+              for (var x = 1; x < W; x += 2) {
+                if (edges[y * W + x] > thr) {
+                  ctx.rect(x + ox * 0.6, y + oy * 0.6, 2.2, 2.2);
+                }
+              }
+            }
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+        var bt = (qs("#bubbleText") && qs("#bubbleText").value) || "POW!";
+        if (bub === "burst") drawBurst(ctx, bubbleXY.x, bubbleXY.y, bt);
+        if (bub === "speech") drawSpeech(ctx, bubbleXY.x, bubbleXY.y, bt);
+        if (flash) setTimeout(function () { flash.classList.remove("on"); }, 120);
+      }
+      function schedule() {
+        if (raf) return;
+        if (typeof window.requestAnimationFrame !== "function") { render(); return; }
+        raf = window.requestAnimationFrame(function () { raf = 0; if (dirty) render(); });
+      }
+      function bump() { dirty = true; schedule(); }
+      qsa("#sources button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          source = b.getAttribute("data-src") || "portrait";
+          qsa("#sources button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+          var tf = qs("#textField");
+          if (tf) tf.classList.toggle("show", source === "text");
+          bump();
+        });
+      });
+      qsa("#palettes button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          pal = b.getAttribute("data-pal") || "cmyk";
+          qsa("#palettes button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+          bump();
+        });
+      });
+      qsa("#bubbleStyle button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          bub = b.getAttribute("data-bub") || "burst";
+          qsa("#bubbleStyle button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+          bump();
+        });
+      });
+      ["dotSize", "angle", "contrast", "outline", "bubbleText", "bigText"].forEach(function (id) {
+        var el = qs("#" + id);
+        if (!el) return;
+        el.addEventListener("input", function () {
+          if (id === "dotSize" && qs("#dotOut")) qs("#dotOut").textContent = el.value + " px";
+          if (id === "angle" && qs("#angOut")) qs("#angOut").textContent = el.value + "°";
+          if (id === "contrast" && qs("#conOut")) qs("#conOut").textContent = (Number(el.value) / 100).toFixed(2);
+          if (id === "outline" && qs("#outOut")) qs("#outOut").textContent = el.value;
+          bump();
+        });
+      });
+      function localPt(ev) {
+        var r = canvas.getBoundingClientRect();
+        return { x: (ev.clientX - r.left) / r.width * 720, y: (ev.clientY - r.top) / r.height * 720 };
+      }
+      canvas.addEventListener("pointerdown", function (ev) {
+        var p = localPt(ev);
+        if (Math.hypot(p.x - bubbleXY.x, p.y - bubbleXY.y) < 90) {
+          dragging = true; canvas.setPointerCapture(ev.pointerId);
+        }
+      });
+      canvas.addEventListener("pointermove", function (ev) {
+        if (!dragging) return;
+        var p = localPt(ev);
+        bubbleXY.x = p.x; bubbleXY.y = p.y; bump();
+      });
+      canvas.addEventListener("pointerup", function () { dragging = false; });
+      var dl = qs("#download");
+      if (dl) dl.addEventListener("click", function () {
+        var a = document.createElement("a");
+        a.href = canvas.toDataURL("image/png");
+        a.download = "dot-bomb.png";
+        a.click();
+      });
+      fit();
+      if (typeof window.addEventListener === "function") window.addEventListener("resize", fit);
+      schedule();
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

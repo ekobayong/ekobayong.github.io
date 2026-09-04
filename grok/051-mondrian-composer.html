@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Composer — A De Stijl Generator</title>
+  <style>
+    :root {
+      --red: #d7301f;
+      --blue: #1e4d9b;
+      --yellow: #f2c40f;
+      --black: #161616;
+      --white: #f6f3ec;
+      --gutter: #1a1a1a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: #2a261f;
+      background:
+        radial-gradient(ellipse 90% 55% at 50% 22%, rgba(255, 248, 230, 0.75), transparent 62%),
+        linear-gradient(#cfc8bb, #d9d3c7 48%, #c8c1b3);
+      overflow-x: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image: repeating-linear-gradient(
+        0deg,
+        rgba(90, 70, 40, 0.035) 0 1px,
+        transparent 1px 3px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        rgba(70, 55, 30, 0.03) 0 1px,
+        transparent 1px 4px
+      );
+      mix-blend-mode: multiply;
+      z-index: 0;
+    }
+    .floor {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      height: 22%;
+      background: linear-gradient(#6b6358, #5a5248);
+      z-index: 0;
+    }
+    .stage {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 28px 16px 48px;
+      gap: 22px;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 14px 18px;
+    }
+    .lbl {
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #3a342c;
+    }
+    .ctrl {
+      appearance: none;
+      background: transparent;
+      color: #111;
+      border: 2px solid #111;
+      padding: 10px 16px;
+      font: 12px/1 ui-sans-serif, system-ui, sans-serif;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 4px 4px 0 #111;
+      position: relative;
+      overflow: hidden;
+      z-index: 0;
+    }
+    .ctrl::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: #111;
+      transform: translateX(-101%);
+      transition: transform 280ms cubic-bezier(.65,0,.25,1);
+      z-index: -1;
+    }
+    .ctrl:hover { color: #f6f3ec; }
+    .ctrl:hover::before { transform: translateX(0); }
+    .ctrl[aria-pressed="true"] { color: #f6f3ec; }
+    .ctrl[aria-pressed="true"]::before { transform: translateX(0); }
+    .depth-wrap { display: flex; align-items: center; gap: 10px; }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 140px;
+      height: 4px;
+      background: #1a1a1a;
+      border-radius: 0;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      background: #d7301f;
+      border: 2px solid #111;
+      cursor: pointer;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px; height: 16px;
+      background: #d7301f;
+      border: 2px solid #111;
+      border-radius: 0;
+      cursor: pointer;
+    }
+    .easel-wrap {
+      width: min(92vw, 720px);
+      aspect-ratio: 1;
+      transform: rotate(var(--tilt, 0deg));
+      transition: transform 1100ms cubic-bezier(.65,0,.25,1);
+    }
+    .frame {
+      width: 100%; height: 100%;
+      padding: 28px;
+      background: linear-gradient(165deg, #2b2b2b, #0d0d0d 38%, #202020 72%, #050505);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.18),
+        inset 0 -2px 6px rgba(0,0,0,0.55),
+        0 28px 60px rgba(0,0,0,0.38),
+        0 8px 18px rgba(0,0,0,0.28);
+      position: relative;
+    }
+    .frame::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(125deg, rgba(255,255,255,0.16) 0 18%, transparent 42%);
+    }
+    .painting {
+      width: 100%; height: 100%;
+      display: grid;
+      background: #1a1a1a;
+      gap: 10px;
+      transition: grid-template-columns 1100ms cubic-bezier(.65,0,.25,1),
+                  grid-template-rows 1100ms cubic-bezier(.65,0,.25,1);
+    }
+    .painting.breathing { transition: none; }
+    .cell {
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      min-width: 0; min-height: 0;
+      background: #f6f3ec;
+      background-image: repeating-linear-gradient(
+        90deg,
+        rgba(180,170,150,0.08) 0 1px,
+        transparent 1px 5px
+      );
+      transition: background-color 380ms ease, transform 220ms ease, opacity 420ms ease;
+      transform-origin: center;
+      opacity: 1;
+    }
+    .cell:hover { transform: scale(0.985); }
+    .cell.paint {
+      background-image: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.12));
+    }
+    .cell.reveal {
+      animation: cellIn 480ms cubic-bezier(.2,.8,.2,1) both;
+    }
+    @keyframes cellIn {
+      from { opacity: 0; transform: scale(0.82); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .plate {
+      width: min(92vw, 420px);
+      background: linear-gradient(#faf7f0, #f3efe6);
+      border: 1px solid #c9c2b4;
+      padding: 18px 28px 16px;
+      position: relative;
+      box-shadow: 0 8px 18px rgba(40,30,10,0.12);
+      transition: opacity 420ms ease;
+    }
+    .plate.swap { opacity: 0; }
+    .screw {
+      position: absolute;
+      top: 10px;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #d7d0c4, #8a8376 70%);
+      box-shadow: inset 0 0 0 1px #6d675c;
+    }
+    .screw.l { left: 10px; }
+    .screw.r { right: 10px; }
+    .artist {
+      font-size: 10px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: #4a453c;
+      text-align: center;
+    }
+    .ptitle {
+      font-family: Georgia, "Iowan Old Style", Palatino, serif;
+      font-style: italic;
+      font-size: 18px;
+      text-align: center;
+      margin: 8px 0 4px;
+      color: #1c1914;
+    }
+    .meta {
+      font-family: Georgia, "Iowan Old Style", Palatino, serif;
+      font-size: 12px;
+      text-align: center;
+      color: #5a5448;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+      .easel-wrap { transform: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="floor" aria-hidden="true"></div>
+  <div class="stage">
+    <div class="toolbar">
+      <button type="button" class="ctrl" id="newBtn">New composition</button>
+      <button type="button" class="ctrl" id="animBtn" aria-pressed="false">Animate</button>
+      <div class="depth-wrap">
+        <label class="lbl" for="depth">Depth</label>
+        <input type="range" id="depth" min="2" max="7" value="4" step="1">
+        <span class="lbl" id="depthVal">4</span>
+      </div>
+    </div>
+    <div class="easel-wrap" id="easel">
+      <div class="frame">
+        <div class="painting" id="painting" aria-label="De Stijl composition"></div>
+      </div>
+    </div>
+    <div class="plate" id="plate">
+      <span class="screw l" aria-hidden="true"></span>
+      <span class="screw r" aria-hidden="true"></span>
+      <p class="artist">Piet Anonymous (b. 1872)</p>
+      <h1 class="ptitle" id="ptitle">Composition No. IV with Red, Blue and Yellow</h1>
+      <p class="meta" id="pmeta">Oil on canvas · 1927 · 720 × 720 mm</p>
+    </div>
+  </div>
+  <script>
+(function () {
+  "use strict";
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  function qs(sel, root) {
+    try { return (root || document).querySelector(sel); } catch (e) { return null; }
+  }
+  var PAL = {
+    white: "#f6f3ec",
+    red: "#d7301f",
+    blue: "#1e4d9b",
+    yellow: "#f2c40f",
+    black: "#161616"
+  };
+  var CYCLE = ["white", "red", "blue", "yellow", "black"];
+  var NAMES = { red: "Red", blue: "Blue", yellow: "Yellow", black: "Black" };
+  var ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+  var TRACKS = 16;
+  var reduced = false;
+  if (typeof window.matchMedia === "function") {
+    try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+  }
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  function irand(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  function trackSize() {
+    var r = Math.random();
+    if (r < 0.12) return rand(0.45, 0.7);
+    if (r > 0.88) return rand(1.5, 2.2);
+    return rand(0.8, 1.3);
+  }
+
+  function splitRect(r, depth, maxDepth, leaves) {
+    var w = r.c1 - r.c0;
+    var h = r.r1 - r.r0;
+    if (depth >= maxDepth || (w <= 1 && h <= 1)) {
+      leaves.push(r);
+      return;
+    }
+    if (depth >= 2 && Math.random() < 0.18) {
+      leaves.push(r);
+      return;
+    }
+    var pLong = w / (w + h);
+    var splitH = Math.random() < pLong && w >= 2;
+    if (!splitH && h < 2) {
+      if (w >= 2) splitH = true;
+      else { leaves.push(r); return; }
+    }
+    var ratio = (Math.random() < 0.5 ? 0.382 : 0.618) + rand(-0.15, 0.15);
+    ratio = Math.max(0.22, Math.min(0.78, ratio));
+    if (splitH) {
+      var cut = r.c0 + Math.max(1, Math.min(w - 1, Math.round(w * ratio)));
+      splitRect({ r0: r.r0, r1: r.r1, c0: r.c0, c1: cut }, depth + 1, maxDepth, leaves);
+      splitRect({ r0: r.r0, r1: r.r1, c0: cut, c1: r.c1 }, depth + 1, maxDepth, leaves);
+    } else {
+      var cutR = r.r0 + Math.max(1, Math.min(h - 1, Math.round(h * ratio)));
+      splitRect({ r0: r.r0, r1: cutR, c0: r.c0, c1: r.c1 }, depth + 1, maxDepth, leaves);
+      splitRect({ r0: cutR, r1: r.r1, c0: r.c0, c1: r.c1 }, depth + 1, maxDepth, leaves);
+    }
+  }
+
+  function paintColor() {
+    var r = Math.random();
+    if (r < 0.04) return "black";
+    if (r < 0.22) return pick(["red", "blue", "yellow"]);
+    return "white";
+  }
+
+  function titleFrom(colors) {
+    var present = [];
+    if (colors.red) present.push("Red");
+    if (colors.blue) present.push("Blue");
+    if (colors.yellow) present.push("Yellow");
+    var n = pick(ROMAN);
+    if (present.length === 0) {
+      return colors.black ? "Composition in Black and White" : "Tableau in White";
+    }
+    if (present.length === 1) return "Tableau with " + present[0];
+    if (present.length === 2) return "Composition with " + present[0] + " and " + present[1];
+    return "Composition No. " + n + " with " + present.join(", ").replace(/, ([^,]+)$/, " and $1");
+  }
+
+  function init() {
+    var painting = qs("#painting");
+    var easel = qs("#easel");
+    var newBtn = qs("#newBtn");
+    var animBtn = qs("#animBtn");
+    var depthEl = qs("#depth");
+    var depthVal = qs("#depthVal");
+    var plate = qs("#plate");
+    var ptitle = qs("#ptitle");
+    var pmeta = qs("#pmeta");
+    if (!painting || !easel || !newBtn || !animBtn || !depthEl) return;
+
+    var colBase = [];
+    var rowBase = [];
+    var breathing = false;
+    var rafId = 0;
+    var t0 = 0;
+
+    function applyTracks(cols, rows, animate) {
+      if (!painting) return;
+      if (reduced) painting.classList.remove("breathing");
+      else if (breathing) painting.classList.add("breathing");
+      else painting.classList.remove("breathing");
+      painting.style.gridTemplateColumns = cols.map(function (n) { return n.toFixed(3) + "fr"; }).join(" ");
+      painting.style.gridTemplateRows = rows.map(function (n) { return n.toFixed(3) + "fr"; }).join(" ");
+    }
+
+    function compose() {
+      colBase = [];
+      rowBase = [];
+      var i;
+      for (i = 0; i < TRACKS; i++) { colBase.push(trackSize()); rowBase.push(trackSize()); }
+      var leaves = [];
+      splitRect({ r0: 0, r1: TRACKS, c0: 0, c1: TRACKS }, 0, parseInt(depthEl.value, 10) || 4, leaves);
+      painting.innerHTML = "";
+      var colors = { red: 0, blue: 0, yellow: 0, black: 0 };
+      leaves.forEach(function (leaf, idx) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cell";
+        var col = paintColor();
+        btn.dataset.color = col;
+        btn.style.gridColumn = (leaf.c0 + 1) + " / " + (leaf.c1 + 1);
+        btn.style.gridRow = (leaf.r0 + 1) + " / " + (leaf.r1 + 1);
+        btn.style.backgroundColor = PAL[col];
+        if (col !== "white") {
+          btn.classList.add("paint");
+          colors[col] = (colors[col] || 0) + 1;
+        }
+        if (!reduced) {
+          btn.classList.add("reveal");
+          btn.style.animationDelay = (idx * 28) + "ms";
+        }
+        btn.addEventListener("click", function () {
+          var cur = CYCLE.indexOf(btn.dataset.color || "white");
+          var next = CYCLE[(cur + 1) % CYCLE.length];
+          btn.dataset.color = next;
+          btn.style.backgroundColor = PAL[next];
+          if (next === "white") btn.classList.remove("paint");
+          else btn.classList.add("paint");
+          recountPlate();
+        });
+        painting.appendChild(btn);
+      });
+      applyTracks(colBase, rowBase, true);
+      if (easel && !reduced) {
+        easel.style.setProperty("--tilt", (rand(-0.6, 0.6)).toFixed(2) + "deg");
+      }
+      updatePlate(colors);
+    }
+
+    function recountPlate() {
+      var colors = { red: 0, blue: 0, yellow: 0, black: 0 };
+      var cells = painting.querySelectorAll(".cell");
+      for (var i = 0; i < cells.length; i++) {
+        var c = cells[i].dataset.color;
+        if (c && colors.hasOwnProperty(c)) colors[c]++;
+      }
+      updatePlate(colors);
+    }
+
+    function updatePlate(colors) {
+      var title = titleFrom(colors);
+      var year = irand(1919, 1942);
+      var dim = irand(60, 92) * 10;
+      var nextMeta = "Oil on canvas · " + year + " · " + dim + " × " + dim + " mm";
+      function apply() {
+        if (ptitle) ptitle.textContent = title;
+        if (pmeta) pmeta.textContent = nextMeta;
+        if (plate) plate.classList.remove("swap");
+      }
+      if (reduced || !plate) { apply(); return; }
+      plate.classList.add("swap");
+      window.setTimeout(apply, 220);
+    }
+
+    function tick(now) {
+      if (!breathing || reduced) return;
+      if (!t0) t0 = now;
+      var t = (now - t0) / 1000;
+      var cols = colBase.map(function (b, i) {
+        return b * (1 + 0.16 * Math.sin(t * 0.55 + i * 0.41) + 0.06 * Math.sin(t * 1.7 + i * 0.93));
+      });
+      var rows = rowBase.map(function (b, i) {
+        return b * (1 + 0.16 * Math.sin(t * 0.48 + i * 0.37) + 0.06 * Math.sin(t * 1.9 + i * 1.1));
+      });
+      applyTracks(cols, rows, false);
+      if (typeof window.requestAnimationFrame === "function") {
+        rafId = window.requestAnimationFrame(tick);
+      }
+    }
+
+    function setBreathing(on) {
+      breathing = on && !reduced;
+      animBtn.setAttribute("aria-pressed", breathing ? "true" : "false");
+      if (breathing) {
+        painting.classList.add("breathing");
+        t0 = 0;
+        if (typeof window.requestAnimationFrame === "function") {
+          rafId = window.requestAnimationFrame(tick);
+        }
+      } else {
+        if (rafId && typeof window.cancelAnimationFrame === "function") {
+          window.cancelAnimationFrame(rafId);
+        }
+        painting.classList.remove("breathing");
+        applyTracks(colBase, rowBase, true);
+      }
+    }
+
+    newBtn.addEventListener("click", function () { compose(); });
+    animBtn.addEventListener("click", function () { setBreathing(!breathing); });
+    depthEl.addEventListener("input", function () {
+      if (depthVal) depthVal.textContent = depthEl.value;
+      compose();
+    });
+    document.addEventListener("keydown", function (e) {
+      var tag = (e.target && e.target.tagName) || "";
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "n" || e.key === "N") compose();
+      if (e.key === "a" || e.key === "A") setBreathing(!breathing);
+    });
+    compose();
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+  </script>
+</body>
+</html>

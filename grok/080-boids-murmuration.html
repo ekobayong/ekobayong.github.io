@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Murmuration</title>
+  <style>
+    :root { --night: 0; --amber: #d9a466; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #2a2f4a; cursor: none; }
+    body { font-family: "Iowan Old Style", Georgia, Palatino, ui-serif, serif; color: #f0e6d8; }
+    .sky {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse at 50% 100%, rgba(227,160,106,0.55), transparent 55%),
+        linear-gradient(#2a2f4a, #5a4a6e 35%, #b26a5a 70%, #e3a06a 88%, #f0c48c);
+    }
+    .night {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse at 50% 100%, rgba(90,60,140,0.35), transparent 50%),
+        linear-gradient(#05060c, #0b0f1e 40%, #1a1c33 75%, #2b2540);
+      opacity: var(--night);
+    }
+    .stars { position: absolute; inset: 0; opacity: var(--night); pointer-events: none; }
+    .star { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #e8e4ff; }
+    #flock { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; }
+    .land {
+      position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 28%;
+      z-index: 3; pointer-events: none;
+    }
+    .title {
+      position: absolute; left: 24px; top: 22px; z-index: 5; pointer-events: none;
+    }
+    h1 { font-size: clamp(2rem, 4.5vw, 3.4rem); font-weight: 500; }
+    h1 em { font-style: italic; color: var(--amber); }
+    .epi { font-style: italic; opacity: 0.8; max-width: 36ch; margin-top: 0.3rem; }
+    .panel {
+      position: absolute; top: 18px; right: 18px; z-index: 6;
+      width: 260px;
+      background: rgba(13,15,20,0.55);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 12px 14px 14px;
+      transition: transform 0.4s ease;
+    }
+    .panel.hide { transform: translateX(120%); }
+    .fps {
+      font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace;
+      font-size: 0.72rem; letter-spacing: 0.12em; color: var(--amber); margin-bottom: 8px;
+    }
+    label.row {
+      display: grid; grid-template-columns: 1fr auto; gap: 6px;
+      font-style: italic; font-size: 0.82rem; margin-top: 8px;
+    }
+    label.row span {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-style: normal; color: var(--amber); font-size: 0.75rem;
+    }
+    input[type="range"] {
+      grid-column: 1 / -1; -webkit-appearance: none; width: 100%; height: 2px;
+      background: rgba(255,255,255,0.22); outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%;
+      background: var(--amber); cursor: pointer;
+    }
+    .btns { display: flex; gap: 6px; margin-top: 12px; }
+    .btns button {
+      flex: 1; font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.7rem; background: transparent; color: #f0e6d8;
+      border: 1px solid rgba(255,255,255,0.28); border-radius: 6px; padding: 6px 4px; cursor: pointer;
+    }
+    .btns button[aria-pressed="true"] { border-color: var(--amber); color: var(--amber); }
+    .hide-btn {
+      position: absolute; right: 18px; bottom: 18px; z-index: 6;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.72rem; letter-spacing: 0.08em;
+      background: rgba(13,15,20,0.55); color: #f0e6d8;
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 999px;
+      padding: 8px 14px; cursor: pointer; backdrop-filter: blur(12px);
+    }
+    #hawk { position: absolute; width: 28px; height: 18px; z-index: 4; pointer-events: none; }
+    .foot {
+      position: absolute; left: 24px; bottom: 16px; z-index: 5;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.7rem; opacity: 0.65; pointer-events: none;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .panel { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sky"></div>
+  <div class="night"></div>
+  <div class="stars" id="stars"></div>
+  <canvas id="flock"></canvas>
+  <svg class="land" viewBox="0 0 1600 340" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+    <path d="M0 180 C 180 150, 320 200, 500 160 S 820 120, 1040 170 S 1400 140, 1600 180 V340 H0 Z" fill="#2a2333"/>
+    <defs>
+      <linearGradient id="trees" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#1c1620"/><stop offset="1" stop-color="#0a0a10"/>
+      </linearGradient>
+    </defs>
+    <polygon id="treeline" fill="url(#trees)" points="0,250 40,210 70,230 110,170 140,200 180,140 220,190 260,120 300,180 360,100 410,170 460,90 520,160 580,80 640,150 700,70 760,140 820,90 880,160 940,70 1000,150 1080,60 1160,140 1240,80 1320,150 1400,90 1480,160 1540,110 1600,170 1600,340 0,340"/>
+    <rect x="0" y="300" width="1600" height="40" fill="#0a0a10"/>
+    <g stroke="#0a0a10" stroke-width="4" fill="#0a0a10">
+      <rect x="220" y="210" width="6" height="100"/>
+      <rect x="206" y="218" width="34" height="4"/>
+      <rect x="800" y="190" width="6" height="120"/>
+      <rect x="786" y="198" width="34" height="4"/>
+      <rect x="1320" y="200" width="6" height="110"/>
+      <rect x="1306" y="208" width="34" height="4"/>
+      <path d="M223 220 Q 510 260 803 200" fill="none" stroke-width="2"/>
+      <path d="M806 200 Q 1060 250 1323 210" fill="none" stroke-width="2"/>
+    </g>
+    <ellipse cx="240" cy="216" rx="4" ry="3" fill="#0a0a10"/>
+    <ellipse cx="248" cy="214" rx="3" ry="2.4" fill="#0a0a10"/>
+    <ellipse cx="812" cy="196" rx="4" ry="3" fill="#0a0a10"/>
+    <ellipse cx="1334" cy="206" rx="3.5" ry="2.6" fill="#0a0a10"/>
+  </svg>
+  <svg id="hawk" viewBox="0 0 28 18" aria-hidden="true">
+    <path d="M2 10 L14 2 L26 10 L18 10 L14 16 L10 10 Z" fill="#1a1210"/>
+  </svg>
+  <div class="title">
+    <h1>Murmur<em>ation</em></h1>
+    <p class="epi">A living ink cloud turning over the wires at dusk.</p>
+  </div>
+  <aside class="panel" id="panel">
+    <div class="fps" id="fps">60 fps</div>
+    <label class="row">Birds <span id="vBirds">2500</span>
+      <input type="range" id="birds" min="500" max="12000" step="100" value="2500">
+    </label>
+    <label class="row">Cohesion <span id="vCoh">1.00</span>
+      <input type="range" id="coh" min="0" max="3" step="0.05" value="1">
+    </label>
+    <label class="row">Alignment <span id="vAli">1.00</span>
+      <input type="range" id="ali" min="0" max="3" step="0.05" value="1">
+    </label>
+    <label class="row">Separation <span id="vSep">1.20</span>
+      <input type="range" id="sep" min="0" max="3" step="0.05" value="1.2">
+    </label>
+    <label class="row">Speed <span id="vSpd">4.00</span>
+      <input type="range" id="spd" min="1" max="7" step="0.1" value="4">
+    </label>
+    <label class="row">Perception radius <span id="vRad">40</span>
+      <input type="range" id="rad" min="10" max="80" step="1" value="40">
+    </label>
+    <label class="row">Dusk → night <span id="vNight">0.00</span>
+      <input type="range" id="night" min="0" max="1" step="0.01" value="0">
+    </label>
+    <div class="btns">
+      <button type="button" id="pause" aria-pressed="false">Pause</button>
+      <button type="button" id="step">Step</button>
+      <button type="button" id="scatter">Scatter</button>
+    </div>
+  </aside>
+  <button type="button" class="hide-btn" id="hide">Hide panel</button>
+  <p class="foot">Click to scatter · Space Pause · S Scatter · cursor is the hawk</p>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var canvas = qs("#flock");
+      if (!canvas || !canvas.getContext) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var reduce = false;
+      if (typeof window.matchMedia === "function") {
+        reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      }
+      var stars = qs("#stars");
+      if (stars) {
+        var si, pos = [8,12,18,22,28,35,42,48,55,62,70,78];
+        for (si = 0; si < 12; si++) {
+          var st = document.createElement("div");
+          st.className = "star";
+          st.style.left = (8 + (si * 7.4) % 90) + "%";
+          st.style.top = (6 + (pos[si] % 40)) + "%";
+          stars.appendChild(st);
+        }
+      }
+      var MAX = 12000, count = 2500;
+      var px = new Float32Array(MAX), py = new Float32Array(MAX);
+      var vx = new Float32Array(MAX), vy = new Float32Array(MAX);
+      var head, next, cols = 1, rows = 1, cell = 40;
+      var cohesion = 1, alignment = 1, separation = 1.2, maxSpd = 4, radius = 40;
+      var paused = false, w = 0, h = 0, dpr = 1, nightVal = 0;
+      var mx = 0, my = 0, mprevx = 0, mprevy = 0;
+      var attrX = 0.5, attrY = 0.3, t = 0;
+      function resize() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        w = window.innerWidth; h = window.innerHeight;
+        canvas.width = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+        canvas.style.width = w + "px";
+        canvas.style.height = h + "px";
+      }
+      resize();
+      window.addEventListener("resize", resize);
+      function seed(n) {
+        var i, old = count;
+        count = Math.max(500, Math.min(MAX, n | 0));
+        for (i = old; i < count; i++) {
+          px[i] = Math.random() * w;
+          py[i] = Math.random() * h * 0.55;
+          var a = Math.random() * Math.PI * 2;
+          vx[i] = Math.cos(a) * maxSpd;
+          vy[i] = Math.sin(a) * maxSpd;
+        }
+      }
+      for (var i0 = 0; i0 < MAX; i0++) {
+        px[i0] = Math.random(); py[i0] = Math.random() * 0.55;
+        var a0 = Math.random() * Math.PI * 2;
+        vx[i0] = Math.cos(a0); vy[i0] = Math.sin(a0);
+      }
+      function scalePos() {
+        var i;
+        for (i = 0; i < count; i++) {
+          if (px[i] <= 1.5) { px[i] *= w; py[i] *= h; vx[i] *= maxSpd; vy[i] *= maxSpd; }
+        }
+      }
+      scalePos();
+      function rebuildHash() {
+        cell = Math.max(16, radius);
+        cols = Math.max(1, Math.ceil(w / cell));
+        rows = Math.max(1, Math.ceil(h / cell));
+        var ncell = cols * rows;
+        if (!head || head.length < ncell) head = new Int32Array(ncell);
+        if (!next || next.length < MAX) next = new Int32Array(MAX);
+      }
+      rebuildHash();
+      function hash() {
+        var ncell = cols * rows, i, c;
+        for (i = 0; i < ncell; i++) head[i] = -1;
+        for (i = 0; i < count; i++) {
+          c = Math.min(cols - 1, Math.max(0, (px[i] / cell) | 0)) + Math.min(rows - 1, Math.max(0, (py[i] / cell) | 0)) * cols;
+          next[i] = head[c];
+          head[c] = i;
+        }
+      }
+      function simulate() {
+        t += 0.008;
+        attrX = w * (0.5 + 0.32 * Math.sin(t * 0.7));
+        attrY = h * (0.28 + 0.16 * Math.sin(t * 1.1));
+        hash();
+        var i, j, ncount, cx, cy, gx, gy, gi, sepR = radius * 0.45, sepR2 = sepR * sepR, r2 = radius * radius;
+        var sx, sy, ax, ay, hx, hy, dx, dy, d2, inv, sp, msp = maxSpd * 60 / 60, minSp = msp * 0.45;
+        var treeY = h * 0.7;
+        var hawkR2 = 160 * 160;
+        for (i = 0; i < count; i++) {
+          sx = sy = ax = ay = hx = hy = 0;
+          ncount = 0;
+          gx = (px[i] / cell) | 0; gy = (py[i] / cell) | 0;
+          var ox, oy;
+          for (oy = -1; oy <= 1; oy++) {
+            for (ox = -1; ox <= 1; ox++) {
+              var ccx = gx + ox, ccy = gy + oy;
+              if (ccx < 0 || ccy < 0 || ccx >= cols || ccy >= rows) continue;
+              j = head[ccx + ccy * cols];
+              var seen = 0;
+              while (j !== -1 && seen < 24) {
+                if (j !== i) {
+                  dx = px[j] - px[i]; dy = py[j] - py[i]; d2 = dx * dx + dy * dy;
+                  if (d2 < r2 && d2 > 0) {
+                    ncount++;
+                    ax += vx[j]; ay += vy[j];
+                    hx += px[j]; hy += py[j];
+                    if (d2 < sepR2) {
+                      inv = 1 / d2;
+                      sx -= dx * inv; sy -= dy * inv;
+                    }
+                  }
+                  seen++;
+                }
+                j = next[j];
+              }
+            }
+          }
+          var fx = 0, fy = 0;
+          if (ncount > 0) {
+            fx += (sx / ncount) * separation * 90;
+            fx += ((ax / ncount) - vx[i]) * alignment * 0.08;
+            fy += (sy / ncount) * separation * 90;
+            fy += ((ay / ncount) - vy[i]) * alignment * 0.08;
+            fx += ((hx / ncount) - px[i]) * cohesion * 0.012;
+            fy += ((hy / ncount) - py[i]) * cohesion * 0.012;
+          }
+          dx = attrX - px[i]; dy = attrY - py[i];
+          fx += dx * 0.0009; fy += dy * 0.0009;
+          if (px[i] < 40) fx += 8; if (px[i] > w - 40) fx -= 8;
+          if (py[i] < 30) fy += 8;
+          if (py[i] > treeY) fy -= 14;
+          dx = px[i] - mx; dy = py[i] - my;
+          d2 = dx * dx + dy * dy;
+          if (d2 < hawkR2 && d2 > 1) {
+            inv = 1 / Math.sqrt(d2);
+            fx += dx * inv * 28; fy += dy * inv * 28;
+          }
+          vx[i] += fx; vy[i] += fy;
+          sp = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]) || 0.001;
+          if (sp > msp) { vx[i] = vx[i] / sp * msp; vy[i] = vy[i] / sp * msp; }
+          else if (sp < minSp) { vx[i] = vx[i] / sp * minSp; vy[i] = vy[i] / sp * minSp; }
+          px[i] += vx[i]; py[i] += vy[i];
+          if (px[i] < -20) px[i] = w + 20;
+          if (px[i] > w + 20) px[i] = -20;
+          if (py[i] < -20) py[i] = treeY - 10;
+          if (py[i] > h + 20) py[i] = 40;
+        }
+      }
+      var paths = [null, null, null, null];
+      function draw() {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        var night = nightVal;
+        var shades = [
+          [22 + night * -10, 0.42],
+          [16 + night * -8, 0.6],
+          [10 + night * -5, 0.8],
+          [5, 0.96]
+        ];
+        var i, d, k, sz = Math.max(1.4, 3.2 - count / 6000);
+        var usePath = typeof Path2D !== "undefined";
+        if (usePath) {
+          for (k = 0; k < 4; k++) paths[k] = new Path2D();
+        } else {
+          for (k = 0; k < 4; k++) paths[k] = [];
+        }
+        ctx.lineJoin = "round";
+        for (i = 0; i < count; i++) {
+          d = (i % 4);
+          var sp = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]) || 1;
+          var nx = vx[i] / sp, ny = vy[i] / sp;
+          var x = px[i], y = py[i];
+          if (usePath) {
+            paths[d].moveTo(x + nx * sz, y + ny * sz);
+            paths[d].lineTo(x - nx * sz * 0.8 - ny * sz * 0.45, y - ny * sz * 0.8 + nx * sz * 0.45);
+            paths[d].lineTo(x - nx * sz * 0.8 + ny * sz * 0.45, y - ny * sz * 0.8 - nx * sz * 0.45);
+            paths[d].closePath();
+          } else {
+            paths[d].push(x, y, nx, ny);
+          }
+        }
+        for (k = 0; k < 4; k++) {
+          var sh = shades[k][0] | 0;
+          ctx.fillStyle = "rgba(" + sh + "," + sh + "," + (sh + 4) + "," + shades[k][1] + ")";
+          if (usePath) ctx.fill(paths[k]);
+          else {
+            var arr = paths[k], p;
+            for (p = 0; p < arr.length; p += 4) {
+              ctx.beginPath();
+              ctx.moveTo(arr[p] + arr[p + 2] * sz, arr[p + 1] + arr[p + 3] * sz);
+              ctx.lineTo(arr[p] - arr[p + 2] * sz * 0.8 - arr[p + 3] * sz * 0.45, arr[p + 1] - arr[p + 3] * sz * 0.8 + arr[p + 2] * sz * 0.45);
+              ctx.lineTo(arr[p] - arr[p + 2] * sz * 0.8 + arr[p + 3] * sz * 0.45, arr[p + 1] - arr[p + 3] * sz * 0.8 - arr[p + 2] * sz * 0.45);
+              ctx.closePath();
+              ctx.fill();
+            }
+          }
+        }
+      }
+      function scatterAt(x, y) {
+        var i, dx, dy, d;
+        for (i = 0; i < count; i++) {
+          dx = px[i] - x; dy = py[i] - y; d = Math.sqrt(dx * dx + dy * dy) + 8;
+          vx[i] += dx / d * 18; vy[i] += dy / d * 18;
+        }
+      }
+      var hawk = qs("#hawk");
+      window.addEventListener("pointermove", function (e) {
+        mprevx = mx; mprevy = my; mx = e.clientX; my = e.clientY;
+        if (hawk) {
+          var ang = Math.atan2(my - mprevy, mx - mprevx) * 180 / Math.PI;
+          hawk.style.left = (mx - 14) + "px";
+          hawk.style.top = (my - 9) + "px";
+          hawk.style.transform = "rotate(" + ang + "deg)";
+        }
+      });
+      canvas.addEventListener("pointerdown", function (e) { scatterAt(e.clientX, e.clientY); });
+      function bindRange(id, lab, fn, digits) {
+        var el = qs("#" + id), v = qs("#" + lab);
+        if (!el) return;
+        el.addEventListener("input", function () {
+          var n = parseFloat(el.value);
+          fn(n);
+          if (v) v.textContent = digits != null ? n.toFixed(digits) : String(n | 0);
+        });
+      }
+      bindRange("birds", "vBirds", function (n) { seed(n); }, null);
+      bindRange("coh", "vCoh", function (n) { cohesion = n; }, 2);
+      bindRange("ali", "vAli", function (n) { alignment = n; }, 2);
+      bindRange("sep", "vSep", function (n) { separation = n; }, 2);
+      bindRange("spd", "vSpd", function (n) { maxSpd = n; }, 2);
+      bindRange("rad", "vRad", function (n) { radius = n; rebuildHash(); }, null);
+      var nightEl = qs("#night"), vNight = qs("#vNight");
+      if (nightEl) nightEl.addEventListener("input", function () {
+        var n = parseFloat(nightEl.value) || 0;
+        nightVal = n;
+        document.documentElement.style.setProperty("--night", String(n));
+        if (vNight) vNight.textContent = n.toFixed(2);
+      });
+      var pauseBtn = qs("#pause"), stepBtn = qs("#step"), scatterBtn = qs("#scatter");
+      var panel = qs("#panel"), hide = qs("#hide"), fpsEl = qs("#fps");
+      function togglePause() {
+        paused = !paused;
+        if (pauseBtn) {
+          pauseBtn.setAttribute("aria-pressed", paused ? "true" : "false");
+          pauseBtn.textContent = paused ? "Resume" : "Pause";
+        }
+      }
+      if (pauseBtn) pauseBtn.addEventListener("click", togglePause);
+      if (stepBtn) stepBtn.addEventListener("click", function () { simulate(); draw(); });
+      if (scatterBtn) scatterBtn.addEventListener("click", function () { scatterAt(w * 0.5, h * 0.35); });
+      if (hide && panel) hide.addEventListener("click", function () {
+        panel.classList.toggle("hide");
+        hide.textContent = panel.classList.contains("hide") ? "Show panel" : "Hide panel";
+      });
+      window.addEventListener("keydown", function (e) {
+        if (e.code === "Space") { e.preventDefault(); togglePause(); }
+        if (e.key === "s" || e.key === "S") scatterAt(w * 0.5, h * 0.35);
+      });
+      var last = 0, acc = 0, frames = 0, fpsT = 0, skip = 0;
+      function loop(now) {
+        var dt = now - (last || now);
+        last = now;
+        frames++;
+        if (now - fpsT > 500) {
+          if (fpsEl) fpsEl.textContent = Math.round(frames * 1000 / (now - fpsT)) + " fps";
+          frames = 0; fpsT = now;
+        }
+        if (!paused) {
+          skip++;
+          if (!reduce || skip % 2 === 0) {
+            simulate();
+            draw();
+          }
+        }
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KESTREL//OS v9.4.1 Nightjar</title>
+  <style>
+    :root {
+      --bg: #05060a;
+      --panel: rgba(10,12,22,0.82);
+      --mag: #ff2bd6;
+      --cyan: #00f0ff;
+      --amber: #ffb830;
+      --mint: #5cff8a;
+      --slate: #6b7390;
+      --ink: #d8e6ff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: radial-gradient(120% 80% at 50% 0%, #10142a, #05060a 58%);
+      color: var(--ink);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+      overflow: hidden;
+    }
+    .scan {
+      position: fixed; inset: 0; pointer-events: none; z-index: 8;
+      background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0,0,0,0.28) 2px 3px);
+      mix-blend-mode: multiply;
+    }
+    .sweep {
+      position: fixed; left: 0; right: 0; height: 18%;
+      background: linear-gradient(to bottom, transparent, rgba(0,240,255,0.07), transparent);
+      animation: sweep 7s linear infinite;
+      pointer-events: none; z-index: 7;
+    }
+    .flicker {
+      position: fixed; inset: 0; background: #fff; opacity: 0;
+      animation: flicker 0.12s steps(2, end) infinite;
+      pointer-events: none; z-index: 6;
+    }
+    .vignette {
+      position: fixed; inset: 0; pointer-events: none; z-index: 5;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.55) 100%);
+    }
+    .floor {
+      position: fixed; left: -10%; right: -10%; bottom: -8%; height: 28vh;
+      background:
+        repeating-linear-gradient(to bottom, transparent 0 18px, rgba(0,240,255,0.18) 18px 19px),
+        repeating-linear-gradient(to right, transparent 0 38px, rgba(255,43,214,0.16) 38px 39px);
+      transform: perspective(420px) rotateX(62deg);
+      transform-origin: bottom;
+      animation: grid-scroll 4s linear infinite;
+      pointer-events: none; z-index: 1; opacity: 0.55;
+    }
+    .app {
+      position: relative; z-index: 2;
+      display: grid; grid-template-rows: auto 1fr;
+      height: 100%; padding: 14px; gap: 12px;
+    }
+    .header {
+      position: relative;
+      background: var(--panel);
+      border: 1px solid rgba(0,240,255,0.28);
+      box-shadow: 0 0 22px rgba(0,240,255,0.12);
+      padding: 12px 18px;
+      clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px);
+    }
+    .title {
+      font-weight: 700; letter-spacing: 0.18em; font-size: 22px;
+      text-transform: uppercase;
+      color: #fff;
+      text-shadow: 0 0 12px var(--cyan);
+    }
+    .title .sl { color: var(--mag); text-shadow: 0 0 10px var(--mag); }
+    .title.glitch {
+      animation: glitch 0.42s steps(2, end);
+    }
+    .status {
+      display: flex; gap: 22px; align-items: center; margin-top: 6px; font-size: 12px; color: var(--slate);
+    }
+    .led { width: 8px; height: 8px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 8px var(--mint); animation: blink 1s step-end infinite; }
+    .main {
+      display: grid;
+      grid-template-columns: 1fr minmax(280px, 340px);
+      gap: 12px; min-height: 0;
+    }
+    .panel {
+      position: relative;
+      background: var(--panel);
+      border: 1px solid rgba(255,43,214,0.28);
+      box-shadow: 0 0 18px rgba(255,43,214,0.1);
+      padding: 18px 14px 12px;
+      min-height: 0;
+      display: flex; flex-direction: column;
+    }
+    .panel::before {
+      content: attr(data-label);
+      position: absolute; top: -8px; left: 18px;
+      background: #05060a; color: var(--mag); letter-spacing: 0.18em;
+      font-size: 10px; padding: 0 8px; text-transform: uppercase;
+    }
+    .bracket { position: absolute; width: 10px; height: 10px; border: 1px solid var(--cyan); }
+    .tl { top: 4px; left: 4px; border-right: 0; border-bottom: 0; }
+    .tr { top: 4px; right: 4px; border-left: 0; border-bottom: 0; }
+    .bl { bottom: 4px; left: 4px; border-right: 0; border-top: 0; }
+    .br { bottom: 4px; right: 4px; border-left: 0; border-top: 0; }
+    .log {
+      flex: 1; overflow: auto; font-size: 12.5px; line-height: 1.45;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .log .ts { color: var(--slate); }
+    .log .ok { color: var(--mint); }
+    .log .warn { color: var(--amber); }
+    .log .err { color: #ff4d6d; }
+    .log .cyan { color: var(--cyan); }
+    .prompt {
+      display: flex; align-items: center; gap: 8px; margin-top: 8px; border-top: 1px solid rgba(0,240,255,0.15); padding-top: 8px;
+    }
+    .prompt label { color: var(--mag); text-shadow: 0 0 8px var(--mag); white-space: nowrap; }
+    .prompt input {
+      flex: 1; background: transparent; border: 0; color: var(--ink); font: inherit; outline: none;
+    }
+    .cursor { display: inline-block; width: 8px; height: 13px; background: var(--cyan); animation: blink 0.9s step-end infinite; vertical-align: text-bottom; }
+    canvas { width: 100%; height: 180px; display: block; background: rgba(0,0,0,0.25); }
+    .angle { font-size: 11px; color: var(--slate); text-align: right; margin-top: 4px; }
+    .gauges { display: grid; gap: 10px; margin: 12px 0; font-size: 12px; }
+    .g-row { display: flex; justify-content: space-between; color: var(--cyan); }
+    .bar { height: 4px; background: rgba(255,43,214,0.2); margin-top: 4px; }
+    .bar > span { display: block; height: 100%; background: var(--mag); width: 40%; }
+    .hex { font-size: 11px; line-height: 1.35; mask-image: linear-gradient(#000 70%, transparent); }
+    .hex .addr { color: var(--mag); }
+    .hex .hot { color: var(--cyan); text-shadow: 0 0 6px var(--cyan); }
+    .ascii { color: var(--slate); }
+    .progress { height: 8px; background: rgba(0,240,255,0.12); margin: 4px 0 8px; }
+    .progress > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--mag)); }
+    @keyframes sweep { from { top: -20%; } to { top: 110%; } }
+    @keyframes flicker { 0%, 80% { opacity: 0; } 90% { opacity: 0.02; } }
+    @keyframes blink { 50% { opacity: 0; } }
+    @keyframes grid-scroll { to { background-position: 0 40px, 0 0; } }
+    @keyframes glitch {
+      0% { text-shadow: 3px 0 var(--mag), -3px 0 var(--cyan); transform: translate(1px, 0) skewX(-4deg); clip-path: inset(10% 0 40% 0); }
+      40% { text-shadow: -4px 0 var(--mag), 3px 0 var(--cyan); transform: translate(-2px, 1px) skewX(3deg); clip-path: inset(40% 0 10% 0); }
+      100% { text-shadow: 0 0 12px var(--cyan); transform: none; clip-path: none; }
+    }
+    @media (min-width: 1800px) { canvas { height: 240px; } }
+    @media (max-width: 860px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100%; }
+      .main { grid-template-columns: 1fr; }
+      .log { min-height: 60vh; }
+      .hide-sm { display: none; }
+    }
+    @media (max-width: 480px) {
+      .header { padding: 10px; }
+      .status { flex-wrap: wrap; }
+      .title { font-size: 16px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sweep, .flicker, .floor, .led, .cursor, .title.glitch { animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="scan"></div>
+  <div class="sweep"></div>
+  <div class="flicker"></div>
+  <div class="vignette"></div>
+  <div class="floor"></div>
+  <div class="app">
+    <header class="header">
+      <div class="title" id="os-title">KESTREL<span class="sl">//</span>OS</div>
+      <div class="status">
+        <span class="led" aria-hidden="true"></span>
+        <span>NODE · KJ-9.4.1</span>
+        <span class="hide-sm">UPLINK · NIGHTJAR</span>
+        <span id="clock">00:00:00</span>
+      </div>
+    </header>
+    <div class="main">
+      <section class="panel" data-label="console" id="console">
+        <span class="bracket tl"></span><span class="bracket tr"></span><span class="bracket bl"></span><span class="bracket br"></span>
+        <div class="log" id="log" aria-live="polite"></div>
+        <div class="prompt">
+          <label for="cmd">operator@kestrel:~$</label>
+          <input id="cmd" type="text" autocomplete="off" spellcheck="false" disabled>
+        </div>
+      </section>
+      <aside class="panel" data-label="telemetry">
+        <span class="bracket tl"></span><span class="bracket tr"></span><span class="bracket bl"></span><span class="bracket br"></span>
+        <div>Core assembly</div>
+        <canvas id="core" width="320" height="180"></canvas>
+        <div class="angle" id="ang">θ 000.0°</div>
+        <div class="gauges">
+          <div><div class="g-row"><span>Core temp</span><span id="temp">41.2°C</span></div><div class="bar"><span id="temp-bar"></span></div></div>
+          <div><div class="g-row"><span>Flux</span><span id="flux">0.62 T</span></div><div class="bar"><span id="flux-bar"></span></div></div>
+        </div>
+        <div>Memory · 0x7f3a</div>
+        <div class="hex" id="hex"></div>
+      </aside>
+    </div>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var log = qs("#log");
+      var input = qs("#cmd");
+      var title = qs("#os-title");
+      var clock = qs("#clock");
+      var hexEl = qs("#hex");
+      var canvas = qs("#core");
+      var angEl = qs("#ang");
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var busy = true;
+      var history = [];
+      var hIndex = 0;
+      var hexRows = [];
+
+      function ts() {
+        var d = new Date();
+        return d.toTimeString().slice(0, 8);
+      }
+      if (clock) {
+        function tickClock() { clock.textContent = ts(); }
+        tickClock();
+        setInterval(tickClock, 1000);
+      }
+      function glitch() {
+        if (!title || reduce) return;
+        title.classList.remove("glitch");
+        void title.offsetWidth;
+        title.classList.add("glitch");
+        setTimeout(function () { title.classList.remove("glitch"); }, 450);
+      }
+      function scheduleGlitch() {
+        var wait = 2500 + Math.random() * 6000;
+        setTimeout(function () { glitch(); scheduleGlitch(); }, wait);
+      }
+      if (!reduce) scheduleGlitch();
+
+      function append(html) {
+        if (!log) return;
+        var d = document.createElement("div");
+        d.innerHTML = html;
+        log.appendChild(d);
+        log.scrollTop = log.scrollHeight;
+      }
+      function typeLine(text, cls, done) {
+        if (reduce) {
+          append('<span class="ts">' + ts() + "  </span><span class=\"" + (cls || "") + "\">" + text + "</span>");
+          if (done) done();
+          return;
+        }
+        var row = document.createElement("div");
+        var span = document.createElement("span");
+        span.className = cls || "";
+        var cur = document.createElement("span");
+        cur.className = "cursor";
+        row.innerHTML = '<span class="ts">' + ts() + "  </span>";
+        row.appendChild(span);
+        row.appendChild(cur);
+        if (log) { log.appendChild(row); log.scrollTop = log.scrollHeight; }
+        var i = 0;
+        function step() {
+          var burst = Math.random() < 0.18 ? 2 : 1;
+          span.textContent += text.slice(i, i + burst);
+          i += burst;
+          if (log) log.scrollTop = log.scrollHeight;
+          if (i < text.length) setTimeout(step, 14 + Math.random() * 22);
+          else { if (cur.parentNode) cur.parentNode.removeChild(cur); if (done) done(); }
+        }
+        step();
+      }
+      function progress(label, ms, next) {
+        var wrap = document.createElement("div");
+        wrap.innerHTML = '<span class="ts">' + ts() + '  </span><span class="cyan">' + label + '</span><div class="progress"><i></i></div>';
+        if (log) log.appendChild(wrap);
+        var bar = wrap.querySelector("i");
+        var t0 = performance.now();
+        function tick(now) {
+          var p = Math.min(1, (now - t0) / ms);
+          if (bar) bar.style.width = Math.round(p * 100) + "%";
+          if (p < 1 && typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(tick);
+          else if (next) next();
+        }
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(tick);
+        else if (next) next();
+      }
+
+      var banner = [
+        "  _  _______ ____ _____ ____  _____ _",
+        " | |/ / ____/ ___|_   _|  _ \\| ____| |",
+        " | ' /|  _| \\___ \\ | | | |_) |  _| | |",
+        " | . \\| |___ ___) || | |  _ <| |___| |___",
+        " |_|\\_\\_____|____/ |_| |_| \\_\\_____|_____|"
+      ].join("\n");
+
+      var checks = [
+        { t: "KESTREL//OS v9.4.1 Nightjar — cold start", c: "cyan" },
+        { t: "Verifying lattice checksum ................ [ OK ]", c: "ok" },
+        { t: "Binding photon bus 0x0A .................... [ OK ]", c: "ok" },
+        { t: "Calibrating iris mesh ...................... [WARN] drift 0.04", c: "warn" },
+        { t: "Mounting operator vault .................... [ OK ]", c: "ok" },
+        { t: "Sealing uplink Nightjar .................... [ OK ]", c: "ok" }
+      ];
+
+      function runBoot(i) {
+        if (i === 0) {
+          append('<span class="cyan">' + banner + "</span>");
+          return runBoot(1);
+        }
+        if (i <= checks.length) {
+          var ck = checks[i - 1];
+          typeLine(ck.t, ck.c, function () { runBoot(i + 1); });
+          return;
+        }
+        if (i === checks.length + 1) {
+          progress("Hydrating memory lattice", reduce ? 80 : 900, function () { runBoot(i + 1); });
+          return;
+        }
+        if (i === checks.length + 2) {
+          progress("Loading operator profile", reduce ? 80 : 700, function () { runBoot(i + 1); });
+          return;
+        }
+        typeLine("Welcome, operator. Type help.", "ok", function () {
+          busy = false;
+          if (input) { input.disabled = false; input.focus(); }
+        });
+      }
+      runBoot(0);
+
+      var helpTable =
+        "  help     list commands          status   subsystem table\n" +
+        "  scan     sweep local spectrum   about    file provenance\n" +
+        "  clear    wipe console log";
+
+      function runCmd(raw) {
+        var cmd = (raw || "").trim();
+        if (!cmd) return;
+        history.push(cmd);
+        hIndex = history.length;
+        append('<span style="color:#ff2bd6">operator@kestrel:~$ </span>' + cmd);
+        var low = cmd.toLowerCase();
+        if (low === "help") {
+          append('<span class="cyan">' + helpTable + "</span>");
+        } else if (low === "status") {
+          append("  lattice ........ <span class='ok'>ONLINE</span>\n  photon bus ..... <span class='ok'>LOCKED</span>\n  iris mesh ...... <span class='warn'>WARN</span>\n  vault .......... <span class='ok'>SEALED</span>");
+        } else if (low === "about") {
+          append("This page is a single offline file.\nNo network, no fonts, no libraries.\nKESTREL//OS v9.4.1 Nightjar is a fiction.");
+        } else if (low === "clear") {
+          if (log) log.innerHTML = "";
+        } else if (low === "scan") {
+          busy = true;
+          if (input) input.disabled = true;
+          progress("Scanning spectrum", reduce ? 100 : 800, function () {
+            var lines = [
+              "  0xA1F3  NIGHTJAR-ECHO     -41 dBm  FRIENDLY",
+              "  0x09C2  GHOST-FERRY       -62 dBm  UNKNOWN",
+              "  0x7E10  MAGENTA-SPINE     -28 dBm  HOSTILE"
+            ];
+            function next(n) {
+              if (n < lines.length) typeLine(lines[n], "cyan", function () { next(n + 1); });
+              else {
+                typeLine("Summary: 3 signals · 1 hostile · recommend hush protocol", "warn", function () {
+                  glitch();
+                  busy = false;
+                  if (input) { input.disabled = false; input.focus(); }
+                });
+              }
+            }
+            next(0);
+          });
+        } else {
+          append('<span class="err">Unknown command. Type help.</span>');
+        }
+      }
+
+      if (input) {
+        input.addEventListener("keydown", function (e) {
+          if (busy) return;
+          if (e.key === "Enter") {
+            runCmd(input.value);
+            input.value = "";
+          } else if (e.key === "ArrowUp") {
+            if (hIndex > 0) { hIndex--; input.value = history[hIndex] || ""; e.preventDefault(); }
+          } else if (e.key === "ArrowDown") {
+            if (hIndex < history.length) { hIndex++; input.value = history[hIndex] || ""; e.preventDefault(); }
+          }
+        });
+      }
+      var consoleEl = qs("#console");
+      if (consoleEl && input) {
+        consoleEl.addEventListener("click", function () { if (!busy) input.focus(); });
+      }
+
+      var tempEl = qs("#temp");
+      var fluxEl = qs("#flux");
+      var tempBar = qs("#temp-bar");
+      var fluxBar = qs("#flux-bar");
+      function gauges() {
+        var t = 38 + Math.random() * 8;
+        var f = 0.4 + Math.random() * 0.5;
+        if (tempEl) tempEl.textContent = t.toFixed(1) + "°C";
+        if (fluxEl) fluxEl.textContent = f.toFixed(2) + " T";
+        if (tempBar) tempBar.style.width = ((t - 30) / 20 * 100) + "%";
+        if (fluxBar) fluxBar.style.width = (f * 80) + "%";
+      }
+      gauges();
+      setInterval(gauges, 1400);
+
+      function randHex() { return ("0" + Math.floor(Math.random() * 256).toString(16)).slice(-2); }
+      function makeRow(addr) {
+        var bytes = [];
+        var ascii = "";
+        for (var i = 0; i < 8; i++) {
+          var b = randHex();
+          var hot = Math.random() < 0.12;
+          bytes.push(hot ? '<span class="hot">' + b + "</span>" : b);
+          ascii += String.fromCharCode(97 + Math.floor(Math.random() * 26));
+        }
+        return '<span class="addr">' + addr + "</span>  " + bytes.join(" ") + '  <span class="ascii">' + ascii + "</span>";
+      }
+      var addr = 0x7f3a;
+      for (var r = 0; r < 14; r++) hexRows.push(makeRow((addr + r * 8).toString(16)));
+      function paintHex() {
+        if (hexEl) hexEl.innerHTML = hexRows.join("\n");
+      }
+      paintHex();
+      setInterval(function () {
+        hexRows.shift();
+        addr += 8;
+        hexRows.push(makeRow(addr.toString(16)));
+        paintHex();
+      }, reduce ? 1500 : 220);
+
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var angle = 0;
+      var verts = [];
+      var t = (1 + Math.sqrt(5)) / 2;
+      var raw = [
+        [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
+        [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
+        [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]
+      ];
+      raw.forEach(function (v) {
+        var n = Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
+        verts.push([v[0]/n, v[1]/n, v[2]/n]);
+      });
+      var faces = [
+        [0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],
+        [1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+        [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],
+        [4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]
+      ];
+      var edges = {};
+      faces.forEach(function (f) {
+        for (var i = 0; i < 3; i++) {
+          var a = f[i], b = f[(i+1)%3];
+          var k = a < b ? a + "-" + b : b + "-" + a;
+          edges[k] = [a, b];
+        }
+      });
+      function resize() {
+        var dpr = Math.min(window.devicePixelRatio || 1, 3);
+        var w = canvas.clientWidth || 320;
+        var h = canvas.clientHeight || 180;
+        canvas.width = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      resize();
+      window.addEventListener("resize", resize);
+      function project(v, a) {
+        var c = Math.cos(a), s = Math.sin(a);
+        var x = v[0]*c - v[2]*s;
+        var z = v[0]*s + v[2]*c;
+        var y = v[1]*c - z*s*0.4;
+        var z2 = v[1]*s*0.4 + z*c;
+        var p = 2.4 / (3.2 + z2);
+        var w = canvas.clientWidth || 320;
+        var h = canvas.clientHeight || 180;
+        return { x: w/2 + x * p * h * 0.38, y: h/2 + y * p * h * 0.38, z: z2 };
+      }
+      function draw() {
+        var w = canvas.clientWidth || 320;
+        var h = canvas.clientHeight || 180;
+        ctx.clearRect(0, 0, w, h);
+        ctx.strokeStyle = "rgba(255,43,214,0.55)";
+        ctx.beginPath();
+        ctx.arc(w/2, h/2, Math.min(w,h)*0.42, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.setLineDash([4, 6]);
+        ctx.beginPath();
+        ctx.arc(w/2, h/2, Math.min(w,h)*0.42, angle, angle + 1.2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        var pts = verts.map(function (v) { return project(v, angle); });
+        Object.keys(edges).forEach(function (k) {
+          var e = edges[k];
+          var a = pts[e[0]], b = pts[e[1]];
+          var z = (a.z + b.z) * 0.5;
+          var bright = 0.25 + (z + 1.2) * 0.35;
+          ctx.strokeStyle = "rgba(0,240,255," + Math.min(1, bright) + ")";
+          ctx.shadowColor = "#00f0ff";
+          ctx.shadowBlur = bright > 0.7 ? 8 : 0;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        });
+        ctx.shadowBlur = 0;
+        pts.forEach(function (p) {
+          ctx.fillStyle = "#ff2bd6";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 2.2, 0, Math.PI*2);
+          ctx.fill();
+        });
+        if (angEl) angEl.textContent = "θ " + (angle * 180 / Math.PI % 360).toFixed(1) + "°";
+      }
+      function loop() {
+        if (!reduce) angle += 0.012;
+        draw();
+        if (!reduce && typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+      }
+      loop();
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

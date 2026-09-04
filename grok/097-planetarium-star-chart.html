@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PLANETARIUM / A Chart of the Visible Heavens</title>
+  <style>
+    :root {
+      --night: #070b1c; --brass: #efd9a1; --umber: #2b1c06;
+      --serif: "Iowan Old Style", Palatino, "Book Antiqua", Georgia, serif;
+      --mono: ui-monospace, "Courier New", Courier, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; background: #070b1c; color: var(--brass); }
+    body {
+      min-height: 100vh;
+      background:
+        radial-gradient(700px 420px at 18% 12%, #16204a, transparent 60%),
+        radial-gradient(900px 600px at 82% 88%, #121a3a, transparent 55%),
+        #070b1c;
+      font-family: var(--serif);
+    }
+    .page {
+      display: grid; grid-template-columns: minmax(280px, 1fr) 320px; gap: 20px;
+      max-width: 1280px; margin: 0 auto; padding: 20px 18px 40px;
+    }
+    header.mast { grid-column: 1 / -1; text-align: center; padding: 8px 0 4px; }
+    header.mast h1 {
+      font-weight: 400; letter-spacing: .28em; text-transform: uppercase;
+      font-size: clamp(18px, 2.4vw, 28px); text-shadow: 0 0 18px rgba(239,217,161,.35);
+    }
+    header.mast .rule { margin: 8px auto 0; width: min(420px, 80%); height: 1px; background: var(--brass); position: relative; }
+    header.mast .rule::after { content: "✦"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #070b1c; padding: 0 8px; }
+    .sky-wrap { position: relative; }
+    canvas#sky { width: 100%; aspect-ratio: 1; display: block; background: transparent; }
+    .tooltip {
+      position: absolute; pointer-events: none; background: #f4ead2; color: #2b1c06;
+      padding: 8px 10px 14px; font-size: 13px; min-width: 140px; opacity: 0;
+      filter: drop-shadow(0 4px 10px rgba(0,0,0,.4));
+    }
+    .tooltip.on { opacity: 1; }
+    .tooltip::after {
+      content: ""; position: absolute; left: 16px; bottom: -8px;
+      border: 8px solid transparent; border-top-color: #f4ead2; border-bottom: 0;
+    }
+    .tooltip b { display: block; font-weight: 600; }
+    .panel {
+      background: rgba(10, 16, 40, .62); border: 1px solid rgba(239,217,161,.35);
+      backdrop-filter: blur(12px); padding: 16px; color: var(--brass);
+    }
+    .panel h2 { font-weight: 400; letter-spacing: .16em; text-transform: uppercase; font-size: 13px; margin-bottom: 10px; }
+    .panel label { display: block; font-size: 12px; margin: 10px 0 4px; }
+    .panel label span { font-family: var(--mono); float: right; }
+    input[type="range"], input[type="date"] { width: 100%; accent-color: var(--brass); background: #0b1230; color: var(--brass); border: 1px solid rgba(239,217,161,.3); padding: 4px; }
+    .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+    .toggles button {
+      font-family: inherit; font-size: 12px; background: transparent; color: var(--brass);
+      border: 1px solid rgba(239,217,161,.35); padding: 8px 6px; cursor: pointer;
+    }
+    .toggles button[aria-pressed="true"] { background: rgba(239,217,161,.16); box-shadow: inset 0 0 0 1px var(--brass); }
+    .row-btns { display: flex; gap: 8px; }
+    .row-btns button {
+      flex: 1; font-family: inherit; background: var(--brass); color: var(--umber);
+      border: 0; padding: 8px; cursor: pointer; letter-spacing: .08em; text-transform: uppercase; font-size: 12px;
+    }
+    .card { margin-top: 16px; border-top: 1px solid rgba(239,217,161,.25); padding-top: 12px; font-size: 13px; }
+    .card dl { display: grid; grid-template-columns: 80px 1fr; gap: 4px 8px; font-family: var(--mono); font-size: 12px; }
+    @media (max-width: 900px) { .page { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) { * { transition: none; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="mast">
+      <h1>PLANETARIUM / A Chart of the Visible Heavens</h1>
+      <div class="rule"></div>
+    </header>
+    <div class="sky-wrap">
+      <canvas id="sky" aria-label="Star chart"></canvas>
+      <div class="tooltip" id="tip"><b id="tipName"></b><span id="tipMeta"></span></div>
+    </div>
+    <aside class="panel">
+      <h2>Observer</h2>
+      <label>Local hour <span id="hourOut">21:00</span>
+        <input type="range" id="hour" min="0" max="1439" value="1260">
+      </label>
+      <label>Date
+        <input type="date" id="date">
+      </label>
+      <label>Latitude <span id="latOut">+51.5°</span>
+        <input type="range" id="lat" min="-70" max="70" value="51.5" step="0.5">
+      </label>
+      <label>Sidereal drift <span id="driftOut">0×</span>
+        <input type="range" id="drift" min="0" max="600" value="0">
+      </label>
+      <div class="toggles" id="toggles">
+        <button type="button" data-k="lines" aria-pressed="true">Lines</button>
+        <button type="button" data-k="figures" aria-pressed="true">Figures</button>
+        <button type="button" data-k="labels" aria-pressed="true">Labels</button>
+        <button type="button" data-k="mw" aria-pressed="true">Milky Way</button>
+        <button type="button" data-k="ecl" aria-pressed="true">Ecliptic</button>
+        <button type="button" data-k="grid" aria-pressed="false">Alt/Az grid</button>
+      </div>
+      <div class="row-btns">
+        <button type="button" id="now">Set to now</button>
+        <button type="button" id="pause">Pause</button>
+      </div>
+      <div class="card">
+        <h2>Star card</h2>
+        <div id="cardEmpty">Hover a named star.</div>
+        <dl id="card" hidden>
+          <dt>Name</dt><dd id="cName">—</dd>
+          <dt>Const.</dt><dd id="cCon">—</dd>
+          <dt>RA</dt><dd id="cRa">—</dd>
+          <dt>Dec</dt><dd id="cDec">—</dd>
+          <dt>Mag</dt><dd id="cMag">—</dd>
+          <dt>Dist.</dt><dd id="cDist">—</dd>
+          <dt>Alt</dt><dd id="cAlt">—</dd>
+        </dl>
+      </div>
+    </aside>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    function init() {
+      var canvas = qs("#sky");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var CATALOG = [
+        ["Sirius",6.7525,-16.72,-1.46,8.6,"Canis Major"],
+        ["Canopus",6.3992,-52.70,-0.74,310,"Carina"],
+        ["Arcturus",14.2617,19.18,-0.05,37,"Boötes"],
+        ["Vega",18.6156,38.78,0.03,25,"Lyra"],
+        ["Capella",5.2782,46.00,0.08,43,"Auriga"],
+        ["Rigel",5.2422,-8.20,0.13,860,"Orion"],
+        ["Procyon",7.6553,5.22,0.34,11,"Canis Minor"],
+        ["Achernar",1.6286,-57.24,0.46,139,"Eridanus"],
+        ["Betelgeuse",5.9195,7.41,0.50,640,"Orion"],
+        ["Hadar",14.0637,-60.37,0.61,390,"Centaurus"],
+        ["Altair",19.8463,8.87,0.77,17,"Aquila"],
+        ["Acrux",12.4433,-63.10,0.77,320,"Crux"],
+        ["Aldebaran",4.5987,16.51,0.85,65,"Taurus"],
+        ["Antares",16.4901,-26.43,0.96,550,"Scorpius"],
+        ["Spica",13.4199,-11.16,0.98,250,"Virgo"],
+        ["Pollux",7.7553,28.03,1.14,34,"Gemini"],
+        ["Fomalhaut",22.9608,-29.62,1.16,25,"Piscis Austrinus"],
+        ["Deneb",20.6906,45.28,1.25,2600,"Cygnus"],
+        ["Regulus",10.1395,11.97,1.35,79,"Leo"],
+        ["Polaris",2.5303,89.26,1.98,430,"Ursa Minor"],
+        ["Bellatrix",5.4188,6.35,1.64,250,"Orion"],
+        ["Alnilam",5.6036,-1.20,1.70,2000,"Orion"],
+        ["Alnitak",5.6793,-1.94,1.77,800,"Orion"],
+        ["Mintaka",5.5331,-0.30,2.23,900,"Orion"],
+        ["Saiph",5.7959,-9.67,2.06,650,"Orion"],
+        ["Meissa",5.5856,9.93,3.39,1100,"Orion"],
+        ["Dubhe",11.0621,61.75,1.79,123,"Ursa Major"],
+        ["Merak",11.0307,56.38,2.37,79,"Ursa Major"],
+        ["Phecda",11.8972,53.69,2.44,83,"Ursa Major"],
+        ["Megrez",12.2571,57.03,3.31,81,"Ursa Major"],
+        ["Alioth",12.9004,55.96,1.77,83,"Ursa Major"],
+        ["Mizar",13.3987,54.92,2.04,86,"Ursa Major"],
+        ["Alkaid",13.7923,49.31,1.86,104,"Ursa Major"],
+        ["Schedar",0.6751,56.54,2.24,228,"Cassiopeia"],
+        ["Caph",0.1529,59.15,2.27,54,"Cassiopeia"],
+        ["Gamma Cas",0.9451,60.72,2.47,550,"Cassiopeia"],
+        ["Ruchbah",1.4302,60.24,2.68,99,"Cassiopeia"],
+        ["Segin",1.9066,63.67,3.35,440,"Cassiopeia"],
+        ["Sadr",20.3705,40.26,2.23,1800,"Cygnus"],
+        ["Gienah Cyg",20.7701,33.97,2.48,72,"Cygnus"],
+        ["Delta Cyg",19.7495,45.13,2.87,165,"Cygnus"],
+        ["Albireo",19.5120,27.96,3.08,430,"Cygnus"],
+        ["Sheliak",18.8347,33.36,3.45,960,"Lyra"],
+        ["Sulafat",18.9824,32.69,3.24,620,"Lyra"],
+        ["Shaula",17.5601,-37.10,1.62,365,"Scorpius"],
+        ["Dschubba",16.0056,-22.62,2.29,400,"Scorpius"],
+        ["Graffias",16.0906,-19.81,2.62,404,"Scorpius"],
+        ["Sargas",17.6217,-43.00,1.86,272,"Scorpius"],
+        ["Lesath",17.5036,-37.30,2.70,580,"Scorpius"],
+        ["Denebola",11.8177,14.57,2.14,36,"Leo"],
+        ["Algieba",10.3328,19.84,2.08,130,"Leo"],
+        ["Zosma",11.2351,20.52,2.56,58,"Leo"],
+        ["Elnath",5.4382,28.61,1.65,134,"Taurus"],
+        ["Alcyone",3.7903,24.11,2.87,440,"Taurus"],
+        ["Castor",7.5766,31.89,1.58,51,"Gemini"],
+        ["Alhena",6.6285,16.40,1.93,109,"Gemini"],
+        ["Adhara",6.9771,-28.97,1.50,430,"Canis Major"],
+        ["Wezen",7.1399,-26.39,1.83,1600,"Canis Major"],
+        ["Mirzam",6.3783,-17.96,1.98,500,"Canis Major"],
+        ["Alnair",22.1372,-46.96,1.74,101,"Grus"],
+        ["Alioth2",12.900,55.96,1.77,83,"Ursa Major"],
+        ["Miaplacidus",9.2200,-69.72,1.68,113,"Carina"],
+        ["Almach",2.0650,42.33,2.10,390,"Andromeda"],
+        ["Mirach",1.1622,35.62,2.05,199,"Andromeda"],
+        ["Alpheratz",0.1398,29.09,2.06,97,"Andromeda"],
+        ["Hamal",2.1196,23.46,2.00,66,"Aries"],
+        ["Sheratan",1.9106,20.81,2.64,60,"Aries"],
+        ["Menkar",3.0380,4.09,2.54,249,"Cetus"],
+        ["Diphda",0.7265,-17.99,2.04,96,"Cetus"],
+        ["Alphard",9.4597,-8.66,1.98,177,"Hydra"],
+        ["Gacrux",12.5194,-57.11,1.63,88,"Crux"],
+        ["Mimosa",12.7953,-59.69,1.25,280,"Crux"],
+        ["Atria",16.8111,-69.03,1.91,391,"Triangulum Australe"],
+        ["Peacock",20.4275,-56.74,1.94,179,"Pavo"],
+        ["Kaus Australis",18.4028,-34.38,1.85,143,"Sagittarius"],
+        ["Nunki",18.9211,-26.30,2.05,228,"Sagittarius"],
+        ["Enif",21.7364,9.88,2.38,672,"Pegasus"],
+        ["Markab",23.0793,15.21,2.49,133,"Pegasus"],
+        ["Scheat",23.0629,28.08,2.42,196,"Pegasus"],
+        ["Algenib",0.2206,15.18,2.83,390,"Pegasus"],
+        ["Kochab",14.8451,74.16,2.08,131,"Ursa Minor"],
+        ["Pherkad",15.3454,71.83,3.00,487,"Ursa Minor"],
+        ["Thuban",14.0732,64.38,3.65,303,"Draco"],
+        ["Eltanin",17.9434,51.49,2.23,154,"Draco"],
+        ["Rasalhague",17.5822,12.56,2.08,49,"Ophiuchus"],
+        ["Sabik",17.1728,-15.72,2.43,82,"Ophiuchus"],
+        ["Unukalhai",15.7378,6.43,2.63,73,"Serpens"],
+        ["Alphecca",15.5781,26.71,2.23,75,"Corona Borealis"],
+        ["Gemma",15.5781,26.71,2.23,75,"Corona Borealis"],
+        ["Kornephoros",16.5037,21.49,2.78,139,"Hercules"]
+      ];
+      var FIGURES = {
+        Orion: [["Betelgeuse","Bellatrix"],["Bellatrix","Mintaka"],["Mintaka","Alnilam"],["Alnilam","Alnitak"],["Alnitak","Saiph"],["Saiph","Rigel"],["Rigel","Mintaka"],["Betelgeuse","Meissa"],["Bellatrix","Meissa"],["Betelgeuse","Alnitak"]],
+        "Ursa Major": [["Dubhe","Merak"],["Merak","Phecda"],["Phecda","Megrez"],["Megrez","Alioth"],["Alioth","Mizar"],["Mizar","Alkaid"],["Megrez","Dubhe"]],
+        Cassiopeia: [["Caph","Schedar"],["Schedar","Gamma Cas"],["Gamma Cas","Ruchbah"],["Ruchbah","Segin"]],
+        Cygnus: [["Deneb","Sadr"],["Sadr","Gienah Cyg"],["Sadr","Delta Cyg"],["Sadr","Albireo"]],
+        Lyra: [["Vega","Sheliak"],["Sheliak","Sulafat"],["Sulafat","Vega"]],
+        Scorpius: [["Graffias","Dschubba"],["Dschubba","Antares"],["Antares","Shaula"],["Shaula","Lesath"],["Shaula","Sargas"]],
+        Leo: [["Regulus","Algieba"],["Algieba","Zosma"],["Zosma","Denebola"],["Regulus","Zosma"]],
+        Taurus: [["Aldebaran","Elnath"],["Aldebaran","Alcyone"]],
+        Gemini: [["Castor","Pollux"],["Pollux","Alhena"],["Castor","Alhena"]],
+        "Canis Major": [["Sirius","Mirzam"],["Sirius","Adhara"],["Adhara","Wezen"],["Sirius","Wezen"]]
+      };
+      var byName = {};
+      CATALOG.forEach(function (s) { byName[s[0]] = { name: s[0], ra: s[1], dec: s[2], mag: s[3], dist: s[4], con: s[5] }; });
+      function lcg(seed) {
+        var s = seed;
+        return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+      }
+      var faint = [];
+      var rnd = lcg(20260321);
+      for (var i = 0; i < 900; i++) {
+        var u = rnd();
+        faint.push({ ra: rnd() * 24, dec: Math.asin(2 * u - 1) * 180 / Math.PI, mag: 4.4 + rnd() * 2.2 });
+      }
+      var flags = { lines: true, figures: true, labels: true, mw: true, ecl: true, grid: false };
+      var lat = 51.5, lon = 0, date = new Date(), hourMin = 21 * 60, drift = 0, paused = false;
+      var dateEl = qs("#date");
+      if (dateEl) dateEl.value = date.toISOString().slice(0, 10);
+      function julian(d) {
+        return d.getTime() / 86400000 + 2440587.5;
+      }
+      function gmst(d) {
+        var jd = julian(d);
+        var t = jd - 2451545.0;
+        var g = 280.46061837 + 360.98564736629 * t;
+        g = ((g % 360) + 360) % 360;
+        return g;
+      }
+      function lstHours(d) {
+        return ((gmst(d) + lon) / 15 + 24) % 24;
+      }
+      function altaz(star, lst, latDeg) {
+        var ha = (lst - star.ra) * 15 * Math.PI / 180;
+        var dec = star.dec * Math.PI / 180;
+        var la = latDeg * Math.PI / 180;
+        var sinAlt = Math.sin(dec) * Math.sin(la) + Math.cos(dec) * Math.cos(la) * Math.cos(ha);
+        var alt = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
+        var cosAz = (Math.sin(dec) - Math.sin(alt) * Math.sin(la)) / (Math.cos(alt) * Math.cos(la) + 1e-9);
+        var az = Math.acos(Math.max(-1, Math.min(1, cosAz)));
+        if (Math.sin(ha) > 0) az = 2 * Math.PI - az;
+        return { alt: alt, az: az };
+      }
+      function stereo(aa, R) {
+        var zd = Math.PI / 2 - aa.alt;
+        if (zd > Math.PI / 2 + 0.15) return null;
+        var r = R * Math.tan(zd / 2);
+        if (r > R * 1.08) return null;
+        var x = -Math.sin(aa.az) * r;
+        var y = -Math.cos(aa.az) * r;
+        return { x: x, y: y, r: r };
+      }
+      var projected = [];
+      var size = 800, dpr = 1, cx = 400, cy = 400, R = 340;
+      function tint(name) {
+        if (name === "Betelgeuse" || name === "Antares") return ["#ffb070", "#ff6a2a"];
+        if (name === "Rigel" || name === "Vega") return ["#dcecff", "#8ec8ff"];
+        if (name === "Aldebaran" || name === "Arcturus") return ["#ffd08a", "#e09a40"];
+        return ["#ffffff", "#c9d8ff"];
+      }
+      function galToEq(l, b) {
+        var l0 = 122.932 * Math.PI / 180;
+        var aNGP = 192.86 * Math.PI / 180;
+        var dNGP = 27.13 * Math.PI / 180;
+        l *= Math.PI / 180; b *= Math.PI / 180;
+        var sinDec = Math.sin(b) * Math.sin(dNGP) + Math.cos(b) * Math.cos(dNGP) * Math.cos(l0 - l);
+        var dec = Math.asin(Math.max(-1, Math.min(1, sinDec)));
+        var ra = Math.atan2(Math.cos(b) * Math.sin(l0 - l), Math.sin(b) * Math.cos(dNGP) - Math.cos(b) * Math.sin(dNGP) * Math.cos(l0 - l)) + aNGP;
+        return { ra: ((ra * 12 / Math.PI) + 24) % 24, dec: dec * 180 / Math.PI };
+      }
+      function observerDate() {
+        var d = dateEl && dateEl.value ? new Date(dateEl.value + "T00:00:00") : new Date();
+        d.setHours(0, 0, 0, 0);
+        d.setMinutes(hourMin);
+        return d;
+      }
+      function drawRing() {
+        var g = ctx.createLinearGradient(cx - R - 28, cy, cx + R + 28, cy);
+        g.addColorStop(0, "#6b4d22"); g.addColorStop(0.25, "#efd9a1"); g.addColorStop(0.5, "#a67c3a");
+        g.addColorStop(0.75, "#e0c17c"); g.addColorStop(1, "#5a3f1a");
+        ctx.beginPath(); ctx.arc(cx, cy, R + 22, 0, Math.PI * 2);
+        ctx.lineWidth = 18; ctx.strokeStyle = g; ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, R + 31, 0, Math.PI * 2); ctx.strokeStyle = "#2b1c06"; ctx.lineWidth = 1; ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, R + 13, 0, Math.PI * 2); ctx.strokeStyle = "#2b1c06"; ctx.lineWidth = 1; ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, R + 16, 0, Math.PI * 2); ctx.strokeStyle = "rgba(255,240,200,.45)"; ctx.lineWidth = 1.2; ctx.stroke();
+        for (var a = 0; a < 360; a += 5) {
+          var rad = a * Math.PI / 180;
+          var inner = R + (a % 30 === 0 ? 8 : a % 15 === 0 ? 12 : 16);
+          var outer = R + 28;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.sin(rad) * inner, cy - Math.cos(rad) * inner);
+          ctx.lineTo(cx + Math.sin(rad) * outer, cy - Math.cos(rad) * outer);
+          ctx.strokeStyle = "#2b1c06"; ctx.lineWidth = a % 30 === 0 ? 1.6 : 0.8; ctx.stroke();
+        }
+        var labs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+        ctx.fillStyle = "#2b1c06"; ctx.font = "600 11px " + '"Iowan Old Style", Palatino, Georgia, serif';
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        labs.forEach(function (lab, i) {
+          var ang = i * Math.PI / 4;
+          ctx.save();
+          ctx.translate(cx + Math.sin(ang) * (R + 22), cy - Math.cos(ang) * (R + 22));
+          ctx.rotate(ang);
+          ctx.fillText(lab, 0, 0);
+          ctx.restore();
+        });
+      }
+      function hull(pts) {
+        var p = pts.slice().sort(function (a, b) { return a.x === b.x ? a.y - b.y : a.x - b.x; });
+        if (p.length < 3) return p;
+        function cross(o, a, b) { return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x); }
+        var low = [], up = [];
+        p.forEach(function (pt) {
+          while (low.length >= 2 && cross(low[low.length - 2], low[low.length - 1], pt) <= 0) low.pop();
+          low.push(pt);
+        });
+        for (var i = p.length - 1; i >= 0; i--) {
+          var pt = p[i];
+          while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], pt) <= 0) up.pop();
+          up.push(pt);
+        }
+        low.pop(); up.pop();
+        return low.concat(up);
+      }
+      function draw() {
+        var w = canvas.width, h = canvas.height;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        cx = w / 2; cy = h / 2; R = Math.min(w, h) * 0.42;
+        var sky = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+        sky.addColorStop(0, "#0b1230"); sky.addColorStop(0.72, "#080d24"); sky.addColorStop(0.82, "#101a3f"); sky.addColorStop(1, "#152040");
+        ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fillStyle = sky; ctx.fill();
+        ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
+        var haze = ctx.createRadialGradient(cx, cy, R * 0.82, cx, cy, R);
+        haze.addColorStop(0, "rgba(80,120,200,0)"); haze.addColorStop(1, "rgba(90,140,220,.18)");
+        ctx.fillStyle = haze; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+        var od = observerDate();
+        var lst = lstHours(od);
+        projected = [];
+        function projectStar(st) {
+          var aa = altaz(st, lst, lat);
+          var p = stereo(aa, R);
+          if (!p) return null;
+          return { x: cx + p.x, y: cy + p.y, alt: aa.alt * 180 / Math.PI, az: aa.az, star: st };
+        }
+        if (flags.mw) {
+          ctx.globalCompositeOperation = "lighter";
+          [0, 7, -7].forEach(function (b, bi) {
+            ctx.beginPath();
+            var first = true;
+            for (var l = 0; l <= 360; l += 4) {
+              var eq = galToEq(l, b);
+              var p = projectStar({ ra: eq.ra, dec: eq.dec, mag: 6 });
+              if (!p) { first = true; continue; }
+              if (first) { ctx.moveTo(p.x, p.y); first = false; } else ctx.lineTo(p.x, p.y);
+            }
+            ctx.strokeStyle = bi === 0 ? "rgba(180,200,255,.16)" : "rgba(160,180,240,.07)";
+            ctx.lineWidth = bi === 0 ? 18 : 10;
+            ctx.filter = "blur(6px)";
+            ctx.stroke();
+            ctx.filter = "none";
+          });
+          ctx.globalCompositeOperation = "source-over";
+        }
+        if (flags.grid) {
+          ctx.strokeStyle = "rgba(201,162,94,.18)"; ctx.lineWidth = 0.7;
+          [30, 60].forEach(function (alt) {
+            ctx.beginPath();
+            for (var a = 0; a <= 360; a += 4) {
+              var p = stereo({ alt: alt * Math.PI / 180, az: a * Math.PI / 180 }, R);
+              if (!p) continue;
+              if (a === 0) ctx.moveTo(cx + p.x, cy + p.y); else ctx.lineTo(cx + p.x, cy + p.y);
+            }
+            ctx.stroke();
+          });
+          for (var az = 0; az < 360; az += 45) {
+            ctx.beginPath();
+            var p0 = stereo({ alt: 0, az: az * Math.PI / 180 }, R);
+            var p1 = stereo({ alt: Math.PI / 2 - 0.02, az: az * Math.PI / 180 }, R);
+            if (p0 && p1) { ctx.moveTo(cx + p0.x, cy + p0.y); ctx.lineTo(cx + p1.x, cy + p1.y); ctx.stroke(); }
+          }
+        }
+        if (flags.ecl) {
+          ctx.setLineDash([5, 5]); ctx.strokeStyle = "rgba(224,170,70,.7)"; ctx.lineWidth = 1;
+          ctx.beginPath();
+          var firstE = true;
+          for (var lonE = 0; lonE <= 360; lonE += 3) {
+            var eps = 23.44 * Math.PI / 180;
+            var L = lonE * Math.PI / 180;
+            var dec = Math.asin(Math.sin(eps) * Math.sin(L)) * 180 / Math.PI;
+            var ra = Math.atan2(Math.cos(eps) * Math.sin(L), Math.cos(L)) * 12 / Math.PI;
+            if (ra < 0) ra += 24;
+            var p = projectStar({ ra: ra, dec: dec, mag: 5 });
+            if (!p) { firstE = true; continue; }
+            if (firstE) { ctx.moveTo(p.x, p.y); firstE = false; } else ctx.lineTo(p.x, p.y);
+          }
+          ctx.stroke(); ctx.setLineDash([]);
+        }
+        faint.forEach(function (s) {
+          var p = projectStar(s);
+          if (!p) return;
+          var a = Math.max(0.08, (6.8 - s.mag) / 8);
+          ctx.fillStyle = "rgba(220,230,255," + a + ")";
+          ctx.beginPath(); ctx.arc(p.x, p.y, 0.6, 0, Math.PI * 2); ctx.fill();
+        });
+        if (flags.figures) {
+          Object.keys(FIGURES).forEach(function (con) {
+            var pts = [];
+            CATALOG.forEach(function (row) {
+              if (row[5] === con || (con === "Ursa Major" && row[5] === "Ursa Major")) {
+                var p = projectStar(byName[row[0]]);
+                if (p) pts.push(p);
+              }
+            });
+            if (con === "Lyra") {
+              pts = ["Vega","Sheliak","Sulafat"].map(function (n) { return projectStar(byName[n]); }).filter(Boolean);
+            }
+            var hpts = hull(pts);
+            if (hpts.length > 2) {
+              var mx = 0, my = 0;
+              hpts.forEach(function (p) { mx += p.x; my += p.y; });
+              mx /= hpts.length; my /= hpts.length;
+              var g = ctx.createRadialGradient(mx, my, 4, mx, my, 80);
+              g.addColorStop(0, "rgba(201,162,94,0.13)"); g.addColorStop(1, "rgba(201,162,94,0)");
+              ctx.beginPath();
+              ctx.moveTo(hpts[0].x, hpts[0].y);
+              hpts.forEach(function (p) { ctx.lineTo(p.x, p.y); });
+              ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+            }
+          });
+        }
+        if (flags.lines) {
+          ctx.strokeStyle = "rgba(239,217,161,.55)"; ctx.lineWidth = 1;
+          Object.keys(FIGURES).forEach(function (con) {
+            FIGURES[con].forEach(function (pair) {
+              var a = byName[pair[0]], b = byName[pair[1]];
+              if (!a || !b) return;
+              var pa = projectStar(a), pb = projectStar(b);
+              if (!pa || !pb) return;
+              ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+            });
+          });
+        }
+        var tnow = Date.now() / 1000;
+        CATALOG.forEach(function (row, idx) {
+          var st = byName[row[0]];
+          var p = projectStar(st);
+          if (!p) return;
+          p.star = st;
+          projected.push(p);
+          var tw = reduce ? 1 : 0.75 + 0.25 * Math.sin(tnow * 2.1 + idx);
+          var rad = Math.max(0.8, (2.2 - st.mag) * 1.15) * tw;
+          var col = tint(st.name);
+          var glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rad * 4);
+          glow.addColorStop(0, col[1]); glow.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, rad * 4, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = col[0]; ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, Math.PI * 2); ctx.fill();
+        });
+        if (flags.labels) {
+          ctx.fillStyle = "rgba(239,217,161,.85)";
+          ctx.font = "italic 12px Iowan Old Style, Palatino, Georgia, serif";
+          ctx.textAlign = "center";
+          Object.keys(FIGURES).forEach(function (con) {
+            var acc = { x: 0, y: 0, n: 0 };
+            FIGURES[con].forEach(function (pair) {
+              var a = byName[pair[0]];
+              if (!a) return;
+              var p = projectStar(a);
+              if (!p) return;
+              acc.x += p.x; acc.y += p.y; acc.n++;
+            });
+            if (acc.n) ctx.fillText(con, acc.x / acc.n, acc.y / acc.n - 8);
+          });
+          ctx.fillStyle = "#f4ead2";
+          ctx.font = "11px Iowan Old Style, Palatino, Georgia, serif";
+          CATALOG.forEach(function (row) {
+            if (row[3] > 1.6) return;
+            var p = projectStar(byName[row[0]]);
+            if (!p) return;
+            ctx.fillText(row[0], p.x + 8, p.y - 6);
+          });
+        }
+        ctx.restore();
+        drawRing();
+      }
+      function resize() {
+        var wrap = canvas.parentElement;
+        var w = wrap ? wrap.clientWidth : 800;
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(w * dpr);
+        draw();
+      }
+      if (typeof window.ResizeObserver === "function") {
+        var wrap = canvas.parentElement;
+        if (wrap) new ResizeObserver(resize).observe(wrap);
+      }
+      window.addEventListener("resize", resize);
+      var last = Date.now();
+      function loop() {
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+        var now = Date.now();
+        var dt = (now - last) / 1000; last = now;
+        if (!paused && drift > 0) {
+          hourMin = (hourMin + dt * drift / 60) % 1440;
+          if (hourMin < 0) hourMin += 1440;
+          var ho = qs("#hour"); if (ho) ho.value = String(Math.round(hourMin));
+          var hout = qs("#hourOut");
+          if (hout) {
+            var hh = Math.floor(hourMin / 60), mm = Math.floor(hourMin % 60);
+            hout.textContent = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+          }
+        }
+        draw();
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+      else setInterval(draw, 80);
+      resize();
+      var hour = qs("#hour"), latEl = qs("#lat"), driftEl = qs("#drift");
+      if (hour) hour.addEventListener("input", function () {
+        hourMin = Number(hour.value);
+        var hh = Math.floor(hourMin / 60), mm = hourMin % 60;
+        var hout = qs("#hourOut"); if (hout) hout.textContent = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+      });
+      if (latEl) latEl.addEventListener("input", function () {
+        lat = Number(latEl.value);
+        var lo = qs("#latOut"); if (lo) lo.textContent = (lat >= 0 ? "+" : "") + lat.toFixed(1) + "°";
+      });
+      if (driftEl) driftEl.addEventListener("input", function () {
+        drift = Number(driftEl.value);
+        var d = qs("#driftOut"); if (d) d.textContent = drift + "×";
+      });
+      qsa("#toggles button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var k = b.getAttribute("data-k");
+          flags[k] = !flags[k];
+          b.setAttribute("aria-pressed", flags[k] ? "true" : "false");
+        });
+      });
+      var nowBtn = qs("#now"), pauseBtn = qs("#pause");
+      if (nowBtn) nowBtn.addEventListener("click", function () {
+        var n = new Date();
+        hourMin = n.getHours() * 60 + n.getMinutes();
+        if (hour) hour.value = String(hourMin);
+        if (dateEl) dateEl.value = n.toISOString().slice(0, 10);
+        var hout = qs("#hourOut");
+        if (hout) hout.textContent = String(n.getHours()).padStart(2, "0") + ":" + String(n.getMinutes()).padStart(2, "0");
+      });
+      if (pauseBtn) pauseBtn.addEventListener("click", function () {
+        paused = !paused; pauseBtn.textContent = paused ? "Resume" : "Pause";
+      });
+      var tip = qs("#tip"), tipName = qs("#tipName"), tipMeta = qs("#tipMeta");
+      canvas.addEventListener("pointermove", function (ev) {
+        var r = canvas.getBoundingClientRect();
+        var x = (ev.clientX - r.left) / r.width * canvas.width;
+        var y = (ev.clientY - r.top) / r.height * canvas.height;
+        var hit = null, best = 14 * dpr;
+        projected.forEach(function (p) {
+          var d = Math.hypot(p.x - x, p.y - y);
+          if (d < best) { best = d; hit = p; }
+        });
+        if (hit && tip) {
+          if (tipName) tipName.textContent = hit.star.name;
+          if (tipMeta) tipMeta.textContent = hit.star.con + " · mag " + hit.star.mag.toFixed(2) + " · " + hit.star.dist + " ly";
+          tip.classList.add("on");
+          tip.style.left = (ev.clientX - r.left + 8) + "px";
+          tip.style.top = (ev.clientY - r.top - 48) + "px";
+          ctx.save();
+          ctx.strokeStyle = "#efd9a1"; ctx.lineWidth = 1.4;
+          ctx.beginPath(); ctx.arc(hit.x, hit.y, 10 * dpr, 0, Math.PI * 2); ctx.stroke();
+          ctx.restore();
+          var card = qs("#card"), empty = qs("#cardEmpty");
+          if (card) card.hidden = false;
+          if (empty) empty.hidden = true;
+          if (qs("#cName")) qs("#cName").textContent = hit.star.name;
+          if (qs("#cCon")) qs("#cCon").textContent = hit.star.con;
+          if (qs("#cRa")) qs("#cRa").textContent = hit.star.ra.toFixed(3) + " h";
+          if (qs("#cDec")) qs("#cDec").textContent = hit.star.dec.toFixed(2) + "°";
+          if (qs("#cMag")) qs("#cMag").textContent = hit.star.mag.toFixed(2);
+          if (qs("#cDist")) qs("#cDist").textContent = hit.star.dist + " ly";
+          if (qs("#cAlt")) qs("#cAlt").textContent = hit.alt.toFixed(1) + "°";
+        } else if (tip) tip.classList.remove("on");
+      });
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

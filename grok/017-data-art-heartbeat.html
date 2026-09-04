@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pulse — A portrait of one heartbeat</title>
+  <style>
+    :root {
+      --accent: #7df9c2;
+      --ink: rgba(233,240,255,0.92);
+      --dim: rgba(233,240,255,0.32);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, "Helvetica Neue", sans-serif;
+      font-weight: 300;
+      background:
+        radial-gradient(ellipse at 12% 0%, rgba(125,249,194,0.08), transparent 40%),
+        radial-gradient(ellipse at 90% 10%, rgba(255,138,122,0.07), transparent 42%),
+        linear-gradient(#050914, #0a1226);
+      --accent: #7df9c2;
+      transition: --accent 0.8s;
+    }
+    body[data-mode="resting"] { --accent: #7df9c2; }
+    body[data-mode="active"] { --accent: #ff8a7a; }
+    body[data-mode="sleep"] { --accent: #9db4ff; }
+    .wrap {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 28px 24px 40px;
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+    }
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    h1 {
+      font-weight: 200;
+      font-size: clamp(22px, 3vw, 36px);
+      letter-spacing: -0.02em;
+    }
+    h1 em { font-style: normal; color: var(--accent); transition: color 0.8s; }
+    .seg {
+      position: relative;
+      display: flex;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 999px;
+      padding: 4px;
+    }
+    .seg .pill {
+      position: absolute;
+      top: 4px; bottom: 4px; left: 4px;
+      width: 88px;
+      border-radius: 999px;
+      background: var(--accent);
+      opacity: 0.22;
+      box-shadow: 0 0 18px var(--accent);
+      transition: left 0.45s cubic-bezier(0.22,1,0.36,1), width 0.45s cubic-bezier(0.22,1,0.36,1), background 0.8s;
+    }
+    .seg button {
+      position: relative;
+      z-index: 1;
+      background: none; border: 0; color: inherit;
+      padding: 8px 18px; font: inherit; cursor: pointer;
+      letter-spacing: 0.18em; text-transform: uppercase; font-size: 11px;
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 18px;
+      padding: 18px 20px;
+      position: relative;
+      animation: fadeup 0.8s ease both;
+    }
+    .card::before {
+      content: "";
+      position: absolute; left: 16px; right: 16px; top: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+    }
+    .c1 { grid-column: 1 / -1; animation-delay: 0.05s; }
+    .c2 { grid-column: span 4; animation-delay: 0.12s; }
+    .c3 { grid-column: span 4; animation-delay: 0.18s; }
+    .c4 { grid-column: span 4; animation-delay: 0.24s; }
+    .c5 { grid-column: 1 / -1; animation-delay: 0.3s; }
+    .lbl {
+      font-size: 10px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin-bottom: 10px;
+    }
+    .bpm-row { display: flex; align-items: baseline; gap: 16px; }
+    .bpm {
+      font-weight: 100;
+      font-size: clamp(56px, 10vw, 112px);
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .heart { width: 28px; height: 28px; fill: var(--accent); animation: beat var(--beat, 0.83s) ease-in-out infinite; }
+    .meta { display: flex; gap: 22px; flex-wrap: wrap; margin: 8px 0 12px; font-variant-numeric: tabular-nums; font-size: 13px; }
+    .meta span { color: var(--dim); letter-spacing: 0.18em; text-transform: uppercase; font-size: 10px; display: block; }
+    #ecg { width: 100%; height: 180px; display: block; }
+    .gauge-wrap { display: grid; place-items: center; position: relative; }
+    .g-num {
+      position: absolute; text-align: center;
+      font-weight: 100; font-size: 48px; font-variant-numeric: tabular-nums;
+    }
+    .g-num small { display: block; font-size: 11px; letter-spacing: 0.24em; color: var(--dim); font-weight: 300; }
+    .orb-box { display: grid; place-items: center; height: 180px; position: relative; }
+    .ring {
+      position: absolute; border: 1px solid rgba(255,255,255,0.12); border-radius: 50%;
+    }
+    .orb {
+      width: 70px; height: 70px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 30px var(--accent);
+      transform: scale(var(--br, 1));
+      transition: background 0.8s;
+    }
+    .vitals { display: grid; gap: 16px; }
+    .v-num { font-weight: 100; font-size: 36px; font-variant-numeric: tabular-nums; }
+    .trend { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); }
+    .bar { height: 2px; background: rgba(255,255,255,0.08); margin-top: 8px; }
+    .bar > i { display: block; height: 100%; width: var(--w, 50%); background: var(--accent); transition: width 1.2s ease, background 0.8s; }
+    #hr24 { width: 100%; height: 220px; display: block; }
+    footer {
+      grid-column: 1 / -1;
+      display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+      font-size: 11px; color: var(--dim); letter-spacing: 0.08em;
+    }
+    @keyframes fadeup {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: none; }
+    }
+    @keyframes beat {
+      0%, 100% { transform: scale(1); }
+      20% { transform: scale(1.18); }
+      35% { transform: scale(0.96); }
+    }
+    @media (max-width: 900px) {
+      .c2, .c3, .c4 { grid-column: span 6; }
+    }
+    @media (max-width: 640px) {
+      .c2, .c3, .c4 { grid-column: 1 / -1; }
+      .vitals { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .card, .heart { animation: none; }
+    }
+  </style>
+</head>
+<body data-mode="resting">
+  <div class="wrap">
+    <header>
+      <h1>A portrait of <em>one heartbeat</em></h1>
+      <div class="seg" role="tablist">
+        <div class="pill" id="pill"></div>
+        <button type="button" data-mode="resting" aria-pressed="true">Resting</button>
+        <button type="button" data-mode="active" aria-pressed="false">Active</button>
+        <button type="button" data-mode="sleep" aria-pressed="false">Sleep</button>
+      </div>
+    </header>
+    <section class="card c1">
+      <div class="lbl">Lead II ECG · Subject 07</div>
+      <div class="bpm-row">
+        <div class="bpm" id="bpm">072</div>
+        <svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.2-4.35-9.2-8.2C.4 9.7 1.1 5.8 4.4 4.3 6.6 3.3 9 4 12 6.4 15 4 17.4 3.3 19.6 4.3c3.3 1.5 4 5.4 1.6 8.5C18.2 16.65 12 21 12 21z"/></svg>
+      </div>
+      <div class="meta">
+        <div><span>R–R interval</span><b id="rr">833 ms</b></div>
+        <div><span>HRV (RMSSD)</span><b id="hrv">42 ms</b></div>
+        <div><span>QT interval</span><b id="qt">390 ms</b></div>
+        <div><span>sweep speed</span><b>25 mm/s</b></div>
+      </div>
+      <canvas id="ecg"></canvas>
+    </section>
+    <section class="card c2">
+      <div class="lbl">SpO₂</div>
+      <div class="gauge-wrap">
+        <svg id="spo2" viewBox="0 0 200 200" width="200" height="200"></svg>
+        <div class="g-num" id="spo2n">98<small>% SpO₂</small></div>
+      </div>
+      <p class="lbl" style="text-align:center;margin-top:-8px">perfusion-index <b id="pi" style="color:var(--ink);font-weight:300">1.4</b></p>
+    </section>
+    <section class="card c3">
+      <div class="lbl">Respiration</div>
+      <div class="orb-box">
+        <div class="ring" style="width:140px;height:140px"></div>
+        <div class="ring" style="width:110px;height:110px"></div>
+        <div class="orb" id="orb"></div>
+      </div>
+      <p style="text-align:center" id="breath">Inhale · tidal volume 480 mL</p>
+    </section>
+    <section class="card c4">
+      <div class="lbl">Additional vitals</div>
+      <div class="vitals">
+        <div>
+          <div class="lbl">blood pressure</div>
+          <div class="v-num" id="bp">118/76</div>
+          <div class="trend" id="bp-t">steady</div>
+          <div class="bar"><i id="bp-b" style="--w:62%"></i></div>
+        </div>
+        <div>
+          <div class="lbl">core temperature</div>
+          <div class="v-num" id="temp">36.7°</div>
+          <div class="trend" id="temp-t">stable</div>
+          <div class="bar"><i id="temp-b" style="--w:48%"></i></div>
+        </div>
+        <div>
+          <div class="lbl">skin conductance</div>
+          <div class="v-num" id="gsr">2.1 µS</div>
+          <div class="trend" id="gsr-t">calm</div>
+          <div class="bar"><i id="gsr-b" style="--w:30%"></i></div>
+        </div>
+      </div>
+    </section>
+    <section class="card c5">
+      <div class="lbl">24-hour heart-rate</div>
+      <svg id="hr24" viewBox="0 0 1000 240" preserveAspectRatio="none"></svg>
+    </section>
+    <footer>
+      <p>Fictional vitals for Subject 07 · not a medical device · data-art only</p>
+      <p id="liveclock"></p>
+    </footer>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    var MODES = {
+      resting: { bpm: 72, breath: 14, spo2: 98, bp: [118, 76], temp: 36.7, gsr: 2.1, trends: ["steady", "stable", "calm"] },
+      active: { bpm: 138, breath: 28, spo2: 96, bp: [146, 88], temp: 37.4, gsr: 6.8, trends: ["rising", "warm", "alert"] },
+      sleep: { bpm: 54, breath: 11, spo2: 97, bp: [104, 62], temp: 36.2, gsr: 1.1, trends: ["low", "cool", "quiet"] }
+    };
+    function gauss(x, mu, sig, amp) {
+      var d = (x - mu) / sig;
+      return amp * Math.exp(-0.5 * d * d);
+    }
+    function pqrst(ph) {
+      return gauss(ph, 0.16, 0.03, 0.18) + gauss(ph, 0.245, 0.012, -0.22) + gauss(ph, 0.275, 0.016, 1.15) + gauss(ph, 0.305, 0.014, -0.28) + gauss(ph, 0.52, 0.05, 0.32) + gauss(ph, 0.72, 0.04, 0.06);
+    }
+    function lcg(seed) {
+      var s = seed >>> 0;
+      return function () {
+        s = (Math.imul(1664525, s) + 1013904223) >>> 0;
+        return s / 4294967296;
+      };
+    }
+    function init() {
+      var bpmEl = qs("#bpm");
+      var rrEl = qs("#rr");
+      var hrvEl = qs("#hrv");
+      var qtEl = qs("#qt");
+      var canvas = qs("#ecg");
+      var pill = qs("#pill");
+      var orb = qs("#orb");
+      var breathEl = qs("#breath");
+      var spo2svg = qs("#spo2");
+      var spo2n = qs("#spo2n");
+      var hr24 = qs("#hr24");
+      var clock = qs("#liveclock");
+      var heart = qs(".heart");
+      if (!bpmEl || !canvas || !pill || !orb || !spo2svg || !hr24) return;
+      var ctx = canvas.getContext ? canvas.getContext("2d") : null;
+      if (!ctx) return;
+      var reduced = false;
+      if (typeof window.matchMedia === "function") {
+        try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e6) { reduced = false; }
+      }
+      var mode = "resting";
+      var bpm = 72, target = 72;
+      var phase = 0;
+      var lastRead = 0;
+      var off = document.createElement("canvas");
+      var octx = off.getContext("2d");
+      if (!octx) return;
+      function sizeEcg() {
+        var dpr = window.devicePixelRatio ? Math.min(2, window.devicePixelRatio) : 1;
+        var w = canvas.clientWidth || 800, h = canvas.clientHeight || 180;
+        canvas.width = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+        off.width = canvas.width; off.height = canvas.height;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      sizeEcg();
+      window.addEventListener("resize", sizeEcg);
+      function movePill() {
+        var btn = qs('.seg button[data-mode="' + mode + '"]');
+        if (!btn) return;
+        var wrap = qs(".seg");
+        if (!wrap) return;
+        var wr = wrap.getBoundingClientRect();
+        var br = btn.getBoundingClientRect();
+        pill.style.left = (br.left - wr.left) + "px";
+        pill.style.width = br.width + "px";
+      }
+      qsa(".seg button").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          mode = btn.getAttribute("data-mode");
+          document.body.setAttribute("data-mode", mode);
+          qsa(".seg button").forEach(function (b) {
+            b.setAttribute("aria-pressed", b === btn ? "true" : "false");
+          });
+          target = MODES[mode].bpm;
+          movePill();
+          applyVitals();
+        });
+      });
+      movePill();
+      window.addEventListener("resize", movePill);
+      function applyVitals() {
+        var m = MODES[mode];
+        if (qs("#bp")) qs("#bp").textContent = m.bp[0] + "/" + m.bp[1];
+        if (qs("#bp-t")) qs("#bp-t").textContent = m.trends[0];
+        if (qs("#bp-b")) qs("#bp-b").style.setProperty("--w", (m.bp[0] / 180 * 100) + "%");
+        if (qs("#temp")) qs("#temp").textContent = m.temp.toFixed(1) + "°";
+        if (qs("#temp-t")) qs("#temp-t").textContent = m.trends[1];
+        if (qs("#temp-b")) qs("#temp-b").style.setProperty("--w", ((m.temp - 35) / 3 * 100) + "%");
+        if (qs("#gsr")) qs("#gsr").textContent = m.gsr.toFixed(1) + " µS";
+        if (qs("#gsr-t")) qs("#gsr-t").textContent = m.trends[2];
+        if (qs("#gsr-b")) qs("#gsr-b").style.setProperty("--w", (m.gsr / 10 * 100) + "%");
+        setSpo2(m.spo2);
+        if (spo2n) spo2n.innerHTML = m.spo2 + "<small>% SpO₂</small>";
+        if (qs("#pi")) qs("#pi").textContent = (mode === "active" ? "3.2" : mode === "sleep" ? "0.9" : "1.4");
+      }
+      function setSpo2(val) {
+        var circ = 2 * Math.PI * 74;
+        var frac = val / 100 * 0.75;
+        var arc = qs("#spo2-arc");
+        if (arc) arc.setAttribute("stroke-dashoffset", String(circ * (1 - frac)));
+      }
+      (function buildGauge() {
+        var ns = "http://www.w3.org/2000/svg";
+        var g = document.createElementNS(ns, "g");
+        g.setAttribute("transform", "rotate(135 100 100)");
+        var track = document.createElementNS(ns, "circle");
+        track.setAttribute("cx", "100"); track.setAttribute("cy", "100"); track.setAttribute("r", "74");
+        track.setAttribute("fill", "none"); track.setAttribute("stroke", "rgba(255,255,255,0.08)");
+        track.setAttribute("stroke-width", "8");
+        track.setAttribute("stroke-dasharray", String(2 * Math.PI * 74 * 0.75) + " " + String(2 * Math.PI * 74));
+        g.appendChild(track);
+        var arc = document.createElementNS(ns, "circle");
+        arc.setAttribute("id", "spo2-arc");
+        arc.setAttribute("cx", "100"); arc.setAttribute("cy", "100"); arc.setAttribute("r", "74");
+        arc.setAttribute("fill", "none"); arc.setAttribute("stroke", "var(--accent)");
+        arc.setAttribute("stroke-width", "8"); arc.setAttribute("stroke-linecap", "round");
+        var circ = 2 * Math.PI * 74;
+        arc.setAttribute("stroke-dasharray", String(circ * 0.75) + " " + circ);
+        arc.setAttribute("stroke-dashoffset", String(circ * 0.25));
+        arc.style.transition = "stroke-dashoffset 0.8s ease, stroke 0.8s";
+        g.appendChild(arc);
+        var i, ang, x1, y1, x2, y2, ln;
+        for (i = 0; i < 55; i++) {
+          ang = (135 + i * (270 / 54)) * Math.PI / 180;
+          var major = i % 9 === 0;
+          x1 = 100 + Math.cos(ang) * (major ? 60 : 64);
+          y1 = 100 + Math.sin(ang) * (major ? 60 : 64);
+          x2 = 100 + Math.cos(ang) * 70;
+          y2 = 100 + Math.sin(ang) * 70;
+          ln = document.createElementNS(ns, "line");
+          ln.setAttribute("x1", x1); ln.setAttribute("y1", y1); ln.setAttribute("x2", x2); ln.setAttribute("y2", y2);
+          ln.setAttribute("stroke", "rgba(233,240,255," + (major ? 0.45 : 0.18) + ")");
+          ln.setAttribute("stroke-width", major ? "1.4" : "0.8");
+          spo2svg.appendChild(ln);
+        }
+        spo2svg.appendChild(g);
+      })();
+      (function buildChart() {
+        var ns = "http://www.w3.org/2000/svg";
+        var rand = lcg(7);
+        var pts = [], i, h, v, x, y;
+        for (i = 0; i < 288; i++) {
+          h = i / 12;
+          v = 68 + Math.sin((h - 6) / 24 * Math.PI * 2) * 8;
+          if (h >= 0 && h < 6) v -= 12;
+          if (h >= 6.5 && h < 7.4) v += 55 * Math.sin((h - 6.5) / 0.9 * Math.PI);
+          if (h >= 12.2 && h < 13) v += 10;
+          if (h >= 18 && h < 19.2) v += 48 * Math.sin((h - 18) / 1.2 * Math.PI);
+          v += (rand() - 0.5) * 4;
+          pts.push(v);
+        }
+        var defs = document.createElementNS(ns, "defs");
+        defs.innerHTML = '<linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity="0.45"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient><filter id="ds"><feDropShadow dx="0" dy="0" stdDeviation="2" flood-color="var(--accent)"/></filter>';
+        hr24.appendChild(defs);
+        function mapY(val) { return 200 - (val - 40) / 120 * 170; }
+        var poly = "", line = "";
+        for (i = 0; i < pts.length; i++) {
+          x = i / (pts.length - 1) * 1000;
+          y = mapY(pts[i]);
+          line += (i ? "L" : "M") + x.toFixed(1) + "," + y.toFixed(1) + " ";
+          poly += x.toFixed(1) + "," + y.toFixed(1) + " ";
+        }
+        var sleep = document.createElementNS(ns, "rect");
+        sleep.setAttribute("x", "0"); sleep.setAttribute("y", "20"); sleep.setAttribute("width", String(6 / 24 * 1000)); sleep.setAttribute("height", "180");
+        sleep.setAttribute("fill", "rgba(157,180,255,0.08)");
+        hr24.appendChild(sleep);
+        var gi, gl;
+        for (gi = 0; gi <= 24; gi += 3) {
+          gl = document.createElementNS(ns, "line");
+          gl.setAttribute("x1", gi / 24 * 1000); gl.setAttribute("x2", gi / 24 * 1000);
+          gl.setAttribute("y1", 20); gl.setAttribute("y2", 210);
+          gl.setAttribute("stroke", "rgba(233,240,255,0.08)");
+          hr24.appendChild(gl);
+        }
+        var pg = document.createElementNS(ns, "polygon");
+        pg.setAttribute("points", "0,210 " + poly + " 1000,210");
+        pg.setAttribute("fill", "url(#ag)");
+        hr24.appendChild(pg);
+        var pl = document.createElementNS(ns, "path");
+        pl.setAttribute("d", line);
+        pl.setAttribute("fill", "none");
+        pl.setAttribute("stroke", "var(--accent)");
+        pl.setAttribute("stroke-width", "1.6");
+        pl.setAttribute("filter", "url(#ds)");
+        hr24.appendChild(pl);
+        var cursor = document.createElementNS(ns, "g");
+        cursor.innerHTML = '<line x1="0" y1="20" x2="0" y2="210" stroke="var(--accent)" stroke-opacity="0.5"/><circle r="4" fill="var(--accent)" cy="100"/><text fill="rgba(233,240,255,0.8)" font-size="12" y="16"></text>';
+        hr24.appendChild(cursor);
+        hr24.addEventListener("mousemove", function (e) {
+          var r = hr24.getBoundingClientRect();
+          var t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+          var idx = Math.round(t * (pts.length - 1));
+          var xx = t * 1000;
+          cursor.setAttribute("transform", "translate(" + xx + ",0)");
+          var c = cursor.querySelector("circle");
+          var tx = cursor.querySelector("text");
+          if (c) c.setAttribute("cy", mapY(pts[idx]));
+          if (tx) {
+            tx.textContent = (idx / 12).toFixed(1) + "h · " + pts[idx].toFixed(0) + " bpm";
+            tx.setAttribute("x", xx > 800 ? -120 : 8);
+          }
+        });
+      })();
+      applyVitals();
+      var writeX = 0;
+      function drawGrid(w, h) {
+        var x, y, accent = getComputedStyle(document.body).getPropertyValue("--accent").trim() || "#7df9c2";
+        octx.strokeStyle = accent;
+        octx.globalAlpha = 0.12;
+        for (x = 0; x < w; x += 8) {
+          octx.beginPath(); octx.moveTo(x, 0); octx.lineTo(x, h); octx.stroke();
+        }
+        octx.globalAlpha = 0.22;
+        for (x = 0; x < w; x += 40) {
+          octx.beginPath(); octx.moveTo(x, 0); octx.lineTo(x, h); octx.stroke();
+        }
+        octx.globalAlpha = 0.12;
+        for (y = 0; y < h; y += 8) {
+          octx.beginPath(); octx.moveTo(0, y); octx.lineTo(w, y); octx.stroke();
+        }
+        octx.globalAlpha = 1;
+      }
+      var last = performance && performance.now ? performance.now() : Date.now();
+      function loop(now) {
+        var dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        var wobble = Math.sin(now / 2800) * 3;
+        bpm += (target + wobble - bpm) * dt * 0.6;
+        var period = 60 / bpm;
+        if (heart) heart.style.setProperty("--beat", period.toFixed(2) + "s");
+        phase += dt / period;
+        if (phase > 1) phase -= 1;
+        var w = canvas.clientWidth || 800, h = canvas.clientHeight || 180;
+        if (writeX === 0) {
+          octx.fillStyle = "#071018";
+          octx.fillRect(0, 0, w, h);
+          drawGrid(w, h);
+        }
+        var y = h * 0.55 - pqrst(phase) * h * 0.38;
+        octx.fillStyle = "#071018";
+        octx.fillRect(writeX, 0, 14, h);
+        octx.save();
+        drawGridSlice(writeX, 14, w, h);
+        octx.restore();
+        octx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--accent").trim() || "#7df9c2";
+        octx.shadowColor = octx.strokeStyle;
+        octx.shadowBlur = 10;
+        octx.lineWidth = 1.6;
+        octx.beginPath();
+        octx.moveTo(writeX, y);
+        octx.lineTo(writeX + 1.5, y);
+        octx.stroke();
+        octx.shadowBlur = 0;
+        writeX += 1.5;
+        if (writeX > w) writeX = 0;
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(off, 0, 0, w, h);
+        var grd = ctx.createRadialGradient(writeX, y, 0, writeX, y, 18);
+        grd.addColorStop(0, "rgba(255,255,255,0.7)");
+        grd.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        ctx.arc(writeX, y, 18, 0, Math.PI * 2);
+        ctx.fill();
+        var br = MODES[mode].breath / 60;
+        var breathPh = (now / 1000 * br) % 1;
+        var scale = 0.55 + (0.5 + 0.5 * Math.cos(breathPh * Math.PI * 2)) * 0.75;
+        orb.style.setProperty("--br", scale.toFixed(3));
+        if (breathEl) breathEl.textContent = (breathPh < 0.5 ? "Inhale" : "Exhale") + " · tidal volume " + (mode === "active" ? "720" : mode === "sleep" ? "380" : "480") + " mL";
+        if (now - lastRead > 250) {
+          lastRead = now;
+          bpmEl.textContent = String(Math.round(bpm)).padStart(3, "0");
+          if (rrEl) rrEl.textContent = Math.round(60000 / bpm) + " ms";
+          if (hrvEl) hrvEl.textContent = Math.round(mode === "sleep" ? 64 : mode === "active" ? 22 : 42) + " ms";
+          if (qtEl) qtEl.textContent = Math.round(400 * Math.sqrt(60 / bpm)) + " ms";
+        }
+        if (clock) clock.textContent = new Date().toLocaleTimeString();
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+      }
+      function drawGridSlice(x, ww, W, H) {
+        var accent = getComputedStyle(document.body).getPropertyValue("--accent").trim() || "#7df9c2";
+        octx.save();
+        octx.beginPath();
+        octx.rect(x, 0, ww, H);
+        octx.clip();
+        octx.strokeStyle = accent;
+        var gx, gy;
+        octx.globalAlpha = 0.12;
+        for (gx = 0; gx < W; gx += 8) { octx.beginPath(); octx.moveTo(gx, 0); octx.lineTo(gx, H); octx.stroke(); }
+        octx.globalAlpha = 0.22;
+        for (gx = 0; gx < W; gx += 40) { octx.beginPath(); octx.moveTo(gx, 0); octx.lineTo(gx, H); octx.stroke(); }
+        octx.globalAlpha = 0.12;
+        for (gy = 0; gy < H; gy += 8) { octx.beginPath(); octx.moveTo(0, gy); octx.lineTo(W, gy); octx.stroke(); }
+        octx.restore();
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

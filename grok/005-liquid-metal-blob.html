@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MERCURY — Liquid Metal Metaballs</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; background: #101113; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #fff;
+    }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    .grain {
+      position: fixed; inset: 0; pointer-events: none; z-index: 2; opacity: 0.07; mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+    .ui { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+    .top {
+      display: flex; justify-content: space-between; padding: 18px 22px;
+      font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace;
+      font-size: 11px; letter-spacing: 0.32em; text-transform: uppercase; color: rgba(255,255,255,0.55);
+    }
+    h1 {
+      position: absolute; left: 50%; top: 46%;
+      transform: translate(-50%, -50%);
+      font-weight: 200;
+      font-size: clamp(48px, 13.5vw, 300px);
+      letter-spacing: 0.05em;
+      color: #fff;
+      mix-blend-mode: difference;
+      animation: title-in 2.4s ease-out both;
+    }
+    .foot {
+      position: absolute; left: 22px; right: 22px; bottom: 18px;
+      display: flex; justify-content: space-between; gap: 16px; align-items: flex-end;
+    }
+    .foot p { max-width: 42ch; font-size: 13px; color: rgba(255,255,255,0.55); line-height: 1.45; }
+    .stats {
+      font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace;
+      font-size: 11px; letter-spacing: 0.08em; color: rgba(255,255,255,0.55); white-space: nowrap;
+    }
+    .hint {
+      position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%);
+      font-size: 13px; color: rgba(255,255,255,0.7);
+      transition: opacity 0.6s ease;
+    }
+    .hint.hide { opacity: 0; }
+    @keyframes title-in {
+      from { filter: blur(16px); opacity: 0; letter-spacing: 0.28em; }
+      to { filter: blur(0); opacity: 1; letter-spacing: 0.05em; }
+    }
+    @media (max-width: 640px) {
+      .top span:last-child { display: none; }
+      .foot { flex-direction: column; align-items: flex-start; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      h1 { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="grain"></div>
+  <div class="ui">
+    <div class="top">
+      <span>Liquid metal study · 05</span>
+      <span>Metaball field · environment mapped</span>
+    </div>
+    <h1>MERCURY</h1>
+    <p class="hint" id="hint">Move to attract · click to add</p>
+    <div class="foot">
+      <p>Chrome bodies wander, merge and split over a charcoal floor. Click to pour another drop. R reseeds. Space pauses.</p>
+      <div class="stats" id="stats">fps — · bodies — · buf —%</div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var canvas = qs("#c");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var stats = qs("#stats");
+      var hint = qs("#hint");
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var paused = false;
+      var pointer = { x: 0, y: 0, on: false, strength: 0 };
+      var bodies = [];
+      var nextId = 1;
+      var scale = 0.42;
+      var slow = 0, fast = 0;
+      var fps = 0, frames = 0, fpsT = 0;
+      var off = document.createElement("canvas");
+      var octx = off.getContext("2d");
+      if (!octx) return;
+      var lut = new Uint8Array(256 * 3);
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function smooth(t) { return t * t * (3 - 2 * t); }
+      (function buildLut() {
+        var stops = [
+          { t: 0, c: [14, 15, 18] },
+          { t: 0.32, c: [40, 42, 48] },
+          { t: 0.46, c: [88, 90, 96] },
+          { t: 0.495, c: [210, 208, 204] },
+          { t: 0.505, c: [250, 250, 252] },
+          { t: 0.58, c: [190, 196, 206] },
+          { t: 0.72, c: [128, 137, 150] },
+          { t: 0.86, c: [72, 78, 90] },
+          { t: 1, c: [26, 28, 34] }
+        ];
+        for (var i = 0; i < 256; i++) {
+          var t = i / 255;
+          var a = stops[0], b = stops[stops.length - 1];
+          for (var s = 0; s < stops.length - 1; s++) {
+            if (t >= stops[s].t && t <= stops[s + 1].t) { a = stops[s]; b = stops[s + 1]; break; }
+          }
+          var u = (t - a.t) / Math.max(0.0001, b.t - a.t);
+          u = smooth(u);
+          lut[i * 3] = lerp(a.c[0], b.c[0], u);
+          lut[i * 3 + 1] = lerp(a.c[1], b.c[1], u);
+          lut[i * 3 + 2] = lerp(a.c[2], b.c[2], u);
+        }
+      })();
+      function cssSize() {
+        return { w: window.innerWidth || 800, h: window.innerHeight || 600 };
+      }
+      function spawn(n, x, y, swell) {
+        var s = cssSize();
+        var short = Math.min(s.w, s.h);
+        for (var i = 0; i < n; i++) {
+          var r = short * (0.09 + Math.random() * 0.1);
+          bodies.push({
+            id: nextId++,
+            x: x != null ? x : Math.random() * s.w,
+            y: y != null ? y : Math.random() * s.h * 0.7 + s.h * 0.1,
+            vx: (Math.random() - 0.5) * 0.6,
+            vy: (Math.random() - 0.5) * 0.6,
+            r: swell ? 4 : r,
+            tr: r,
+            seed: Math.random() * 1000,
+            born: swell ? performance.now() : 0
+          });
+        }
+      }
+      function reseed() {
+        bodies = [];
+        var s = cssSize();
+        spawn(s.w < 600 ? 5 : 7);
+      }
+      reseed();
+
+      function step(dt, now) {
+        var s = cssSize();
+        var target = pointer.on ? 1 : 0;
+        pointer.strength += (target - pointer.strength) * 0.08;
+        var i, j, b, o;
+        for (i = 0; i < bodies.length; i++) {
+          b = bodies[i];
+          if (b.born) {
+            var k = Math.min(1, (now - b.born) / 900);
+            k = k * k * (3 - 2 * k);
+            b.r = 4 + (b.tr - 4) * k;
+          }
+          b.vx += Math.sin(now / 1400 + b.seed) * 0.012;
+          b.vy += Math.cos(now / 1700 + b.seed * 0.7) * 0.01;
+          b.vx += (s.w * 0.5 - b.x) * 0.00004;
+          b.vy += (s.h * 0.48 - b.y) * 0.00004;
+          if (pointer.strength > 0.01) {
+            var dx = pointer.x - b.x, dy = pointer.y - b.y;
+            var d2 = dx * dx + dy * dy + 80;
+            var f = pointer.strength * 0.9 / Math.sqrt(d2);
+            b.vx += dx * f * 0.015;
+            b.vy += dy * f * 0.015;
+          }
+        }
+        for (i = 0; i < bodies.length; i++) {
+          for (j = i + 1; j < bodies.length; j++) {
+            b = bodies[i]; o = bodies[j];
+            var dx = o.x - b.x, dy = o.y - b.y;
+            var d = Math.sqrt(dx * dx + dy * dy) + 0.001;
+            var min = (b.r + o.r) * 0.85;
+            if (d < min) {
+              var push = (min - d) * 0.012;
+              dx /= d; dy /= d;
+              b.vx -= dx * push; b.vy -= dy * push;
+              o.vx += dx * push; o.vy += dy * push;
+            }
+          }
+        }
+        for (i = 0; i < bodies.length; i++) {
+          b = bodies[i];
+          b.vx *= 0.985; b.vy *= 0.985;
+          b.x += b.vx * dt * 60; b.y += b.vy * dt * 60;
+          if (b.x < b.r) { b.x = b.r; b.vx *= -0.8; }
+          if (b.y < b.r) { b.y = b.r; b.vy *= -0.8; }
+          if (b.x > s.w - b.r) { b.x = s.w - b.r; b.vx *= -0.8; }
+          if (b.y > s.h - b.r) { b.y = s.h - b.r; b.vy *= -0.8; }
+        }
+      }
+
+      function renderField() {
+        var s = cssSize();
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(s.w * dpr);
+        canvas.height = Math.floor(s.h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        var bw = Math.max(40, Math.floor(s.w * scale));
+        var bh = Math.max(40, Math.floor(s.h * scale));
+        if (bw * bh > 420000) {
+          var k = Math.sqrt(420000 / (bw * bh));
+          bw = Math.floor(bw * k); bh = Math.floor(bh * k);
+        }
+        off.width = bw; off.height = bh;
+        var img = octx.createImageData(bw, bh);
+        var data = img.data;
+        var buf = new ArrayBuffer(data.length);
+        var px32 = new Uint32Array(buf);
+        var px8 = new Uint8ClampedArray(buf);
+        var sx = s.w / bw, sy = s.h / bh;
+        var n = bodies.length;
+        var bx = new Float32Array(n), by = new Float32Array(n), br2 = new Float32Array(n);
+        var i;
+        for (i = 0; i < n; i++) {
+          bx[i] = bodies[i].x / sx;
+          by[i] = bodies[i].y / sy;
+          var rr = bodies[i].r / ((sx + sy) * 0.5);
+          br2[i] = rr * rr;
+        }
+        var lx = -0.45, ly = -0.62, lz = 0.64;
+        var llen = Math.sqrt(lx*lx+ly*ly+lz*lz);
+        lx /= llen; ly /= llen; lz /= llen;
+        var y, x, p = 0;
+        for (y = 0; y < bh; y++) {
+          for (x = 0; x < bw; x++) {
+            var f = 0, gx = 0, gy = 0;
+            for (i = 0; i < n; i++) {
+              var dx = x - bx[i], dy = y - by[i];
+              var d2 = dx * dx + dy * dy + 0.0001;
+              var term = br2[i] / d2;
+              f += term;
+              var g = 2 * br2[i] / (d2 * d2);
+              gx += -dx * g;
+              gy += -dy * g;
+            }
+            if (f < 0.92) { px32[p++] = 0; continue; }
+            var mag = Math.sqrt(gx * gx + gy * gy) + 1e-6;
+            var alpha = (f - 1) / mag + 0.5;
+            if (alpha < 0) { px32[p++] = 0; continue; }
+            if (alpha > 1) alpha = 1;
+            var nx = gx / mag, ny = gy / mag;
+            var tilt = Math.pow(1 / Math.max(f, 0.2), 1.6);
+            nx *= tilt; ny *= tilt;
+            var nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+            var ndv = nz;
+            var rx = -2 * ndv * nx;
+            var ry = -2 * ndv * ny;
+            var rz = 1 - 2 * ndv * nz;
+            var u = (1 - (ry * 0.5 + 0.5));
+            if (u < 0) u = 0; if (u > 1) u = 1;
+            var li = (u * 255) | 0;
+            var cr = lut[li * 3], cg = lut[li * 3 + 1], cb = lut[li * 3 + 2];
+            var fall = 0.88 + 0.12 * (rx * 0.5 + 0.5);
+            cr *= fall; cg *= fall; cb *= fall;
+            var fres = tilt * tilt * tilt * 38;
+            cr += fres * 0.7; cg += fres * 0.85; cb += fres;
+            var spec = Math.max(0, nx * lx + ny * ly + nz * lz);
+            spec = Math.pow(spec, 48) * 255;
+            cr += spec; cg += spec; cb += spec;
+            cr += 8; cg += 9; cb += 12;
+            var a = (alpha * 255) | 0;
+            px32[p++] = (a << 24) | (Math.min(255, cb) << 16) | (Math.min(255, cg) << 8) | Math.min(255, cr);
+          }
+        }
+        data.set(px8);
+        octx.putImageData(img, 0, 0);
+        ctx.fillStyle = "#101113";
+        ctx.fillRect(0, 0, s.w, s.h);
+        var g = ctx.createLinearGradient(0, s.h * 0.62, 0, s.h);
+        g.addColorStop(0, "rgba(0,0,0,0)");
+        g.addColorStop(1, "rgba(0,0,0,0.45)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, s.w, s.h);
+        ctx.save();
+        bodies.forEach(function (b) {
+          var rg = ctx.createRadialGradient(b.x, b.y + b.r * 0.55, 4, b.x, b.y + b.r * 0.7, b.r * 1.4);
+          rg.addColorStop(0, "rgba(0,0,0,0.35)");
+          rg.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = rg;
+          ctx.beginPath();
+          ctx.ellipse(b.x, b.y + b.r * 0.7, b.r * 1.05, b.r * 0.38, 0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.restore();
+        ctx.imageSmoothingEnabled = true;
+        if (ctx.imageSmoothingQuality) ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(off, 0, 0, s.w, s.h);
+      }
+
+      var last = performance.now();
+      function frame(now) {
+        var dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        var t0 = performance.now();
+        if (!paused) step(dt, now);
+        renderField();
+        var ms = performance.now() - t0;
+        if (ms > 26) { slow++; fast = 0; if (slow > 20) { scale = Math.max(0.28, scale * 0.85); slow = 0; } }
+        else if (ms < 14) { fast++; slow = 0; if (fast > 240) { scale = Math.min(0.6, scale * 1.1); fast = 0; } }
+        else { slow = 0; fast = 0; }
+        frames++;
+        if (now - fpsT > 400) { fps = Math.round(frames * 1000 / (now - fpsT)); frames = 0; fpsT = now; }
+        if (stats) stats.textContent = "fps " + fps + " · bodies " + bodies.length + " · buf " + Math.round(scale * 100) + "%";
+        if (!reduce && typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      }
+
+      function interact() { if (hint) hint.classList.add("hide"); }
+      window.addEventListener("pointermove", function (e) {
+        pointer.x = e.clientX; pointer.y = e.clientY; pointer.on = true;
+        interact();
+        if (reduce) { step(0.016, performance.now()); renderField(); }
+      });
+      window.addEventListener("pointerleave", function () { pointer.on = false; });
+      window.addEventListener("pointerdown", function (e) {
+        interact();
+        if (bodies.length >= 12) bodies.shift();
+        spawn(1, e.clientX, e.clientY, true);
+        if (reduce) { step(0.016, performance.now()); renderField(); }
+      });
+      window.addEventListener("keydown", function (e) {
+        if (e.key === "r" || e.key === "R") { reseed(); if (reduce) renderField(); }
+        if (e.code === "Space") { e.preventDefault(); paused = !paused; }
+      });
+      window.addEventListener("resize", function () { if (reduce) renderField(); });
+
+      if (reduce) {
+        for (var i = 0; i < 240; i++) step(0.016, i * 16);
+        renderField();
+      } else if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(frame);
+      } else {
+        renderField();
+      }
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

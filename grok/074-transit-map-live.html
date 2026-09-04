@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vellmar Metro</title>
+  <style>
+    :root {
+      --bg: #f5f2ea;
+      --panel: #ebe7dc;
+      --ink: #1b1e24;
+      --muted: #5a5f6b;
+      --rule: #d5d0c4;
+      --river: #cfe3ec;
+      --station: #ffffff;
+      --station-stroke: #1b1e24;
+      --good: #1e9e5a;
+      --delay: #f0a020;
+      --crimson: #d9363e;
+      --cobalt: #1f6fd6;
+      --emerald: #1e9e5a;
+      --amber: #f0a020;
+      --violet: #7b4fbf;
+      --slate: #3a8c96;
+    }
+    html.night {
+      --bg: #0f1318;
+      --panel: #151a21;
+      --ink: #e9ecf1;
+      --muted: #9aa3b2;
+      --rule: #252c36;
+      --river: #17232e;
+      --station: #151a21;
+      --station-stroke: #e9ecf1;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; }
+    body {
+      font-family: ui-sans-serif, system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-weight: 500;
+      background: var(--bg);
+      color: var(--ink);
+      transition: background 0.5s ease, color 0.5s ease;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.4rem;
+      border-bottom: 1px solid var(--rule);
+      gap: 1rem;
+    }
+    .wordmark { font-weight: 700; font-size: 1.25rem; }
+    .legend { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+    .leg {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      font-size: 0.78rem; cursor: pointer; background: none; border: 0; color: inherit; font-weight: 500;
+    }
+    .pip { width: 14px; height: 6px; border-radius: 3px; }
+    .night-btn {
+      border: 1px solid var(--rule);
+      background: var(--panel);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 0.4rem 0.9rem;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      min-height: calc(100vh - 62px);
+    }
+    .map-wrap {
+      background: var(--panel);
+      padding: 1rem;
+      transition: background 0.5s ease;
+    }
+    #map { width: 100%; height: auto; display: block; aspect-ratio: 1000 / 740; }
+    aside {
+      border-left: 1px solid var(--rule);
+      padding: 1.1rem 1.15rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.1rem;
+    }
+    .card {
+      background: var(--bg);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      padding: 0.9rem 0.95rem;
+      transition: background 0.5s ease, border-color 0.5s ease;
+    }
+    .ph {
+      font-size: 0.68rem;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.6rem;
+    }
+    #stationName { font-weight: 700; font-size: 1.15rem; margin-bottom: 0.35rem; }
+    .calling { display: flex; gap: 0.3rem; margin-bottom: 0.7rem; min-height: 10px; }
+    .arr { list-style: none; }
+    .arr li {
+      display: grid;
+      grid-template-columns: 10px 1fr auto;
+      gap: 0.5rem;
+      align-items: center;
+      padding: 0.38rem 0;
+      border-top: 1px solid var(--rule);
+      font-size: 0.86rem;
+    }
+    .eta {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+    }
+    .eta.due { color: var(--good); font-weight: 700; }
+    .status-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.4rem 0; border-top: 1px solid var(--rule); font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .badge {
+      font-size: 0.68rem;
+      padding: 0.18rem 0.5rem;
+      border-radius: 999px;
+      background: rgba(30,158,90,0.14);
+      color: var(--good);
+    }
+    .badge.delay {
+      background: rgba(240,160,32,0.18);
+      color: var(--delay);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse { 50% { opacity: 0.45; } }
+    .clock {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      fill: var(--ink);
+    }
+    .hint { color: var(--muted); font-size: 0.85rem; }
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+      aside { border-left: 0; border-top: 1px solid var(--rule); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .badge.delay { animation: none; }
+      * { transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wordmark">Vellmar Metro</div>
+    <div class="legend" id="legend"></div>
+    <button type="button" class="night-btn" id="nightBtn">Night mode</button>
+  </header>
+  <div class="layout">
+    <div class="map-wrap">
+      <svg id="map" viewBox="0 0 1000 740" role="img" aria-label="Vellmar Metro network map"></svg>
+    </div>
+    <aside>
+      <section class="card" id="arrivals">
+        <div class="ph">Next arrivals</div>
+        <div id="stationName">Select a station</div>
+        <div class="calling" id="calling"></div>
+        <ul class="arr" id="arrList"></ul>
+      </section>
+      <section class="card">
+        <div class="ph">Service status</div>
+        <div id="statusList"></div>
+      </section>
+      <p class="hint">Hover a line to isolate it. Click a station for live arrivals. Delayed lines run at 45% speed.</p>
+    </aside>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function svgEl(name, attrs) {
+      var el = document.createElementNS("http://www.w3.org/2000/svg", name);
+      var k;
+      if (attrs) for (k in attrs) if (Object.prototype.hasOwnProperty.call(attrs, k)) el.setAttribute(k, attrs[k]);
+      return el;
+    }
+    function init() {
+      var svg = qs("#map");
+      if (!svg) return;
+      var reduce = false;
+      if (typeof window.matchMedia === "function") {
+        reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+          document.documentElement.classList.add("night");
+        }
+      }
+      var nightBtn = qs("#nightBtn");
+      if (nightBtn) {
+        nightBtn.addEventListener("click", function () {
+          document.documentElement.classList.toggle("night");
+        });
+      }
+      var COLORS = {
+        Crimson: "#d9363e", Cobalt: "#1f6fd6", Emerald: "#1e9e5a",
+        Amber: "#f0a020", Violet: "#7b4fbf", Slate: "#3a8c96"
+      };
+      var lines = [
+        { id: "Crimson", d: "M60 120 H220 L300 200 H460 L540 280 H780 L860 360 H940" },
+        { id: "Cobalt", d: "M80 620 V500 L160 420 H300 L380 340 V220 L460 140 H700 L780 60" },
+        { id: "Emerald", d: "M40 360 H180 L260 280 H420 L500 200 V80" },
+        { id: "Amber", d: "M120 700 H280 L360 620 H520 L600 540 H760 L840 460 V300" },
+        { id: "Violet", d: "M940 640 H780 L700 560 V420 L620 340 H460 L380 260 V80" },
+        { id: "Slate", d: "M40 520 H200 L280 440 H440 L520 360 H680 L760 280 H920" }
+      ];
+      var stations = [
+        { name: "Westgate Quay", x: 60, y: 120, lines: ["Crimson"], term: true, ox: -8, oy: -12, anchor: "end" },
+        { name: "Harbor Mills", x: 220, y: 120, lines: ["Crimson"], ox: 0, oy: -12, anchor: "middle" },
+        { name: "Tannery Steps", x: 300, y: 200, lines: ["Crimson"], ox: 10, oy: -8, anchor: "start" },
+        { name: "Central Vellmar", x: 460, y: 200, lines: ["Crimson", "Emerald"], ix: true, ox: 10, oy: -10, anchor: "start" },
+        { name: "Museum Quarter", x: 540, y: 280, lines: ["Crimson", "Slate"], ox: 10, oy: 16, anchor: "start" },
+        { name: "Weaver's Row", x: 780, y: 280, lines: ["Crimson", "Slate"], ox: 0, oy: -12, anchor: "middle" },
+        { name: "Lantern Court", x: 860, y: 360, lines: ["Crimson"], ix: true, ox: 10, oy: 4, anchor: "start" },
+        { name: "Eastmoor Terminal", x: 940, y: 360, lines: ["Crimson"], term: true, ox: 8, oy: -10, anchor: "start" },
+        { name: "North Beacon", x: 780, y: 60, lines: ["Cobalt"], term: true, ox: 0, oy: -12, anchor: "middle" },
+        { name: "Priory Gate", x: 700, y: 60, lines: ["Cobalt", "Violet"], ix: true, ox: 0, oy: 16, anchor: "middle" },
+        { name: "Kingsrow", x: 460, y: 140, lines: ["Cobalt", "Crimson"], ix: true, ox: -10, oy: -10, anchor: "end" },
+        { name: "Aurora Park", x: 380, y: 220, lines: ["Cobalt"], ix: true, ox: -10, oy: 4, anchor: "end" },
+        { name: "Foundry Square", x: 300, y: 340, lines: ["Cobalt", "Emerald"], ix: true, ox: -10, oy: 14, anchor: "end" },
+        { name: "Riverside", x: 160, y: 420, lines: ["Cobalt"], ix: true, ox: -10, oy: 4, anchor: "end" },
+        { name: "Old Docks", x: 80, y: 500, lines: ["Cobalt"], ix: true, ox: -8, oy: 4, anchor: "end" },
+        { name: "Saltmarsh", x: 80, y: 620, lines: ["Cobalt"], ix: true, term: true, ox: 10, oy: 4, anchor: "start" },
+        { name: "Hillcrest", x: 40, y: 360, lines: ["Emerald"], term: true, ox: -8, oy: -10, anchor: "end" },
+        { name: "Botanic Gardens", x: 180, y: 360, lines: ["Emerald", "Slate"], ix: true, ox: 0, oy: -12, anchor: "middle" },
+        { name: "Clocktower", x: 260, y: 280, lines: ["Emerald"], ox: 8, oy: 14, anchor: "start" },
+        { name: "Library Vale", x: 420, y: 280, lines: ["Emerald"], ox: 0, oy: 14, anchor: "middle" },
+        { name: "Observatory", x: 500, y: 200, lines: ["Emerald"], ox: 10, oy: 4, anchor: "start" },
+        { name: "North Spur", x: 500, y: 80, lines: ["Emerald"], term: true, ox: 10, oy: 0, anchor: "start" },
+        { name: "South Wharf", x: 120, y: 700, lines: ["Amber"], term: true, ox: 0, oy: 16, anchor: "middle" },
+        { name: "Brickfields", x: 280, y: 700, lines: ["Amber"], ox: 0, oy: -12, anchor: "middle" },
+        { name: "Ferry Landing", x: 360, y: 620, lines: ["Amber"], ox: 10, oy: 4, anchor: "start" },
+        { name: "Canal Gate", x: 520, y: 620, lines: ["Amber"], ox: 0, oy: 16, anchor: "middle" },
+        { name: "Market Cross", x: 600, y: 540, lines: ["Amber", "Violet"], ox: 10, oy: 4, anchor: "start" },
+        { name: "Glassworks", x: 760, y: 540, lines: ["Amber"], ox: 0, oy: -12, anchor: "middle" },
+        { name: "Highbridge", x: 840, y: 460, lines: ["Amber"], ox: 10, oy: 4, anchor: "start" },
+        { name: "Citadel", x: 840, y: 300, lines: ["Amber"], term: true, ox: 10, oy: 0, anchor: "start" },
+        { name: "Eastcliff", x: 940, y: 640, lines: ["Violet"], term: true, ox: 8, oy: 4, anchor: "start" },
+        { name: "Chapel Row", x: 780, y: 640, lines: ["Violet"], ox: 0, oy: 16, anchor: "middle" },
+        { name: "Lantern Court East", x: 700, y: 560, lines: ["Violet"], ox: -10, oy: 4, anchor: "end" },
+        { name: "Violet Arcade", x: 700, y: 420, lines: ["Violet"], ox: 10, oy: 0, anchor: "start" },
+        { name: "Silk Street", x: 620, y: 340, lines: ["Violet", "Slate"], ox: 0, oy: -12, anchor: "middle" },
+        { name: "Parade", x: 460, y: 340, lines: ["Violet"], ox: 0, oy: 16, anchor: "middle" },
+        { name: "Orchard", x: 380, y: 260, lines: ["Violet"], ox: -10, oy: 0, anchor: "end" },
+        { name: "North Cloister", x: 380, y: 80, lines: ["Violet"], term: true, ox: -8, oy: -10, anchor: "end" },
+        { name: "West Marsh", x: 40, y: 520, lines: ["Slate"], term: true, ox: -8, oy: 4, anchor: "end" },
+        { name: "Reedbeds", x: 200, y: 520, lines: ["Slate"], ox: 0, oy: 16, anchor: "middle" },
+        { name: "Copperwalk", x: 280, y: 440, lines: ["Slate"], ox: 10, oy: -8, anchor: "start" },
+        { name: "Ashford", x: 440, y: 440, lines: ["Slate"], ox: 0, oy: 16, anchor: "middle" },
+        { name: "Quay Junction", x: 520, y: 360, lines: ["Slate"], ox: 10, oy: 14, anchor: "start" },
+        { name: "Millbridge", x: 680, y: 360, lines: ["Slate"], ox: 0, oy: 16, anchor: "middle" },
+        { name: "Harbour View", x: 760, y: 280, lines: ["Slate"], ox: 0, oy: 16, anchor: "middle" },
+        { name: "Pierhead", x: 920, y: 280, lines: ["Slate"], term: true, ox: 8, oy: -10, anchor: "start" },
+        { name: "Gable End", x: 220, y: 200, lines: ["Crimson"], ox: 0, oy: 16, anchor: "middle" },
+        { name: "Linen Yard", x: 380, y: 340, lines: ["Cobalt"], ox: 10, oy: 14, anchor: "start" },
+        { name: "Pewter Lane", x: 600, y: 280, lines: ["Crimson"], ox: 0, oy: 16, anchor: "middle" },
+        { name: "Folio Square", x: 460, y: 80, lines: ["Cobalt"], ox: 0, oy: -12, anchor: "middle" }
+      ];
+      var gGrid = svgEl("g", { opacity: "0.18" });
+      var gx, gy;
+      for (gx = 0; gx <= 1000; gx += 100) gGrid.appendChild(svgEl("line", { x1: gx, y1: 0, x2: gx, y2: 740, stroke: "currentColor", "stroke-width": "0.6" }));
+      for (gy = 0; gy <= 740; gy += 100) gGrid.appendChild(svgEl("line", { x1: 0, y1: gy, x2: 1000, y2: gy, stroke: "currentColor", "stroke-width": "0.6" }));
+      svg.appendChild(gGrid);
+      var river = svgEl("path", {
+        d: "M0 470 C 180 430, 260 520, 420 500 S 640 430, 820 470 S 960 560, 1000 540 L1000 620 C 820 640, 640 560, 420 580 S 160 620, 0 560 Z",
+        fill: "var(--river)", opacity: "0.85"
+      });
+      svg.appendChild(river);
+      var cap = svgEl("text", { x: "24", y: "722", "font-size": "11", fill: "currentColor", opacity: "0.7" });
+      cap.textContent = "Vellmar Metro · Network Diagram · 2026";
+      svg.appendChild(cap);
+      var clock = svgEl("text", { x: "976", y: "28", "font-size": "12", "text-anchor": "end", "class": "clock" });
+      clock.setAttribute("font-family", "ui-monospace, Menlo, Consolas, monospace");
+      svg.appendChild(clock);
+      var gLines = svgEl("g", { id: "gLines" });
+      var gHits = svgEl("g", { id: "gHits" });
+      var gSta = svgEl("g", { id: "gSta" });
+      var gTrains = svgEl("g", { id: "gTrains" });
+      svg.appendChild(gLines);
+      svg.appendChild(gHits);
+      svg.appendChild(gSta);
+      svg.appendChild(gTrains);
+      var lineEls = {};
+      var pathEls = {};
+      var delayed = {};
+      lines.forEach(function (ln) {
+        var p = svgEl("path", {
+          d: ln.d, fill: "none", stroke: COLORS[ln.id], "stroke-width": "9",
+          "stroke-linejoin": "round", "stroke-linecap": "round", "data-line": ln.id, "class": "line-stroke"
+        });
+        gLines.appendChild(p);
+        pathEls[ln.id] = p;
+        var hit = svgEl("path", {
+          d: ln.d, fill: "none", stroke: "transparent", "stroke-width": "26",
+          "stroke-linejoin": "round", "stroke-linecap": "round", "data-line": ln.id
+        });
+        hit.style.cursor = "pointer";
+        gHits.appendChild(hit);
+        lineEls[ln.id] = { stroke: p, hit: hit };
+      });
+      function dist2(a, b, x, y) { var dx = a - x, dy = b - y; return dx * dx + dy * dy; }
+      function stationOnPath(path, st) {
+        if (!path || typeof path.getTotalLength !== "function") return 0;
+        var len = path.getTotalLength();
+        var best = 0, bestD = 1e15, step = 4, s, pt, d;
+        for (s = 0; s <= len; s += step) {
+          pt = path.getPointAtLength(s);
+          d = dist2(pt.x, pt.y, st.x, st.y);
+          if (d < bestD) { bestD = d; best = s; }
+        }
+        return best;
+      }
+      var lineStations = {};
+      lines.forEach(function (ln) {
+        var path = pathEls[ln.id];
+        var arr = stations.filter(function (st) { return st.lines.indexOf(ln.id) !== -1; }).map(function (st) {
+          return { st: st, s: stationOnPath(path, st) };
+        }).sort(function (a, b) { return a.s - b.s; });
+        lineStations[ln.id] = arr;
+        ln.length = path.getTotalLength();
+        ln.termA = arr[0].st.name;
+        ln.termB = arr[arr.length - 1].st.name;
+      });
+      stations.forEach(function (st) {
+        var g = svgEl("g", { "data-station": st.name, "class": "sta", tabindex: "0", role: "button" });
+        g.style.cursor = "pointer";
+        if (st.ix) {
+          g.appendChild(svgEl("circle", { cx: st.x, cy: st.y, r: 8, fill: "var(--station)", stroke: "var(--station-stroke)", "stroke-width": "3.5" }));
+        } else if (st.term) {
+          g.appendChild(svgEl("line", { x1: st.x - 8, y1: st.y, x2: st.x + 8, y2: st.y, stroke: "var(--station-stroke)", "stroke-width": "4" }));
+          g.appendChild(svgEl("circle", { cx: st.x, cy: st.y, r: 5, fill: "var(--station)", stroke: "var(--station-stroke)", "stroke-width": "2" }));
+        } else {
+          g.appendChild(svgEl("line", { x1: st.x, y1: st.y - 6, x2: st.x, y2: st.y + 6, stroke: "var(--station-stroke)", "stroke-width": "3.2" }));
+        }
+        var lab = svgEl("text", {
+          x: st.x + (st.ox || 0), y: st.y + (st.oy || 0),
+          "font-size": "11.5", "text-anchor": st.anchor || "start",
+          fill: "var(--ink)", "paint-order": "stroke", stroke: "var(--panel)", "stroke-width": "3"
+        });
+        lab.textContent = st.name;
+        g.appendChild(lab);
+        g.addEventListener("click", function () { selectStation(st); });
+        g.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectStation(st); }
+        });
+        gSta.appendChild(g);
+        st.el = g;
+      });
+      var trains = [];
+      lines.forEach(function (ln) {
+        var path = pathEls[ln.id];
+        var len = ln.length;
+        var dirs = [1, 1, -1, -1];
+        var offs = [0.08, 0.38, 0.62, 0.88];
+        dirs.forEach(function (dir, i) {
+          var c = svgEl("circle", { r: "5.5", fill: COLORS[ln.id], stroke: "#fff", "stroke-width": "1.6" });
+          var halo = svgEl("circle", { r: "9", fill: COLORS[ln.id], opacity: "0.22" });
+          gTrains.appendChild(halo);
+          gTrains.appendChild(c);
+          trains.push({
+            line: ln.id, path: path, dir: dir, s: offs[i] * len, dwell: 0,
+            el: c, halo: halo, dest: dir > 0 ? ln.termB : ln.termA
+          });
+        });
+      });
+      var hoverLine = null;
+      var selected = null;
+      var selectedEl = null;
+      function setHover(id) {
+        hoverLine = id;
+        var opac = id ? "0.13" : "1";
+        lines.forEach(function (ln) {
+          var on = !id || ln.id === id;
+          pathEls[ln.id].style.opacity = on ? "1" : opac;
+          if (on && id) pathEls[ln.id].setAttribute("stroke-width", "12");
+          else pathEls[ln.id].setAttribute("stroke-width", "9");
+        });
+        trains.forEach(function (tr) {
+          var on = !id || tr.line === id;
+          tr.el.style.opacity = on ? "1" : opac;
+          tr.halo.style.opacity = on ? "0.22" : "0.04";
+        });
+        stations.forEach(function (st) {
+          var share = !id || st.lines.indexOf(id) !== -1;
+          st.el.style.opacity = share ? "1" : opac;
+        });
+      }
+      Object.keys(lineEls).forEach(function (id) {
+        lineEls[id].hit.addEventListener("mouseenter", function () { setHover(id); });
+        lineEls[id].hit.addEventListener("mouseleave", function () { setHover(null); });
+      });
+      var legend = qs("#legend");
+      if (legend) {
+        lines.forEach(function (ln) {
+          var b = document.createElement("button");
+          b.className = "leg";
+          b.type = "button";
+          b.innerHTML = '<span class="pip" style="background:' + COLORS[ln.id] + '"></span>' + ln.id;
+          b.addEventListener("mouseenter", function () { setHover(ln.id); });
+          b.addEventListener("mouseleave", function () { setHover(null); });
+          legend.appendChild(b);
+        });
+      }
+      var statusList = qs("#statusList");
+      function renderStatus() {
+        if (!statusList) return;
+        statusList.innerHTML = "";
+        lines.forEach(function (ln) {
+          var row = document.createElement("div");
+          row.className = "status-row";
+          var delay = !!delayed[ln.id];
+          row.innerHTML = '<span><span class="pip" style="background:' + COLORS[ln.id] + ';display:inline-block;margin-right:8px;vertical-align:middle"></span>' + ln.id + '</span><span class="badge' + (delay ? " delay" : "") + '">' + (delay ? "Minor delays" : "Good service") + "</span>";
+          row.addEventListener("mouseenter", function () { setHover(ln.id); });
+          row.addEventListener("mouseleave", function () { setHover(null); });
+          statusList.appendChild(row);
+        });
+      }
+      renderStatus();
+      function selectStation(st) {
+        selected = st;
+        if (selectedEl) {
+          var old = selectedEl.querySelector(".sel-ring");
+          if (old) old.parentNode.removeChild(old);
+          var lab = selectedEl.querySelector("text");
+          if (lab) lab.setAttribute("font-weight", "500");
+        }
+        selectedEl = st.el;
+        var ring = svgEl("circle", { cx: st.x, cy: st.y, r: 12, fill: "none", stroke: "#f0a020", "stroke-width": "3", "class": "sel-ring" });
+        st.el.insertBefore(ring, st.el.firstChild);
+        var t = st.el.querySelector("text");
+        if (t) t.setAttribute("font-weight", "700");
+        var nameEl = qs("#stationName");
+        if (nameEl) nameEl.textContent = st.name;
+        var calling = qs("#calling");
+        if (calling) {
+          calling.innerHTML = "";
+          st.lines.forEach(function (id) {
+            var p = document.createElement("span");
+            p.className = "pip";
+            p.style.background = COLORS[id];
+            calling.appendChild(p);
+          });
+        }
+        refreshArrivals();
+      }
+      function nearestAhead(tr) {
+        var arr = lineStations[tr.line];
+        var best = null, i, item, ds;
+        for (i = 0; i < arr.length; i++) {
+          item = arr[i];
+          ds = (item.s - tr.s) * tr.dir;
+          if (ds < -2) ds += pathEls[tr.line].getTotalLength();
+          if (ds >= -1) {
+            if (!best || ds < best.ds) best = { st: item.st, s: item.s, ds: ds, term: i === 0 || i === arr.length - 1 };
+          }
+        }
+        return best;
+      }
+      function refreshArrivals() {
+        var list = qs("#arrList");
+        if (!list || !selected) return;
+        var rows = [];
+        trains.forEach(function (tr) {
+          if (selected.lines.indexOf(tr.line) === -1) return;
+          var nxt = nearestAhead(tr);
+          if (!nxt || nxt.st.name !== selected.name) return;
+          var speed = delayed[tr.line] ? 62 * 0.45 : 62;
+          if (reduce) speed *= 0.55;
+          var eta = nxt.ds / speed + tr.dwell;
+          var dest;
+          if (selected.name === tr.dest) dest = "Terminates here";
+          else dest = "towards " + tr.dest;
+          rows.push({ line: tr.line, dest: dest, eta: eta, delay: !!delayed[tr.line] });
+        });
+        rows.sort(function (a, b) { return a.eta - b.eta; });
+        list.innerHTML = "";
+        rows.slice(0, 6).forEach(function (r) {
+          var li = document.createElement("li");
+          var etaTxt, cls = "eta";
+          if (r.eta < 3) { etaTxt = "Due"; cls += " due"; }
+          else if (r.eta < 60) etaTxt = String(Math.round(r.eta)) + "s";
+          else etaTxt = Math.floor(r.eta / 60) + ":" + ("0" + Math.round(r.eta % 60)).slice(-2);
+          li.innerHTML = '<span class="pip" style="background:' + COLORS[r.line] + '"></span><span>' + r.line + " · " + r.dest + (r.delay ? " · delays" : "") + '</span><span class="' + cls + '">' + etaTxt + "</span>";
+          list.appendChild(li);
+        });
+        if (!rows.length) {
+          var empty = document.createElement("li");
+          empty.textContent = "No trains approaching.";
+          empty.style.gridColumn = "1 / -1";
+          list.appendChild(empty);
+        }
+      }
+      var last = 0, arrAcc = 0, delayIn = 18 + Math.random() * 22;
+      function step(now) {
+        var dt = Math.min(0.05, (now - (last || now)) / 1000);
+        last = now;
+        var hh = new Date();
+        if (clock) clock.textContent = ("0" + hh.getHours()).slice(-2) + ":" + ("0" + hh.getMinutes()).slice(-2) + ":" + ("0" + hh.getSeconds()).slice(-2);
+        trains.forEach(function (tr) {
+          var len = pathEls[tr.line].getTotalLength();
+          var speed = delayed[tr.line] ? 62 * 0.45 : 62;
+          if (reduce) speed *= 0.55;
+          var nxt = nearestAhead(tr);
+          if (tr.dwell > 0) {
+            tr.dwell -= dt;
+          } else {
+            tr.s += tr.dir * speed * dt;
+            if (nxt && nxt.ds < 3) {
+              tr.s = nxt.s;
+              tr.dwell = (nxt.term ? 3.2 : 1.6) * (delayed[tr.line] ? 2 : 1);
+              if (nxt.term) {
+                tr.dir *= -1;
+                var ln = lines.filter(function (L) { return L.id === tr.line; })[0];
+                tr.dest = tr.dir > 0 ? ln.termB : ln.termA;
+              }
+            }
+          }
+          if (tr.s < 0) tr.s += len;
+          if (tr.s > len) tr.s -= len;
+          var pt = tr.path.getPointAtLength(tr.s);
+          tr.el.setAttribute("cx", pt.x);
+          tr.el.setAttribute("cy", pt.y);
+          tr.halo.setAttribute("cx", pt.x);
+          tr.halo.setAttribute("cy", pt.y);
+        });
+        delayIn -= dt;
+        if (delayIn <= 0) {
+          var pick = lines[(Math.random() * lines.length) | 0].id;
+          delayed[pick] = true;
+          renderStatus();
+          window.setTimeout(function () {
+            delayed[pick] = false;
+            renderStatus();
+          }, (14 + Math.random() * 16) * 1000);
+          delayIn = 18 + Math.random() * 22;
+        }
+        arrAcc += dt;
+        if (arrAcc > 0.25) { arrAcc = 0; if (selected) refreshArrivals(); }
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(step);
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(step);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

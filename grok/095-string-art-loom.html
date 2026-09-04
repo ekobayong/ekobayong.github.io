@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tension — Generative String Art Loom</title>
+  <style>
+    :root {
+      --linen: #efe7d8;
+      --ink: #22201c;
+      --muted: #7a7266;
+      --moss: #2f4a3e;
+      --brass: #b98a3a;
+      --brass2: #e2b862;
+      --serif: Georgia, "Iowan Old Style", Palatino, serif;
+      --sans: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--linen);
+      background-image:
+        repeating-linear-gradient(0deg, rgba(34,32,28,.035) 0 1px, transparent 1px 18px),
+        repeating-linear-gradient(90deg, rgba(34,32,28,.035) 0 1px, transparent 1px 18px),
+        radial-gradient(900px 500px at 20% 0%, rgba(255,255,255,.55), transparent 60%);
+      color: var(--ink);
+      font-family: var(--sans);
+      min-height: 100vh;
+    }
+    header.top {
+      display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px;
+      padding: 22px 28px 8px; align-items: baseline;
+    }
+    h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 4vw, 44px); }
+    h1 em { font-style: italic; color: var(--moss); font-size: .48em; display: block; margin-top: 6px; }
+    .stats { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+    .layout {
+      display: grid; grid-template-columns: minmax(280px, 1fr) 320px; gap: 24px;
+      max-width: 1180px; margin: 0 auto; padding: 12px 20px 48px;
+    }
+    .board-wrap { position: relative; }
+    .board {
+      position: relative; width: 100%; aspect-ratio: 1; border-radius: 18px; overflow: hidden;
+      box-shadow: 0 18px 40px rgba(34,32,28,.22), 0 2px 0 rgba(255,255,255,.4) inset;
+    }
+    .board canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .badge {
+      position: absolute; left: 14px; bottom: 14px; background: rgba(47,74,62,.88); color: #f4efe4;
+      font-family: var(--mono); font-size: 11px; padding: 6px 10px; border-radius: 4px;
+    }
+    .nail-tip {
+      position: absolute; pointer-events: none; background: #22201c; color: #f4efe4;
+      font-family: var(--mono); font-size: 11px; padding: 4px 8px; opacity: 0; z-index: 4;
+    }
+    .nail-tip.on { opacity: 1; }
+    .panel {
+      background: var(--moss); color: #e8e2d4; padding: 18px; border-radius: 4px;
+      box-shadow: 0 10px 24px rgba(47,74,62,.28); border-top: 3px solid var(--brass2);
+    }
+    .panel h2, .panel label, .panel .lbl {
+      font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--brass2);
+    }
+    .panel h2 { margin: 14px 0 8px; }
+    .panel h2:first-child { margin-top: 0; }
+    .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+    button, select {
+      font: inherit; font-size: 12px; background: transparent; color: #e8e2d4;
+      border: 1px solid rgba(226,184,98,.45); padding: 6px 10px; cursor: pointer;
+    }
+    button[aria-pressed="true"], button.active { background: var(--brass); color: #1c1610; border-color: var(--brass2); }
+    input[type="range"] { width: 100%; accent-color: var(--brass2); }
+    .read { font-family: var(--mono); font-size: 11px; color: var(--brass2); }
+    .swatch { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--brass2); padding: 0; overflow: hidden; position: relative; }
+    .swatch span { position: absolute; inset: 0; }
+    .swatch span.a { clip-path: inset(0 50% 0 0); }
+    .swatch span.b { clip-path: inset(0 0 0 50%); }
+    #thumb { width: 100%; height: 88px; display: block; background: #1a1714; margin-top: 8px; }
+    .essays { max-width: 1180px; margin: 0 auto; padding: 0 20px 60px; display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .essays article { background: rgba(255,255,255,.35); padding: 18px; }
+    .essays h3 { font-family: var(--serif); font-weight: 400; margin-bottom: 8px; }
+    .essays p { color: var(--muted); font-size: 14px; line-height: 1.55; }
+    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <h1>Tension <em>Ten thousand straight lines make a curve</em></h1>
+    <div class="stats" id="headerStats">0 threads · 180 nails · 0.00 m on a 60 cm board</div>
+  </header>
+  <div class="layout">
+    <div class="board-wrap">
+      <div class="board" id="board">
+        <canvas id="wood"></canvas>
+        <canvas id="thread"></canvas>
+        <canvas id="nails"></canvas>
+        <div class="badge" id="badge">0 / 1800</div>
+      </div>
+      <div class="nail-tip" id="nailTip">nail 042 · 96°</div>
+    </div>
+    <aside class="panel">
+      <h2>Target</h2>
+      <div class="row" id="targets">
+        <button type="button" data-t="portrait" aria-pressed="true">Portrait</button>
+        <button type="button" data-t="orb" aria-pressed="false">Orb</button>
+        <button type="button" data-t="rings" aria-pressed="false">Rings</button>
+      </div>
+      <canvas id="thumb" width="256" height="256" aria-label="Target preview"></canvas>
+      <h2>Frame</h2>
+      <div class="row" id="frames">
+        <button type="button" data-f="circle" aria-pressed="true">Circle</button>
+        <button type="button" data-f="square" aria-pressed="false">Square</button>
+        <button type="button" data-f="heart" aria-pressed="false">Heart</button>
+      </div>
+      <h2>Thread</h2>
+      <div class="row" id="presets">
+        <button type="button" class="swatch" data-p="birch" aria-pressed="true" title="black on cream birch"><span class="a" style="background:#1a1714"></span><span class="b" style="background:#e9dcbf"></span></button>
+        <button type="button" class="swatch" data-p="char" aria-pressed="false" title="white on charcoal"><span class="a" style="background:#f4efe4"></span><span class="b" style="background:#2b2926"></span></button>
+        <button type="button" class="swatch" data-p="oak" aria-pressed="false" title="crimson on oak"><span class="a" style="background:#a3122a"></span><span class="b" style="background:#d9bb8a"></span></button>
+        <button type="button" class="swatch" data-p="wal" aria-pressed="false" title="gold on walnut"><span class="a" style="background:#e0b04a"></span><span class="b" style="background:#3a281c"></span></button>
+      </div>
+      <label class="lbl">Nails <span class="read" id="nailOut">180</span></label>
+      <input type="range" id="nailCount" min="60" max="320" value="180">
+      <label class="lbl">Threads <span class="read" id="thOut">1800</span></label>
+      <input type="range" id="threadCount" min="400" max="7000" value="1800">
+      <label class="lbl">Rate <span class="read" id="rateOut">24 / frame</span></label>
+      <input type="range" id="rate" min="2" max="80" value="24">
+      <div class="row" style="margin-top:12px">
+        <button type="button" id="manual">Manual mode</button>
+        <button type="button" id="clear">Clear</button>
+        <button type="button" id="download">Download PNG</button>
+      </div>
+    </aside>
+  </div>
+  <section class="essays">
+    <article>
+      <h3>The greedy stitch</h3>
+      <p>From the current nail every other pin beyond a minimum angular gap is scored by the mean residual sampled along the chord. The darkest unused pair is chosen, 0.13 of coverage is subtracted, and the weaver steps forward. It is not optimal — it is hungry, which is enough.</p>
+    </article>
+    <article>
+      <h3>Why straight lines read as shade</h3>
+      <p>A single hairline is almost nothing. Stacked at slight angles they densify like hatching. The eye integrates the crossings into tone, so a curve appears where no curve was drawn — ten thousand straight lines make a curve.</p>
+    </article>
+    <article>
+      <h3>Building it in the shop</h3>
+      <p>A 60 cm board, evenly spaced nails, and one continuous thread. Record the nail sequence from the loom, then wind in order. Tension is the whole craft: too slack and the image fogs; too tight and the frame sings.</p>
+    </article>
+  </section>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    function init() {
+      var wood = qs("#wood"), threadC = qs("#thread"), nailsC = qs("#nails"), thumb = qs("#thumb");
+      if (!wood || !threadC || !nailsC) return;
+      var wctx = wood.getContext("2d");
+      var tctx = threadC.getContext("2d");
+      var nctx = nailsC.getContext("2d");
+      var thctx = thumb ? thumb.getContext("2d") : null;
+      if (!wctx || !tctx || !nctx) return;
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var N = 180, targetN = 1800, rate = 24;
+      var frame = "circle", target = "portrait", preset = "birch";
+      var palettes = {
+        birch: { thread: "#1a1714", board: "#e9dcbf", shadow: "rgba(20,16,12,.28)" },
+        char: { thread: "#f4efe4", board: "#2b2926", shadow: "rgba(0,0,0,.35)" },
+        oak: { thread: "#a3122a", board: "#d9bb8a", shadow: "rgba(80,20,16,.28)" },
+        wal: { thread: "#e0b04a", board: "#3a281c", shadow: "rgba(20,10,4,.4)" }
+      };
+      var nails = [];
+      var residual = null;
+      var MAP = 256;
+      var current = 0, drawn = 0, weaving = true, manual = false, hook = -1, hover = -1;
+      var used = {};
+      var metres = 0;
+      var dpr = 1, size = 600;
+      function seed(s) { return function () { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
+      function layoutNails() {
+        nails = [];
+        var i, t, x, y;
+        if (frame === "circle") {
+          for (i = 0; i < N; i++) {
+            t = i / N * Math.PI * 2;
+            nails.push({ x: 0.5 + Math.cos(t) * 0.46, y: 0.5 + Math.sin(t) * 0.46, a: t });
+          }
+        } else if (frame === "square") {
+          var per = N / 4;
+          for (i = 0; i < N; i++) {
+            var side = Math.floor(i / per);
+            var u = (i % per) / per;
+            if (side === 0) { x = u; y = 0; }
+            else if (side === 1) { x = 1; y = u; }
+            else if (side === 2) { x = 1 - u; y = 1; }
+            else { x = 0; y = 1 - u; }
+            nails.push({ x: 0.08 + x * 0.84, y: 0.08 + y * 0.84, a: Math.atan2(y - 0.5, x - 0.5) });
+          }
+        } else {
+          var pts = [];
+          var len = 0;
+          for (i = 0; i <= 400; i++) {
+            t = i / 400 * Math.PI * 2;
+            x = 16 * Math.pow(Math.sin(t), 3);
+            y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+            pts.push({ x: x, y: -y });
+            if (i) len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+          }
+          var step = len / N, acc = 0, k = 1;
+          nails.push({ x: pts[0].x, y: pts[0].y });
+          for (i = 1; i < pts.length && nails.length < N; i++) {
+            acc += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+            if (acc >= step * k) {
+              nails.push({ x: pts[i].x, y: pts[i].y });
+              k++;
+            }
+          }
+          var minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+          nails.forEach(function (p) { minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x); miny = Math.min(miny, p.y); maxy = Math.max(maxy, p.y); });
+          nails = nails.map(function (p) {
+            var nx = (p.x - minx) / (maxx - minx);
+            var ny = (p.y - miny) / (maxy - miny);
+            return { x: 0.12 + nx * 0.76, y: 0.1 + ny * 0.78, a: Math.atan2(ny - 0.5, nx - 0.5) };
+          });
+        }
+      }
+      function drawTargetMap(c, W) {
+        c.fillStyle = "#f2ead8"; c.fillRect(0, 0, W, W);
+        if (target === "portrait") {
+          c.fillStyle = "#1a1510";
+          c.beginPath(); c.ellipse(W * .5, W * .42, W * .28, W * .32, 0, 0, Math.PI * 2); c.fill();
+          c.fillRect(W * .22, W * .2, W * .12, W * .4);
+          c.fillRect(W * .66, W * .2, W * .12, W * .4);
+          var g = c.createRadialGradient(W * .46, W * .44, 10, W * .5, W * .48, W * .22);
+          g.addColorStop(0, "#d8b89a"); g.addColorStop(1, "#8a6a52");
+          c.fillStyle = g; c.beginPath(); c.ellipse(W * .5, W * .48, W * .2, W * .24, 0, 0, Math.PI * 2); c.fill();
+          c.strokeStyle = "#2a2018"; c.lineWidth = 3;
+          c.beginPath(); c.moveTo(W * .38, W * .4); c.lineTo(W * .44, W * .4); c.stroke();
+          c.beginPath(); c.moveTo(W * .56, W * .4); c.lineTo(W * .62, W * .4); c.stroke();
+          c.fillStyle = "#1a1510";
+          c.beginPath(); c.arc(W * .41, W * .44, 5, 0, Math.PI * 2); c.fill();
+          c.beginPath(); c.arc(W * .59, W * .44, 5, 0, Math.PI * 2); c.fill();
+          c.beginPath(); c.moveTo(W * .5, W * .46); c.lineTo(W * .48, W * .54); c.lineTo(W * .52, W * .54); c.stroke();
+          c.beginPath(); c.ellipse(W * .5, W * .6, 14, 6, 0, 0, Math.PI); c.stroke();
+          c.fillStyle = "rgba(20,16,12,.35)";
+          c.beginPath(); c.ellipse(W * .5, W * .78, W * .16, W * .1, 0, 0, Math.PI * 2); c.fill();
+          c.fillRect(W * .28, W * .78, W * .44, W * .22);
+        } else if (target === "orb") {
+          c.fillStyle = "#cfc4ae"; c.fillRect(0, 0, W, W);
+          c.fillStyle = "rgba(20,16,12,.25)";
+          c.beginPath(); c.ellipse(W * .52, W * .78, W * .28, W * .08, 0, 0, Math.PI * 2); c.fill();
+          var sg = c.createRadialGradient(W * .42, W * .38, 8, W * .5, W * .5, W * .28);
+          sg.addColorStop(0, "#f2eee6"); sg.addColorStop(.55, "#8a7a62"); sg.addColorStop(1, "#1a1510");
+          c.fillStyle = sg; c.beginPath(); c.arc(W * .5, W * .48, W * .28, 0, Math.PI * 2); c.fill();
+        } else {
+          c.fillStyle = "#eee6d4"; c.fillRect(0, 0, W, W);
+          for (var r = W * .48; r > 8; r -= 18) {
+            c.strokeStyle = ((W * .48 - r) / 18 | 0) % 2 ? "#1a1510" : "#d4c8b0";
+            c.lineWidth = 16; c.beginPath(); c.arc(W * .5, W * .5, r, 0, Math.PI * 2); c.stroke();
+          }
+          var fade = c.createLinearGradient(0, 0, W, W);
+          fade.addColorStop(0, "rgba(255,255,255,0)"); fade.addColorStop(1, "rgba(20,16,12,.35)");
+          c.fillStyle = fade; c.fillRect(0, 0, W, W);
+        }
+      }
+      function buildResidual() {
+        var off = document.createElement("canvas");
+        off.width = MAP; off.height = MAP;
+        var oc = off.getContext("2d");
+        if (!oc) return;
+        drawTargetMap(oc, MAP);
+        if (thctx) { thctx.clearRect(0, 0, 256, 256); thctx.drawImage(off, 0, 0); }
+        var img = oc.getImageData(0, 0, MAP, MAP).data;
+        residual = new Float32Array(MAP * MAP);
+        var pal = palettes[preset];
+        var threadLum = pal.thread === "#f4efe4" || pal.thread === "#e0b04a" ? 0.85 : 0.12;
+        var invert = threadLum > 0.5;
+        for (var i = 0; i < MAP * MAP; i++) {
+          var L = (0.299 * img[i * 4] + 0.587 * img[i * 4 + 1] + 0.114 * img[i * 4 + 2]) / 255;
+          residual[i] = invert ? L : (1 - L);
+        }
+      }
+      function paintWood() {
+        var pal = palettes[preset];
+        var rng = seed(preset.length * 97 + 13);
+        wctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        wctx.fillStyle = pal.board; wctx.fillRect(0, 0, size, size);
+        for (var i = 0; i < 160; i++) {
+          wctx.strokeStyle = "rgba(40,30,20," + (0.04 + rng() * 0.07) + ")";
+          wctx.lineWidth = 1 + rng() * 2.2;
+          wctx.beginPath();
+          var y = rng() * size;
+          wctx.moveTo(0, y);
+          for (var x = 0; x <= size; x += 18) wctx.lineTo(x, y + Math.sin(x * 0.03 + rng() * 6) * (6 + rng() * 10));
+          wctx.stroke();
+        }
+        function knot(x, y) {
+          wctx.save();
+          wctx.translate(x, y); wctx.rotate(rng() * 2);
+          var kg = wctx.createRadialGradient(0, 0, 2, 0, 0, 18);
+          kg.addColorStop(0, "rgba(60,40,20,.45)"); kg.addColorStop(1, "rgba(60,40,20,0)");
+          wctx.fillStyle = kg; wctx.beginPath(); wctx.ellipse(0, 0, 16, 9, 0, 0, Math.PI * 2); wctx.fill();
+          wctx.restore();
+        }
+        knot(size * 0.28, size * 0.33); knot(size * 0.7, size * 0.62);
+        var vg = wctx.createRadialGradient(size * .5, size * .45, size * .1, size * .5, size * .5, size * .7);
+        vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.22)");
+        wctx.fillStyle = vg; wctx.fillRect(0, 0, size, size);
+        var sh = wctx.createLinearGradient(0, 0, size, size);
+        sh.addColorStop(0, "rgba(255,255,255,.12)"); sh.addColorStop(.5, "rgba(255,255,255,0)"); sh.addColorStop(1, "rgba(255,255,255,.05)");
+        wctx.fillStyle = sh; wctx.fillRect(0, 0, size, size);
+      }
+      function drawNails() {
+        nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        nctx.clearRect(0, 0, size, size);
+        nails.forEach(function (n, i) {
+          var x = n.x * size, y = n.y * size;
+          nctx.fillStyle = "rgba(0,0,0,.25)";
+          nctx.beginPath(); nctx.arc(x + 1.2, y + 1.6, 3.4, 0, Math.PI * 2); nctx.fill();
+          var g = nctx.createRadialGradient(x - 1, y - 1, 0.4, x, y, 3.2);
+          g.addColorStop(0, "#f2f2f0"); g.addColorStop(.55, "#9aa0a6"); g.addColorStop(1, "#4a4e52");
+          nctx.fillStyle = g; nctx.beginPath(); nctx.arc(x, y, 3.1, 0, Math.PI * 2); nctx.fill();
+          if (i === hover) {
+            nctx.strokeStyle = "#fff"; nctx.lineWidth = 1.4;
+            nctx.beginPath(); nctx.arc(x, y, 6, 0, Math.PI * 2); nctx.stroke();
+          }
+          if (i === hook) {
+            nctx.strokeStyle = "#e2b862"; nctx.lineWidth = 1.8;
+            nctx.beginPath(); nctx.arc(x, y, 7, 0, Math.PI * 2); nctx.stroke();
+          }
+        });
+        if (manual && hook >= 0 && hover >= 0 && hook !== hover) {
+          nctx.strokeStyle = "#e2b862"; nctx.setLineDash([4, 4]); nctx.lineWidth = 1;
+          nctx.beginPath();
+          nctx.moveTo(nails[hook].x * size, nails[hook].y * size);
+          nctx.lineTo(nails[hover].x * size, nails[hover].y * size);
+          nctx.stroke(); nctx.setLineDash([]);
+        }
+      }
+      function sampleLine(a, b) {
+        var x0 = a.x * (MAP - 1), y0 = a.y * (MAP - 1);
+        var x1 = b.x * (MAP - 1), y1 = b.y * (MAP - 1);
+        var steps = Math.max(8, Math.hypot(x1 - x0, y1 - y0) | 0);
+        var sum = 0, n = 0;
+        for (var i = 0; i <= steps; i++) {
+          var t = i / steps;
+          var x = (x0 + (x1 - x0) * t) | 0;
+          var y = (y0 + (y1 - y0) * t) | 0;
+          sum += residual[y * MAP + x] || 0;
+          n++;
+        }
+        return n ? sum / n : 0;
+      }
+      function subtractLine(a, b) {
+        var x0 = a.x * (MAP - 1), y0 = a.y * (MAP - 1);
+        var x1 = b.x * (MAP - 1), y1 = b.y * (MAP - 1);
+        var steps = Math.max(8, Math.hypot(x1 - x0, y1 - y0) | 0);
+        for (var i = 0; i <= steps; i++) {
+          var t = i / steps;
+          var x = (x0 + (x1 - x0) * t) | 0;
+          var y = (y0 + (y1 - y0) * t) | 0;
+          var idx = y * MAP + x;
+          residual[idx] = Math.max(0, residual[idx] - 0.13);
+        }
+      }
+      function drawThread(a, b) {
+        var pal = palettes[preset];
+        var x0 = a.x * size, y0 = a.y * size, x1 = b.x * size, y1 = b.y * size;
+        tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        tctx.strokeStyle = pal.shadow; tctx.lineWidth = 1.1; tctx.globalAlpha = 0.45;
+        tctx.beginPath(); tctx.moveTo(x0 + 0.8, y0 + 0.9); tctx.lineTo(x1 + 0.8, y1 + 0.9); tctx.stroke();
+        tctx.strokeStyle = pal.thread; tctx.lineWidth = 0.7; tctx.globalAlpha = 0.55;
+        tctx.beginPath(); tctx.moveTo(x0, y0); tctx.lineTo(x1, y1); tctx.stroke();
+        tctx.globalAlpha = 1;
+        metres += Math.hypot(x1 - x0, y1 - y0) / size * 0.6;
+        drawn++;
+      }
+      function angGap(i, j) {
+        var d = Math.abs(i - j);
+        return Math.min(d, N - d);
+      }
+      function stepOnce() {
+        if (!weaving || drawn >= targetN || !residual) return false;
+        var best = -1, bestS = -1;
+        var minGap = Math.max(4, N * 0.04);
+        for (var j = 0; j < N; j++) {
+          if (j === current || angGap(current, j) < minGap) continue;
+          var key = current < j ? current + "-" + j : j + "-" + current;
+          if (used[key]) continue;
+          var s = sampleLine(nails[current], nails[j]);
+          if (s > bestS) { bestS = s; best = j; }
+        }
+        if (best < 0 || bestS < 0.02) return false;
+        var key2 = current < best ? current + "-" + best : best + "-" + current;
+        used[key2] = 1;
+        subtractLine(nails[current], nails[best]);
+        drawThread(nails[current], nails[best]);
+        current = best;
+        return true;
+      }
+      function stats() {
+        var hs = qs("#headerStats");
+        var badge = qs("#badge");
+        if (hs) hs.textContent = drawn + " threads · " + N + " nails · " + metres.toFixed(2) + " m on a 60 cm board";
+        if (badge) badge.textContent = drawn + " / " + targetN;
+      }
+      function loop() {
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+        if (!weaving || manual) return;
+        var n = rate;
+        for (var i = 0; i < n; i++) if (!stepOnce()) { weaving = false; break; }
+        stats();
+      }
+      function resize() {
+        var board = qs("#board");
+        if (!board) return;
+        var w = board.clientWidth || 600;
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        size = w;
+        [wood, threadC, nailsC].forEach(function (c) { c.width = Math.round(w * dpr); c.height = Math.round(w * dpr); });
+        paintWood();
+        tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        tctx.clearRect(0, 0, size, size);
+        drawn = 0; metres = 0; current = 0; used = {}; weaving = !manual;
+        buildResidual();
+        var replay = Math.min(drawn, targetN);
+        replay = 0;
+        drawNails();
+        stats();
+      }
+      function restart() {
+        layoutNails();
+        resize();
+      }
+      qsa("#targets button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          target = b.getAttribute("data-t") || "portrait";
+          qsa("#targets button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+          restart();
+        });
+      });
+      qsa("#frames button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          frame = b.getAttribute("data-f") || "circle";
+          qsa("#frames button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+          restart();
+        });
+      });
+      qsa("#presets button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          preset = b.getAttribute("data-p") || "birch";
+          qsa("#presets button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+          restart();
+        });
+      });
+      var nailCount = qs("#nailCount"), threadCount = qs("#threadCount"), rateEl = qs("#rate");
+      if (nailCount) nailCount.addEventListener("input", function () {
+        N = Number(nailCount.value); if (qs("#nailOut")) qs("#nailOut").textContent = String(N); restart();
+      });
+      if (threadCount) threadCount.addEventListener("change", function () {
+        var v = Number(threadCount.value);
+        if (qs("#thOut")) qs("#thOut").textContent = String(v);
+        if (v > targetN) { targetN = v; weaving = !manual; }
+        else { targetN = v; restart(); }
+      });
+      if (threadCount) threadCount.addEventListener("input", function () {
+        if (qs("#thOut")) qs("#thOut").textContent = threadCount.value;
+      });
+      if (rateEl) rateEl.addEventListener("input", function () {
+        rate = Number(rateEl.value); if (qs("#rateOut")) qs("#rateOut").textContent = rate + " / frame";
+      });
+      var manBtn = qs("#manual");
+      if (manBtn) manBtn.addEventListener("click", function () {
+        manual = !manual; weaving = !manual; manBtn.setAttribute("aria-pressed", manual ? "true" : "false");
+        hook = -1;
+      });
+      var clearBtn = qs("#clear");
+      if (clearBtn) clearBtn.addEventListener("click", function () {
+        tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        tctx.clearRect(0, 0, size, size);
+        drawn = 0; metres = 0; current = 0; used = {}; weaving = !manual; hook = -1;
+        buildResidual(); stats();
+      });
+      var dl = qs("#download");
+      if (dl) dl.addEventListener("click", function () {
+        var out = document.createElement("canvas");
+        out.width = wood.width; out.height = wood.height;
+        var oc = out.getContext("2d");
+        if (!oc) return;
+        oc.drawImage(wood, 0, 0); oc.drawImage(threadC, 0, 0); oc.drawImage(nailsC, 0, 0);
+        var a = document.createElement("a"); a.href = out.toDataURL("image/png"); a.download = "tension.png"; a.click();
+      });
+      function hit(ev) {
+        var r = nailsC.getBoundingClientRect();
+        var x = (ev.clientX - r.left) / r.width;
+        var y = (ev.clientY - r.top) / r.height;
+        var best = -1, bd = 0.03;
+        nails.forEach(function (n, i) {
+          var d = Math.hypot(n.x - x, n.y - y);
+          if (d < bd) { bd = d; best = i; }
+        });
+        return best;
+      }
+      nailsC.addEventListener("pointermove", function (ev) {
+        hover = hit(ev);
+        var tip = qs("#nailTip");
+        if (tip && hover >= 0) {
+          var deg = Math.round(((nails[hover].a * 180 / Math.PI) + 360) % 360);
+          tip.textContent = "nail " + String(hover).padStart(3, "0") + " · " + deg + "°";
+          tip.classList.add("on");
+          var br = qs("#board").getBoundingClientRect();
+          tip.style.left = (ev.clientX - br.left + 10) + "px";
+          tip.style.top = (ev.clientY - br.top - 24) + "px";
+        } else if (tip) tip.classList.remove("on");
+        drawNails();
+      });
+      nailsC.addEventListener("pointerleave", function () { hover = -1; var tip = qs("#nailTip"); if (tip) tip.classList.remove("on"); drawNails(); });
+      nailsC.addEventListener("click", function () {
+        if (hover < 0) return;
+        if (!manual) { manual = true; weaving = false; if (manBtn) manBtn.setAttribute("aria-pressed", "true"); }
+        if (hook < 0) { hook = hover; drawNails(); return; }
+        if (hook === hover) return;
+        drawThread(nails[hook], nails[hover]);
+        subtractLine(nails[hook], nails[hover]);
+        current = hover; hook = hover; stats(); drawNails();
+      });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") { hook = -1; drawNails(); }
+        if (e.key === " " || e.code === "Space") {
+          if (e.target && e.target.tagName === "INPUT") return;
+          e.preventDefault();
+          if (manual) { manual = false; if (manBtn) manBtn.setAttribute("aria-pressed", "false"); }
+          weaving = !weaving;
+        }
+      });
+      layoutNails();
+      if (typeof window.ResizeObserver === "function") {
+        var ro = new ResizeObserver(function () { restart(); });
+        var board = qs("#board");
+        if (board) ro.observe(board);
+      } else {
+        window.addEventListener("resize", restart);
+        restart();
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+      else setInterval(function () { if (weaving && !manual) { for (var i = 0; i < rate; i++) stepOnce(); stats(); } }, 50);
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

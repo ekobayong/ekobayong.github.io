@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mandelbrot Explorer — Progressive Fractal Renderer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #08090d; color: #e8e4dc; overflow: hidden; }
+    body { font-family: ui-sans-serif, system-ui, Helvetica, sans-serif; }
+    canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+    .progress {
+      position: fixed; top: 0; left: 0; height: 2px; width: 0;
+      background: #f0b35a; box-shadow: 0 0 10px #f0b35a; z-index: 20;
+      transition: width 80ms linear;
+    }
+    .panel {
+      position: fixed; z-index: 10;
+      background: rgba(14,16,24,0.78);
+      border: 1px solid rgba(255,255,255,0.09);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 10px;
+    }
+    .brand {
+      top: 16px; left: 16px;
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+    }
+    .mark {
+      width: 28px; height: 28px; border-radius: 50%;
+      background:
+        radial-gradient(circle at 62% 50%, transparent 38%, #f0b35a 39% 46%, transparent 47%),
+        radial-gradient(circle at 38% 50%, #0e1018 0 42%, transparent 43%),
+        #f0b35a;
+    }
+    .brand h1 {
+      font-family: Georgia, "Iowan Old Style", Palatino, serif;
+      font-size: 18px; font-weight: 400; color: #f4efe6;
+    }
+    .brand p {
+      font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+      color: #9aa0ae; margin-top: 2px;
+    }
+    .hud {
+      top: 16px; right: 16px;
+      padding: 12px 14px;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 11.5px; font-variant-numeric: tabular-nums;
+      line-height: 1.55; color: #c9cdd6;
+    }
+    .hud .amber { color: #f0b35a; }
+    .hint {
+      display: block; margin-top: 8px; max-width: 260px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 10px; color: #8b90a0; opacity: 1;
+      transition: opacity 800ms ease;
+    }
+    .hint.gone { opacity: 0; }
+    .dock {
+      bottom: 16px; left: 16px; right: 16px;
+      padding: 12px 14px;
+      display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px;
+    }
+    .marks {
+      display: flex; gap: 8px; overflow-x: auto; flex: 1; min-width: 0;
+      padding-bottom: 2px;
+    }
+    .mark-btn {
+      flex: 0 0 auto; width: 112px; height: 72px; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; overflow: hidden; position: relative; cursor: pointer;
+      background: #11131a; padding: 0; transition: transform 280ms cubic-bezier(.2,.9,.3,1.3), border-color 200ms;
+    }
+    .mark-btn:hover { transform: translateY(-4px); }
+    .mark-btn.active { border-color: #f0b35a; box-shadow: 0 0 0 1px #f0b35a; }
+    .mark-btn canvas { display: block; width: 100%; height: 100%; }
+    .mark-btn span {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      padding: 10px 6px 4px;
+      background: linear-gradient(transparent, rgba(8,10,16,0.92));
+      color: #efe8dc; font-size: 10px; letter-spacing: 0.04em;
+    }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .seg { display: flex; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; overflow: hidden; }
+    .seg button {
+      background: transparent; color: #c9cdd6; border: 0; padding: 6px 8px; cursor: pointer;
+      display: flex; align-items: center; gap: 6px; font: 10px/1 ui-sans-serif, system-ui, sans-serif;
+    }
+    .seg button.active { background: rgba(240,179,90,0.18); color: #f0b35a; }
+    .sw { width: 18px; height: 8px; border-radius: 2px; display: inline-block; }
+    .sw.ultra { background: linear-gradient(90deg, #000764, #206bcb, #edffff, #ffaa00, #000200); }
+    .sw.ember { background: linear-gradient(90deg, #0a0402, #c83c0a, #ffaa28, #3c0a14); }
+    .sw.ice { background: linear-gradient(90deg, #020614, #3c8cdc, #ffffff, #1e1446); }
+    .sw.mono { background: linear-gradient(90deg, #08080a, #f0eee8, #08080a); }
+    .tools button.act, .step {
+      background: rgba(255,255,255,0.05); color: #e8e4dc;
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+      padding: 7px 10px; cursor: pointer; font: 11px/1 ui-sans-serif, system-ui, sans-serif;
+    }
+    .step { min-width: 28px; }
+    @media (max-width: 760px) {
+      .hud { top: auto; bottom: 118px; right: 12px; left: 12px; }
+      .mark-btn { width: 92px; height: 60px; }
+      .dock { flex-direction: column; align-items: stretch; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .mark-btn { transition: none; }
+      .hint { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div class="progress" id="progress"></div>
+  <div class="panel brand">
+    <div class="mark" aria-hidden="true"></div>
+    <div>
+      <h1>Mandelbrot Explorer</h1>
+      <p>Progressive fractal renderer</p>
+    </div>
+  </div>
+  <div class="panel hud" id="hud">
+    <div>Re <span id="re">-0.750000000000</span></div>
+    <div>Im <span id="im">+0.000000000000</span></div>
+    <div>Zoom <span class="amber" id="zoom">×1.00</span></div>
+    <div>Iter <span id="iter">120</span></div>
+    <div>Time <span id="ms">0</span> ms</div>
+    <div>Workers <span id="wc">0</span></div>
+    <span class="hint" id="hint">Click zoom · Shift/right-click out · Drag pan · Wheel zoom · R reset · 1–4 palettes</span>
+  </div>
+  <div class="panel dock">
+    <div class="marks" id="marks"></div>
+    <div class="tools">
+      <div class="seg" id="palettes" role="group" aria-label="Palette">
+        <button type="button" data-p="0" class="active"><span class="sw ultra"></span>Ultra</button>
+        <button type="button" data-p="1"><span class="sw ember"></span>Ember</button>
+        <button type="button" data-p="2"><span class="sw ice"></span>Ice</button>
+        <button type="button" data-p="3"><span class="sw mono"></span>Mono</button>
+      </div>
+      <button type="button" class="step" id="iterMinus">−</button>
+      <button type="button" class="step" id="iterPlus">+</button>
+      <button type="button" class="act" id="zoomOut">Zoom out</button>
+      <button type="button" class="act" id="reset">Reset</button>
+    </div>
+  </div>
+  <script>
+(function () {
+  "use strict";
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  function qs(sel, root) {
+    try { return (root || document).querySelector(sel); } catch (e) { return null; }
+  }
+  var KERNEL = [
+    "var PALETTES=[",
+    "[[0,7,100],[32,107,203],[237,255,255],[255,170,0],[0,2,0]],",
+    "[[10,4,2],[90,12,6],[200,60,10],[255,170,40],[255,240,200],[60,10,20]],",
+    "[[2,6,20],[10,40,110],[60,140,220],[200,240,255],[255,255,255],[30,20,70]],",
+    "[[8,8,10],[240,238,232],[8,8,10]]",
+    "];",
+    "function sm(a,b,t){t=t*t*(3-2*t);return a+(b-a)*t;}",
+    "function buildPal(id){var pts=PALETTES[id]||PALETTES[0],n=2048,out=new Uint8Array(n*4),i,seg=pts.length-1;",
+    "for(i=0;i<n;i++){var u=i/n*seg,k=Math.min(seg-1,Math.floor(u)),f=u-k;",
+    "var a=pts[k],b=pts[k+1];out[i*4]=sm(a[0],b[0],f);out[i*4+1]=sm(a[1],b[1],f);out[i*4+2]=sm(a[2],b[2],f);out[i*4+3]=255;}",
+    "return out;}",
+    "function mandel(cx,cy,maxIt){",
+    "var x=cx,y=cy,x2=x*x,y2=y*y;",
+    "if((x+1)*(x+1)+y2<0.0625) return -1;",
+    "var q=(x-0.25)*(x-0.25)+y2; if(q*(q+(x-0.25))<0.25*y2) return -1;",
+    "var n=0; while(n<maxIt && x2+y2<=65536){y=2*x*y+cy;x=x2-y2+cx;x2=x*x;y2=y*y;n++;}",
+    "if(n>=maxIt) return -1;",
+    "var logz=Math.log(x2+y2)/2; var nu=n+1-Math.log(logz/Math.LN2)/Math.LN2; return nu;}",
+    "function renderBand(msg){",
+    "var pal=buildPal(msg.pal),w=msg.w,h=msg.h,step=msg.step,y0=msg.y0,y1=msg.y1;",
+    "var bw=Math.ceil(w/step),bh=Math.ceil((y1-y0)/step),buf=new Uint8ClampedArray(bw*bh*4);",
+    "var i,j,p=0; for(j=y0;j<y1;j+=step){for(i=0;i<w;i+=step){",
+    "var cx=msg.re+(i/w-0.5)*msg.span; var cy=msg.im-((j/h-0.5)*msg.span*h/w);",
+    "var nu=mandel(cx,cy,msg.maxIt);",
+    "if(nu<0){buf[p]=0;buf[p+1]=0;buf[p+2]=0;buf[p+3]=255;}",
+    "else{var idx=(Math.floor(Math.sqrt(nu)*96+240)%2048+2048)%2048; var o=idx*4;",
+    "buf[p]=pal[o];buf[p+1]=pal[o+1];buf[p+2]=pal[o+2];buf[p+3]=255;}",
+    "p+=4;}} return {buf:buf,bw:bw,bh:bh,y0:y0,step:step,id:msg.id,w:w,h:h};}",
+    "self.onmessage=function(e){var r=renderBand(e.data); self.postMessage(r,[r.buf.buffer]);};"
+  ].join("");
+
+  var BOOKMARKS = [
+    { name: "Overview", re: -0.75, im: 0, span: 3.4 },
+    { name: "Seahorse Valley", re: -0.7435669, im: 0.1314023, span: 0.0022 },
+    { name: "Elephant Valley", re: 0.2749, im: 0.00655, span: 0.012 },
+    { name: "Triple Spiral", re: -0.088, im: 0.654, span: 0.012 },
+    { name: "Spiral", re: -0.16070135, im: 1.0375665, span: 0.0012 },
+    { name: "Mini-brot", re: -1.7548776, im: 0, span: 0.028 }
+  ];
+
+  function init() {
+    var canvas = qs("#view");
+    var progress = qs("#progress");
+    var marks = qs("#marks");
+    var palettes = qs("#palettes");
+    if (!canvas) return;
+    var ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    var reduced = false;
+    if (typeof window.matchMedia === "function") {
+      try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+    }
+    var dpr = 1, W = 0, H = 0;
+    var view = { re: -0.75, im: 0, span: 3.4 };
+    var pal = 0;
+    var iterMul = 1;
+    var renderId = 0;
+    var workers = [];
+    var useWorkers = false;
+    var kernelFn = null;
+    var queue = [];
+    var inflight = 0;
+    var t0 = 0;
+    var snapshot = null;
+    var dragging = false;
+    var dragStart = null;
+    var panOff = { x: 0, y: 0 };
+    var hinted = false;
+    var tmp = document.createElement("canvas");
+    var tmpCtx = tmp.getContext("2d");
+
+    try {
+      kernelFn = new Function("msg", KERNEL.replace("self.onmessage=function(e){var r=renderBand(e.data); self.postMessage(r,[r.buf.buffer]);};", "return renderBand(msg);"));
+    } catch (err) { kernelFn = null; }
+
+    var hw = (typeof navigator !== "undefined" && navigator.hardwareConcurrency) ? navigator.hardwareConcurrency : 4;
+    var nWorkers = Math.max(2, Math.min(8, hw || 4));
+    if (typeof Worker !== "undefined" && typeof Blob !== "undefined" && typeof URL !== "undefined" && URL.createObjectURL) {
+      try {
+        var blob = new Blob([KERNEL], { type: "text/javascript" });
+        var url = URL.createObjectURL(blob);
+        var wi;
+        for (wi = 0; wi < nWorkers; wi++) {
+          var w = new Worker(url);
+          w.onmessage = onBand;
+          workers.push(w);
+        }
+        useWorkers = workers.length > 0;
+      } catch (e2) { useWorkers = false; }
+    }
+    var wcEl = qs("#wc");
+    if (wcEl) wcEl.textContent = String(useWorkers ? workers.length : 0);
+
+    function size() {
+      var w = window.innerWidth || 800, h = window.innerHeight || 600;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = Math.max(1, Math.floor(w * dpr));
+      H = Math.max(1, Math.floor(h * dpr));
+      canvas.width = W; canvas.height = H;
+      canvas.style.width = w + "px"; canvas.style.height = h + "px";
+      startRender();
+    }
+
+    function maxIter() {
+      var depth = Math.log(3.4 / view.span) / Math.LN2;
+      var it = 120 + 90 * Math.pow(Math.max(0, depth), 1.15);
+      it *= iterMul;
+      return Math.max(40, Math.min(12000, Math.floor(it)));
+    }
+
+    function updateHud() {
+      var re = qs("#re"), im = qs("#im"), zoom = qs("#zoom"), iter = qs("#iter");
+      if (re) re.textContent = (view.re >= 0 ? "+" : "") + view.re.toFixed(12);
+      if (im) im.textContent = (view.im >= 0 ? "+" : "") + view.im.toFixed(12);
+      var z = 3.4 / view.span;
+      if (zoom) zoom.textContent = z > 1000 ? z.toExponential(2) : ("×" + z.toFixed(2));
+      if (iter) iter.textContent = String(maxIter());
+    }
+
+    function cancelQueue() {
+      queue = [];
+      renderId++;
+    }
+
+    function startRender() {
+      cancelQueue();
+      var id = renderId;
+      inflight = 0;
+      t0 = performance.now();
+      updateHud();
+      var steps = [8, 4, 2, 1];
+      var s, b, bands, y, hBand, k;
+      for (s = 0; s < steps.length; s++) {
+        var step = steps[s];
+        var parts = (step === 1) ? (useWorkers ? workers.length * 4 : 8) : (useWorkers ? workers.length : 4);
+        hBand = Math.ceil(H / parts);
+        for (b = 0; b < parts; b++) {
+          var y0 = b * hBand, y1 = Math.min(H, (b + 1) * hBand);
+          if (y0 >= y1) continue;
+          queue.push({
+            id: id, w: W, h: H, step: step, y0: y0, y1: y1,
+            re: view.re, im: view.im, span: view.span, pal: pal, maxIt: maxIter()
+          });
+        }
+      }
+      pump();
+      setProgress(0.02);
+    }
+
+    function pump() {
+      if (useWorkers) {
+        while (inflight < workers.length && queue.length) {
+          var job = queue.shift();
+          inflight++;
+          workers[inflight % workers.length].postMessage(job);
+        }
+      } else {
+        var n = 0;
+        while (queue.length && n < 2) {
+          var job2 = queue.shift();
+          n++;
+          if (kernelFn) {
+            try { onBand({ data: kernelFn(job2) }); } catch (e3) {}
+          }
+        }
+        if (queue.length && typeof window.requestAnimationFrame === "function") {
+          window.requestAnimationFrame(pump);
+        }
+      }
+    }
+
+    function onBand(ev) {
+      inflight = Math.max(0, inflight - 1);
+      var data = ev.data;
+      if (!data || data.id !== renderId) { pump(); return; }
+      if (!tmpCtx) { pump(); return; }
+      tmp.width = data.bw; tmp.height = data.bh;
+      try {
+        var img = new ImageData(new Uint8ClampedArray(data.buf), data.bw, data.bh);
+        tmpCtx.putImageData(img, 0, 0);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(tmp, 0, data.y0, data.bw * data.step, data.bh * data.step);
+      } catch (e4) {}
+      var remain = queue.length + inflight;
+      var totalGuess = 40;
+      setProgress(1 - remain / (remain + 8));
+      if (remain === 0) {
+        setProgress(0);
+        var ms = qs("#ms");
+        if (ms) ms.textContent = String(Math.round(performance.now() - t0));
+        snapshot = ctx.getImageData(0, 0, W, H);
+      }
+      pump();
+    }
+
+    function setProgress(p) {
+      if (!progress) return;
+      progress.style.width = (p <= 0 ? 0 : Math.min(100, p * 100)) + "%";
+    }
+
+    function screenToReIm(sx, sy) {
+      return {
+        re: view.re + (sx / W - 0.5) * view.span,
+        im: view.im - (sy / H - 0.5) * view.span * H / W
+      };
+    }
+
+    function zoomAbout(sx, sy, factor, animate) {
+      var before = screenToReIm(sx, sy);
+      view.span /= factor;
+      var after = screenToReIm(sx, sy);
+      view.re += before.re - after.re;
+      view.im += before.im - after.im;
+      if (animate && snapshot && !reduced && factor !== 1) {
+        animateZoom(sx, sy, factor);
+      } else {
+        startRender();
+      }
+    }
+
+    function animateZoom(sx, sy, factor) {
+      var hold = snapshot;
+      var tStart = performance.now();
+      function frame(now) {
+        var u = Math.min(1, (now - tStart) / 300);
+        var e = 1 - Math.pow(1 - u, 3);
+        var sc = 1 + (factor - 1) * e;
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, W, H);
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.scale(sc, sc);
+        ctx.translate(-sx, -sy);
+        if (hold) ctx.putImageData(hold, 0, 0);
+        ctx.restore();
+        if (u < 1 && typeof window.requestAnimationFrame === "function") {
+          window.requestAnimationFrame(frame);
+        } else startRender();
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      else startRender();
+    }
+
+    canvas.addEventListener("mousedown", function (e) {
+      dragging = true;
+      dragStart = { x: e.clientX, y: e.clientY, re: view.re, im: view.im };
+      panOff = { x: 0, y: 0 };
+      if (!hinted) { var h = qs("#hint"); if (h) h.classList.add("gone"); hinted = true; }
+    });
+    window.addEventListener("mousemove", function (e) {
+      if (!dragging || !dragStart) return;
+      panOff.x = e.clientX - dragStart.x;
+      panOff.y = e.clientY - dragStart.y;
+      if (snapshot) {
+        ctx.fillStyle = "#08090d";
+        ctx.fillRect(0, 0, W, H);
+        ctx.putImageData(snapshot, panOff.x * dpr, panOff.y * dpr);
+      }
+    });
+    window.addEventListener("mouseup", function (e) {
+      if (!dragging) return;
+      dragging = false;
+      var dx = panOff.x * dpr, dy = panOff.y * dpr;
+      if (Math.hypot(dx, dy) < 4 * dpr) {
+        var rect = canvas.getBoundingClientRect();
+        var sx = (e.clientX - rect.left) * dpr;
+        var sy = (e.clientY - rect.top) * dpr;
+        if (e.shiftKey || e.button === 2) zoomAbout(sx, sy, 1 / 2.5, true);
+        else zoomAbout(sx, sy, 2.5, true);
+      } else {
+        view.re -= (dx / W) * view.span;
+        view.im += (dy / H) * view.span * H / W;
+        startRender();
+      }
+    });
+    canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+    canvas.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      var rect = canvas.getBoundingClientRect();
+      var sx = (e.clientX - rect.left) * dpr;
+      var sy = (e.clientY - rect.top) * dpr;
+      var f = Math.exp(-e.deltaY * 0.0018);
+      if (snapshot) {
+        ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+        ctx.save(); ctx.translate(sx, sy); ctx.scale(f, f); ctx.translate(-sx, -sy);
+        ctx.putImageData(snapshot, 0, 0); ctx.restore();
+      }
+      zoomAbout(sx, sy, f, false);
+    }, { passive: false });
+
+    if (marks) {
+      BOOKMARKS.forEach(function (bm, idx) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "mark-btn" + (idx === 0 ? " active" : "");
+        var c = document.createElement("canvas");
+        c.width = 224; c.height = 144;
+        btn.appendChild(c);
+        var lab = document.createElement("span");
+        lab.textContent = bm.name;
+        btn.appendChild(lab);
+        btn.addEventListener("click", function () {
+          view.re = bm.re; view.im = bm.im; view.span = bm.span;
+          var all = marks.querySelectorAll(".mark-btn");
+          for (var i = 0; i < all.length; i++) all[i].classList.toggle("active", all[i] === btn);
+          startRender();
+        });
+        marks.appendChild(btn);
+        if (kernelFn) {
+          try {
+            var r = kernelFn({
+              id: 0, w: 224, h: 144, step: 1, y0: 0, y1: 144,
+              re: bm.re, im: bm.im, span: bm.span, pal: 0, maxIt: 220
+            });
+            var cctx = c.getContext("2d");
+            if (cctx) cctx.putImageData(new ImageData(new Uint8ClampedArray(r.buf), r.bw, r.bh), 0, 0);
+          } catch (e5) {}
+        }
+      });
+    }
+    if (palettes) {
+      palettes.addEventListener("click", function (e) {
+        var b = e.target.closest("button");
+        if (!b) return;
+        pal = parseInt(b.getAttribute("data-p"), 10) || 0;
+        var bs = palettes.querySelectorAll("button");
+        for (var i = 0; i < bs.length; i++) bs[i].classList.toggle("active", bs[i] === b);
+        startRender();
+      });
+    }
+    var iterMinus = qs("#iterMinus"), iterPlus = qs("#iterPlus");
+    if (iterMinus) iterMinus.addEventListener("click", function () { iterMul = Math.max(0.5, iterMul / 2); startRender(); });
+    if (iterPlus) iterPlus.addEventListener("click", function () { iterMul = Math.min(8, iterMul * 2); startRender(); });
+    var zoomOut = qs("#zoomOut"), reset = qs("#reset");
+    if (zoomOut) zoomOut.addEventListener("click", function () {
+      zoomAbout(W / 2, H / 2, 1 / 2.5, true);
+    });
+    if (reset) reset.addEventListener("click", function () {
+      view = { re: -0.75, im: 0, span: 3.4 }; iterMul = 1; pal = 0; startRender();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "r" || e.key === "R") { view = { re: -0.75, im: 0, span: 3.4 }; startRender(); }
+      if (e.key === "+" || e.key === "=") { iterMul = Math.min(8, iterMul * 2); startRender(); }
+      if (e.key === "-" || e.key === "_") { iterMul = Math.max(0.5, iterMul / 2); startRender(); }
+      if (e.key >= "1" && e.key <= "4") {
+        pal = parseInt(e.key, 10) - 1;
+        if (palettes) {
+          var bs = palettes.querySelectorAll("button");
+          for (var i = 0; i < bs.length; i++) bs[i].classList.toggle("active", i === pal);
+        }
+        startRender();
+      }
+      if (e.key === "Escape") zoomAbout(W / 2, H / 2, 1 / 2.5, true);
+    });
+    window.addEventListener("resize", size);
+    size();
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+  </script>
+</body>
+</html>

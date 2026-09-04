@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Northern Lights — Lake Inari, 68.9° N</title>
+  <style>
+    :root {
+      --fog: rgba(226,236,255,0.72); --mint: #c8ffe4; --green: #3cf5a0; --violet: #a86bff;
+      --serif: Georgia, "Iowan Old Style", Palatino, ui-serif, serif;
+      --mono: ui-monospace, Menlo, "Courier New", monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #02030a; color: var(--fog); }
+    canvas#sky { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    .vignette {
+      position: fixed; inset: 0; pointer-events: none; z-index: 2;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.55) 100%);
+    }
+    .ui { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+    .ui > * { pointer-events: auto; }
+    .eye {
+      position: absolute; top: 18px; left: 20px;
+      font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .pulse {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+      box-shadow: 0 0 10px var(--green); animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 50% { opacity: 0.35; } }
+    .clock { position: absolute; top: 18px; right: 20px; font-family: var(--mono); font-size: 12px; }
+    .caption {
+      position: absolute; left: 20px; bottom: 86px; max-width: 420px;
+      animation: fadeup 1.4s ease both;
+    }
+    @keyframes fadeup { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+    .caption h1 {
+      font-family: var(--serif); font-weight: 400; font-size: clamp(22px, 3vw, 32px);
+      margin: 0 0 8px; color: #e2ecff;
+    }
+    .caption h1 em { font-style: italic; color: var(--mint); }
+    .caption p { margin: 0 0 8px; font-size: 13px; line-height: 1.5; color: var(--fog); }
+    .meta { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; }
+    .bar {
+      position: absolute; left: 20px; bottom: 18px;
+      display: flex; align-items: center; gap: 14px;
+      background: rgba(6,12,22,0.55); backdrop-filter: blur(12px);
+      border: 1px solid rgba(200,255,228,0.28); border-radius: 999px;
+      padding: 8px 16px; transition: transform 0.3s ease;
+    }
+    .bar:hover { transform: translateY(-3px); }
+    .bar label { font-family: var(--mono); font-size: 11px; }
+    input[type=range] {
+      width: 140px; appearance: none; height: 4px; border-radius: 99px;
+      background: linear-gradient(90deg, #c8ffe4, #3cf5a0, #a86bff);
+    }
+    input[type=range]::-webkit-slider-thumb {
+      appearance: none; width: 14px; height: 14px; border-radius: 50%;
+      background: #fff; box-shadow: 0 0 10px #fff; cursor: pointer; transition: transform 0.2s cubic-bezier(0.22,1.4,0.36,1);
+    }
+    input[type=range]:active::-webkit-slider-thumb { transform: scale(1.35); }
+    .snowbtn {
+      border: 1px solid rgba(200,255,228,0.4); background: transparent; color: var(--fog);
+      border-radius: 999px; padding: 4px 12px; font-family: var(--mono); font-size: 11px; cursor: pointer;
+    }
+    .snowbtn[aria-pressed="true"] { background: rgba(60,245,160,0.2); color: var(--mint); }
+    .legend {
+      position: absolute; right: 20px; bottom: 22px;
+      font-family: var(--mono); font-size: 10px; line-height: 1.6; text-align: right; color: var(--fog);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pulse, .caption, .bar { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="sky"></canvas>
+  <div class="vignette"></div>
+  <div class="ui">
+    <div class="eye"><span class="pulse"></span> Field observation · Kp 5</div>
+    <div class="clock" id="clock"></div>
+    <div class="caption">
+      <h1>The sky <em>breathing</em> over Lake Inari</h1>
+      <p>Oxygen at ~100 km paints the familiar green (557.7 nm); higher nitrogen and ionised molecules fringe the curtains in violet. Intensity is a quiet Kp 5 — the lake holds the rest.</p>
+      <div class="meta">68.9° N 27.0° E, −23 °C, wind calm, cloud 0/8</div>
+    </div>
+    <div class="bar">
+      <label for="int">Intensity</label>
+      <input id="int" type="range" min="0" max="100" value="62">
+      <span id="intOut">62</span>
+      <button class="snowbtn" type="button" id="snow" aria-pressed="true">Snow</button>
+    </div>
+    <div class="legend">Oxygen 557.7 nm<br>Nitrogen 427.8 nm</div>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var canvas = qs("#sky");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var intensity = 0.62, snowOn = !reduce, W = 0, H = 0, dpr = 1;
+      var off = document.createElement("canvas");
+      var octx = off.getContext("2d");
+      if (!octx) return;
+      var stars = [], snow = [], pines = [], shoot = null, t = 0;
+      var perm = new Uint8Array(512);
+      (function () {
+        var p = []; for (var i = 0; i < 256; i++) p[i] = i;
+        var s = 42;
+        function rnd() { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }
+        for (var j = 255; j > 0; j--) { var k = (rnd() * (j + 1)) | 0, tmp = p[j]; p[j] = p[k]; p[k] = tmp; }
+        for (var n = 0; n < 512; n++) perm[n] = p[n & 255];
+      })();
+      function fade(u) { return u * u * (3 - 2 * u); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function n2(x, y) {
+        var xi = Math.floor(x) & 255, yi = Math.floor(y) & 255;
+        var xf = x - Math.floor(x), yf = y - Math.floor(y);
+        var u = fade(xf), v = fade(yf);
+        var aa = perm[perm[xi] + yi], ab = perm[perm[xi] + yi + 1], ba = perm[perm[xi + 1] + yi], bb = perm[perm[xi + 1] + yi + 1];
+        function grad(h, px, py) { return ((h & 1) ? px : -px) + ((h & 2) ? py : -py); }
+        return lerp(lerp(grad(aa, xf, yf), grad(ba, xf - 1, yf), u), lerp(grad(ab, xf, yf - 1), grad(bb, xf - 1, yf - 1), u), v);
+      }
+      function fbm(x, y) {
+        var s = 0, a = 0.5, f = 1;
+        for (var i = 0; i < 4; i++) { s += a * n2(x * f, y * f); a *= 0.5; f *= 2; }
+        return s * 0.5 + 0.5;
+      }
+      var curtains = [
+        { hue: 152, sat: 80, spd: 0.12, dir: 1, freq: 0.018, h: 0.55, a: 0.55 },
+        { hue: 158, sat: 70, spd: 0.08, dir: -1, freq: 0.012, h: 0.7, a: 0.4 },
+        { hue: 285, sat: 65, spd: 0.06, dir: 1, freq: 0.01, h: 0.85, a: 0.28 },
+        { hue: 330, sat: 60, spd: 0.09, dir: -1, freq: 0.022, h: 0.45, a: 0.22 }
+      ];
+      function rebuild() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        W = window.innerWidth; H = window.innerHeight;
+        canvas.width = Math.floor(W * dpr); canvas.height = Math.floor(H * dpr);
+        canvas.style.width = W + "px"; canvas.style.height = H + "px";
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        off.width = Math.max(80, Math.floor(W / 3));
+        off.height = Math.max(60, Math.floor(H * 0.7 / 3));
+        stars = [];
+        var n = Math.floor((W * H) / 2800);
+        for (var i = 0; i < n; i++) {
+          stars.push({
+            x: Math.random() * W, y: Math.random() * H * 0.7,
+            r: Math.random() < 0.08 ? 1.6 + Math.random() : 0.5 + Math.random() * 0.7,
+            warm: Math.random() < 0.2, ph: Math.random() * Math.PI * 2
+          });
+        }
+        snow = [];
+        for (var s = 0; s < 90; s++) {
+          snow.push({ x: Math.random() * W, y: Math.random() * H, r: 0.6 + Math.random() * 1.6, v: 12 + Math.random() * 26, ph: Math.random() * 10 });
+        }
+        pines = [];
+        var x = 0, seed = 3.2;
+        while (x < W + 40) {
+          var hgt = 28 + fbm(seed + x * 0.02, 2) * 70;
+          pines.push({ x: x, h: hgt, far: fbm(seed + x * 0.01, 8) > 0.55 });
+          x += 8 + fbm(x * 0.05, 4) * 18;
+        }
+      }
+      var resizeT = 0;
+      window.addEventListener("resize", function () {
+        clearTimeout(resizeT); resizeT = setTimeout(rebuild, 120);
+      });
+      function pine(px, baseY, h, col) {
+        ctx.fillStyle = col;
+        ctx.fillRect(px - 1.2, baseY - h * 0.2, 2.4, h * 0.25);
+        for (var i = 0; i < 4; i++) {
+          var yy = baseY - h * (0.15 + i * 0.2);
+          var ww = h * (0.28 - i * 0.05);
+          ctx.beginPath();
+          ctx.moveTo(px, yy - h * 0.22);
+          ctx.lineTo(px - ww, yy + 4);
+          ctx.lineTo(px + ww, yy + 4);
+          ctx.closePath(); ctx.fill();
+        }
+      }
+      function drawAurora(time) {
+        var ow = off.width, oh = off.height;
+        octx.clearRect(0, 0, ow, oh);
+        octx.globalCompositeOperation = "lighter";
+        curtains.forEach(function (c) {
+          var bottom = oh * 0.72;
+          for (var x = 0; x < ow; x++) {
+            var nx = x * c.freq + time * c.spd * c.dir;
+            var n = fbm(nx, time * 0.04);
+            var sway = Math.sin(time * 0.3 + x * 0.04) * 0.12;
+            var rib = Math.sin(time * 0.11 + x * 0.015) * 0.08;
+            var bright = Math.pow(Math.max(0, n * 0.7 + sway + rib), 1.8) * intensity * 1.4;
+            if (bright < 0.02) continue;
+            var top = bottom - c.h * oh * (0.35 + n * 0.65) * (0.5 + intensity);
+            var g = octx.createLinearGradient(x, top, x, bottom + 8);
+            g.addColorStop(0, "hsla(" + c.hue + "," + c.sat + "%,70%,0)");
+            g.addColorStop(0.35, "hsla(" + c.hue + "," + c.sat + "%,65%," + (bright * c.a * 0.55) + ")");
+            g.addColorStop(0.78, "hsla(" + c.hue + "," + Math.min(90, c.sat + 10) + "%,62%," + (bright * c.a) + ")");
+            g.addColorStop(1, "hsla(" + c.hue + "," + c.sat + "%,55%,0)");
+            octx.fillStyle = g;
+            octx.fillRect(x, top, 1.6, bottom - top + 10);
+          }
+        });
+        octx.globalCompositeOperation = "source-over";
+      }
+      function drawTrees(baseY, col, scale) {
+        pines.forEach(function (p) {
+          if (scale < 1 && !p.far) return;
+          pine(p.x, baseY, p.h * scale, col);
+        });
+      }
+      function frame(now) {
+        t = now / 1000;
+        var skyH = H * 0.7;
+        var g = ctx.createLinearGradient(0, 0, 0, skyH);
+        g.addColorStop(0, "#02030a"); g.addColorStop(0.55, "#061021"); g.addColorStop(1, "#0b1a30");
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        drawAurora(t);
+        var glow = ctx.createLinearGradient(0, skyH - 80, 0, skyH);
+        glow.addColorStop(0, "rgba(60,245,160,0)"); glow.addColorStop(1, "rgba(60,245,160," + (0.12 * intensity) + ")");
+        ctx.fillStyle = glow; ctx.fillRect(0, skyH - 80, W, 80);
+        ctx.save(); ctx.globalCompositeOperation = "screen";
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(off, 0, 0, W, skyH);
+        ctx.restore();
+        stars.forEach(function (s) {
+          var tw = 0.55 + 0.45 * Math.sin(t * 1.4 + s.ph);
+          var dim = 1 - intensity * 0.25;
+          ctx.fillStyle = s.warm ? "rgba(255,231,196," + (tw * dim) + ")" : "rgba(223,233,255," + (tw * dim) + ")";
+          ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+        });
+        if (!reduce && (!shoot || shoot.life <= 0) && Math.random() < 0.002) {
+          shoot = { x: Math.random() * W * 0.7, y: Math.random() * skyH * 0.4, vx: 180 + Math.random() * 80, vy: 40 + Math.random() * 30, life: 1 };
+        }
+        if (shoot && shoot.life > 0) {
+          shoot.x += shoot.vx * 0.016; shoot.y += shoot.vy * 0.016; shoot.life -= 0.016;
+          var sg = ctx.createLinearGradient(shoot.x, shoot.y, shoot.x - 40, shoot.y - 10);
+          sg.addColorStop(0, "rgba(255,255,255," + shoot.life + ")"); sg.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.strokeStyle = sg; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(shoot.x, shoot.y); ctx.lineTo(shoot.x - 42, shoot.y - 12); ctx.stroke();
+        }
+        var lakeTop = skyH;
+        var lg = ctx.createLinearGradient(0, lakeTop, 0, H);
+        lg.addColorStop(0, "#08121f"); lg.addColorStop(1, "#020409");
+        ctx.fillStyle = lg; ctx.fillRect(0, lakeTop, W, H - lakeTop);
+        var lakeH = H - lakeTop;
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        for (var y = 0; y < lakeH; y += 4) {
+          var srcScreen = skyH - y * 1.3;
+          if (srcScreen < 0) continue;
+          var srcOff = (srcScreen / skyH) * off.height;
+          var wob = Math.sin(t * 0.8 + y * 0.05) * (y * 0.04) + Math.sin(t * 1.3 + y * 0.02) * (y * 0.02);
+          ctx.globalAlpha = Math.max(0, 0.45 - y / lakeH * 0.45);
+          ctx.drawImage(off, 0, Math.max(0, srcOff - 1.2), off.width, 1.6, wob, lakeTop + y, W, 4);
+        }
+        ctx.restore();
+        ctx.globalAlpha = 1;
+        ctx.save();
+        ctx.translate(0, lakeTop);
+        ctx.scale(1, -0.35);
+        ctx.globalAlpha = 0.35;
+        drawTrees(0, "#050a14", 0.85);
+        ctx.restore();
+        ctx.globalAlpha = 1;
+        for (var r = 0; r < 12; r++) {
+          var ry = lakeTop + 20 + ((r * 37 + t * 8) % (lakeH - 10));
+          ctx.strokeStyle = "rgba(200,230,255," + (0.08 + 0.06 * Math.sin(t + r)) + ")";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(30 + Math.sin(t * 0.4 + r) * 40, ry);
+          ctx.lineTo(W - 40 + Math.sin(t * 0.3 + r) * 30, ry + Math.sin(t + r) * 2);
+          ctx.stroke();
+        }
+        drawTrees(lakeTop + 6, "#050a14", 0.85);
+        drawTrees(lakeTop + 10, "#02040a", 1);
+        if (snowOn && !reduce) {
+          snow.forEach(function (fl) {
+            fl.y += fl.v * 0.016;
+            fl.x += Math.sin(t * 0.8 + fl.ph) * 0.4;
+            if (fl.y > H) { fl.y = -4; fl.x = Math.random() * W; }
+            ctx.fillStyle = "rgba(255,255,255,0.75)";
+            ctx.beginPath(); ctx.arc(fl.x, fl.y, fl.r, 0, Math.PI * 2); ctx.fill();
+          });
+        }
+        var ck = qs("#clock");
+        if (ck) ck.textContent = new Date().toLocaleTimeString();
+        if (!reduce && typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      }
+      var intEl = qs("#int"), intOut = qs("#intOut"), snowBtn = qs("#snow");
+      if (intEl) intEl.addEventListener("input", function () {
+        intensity = Number(intEl.value) / 100;
+        if (intOut) intOut.textContent = intEl.value;
+        if (reduce) frame(0);
+      });
+      if (snowBtn) snowBtn.addEventListener("click", function () {
+        snowOn = !snowOn;
+        snowBtn.setAttribute("aria-pressed", snowOn ? "true" : "false");
+      });
+      rebuild();
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      else frame(0);
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Still Water — Moonlit Ripple Reflection</title>
+  <style>
+    :root {
+      --serif: "Iowan Old Style", Palatino, Georgia, serif;
+      --amber: #ffb35c;
+      --silver: #d9dff0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #05071a; color: var(--silver); overflow: hidden; }
+    body { font-family: var(--serif); }
+    canvas#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    .panel {
+      position: fixed; top: 18px; right: 18px; z-index: 2;
+      background: rgba(12, 18, 54, .55); border: 1px solid rgba(217,223,240,.35);
+      backdrop-filter: blur(10px); padding: 14px 16px; min-width: 220px; color: var(--silver);
+    }
+    .panel .tag { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--amber); font-variant: small-caps; }
+    .panel h1 { font-weight: 400; font-style: italic; font-size: 22px; margin: 4px 0 12px; }
+    label { display: block; font-size: 13px; font-style: italic; margin: 8px 0 4px; }
+    label output { float: right; font-style: normal; color: var(--amber); }
+    input[type="range"] { width: 100%; accent-color: var(--amber); }
+    .tog { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 13px; font-style: italic; cursor: pointer; }
+    .knob {
+      width: 28px; height: 16px; border: 1px solid var(--silver); position: relative; flex-shrink: 0;
+    }
+    .knob::after {
+      content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: var(--amber);
+    }
+    input[type="checkbox"] { position: absolute; opacity: 0; }
+    input[type="checkbox"]:checked + .knob::after { left: 14px; }
+    .btns { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .btns button {
+      font-family: inherit; font-style: italic; background: transparent; color: var(--silver);
+      border: 1px solid rgba(217,223,240,.4); padding: 7px 10px; cursor: pointer;
+    }
+    .btns button:hover { border-color: var(--amber); color: var(--amber); }
+    .caption {
+      position: fixed; left: 20px; bottom: 18px; z-index: 2;
+      font-style: italic; font-size: 15px; max-width: 28ch; color: var(--silver);
+      text-shadow: 0 1px 8px #05071a;
+    }
+    @media (max-width: 640px) {
+      .panel { left: 12px; right: 12px; top: auto; bottom: 70px; }
+      .caption { font-size: 13px; }
+    }
+    @media (prefers-reduced-motion: reduce) { .panel { transition: none; } }
+  </style>
+</head>
+<body>
+  <canvas id="scene" aria-label="Moonlit lake"></canvas>
+  <aside class="panel">
+    <div class="tag">Still Water</div>
+    <h1>Moonlit lake</h1>
+    <label>Restlessness <output id="restOut">calm</output>
+      <input type="range" id="damp" min="955" max="997" value="978">
+    </label>
+    <label class="tog"><input type="checkbox" id="rain"><span class="knob"></span> Random raindrops</label>
+    <label class="tog"><input type="checkbox" id="lanterns" checked><span class="knob"></span> Lanterns on the shore</label>
+    <div class="btns">
+      <button type="button" id="stone">Throw a stone</button>
+      <button type="button" id="settle">Let it settle</button>
+    </div>
+  </aside>
+  <p class="caption">The lake keeps whatever the sky gives it, and gives it back a little softer.</p>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var canvas = qs("#scene");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var dpr = 1, W = 0, H = 0, skyH = 0, waterH = 0;
+      var sceneHi = document.createElement("canvas");
+      var sceneLo = document.createElement("canvas");
+      var hi = sceneHi.getContext("2d");
+      var lo = sceneLo.getContext("2d");
+      if (!hi || !lo) return;
+      var sw = 0, sh = 0;
+      var bufA = null, bufB = null;
+      var damp = 0.978, rain = false, lanternsOn = true;
+      var lastDrop = 0, skip = 0;
+      var stars = [];
+      var lanterns = [];
+      var fireflies = [];
+      var reeds = [];
+      function seedRng(s) {
+        return function () { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+      }
+      function rebuild() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        W = canvas.width = Math.round(window.innerWidth * dpr);
+        H = canvas.height = Math.round(window.innerHeight * dpr);
+        skyH = Math.round(H * 0.56);
+        waterH = H - skyH;
+        var scale = window.innerWidth > 1400 ? 0.25 : 1 / 3;
+        sw = Math.max(80, Math.round(window.innerWidth * scale));
+        sh = Math.max(50, Math.round(window.innerHeight * 0.56 * scale));
+        sceneHi.width = W; sceneHi.height = skyH;
+        sceneLo.width = sw; sceneLo.height = sh;
+        bufA = new Float32Array(sw * waterRows());
+        bufB = new Float32Array(sw * waterRows());
+        var rng = seedRng(42);
+        stars = [];
+        for (var i = 0; i < 260; i++) stars.push({ x: rng(), y: rng() * 0.85, r: 0.4 + rng() * 1.4, a: 0.25 + rng() * 0.7 });
+        lanterns = [];
+        for (i = 0; i < 7; i++) {
+          lanterns.push({
+            x: 0.12 + i * 0.12 + rng() * 0.03,
+            y: 0.82 + rng() * 0.04,
+            big: i % 2 === 0 && i < 5,
+            phase: rng() * Math.PI * 2
+          });
+        }
+        lanterns[0].big = lanterns[3].big = lanterns[5].big = true;
+        fireflies = [];
+        for (i = 0; i < 24; i++) fireflies.push({ x: rng(), y: 0.7 + rng() * 0.25, p: rng() * Math.PI * 2, s: 0.8 + rng() });
+        reeds = [
+          { x: 0.04, h: 0.12, ph: 0.2 }, { x: 0.07, h: 0.16, ph: 1.1 }, { x: 0.1, h: 0.11, ph: 2.0 },
+          { x: 0.92, h: 0.14, ph: 0.4 }, { x: 0.95, h: 0.18, ph: 1.7 }, { x: 0.98, h: 0.12, ph: 2.4 }
+        ];
+        paintScene(hi, W, skyH, true);
+        paintScene(lo, sw, sh, false);
+      }
+      function waterRows() { return Math.max(40, Math.round(sh * 0.8)); }
+      function paintScene(c, w, h, hiRes) {
+        var g = c.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, "#05071a"); g.addColorStop(0.55, "#0c1236"); g.addColorStop(1, "#1a2352");
+        c.fillStyle = g; c.fillRect(0, 0, w, h);
+        stars.forEach(function (s) {
+          c.fillStyle = "rgba(217,223,240," + s.a + ")";
+          c.beginPath(); c.arc(s.x * w, s.y * h, s.r * (hiRes ? dpr : 0.6), 0, Math.PI * 2); c.fill();
+        });
+        var mx = w * 0.68, my = h * 0.32, mr = Math.min(w, h) * 0.07;
+        for (var i = 7; i >= 1; i--) {
+          var rg = c.createRadialGradient(mx, my, mr * 0.2, mx, my, mr * i * 1.6);
+          rg.addColorStop(0, "rgba(210,220,255," + (0.16 / i) + ")");
+          rg.addColorStop(1, "rgba(210,220,255,0)");
+          c.fillStyle = rg; c.beginPath(); c.arc(mx, my, mr * i * 1.6, 0, Math.PI * 2); c.fill();
+        }
+        var moon = c.createRadialGradient(mx - mr * 0.2, my - mr * 0.2, mr * 0.2, mx, my, mr);
+        moon.addColorStop(0, "#ffffff"); moon.addColorStop(1, "#c5cde8");
+        c.fillStyle = moon; c.beginPath(); c.arc(mx, my, mr, 0, Math.PI * 2); c.fill();
+        c.fillStyle = "rgba(12,18,54,.22)";
+        c.beginPath(); c.ellipse(mx + mr * 0.15, my - mr * 0.1, mr * 0.22, mr * 0.16, 0.3, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.ellipse(mx - mr * 0.25, my + mr * 0.2, mr * 0.18, mr * 0.12, -0.2, 0, Math.PI * 2); c.fill();
+        c.fillStyle = "#0d1338";
+        c.beginPath(); c.moveTo(0, h * 0.78);
+        for (var x = 0; x <= w; x += 8) {
+          var y = h * 0.76 + Math.sin(x * 0.01) * h * 0.03 + Math.sin(x * 0.023) * h * 0.02;
+          c.lineTo(x, y);
+        }
+        c.lineTo(w, h); c.lineTo(0, h); c.fill();
+        c.fillStyle = "#05071c";
+        c.beginPath(); c.moveTo(0, h * 0.88);
+        var spike = true;
+        for (x = 0; x <= w; x += 10) {
+          var th = spike ? h * 0.16 : h * 0.08;
+          spike = !spike;
+          c.lineTo(x, h * 0.9 - th * (0.7 + 0.3 * Math.sin(x * 0.04)));
+        }
+        c.lineTo(w, h); c.lineTo(0, h); c.fill();
+        var mist = c.createLinearGradient(0, h * 0.82, 0, h);
+        mist.addColorStop(0, "rgba(180,200,255,0)"); mist.addColorStop(1, "rgba(180,200,255,.12)");
+        c.fillStyle = mist; c.fillRect(0, h * 0.8, w, h * 0.2);
+      }
+      function drawLanterns(c, w, h, t) {
+        if (!lanternsOn) return;
+        lanterns.forEach(function (L) {
+          var pulse = 0.65 + 0.35 * Math.sin(t * 0.0018 + L.phase);
+          var x = L.x * w + Math.sin(t * 0.0003 + L.phase) * w * 0.01;
+          var y = L.y * h;
+          var r = (L.big ? 7 : 4) * (c === hi ? dpr : 0.5);
+          var glow = c.createRadialGradient(x, y, 0, x, y, r * 8);
+          glow.addColorStop(0, "rgba(255,190,110," + (0.55 * pulse) + ")");
+          glow.addColorStop(1, "rgba(255,190,110,0)");
+          c.fillStyle = glow; c.beginPath(); c.arc(x, y, r * 8, 0, Math.PI * 2); c.fill();
+          c.fillStyle = "#ffb35c"; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+          c.strokeStyle = "rgba(255,179,92," + (0.35 * pulse) + ")"; c.lineWidth = 1;
+          c.beginPath(); c.moveTo(x, y); c.lineTo(x, h); c.stroke();
+        });
+        if (!reduce) {
+          fireflies.forEach(function (f) {
+            var flick = Math.pow(Math.max(0, Math.sin(t * 0.004 * f.s + f.p)), 3);
+            if (flick < 0.05) return;
+            c.fillStyle = "rgba(200,255,160," + (0.7 * flick) + ")";
+            c.beginPath(); c.arc(f.x * w, f.y * h, (c === hi ? 1.6 : 0.8) * dpr, 0, Math.PI * 2); c.fill();
+          });
+        }
+      }
+      function drop(cx, cy, rad, amp) {
+        var rows = waterRows();
+        var r2 = rad * rad;
+        for (var y = 0; y < rows; y++) {
+          for (var x = 0; x < sw; x++) {
+            var dx = x - cx, dy = y - cy;
+            if (dx * dx + dy * dy <= r2) bufA[y * sw + x] += amp;
+          }
+        }
+      }
+      function stepSim() {
+        var rows = waterRows();
+        for (var y = 1; y < rows - 1; y++) {
+          for (var x = 1; x < sw - 1; x++) {
+            var i = y * sw + x;
+            var v = (bufA[i - 1] + bufA[i + 1] + bufA[i - sw] + bufA[i + sw]) / 2 - bufB[i];
+            bufB[i] = v * damp;
+          }
+        }
+        var tmp = bufA; bufA = bufB; bufB = tmp;
+      }
+      function sampleScene(sx, sy) {
+        sx = Math.max(0, Math.min(sw - 1, sx));
+        sy = Math.max(0, Math.min(sh - 1, sy));
+        return lo.getImageData ? null : null;
+      }
+      var loData = null;
+      function renderWater(t) {
+        paintScene(lo, sw, sh, false);
+        drawLanterns(lo, sw, sh, t);
+        try { loData = lo.getImageData(0, 0, sw, sh); } catch (e) { return; }
+        var rows = waterRows();
+        var out = ctx.createImageData(sw, rows);
+        var moonCol = 0.68 * sw;
+        var shimmer = 0.7 + 0.3 * Math.sin(t * 0.0012);
+        var k = 8;
+        for (var y = 0; y < rows; y++) {
+          var persp = y / rows;
+          var mirrorY = sh * (0.92 - persp * 0.55);
+          var dim = 0.45 + 0.4 * (1 - persp);
+          for (var x = 0; x < sw; x++) {
+            var i = y * sw + x;
+            var hL = bufA[i - (x > 0 ? 1 : 0)] || 0;
+            var hR = bufA[i + (x < sw - 1 ? 1 : 0)] || 0;
+            var hU = bufA[i - sw] || 0;
+            var hD = bufA[i + sw] || 0;
+            var gx = (hR - hL);
+            var gy = (hD - hU);
+            var sx = x + gx * k;
+            var sy = mirrorY + gy * 1.6 * k;
+            sx = Math.max(0, Math.min(sw - 1, sx));
+            sy = Math.max(0, Math.min(sh - 1, sy));
+            var si = ((sy | 0) * sw + (sx | 0)) * 4;
+            var r = loData.data[si], g = loData.data[si + 1], b = loData.data[si + 2];
+            r = r * 0.55 + 10 * dim; g = g * 0.58 + 14 * dim; b = b * 0.75 + 40 * dim;
+            r *= dim; g *= dim; b *= dim;
+            var slope = Math.abs(gx);
+            r *= 1 - Math.min(0.4, slope * 0.08);
+            g *= 1 - Math.min(0.4, slope * 0.08);
+            b *= 1 - Math.min(0.3, slope * 0.06);
+            var spec = Math.max(0, -gy) * Math.exp(-Math.pow((x - moonCol) / (sw * 0.12), 2)) * shimmer * 40;
+            r += spec; g += spec; b += spec * 1.1;
+            var o = (y * sw + x) * 4;
+            out.data[o] = r; out.data[o + 1] = g; out.data[o + 2] = b; out.data[o + 3] = 255;
+          }
+        }
+        var tmpC = document.createElement("canvas");
+        tmpC.width = sw; tmpC.height = rows;
+        var tctx = tmpC.getContext("2d");
+        if (!tctx) return;
+        tctx.putImageData(out, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(tmpC, 0, skyH, W, waterH);
+      }
+      function frame(t) {
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+        skip = 1 - skip;
+        if (reduce && skip) return;
+        paintScene(hi, W, skyH, true);
+        drawLanterns(hi, W, skyH, t);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(sceneHi, 0, 0);
+        stepSim(); if (!reduce) stepSim();
+        if (damp > 0.976 && !reduce) {
+          if (Math.random() < 0.08) drop((Math.random() * sw) | 0, (Math.random() * waterRows()) | 0, 1, 2);
+        }
+        if (rain) {
+          var n = 1 + Math.floor((damp - 0.955) / 0.01);
+          for (var i = 0; i < n; i++) drop((Math.random() * sw) | 0, (Math.random() * waterRows() * 0.7) | 0, 1.2, 18);
+        }
+        renderWater(t);
+        ctx.fillStyle = "rgba(5,7,26,.35)";
+        ctx.fillRect(0, skyH - 2, W, 6);
+        var shore = ctx.createLinearGradient(0, H - waterH * 0.25, 0, H);
+        shore.addColorStop(0, "rgba(5,7,28,0)"); shore.addColorStop(1, "rgba(5,7,20,.85)");
+        ctx.fillStyle = shore; ctx.fillRect(0, H - waterH * 0.28, W, waterH * 0.28);
+        ctx.strokeStyle = "#05071c"; ctx.fillStyle = "#05071c"; ctx.lineWidth = 2 * dpr;
+        reeds.forEach(function (r) {
+          var sway = reduce ? 0 : Math.sin(t * 0.0015 + r.ph) * 10 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(r.x * W, H);
+          ctx.quadraticCurveTo(r.x * W + sway, H - r.h * H * 0.5, r.x * W + sway * 1.4, H - r.h * H);
+          ctx.stroke();
+        });
+      }
+      function restWord(v) {
+        if (v < 0.962) return "glass";
+        if (v < 0.972) return "calm";
+        if (v < 0.982) return "stirring";
+        if (v < 0.992) return "restless";
+        return "brooding";
+      }
+      function waterPt(ev) {
+        var r = canvas.getBoundingClientRect();
+        var x = (ev.clientX - r.left) / r.width;
+        var y = (ev.clientY - r.top) / r.height;
+        if (y < 0.56) return null;
+        return { x: x * sw, y: ((y - 0.56) / 0.44) * waterRows() };
+      }
+      canvas.addEventListener("pointerdown", function (ev) {
+        var p = waterPt(ev); if (!p) return;
+        drop(p.x, p.y, 3, 90);
+      });
+      canvas.addEventListener("pointermove", function (ev) {
+        if (!ev.buttons) return;
+        var now = Date.now();
+        if (now - lastDrop < 28) return;
+        lastDrop = now;
+        var p = waterPt(ev); if (!p) return;
+        drop(p.x, p.y, 2, 36);
+      });
+      var dampEl = qs("#damp"), restOut = qs("#restOut");
+      if (dampEl) dampEl.addEventListener("input", function () {
+        damp = Number(dampEl.value) / 1000;
+        if (restOut) restOut.textContent = restWord(damp);
+      });
+      var rainEl = qs("#rain"), lanEl = qs("#lanterns");
+      if (rainEl) rainEl.addEventListener("change", function () { rain = rainEl.checked; });
+      if (lanEl) lanEl.addEventListener("change", function () { lanternsOn = lanEl.checked; });
+      var stone = qs("#stone"), settle = qs("#settle");
+      if (stone) stone.addEventListener("click", function () { drop(sw * 0.5, waterRows() * 0.4, 6, 140); });
+      if (settle) settle.addEventListener("click", function () {
+        if (bufA) bufA.fill(0); if (bufB) bufB.fill(0);
+      });
+      window.addEventListener("resize", rebuild);
+      rebuild();
+      if (restOut) restOut.textContent = restWord(damp);
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      else setInterval(function () { frame(Date.now()); }, reduce ? 50 : 32);
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

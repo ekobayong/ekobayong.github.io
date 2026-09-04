@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orbit. — A CSS 3D Solar System</title>
+  <style>
+    :root {
+      --pitch: 62deg;
+      --yaw: 0deg;
+      --s: 0.72;
+      --paper: #e8ecf5;
+      --amber: #ffb52e;
+      --panel: rgba(10,14,30,0.72);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: #02030a;
+      color: var(--paper);
+      font-family: ui-sans-serif, system-ui, "Helvetica Neue", sans-serif;
+      overflow: hidden;
+    }
+    #stars {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+    .nebula {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at 8% 92%, rgba(60,30,120,0.25), transparent 46%),
+        radial-gradient(ellipse at 92% 8%, rgba(20,70,120,0.22), transparent 44%);
+    }
+    .persp {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      perspective: 1400px;
+      perspective-origin: 50% 50%;
+    }
+    .cam {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 0;
+      height: 0;
+      transform-style: preserve-3d;
+      transform: scale3d(var(--s), var(--s), var(--s)) rotateX(var(--pitch)) rotateY(var(--yaw));
+    }
+    button.sun, button.disc {
+      appearance: none;
+      -webkit-appearance: none;
+      border: 0;
+      padding: 0;
+      font: inherit;
+    }
+    .sun {
+      position: absolute;
+      width: 90px;
+      height: 90px;
+      margin: -45px 0 0 -45px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 32%, #fff9d6, #ffe28a 28%, #ffb428 52%, #ff7a12 76%, #ff4d00 100%);
+      box-shadow:
+        0 0 24px 8px rgba(255,180,40,0.7),
+        0 0 80px 24px rgba(255,120,20,0.45),
+        0 0 180px 60px rgba(255,80,0,0.28),
+        0 0 320px 90px rgba(255,60,0,0.12);
+      animation: sunPulse 5s ease-in-out infinite;
+      z-index: 4;
+      cursor: pointer;
+    }
+    .corona {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 210px;
+      height: 210px;
+      margin: -105px 0 0 -105px;
+      border-radius: 50%;
+      filter: blur(16px);
+      opacity: 0.55;
+      pointer-events: none;
+      background: conic-gradient(from 0deg, #ffd27a, transparent 18%, #ff7a12 38%, transparent 55%, #ffe28a 78%, transparent);
+      animation: spin 28s linear infinite;
+    }
+    .corona.rev {
+      width: 170px;
+      height: 170px;
+      margin: -85px 0 0 -85px;
+      animation: spin 40s linear infinite reverse;
+      opacity: 0.4;
+    }
+    .orbit {
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform-style: preserve-3d;
+    }
+    .ring {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 50%;
+      box-shadow: 0 0 8px rgba(140,190,255,0.18), inset 0 0 8px rgba(140,190,255,0.12);
+      transform: translate(-50%, -50%) rotateX(90deg);
+    }
+    .body-wrap {
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform-style: preserve-3d;
+    }
+    .disc {
+      position: absolute;
+      border-radius: 50%;
+      transform-style: preserve-3d;
+      cursor: pointer;
+    }
+    .disc::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: radial-gradient(circle at var(--lx, 30%) var(--ly, 30%), transparent 28%, rgba(0,0,0,0.55) 78%);
+      pointer-events: none;
+    }
+    .label {
+      position: absolute;
+      top: 110%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(232,236,245,0.82);
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.35s;
+      pointer-events: none;
+      text-shadow: 0 0 8px rgba(0,0,0,0.8);
+    }
+    body.labels-on .label { opacity: 1; }
+    .mercury .ring { width: 210px; height: 210px; }
+    .venus .ring { width: 280px; height: 280px; }
+    .earth .ring { width: 360px; height: 360px; }
+    .mars .ring { width: 444px; height: 444px; }
+    .jupiter .ring { width: 600px; height: 600px; }
+    .saturn .ring { width: 760px; height: 760px; }
+    .uranus .ring { width: 900px; height: 900px; }
+    .neptune .ring { width: 1024px; height: 1024px; }
+    .mercury-disc {
+      width: 10px; height: 10px; margin: -5px 0 0 -5px;
+      background: radial-gradient(circle at 32% 28%, #cfc9bf, #46423d);
+      box-shadow: inset 2px 3px 0 rgba(0,0,0,0.28), inset -3px 4px 0 rgba(0,0,0,0.18);
+    }
+    .venus-disc {
+      width: 16px; height: 16px; margin: -8px 0 0 -8px;
+      background:
+        repeating-linear-gradient(118deg, rgba(255,255,255,0.12) 0 2px, transparent 2px 7px),
+        radial-gradient(circle at 34% 30%, #f6e3b4, #9c6a3a);
+    }
+    .earth-disc {
+      width: 18px; height: 18px; margin: -9px 0 0 -9px;
+      background:
+        radial-gradient(circle at 62% 38%, rgba(255,255,255,0.35), transparent 28%),
+        radial-gradient(ellipse at 30% 55%, #4a9a3e 0 18%, transparent 19%),
+        radial-gradient(ellipse at 68% 62%, #3c8a3a 0 14%, transparent 16%),
+        radial-gradient(circle at 34% 30%, #3b7be0, #0a2a66);
+    }
+    .mars-disc {
+      width: 12px; height: 12px; margin: -6px 0 0 -6px;
+      background:
+        radial-gradient(circle at 50% 6%, #f4f0ea 0 14%, transparent 16%),
+        radial-gradient(ellipse at 62% 58%, #3a1408 0 22%, transparent 24%),
+        radial-gradient(circle at 32% 30%, #e6845a, #6a2810);
+    }
+    .jupiter-disc {
+      width: 42px; height: 42px; margin: -21px 0 0 -21px;
+      background:
+        radial-gradient(ellipse at 68% 62%, #c8583c 0 10%, transparent 12%),
+        repeating-linear-gradient(180deg, #d7bd9c 0 4px, #b18866 4px 7px, #ecdcc7 7px 10px, #a56b4d 10px 13px, #cfa781 13px 16px);
+    }
+    .saturn-disc {
+      width: 34px; height: 34px; margin: -17px 0 0 -17px;
+      background: repeating-linear-gradient(180deg, #e6d3a4 0 4px, #c9ae72 4px 7px, #f0e2b8 7px 10px);
+    }
+    .saturn-rings {
+      position: absolute;
+      width: 230%;
+      height: 230%;
+      left: 50%;
+      top: 50%;
+      margin: -115% 0 0 -115%;
+      border-radius: 50%;
+      transform: rotateX(74deg);
+      background: radial-gradient(circle, transparent 36%, rgba(210,190,140,0.55) 42%, rgba(80,70,50,0.9) 48%, rgba(210,190,140,0.5) 54%, transparent 58%);
+      pointer-events: none;
+    }
+    .uranus-disc {
+      width: 24px; height: 24px; margin: -12px 0 0 -12px;
+      background: radial-gradient(circle at 34% 30%, #d6f6f7, #3a9aa3);
+    }
+    .neptune-disc {
+      width: 22px; height: 22px; margin: -11px 0 0 -11px;
+      background:
+        repeating-linear-gradient(180deg, transparent 0 3px, rgba(255,255,255,0.08) 3px 4px),
+        radial-gradient(circle at 34% 30%, #6d95f5, #142f8f);
+    }
+    .moon-wrap { position: absolute; transform-style: preserve-3d; }
+    .moon-disc {
+      width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px;
+      background: radial-gradient(circle at 32% 30%, #d8d8d4, #6e6e6a);
+    }
+    .brand {
+      position: fixed;
+      top: 22px;
+      left: 28px;
+      z-index: 5;
+      font-family: Georgia, "Iowan Old Style", Palatino, serif;
+      font-size: clamp(28px, 4vw, 44px);
+    }
+    .brand span { color: var(--amber); }
+    .toolbar {
+      position: fixed;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 5;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      padding: 10px 16px;
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 999px;
+      font-size: 12px;
+    }
+    .toolbar label { display: flex; align-items: center; gap: 8px; }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 140px;
+      height: 4px;
+      background: linear-gradient(90deg, #334, var(--amber));
+      border-radius: 4px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--amber);
+      cursor: pointer;
+    }
+    .toolbar button {
+      background: transparent;
+      color: var(--paper);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .toolbar button[aria-pressed="true"] {
+      background: rgba(255,181,46,0.22);
+      border-color: var(--amber);
+    }
+    .card {
+      position: fixed;
+      top: 18px;
+      right: -420px;
+      width: min(360px, 92vw);
+      z-index: 6;
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 16px;
+      padding: 22px;
+      transition: right 0.45s cubic-bezier(0.22,1,0.36,1);
+    }
+    .card.open { right: 18px; }
+    .card h2 {
+      font-family: Georgia, "Iowan Old Style", Palatino, serif;
+      font-size: 28px;
+      margin-bottom: 4px;
+    }
+    .card .type { color: var(--amber); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; }
+    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 14px 0; font-size: 13px; }
+    .meta dt { color: rgba(232,236,245,0.5); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; }
+    .card p { font-size: 14px; line-height: 1.5; color: rgba(232,236,245,0.86); }
+    .close {
+      position: absolute; top: 12px; right: 12px;
+      background: none; border: 0; color: inherit; font-size: 18px; cursor: pointer;
+    }
+    @keyframes sunPulse {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.18); }
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 640px) {
+      .card { top: auto; bottom: -80%; right: 0; width: 100%; border-radius: 16px 16px 0 0; }
+      .card.open { right: 0; bottom: 0; }
+      .toolbar { width: calc(100% - 16px); flex-wrap: wrap; justify-content: center; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sun, .corona { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="stars"></canvas>
+  <div class="nebula"></div>
+  <div class="persp" id="persp">
+    <div class="cam" id="cam">
+      <div class="corona"></div>
+      <div class="corona rev"></div>
+      <button type="button" class="sun" data-id="sun" aria-label="Sun"></button>
+      <div class="orbit mercury" data-planet="mercury">
+        <div class="ring"></div>
+        <div class="body-wrap"><button type="button" class="disc mercury-disc" data-id="mercury" aria-label="Mercury"></button><span class="label">Mercury</span></div>
+      </div>
+      <div class="orbit venus" data-planet="venus">
+        <div class="ring"></div>
+        <div class="body-wrap"><button type="button" class="disc venus-disc" data-id="venus" aria-label="Venus"></button><span class="label">Venus</span></div>
+      </div>
+      <div class="orbit earth" data-planet="earth">
+        <div class="ring"></div>
+        <div class="body-wrap">
+          <button type="button" class="disc earth-disc" data-id="earth" aria-label="Earth"></button>
+          <span class="label">Earth</span>
+          <div class="moon-wrap"><div class="disc moon-disc" data-id="moon"></div></div>
+        </div>
+      </div>
+      <div class="orbit mars" data-planet="mars">
+        <div class="ring"></div>
+        <div class="body-wrap"><button type="button" class="disc mars-disc" data-id="mars" aria-label="Mars"></button><span class="label">Mars</span></div>
+      </div>
+      <div class="orbit jupiter" data-planet="jupiter">
+        <div class="ring"></div>
+        <div class="body-wrap"><button type="button" class="disc jupiter-disc" data-id="jupiter" aria-label="Jupiter"></button><span class="label">Jupiter</span></div>
+      </div>
+      <div class="orbit saturn" data-planet="saturn">
+        <div class="ring"></div>
+        <div class="body-wrap">
+          <button type="button" class="disc saturn-disc" data-id="saturn" aria-label="Saturn"></button>
+          <div class="saturn-rings" aria-hidden="true"></div>
+          <span class="label">Saturn</span>
+        </div>
+      </div>
+      <div class="orbit uranus" data-planet="uranus">
+        <div class="ring"></div>
+        <div class="body-wrap"><button type="button" class="disc uranus-disc" data-id="uranus" aria-label="Uranus"></button><span class="label">Uranus</span></div>
+      </div>
+      <div class="orbit neptune" data-planet="neptune">
+        <div class="ring"></div>
+        <div class="body-wrap"><button type="button" class="disc neptune-disc" data-id="neptune" aria-label="Neptune"></button><span class="label">Neptune</span></div>
+      </div>
+    </div>
+  </div>
+  <h1 class="brand">Orbit<span>.</span></h1>
+  <div class="toolbar">
+    <label>Speed <input type="range" id="speed" min="0" max="40" step="0.1" value="1"> <span id="speed-out">1.0×</span></label>
+    <button type="button" id="labels" aria-pressed="false">Labels</button>
+    <button type="button" id="reset">Reset view</button>
+  </div>
+  <aside class="card" id="card" hidden>
+    <button type="button" class="close" id="close" aria-label="Close">×</button>
+    <div class="type" id="card-type"></div>
+    <h2 id="card-name"></h2>
+    <dl class="meta">
+      <div><dt>Diameter</dt><dd id="m-d"></dd></div>
+      <div><dt>Day length</dt><dd id="m-day"></dd></div>
+      <div><dt>Year</dt><dd id="m-year"></dd></div>
+      <div><dt>Moon count</dt><dd id="m-moons"></dd></div>
+      <div><dt>Mean temperature</dt><dd id="m-temp"></dd></div>
+    </dl>
+    <p id="card-fact"></p>
+  </aside>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    var PLANETS = {
+      mercury: { inc: 7, r: 105, period: 0.240846, size: 10 },
+      venus: { inc: 3.4, r: 140, period: 0.615198, size: 16 },
+      earth: { inc: 0, r: 180, period: 1, size: 18 },
+      mars: { inc: 1.9, r: 222, period: 1.88082, size: 12 },
+      jupiter: { inc: 1.3, r: 300, period: 11.862, size: 42 },
+      saturn: { inc: 2.5, r: 380, period: 29.457, size: 34 },
+      uranus: { inc: 0.8, r: 450, period: 84.021, size: 24 },
+      neptune: { inc: 1.8, r: 512, period: 164.8, size: 22 }
+    };
+    var FACTS = {
+      sun: { type: "G-type star", name: "Sun", d: "1,392,700 km", day: "25.4 d (eq.)", year: "—", moons: "—", temp: "5772 K", fact: "The Sun holds 99.8% of the Solar System’s mass and fuses 600 million tons of hydrogen every second." },
+      mercury: { type: "Terrestrial", name: "Mercury", d: "4,879 km", day: "58.6 d", year: "88 d", moons: "0", temp: "167 °C", fact: "Mercury’s day is longer than its year; the same face bakes and freezes as it races the Sun." },
+      venus: { type: "Terrestrial", name: "Venus", d: "12,104 km", day: "243 d retro", year: "225 d", moons: "0", temp: "464 °C", fact: "A runaway greenhouse cloaks Venus in sulfuric clouds, making it the hottest world we know." },
+      earth: { type: "Terrestrial", name: "Earth", d: "12,742 km", day: "23.93 h", year: "365.25 d", moons: "1", temp: "15 °C", fact: "The only known harbor of life, Earth sits in a thin goldilocks belt of liquid water." },
+      mars: { type: "Terrestrial", name: "Mars", d: "6,779 km", day: "24.6 h", year: "687 d", moons: "2", temp: "−63 °C", fact: "Olympus Mons on Mars is the tallest volcano in the Solar System, three times the height of Everest." },
+      jupiter: { type: "Gas giant", name: "Jupiter", d: "139,820 km", day: "9.9 h", year: "11.86 y", moons: "95", temp: "−145 °C", fact: "The Great Red Spot is an anticyclone older than telescopes, large enough to swallow Earth." },
+      saturn: { type: "Gas giant", name: "Saturn", d: "116,460 km", day: "10.7 h", year: "29.46 y", moons: "146", temp: "−178 °C", fact: "Saturn’s rings are ice and dust only tens of meters thick, yet they span hundreds of thousands of kilometers." },
+      uranus: { type: "Ice giant", name: "Uranus", d: "50,724 km", day: "17.2 h", year: "84 y", moons: "28", temp: "−195 °C", fact: "Uranus rolls on its side: its axis is tilted 98°, so seasons last for decades." },
+      neptune: { type: "Ice giant", name: "Neptune", d: "49,244 km", day: "16.1 h", year: "165 y", moons: "16", temp: "−201 °C", fact: "Neptune radiates more heat than it receives and drives the fastest winds in the Solar System." }
+    };
+    function init() {
+      var cam = qs("#cam");
+      var stars = qs("#stars");
+      var speed = qs("#speed");
+      var speedOut = qs("#speed-out");
+      var labelsBtn = qs("#labels");
+      var resetBtn = qs("#reset");
+      var card = qs("#card");
+      var persp = qs("#persp");
+      if (!cam || !stars || !speed || !labelsBtn || !resetBtn || !card || !persp) return;
+      var reduced = false;
+      if (typeof window.matchMedia === "function") {
+        try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e1) { reduced = false; }
+      }
+      var stctx = stars.getContext ? stars.getContext("2d") : null;
+      var starList = [];
+      function paintStars() {
+        if (!stctx) return;
+        var dpr = window.devicePixelRatio ? Math.min(2, window.devicePixelRatio) : 1;
+        var w = window.innerWidth || 800;
+        var h = window.innerHeight || 600;
+        stars.width = Math.floor(w * dpr);
+        stars.height = Math.floor(h * dpr);
+        stars.style.width = w + "px";
+        stars.style.height = h + "px";
+        stctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        stctx.fillStyle = "#02030a";
+        stctx.fillRect(0, 0, w, h);
+        if (!starList.length) {
+          var n = Math.floor((w * h) / 2800);
+          var i, kind;
+          for (i = 0; i < n; i++) {
+            kind = Math.random();
+            starList.push({
+              x: Math.random() * w,
+              y: Math.random() * h,
+              r: kind > 0.92 ? 1.6 : (kind > 0.6 ? 1.1 : 0.6),
+              a: 0.25 + Math.random() * 0.75,
+              c: kind > 0.7 ? "210,220,255" : (kind > 0.35 ? "255,248,230" : "255,190,120")
+            });
+          }
+          for (i = 0; i < 5; i++) {
+            starList.push({
+              x: Math.random() * w, y: Math.random() * h, r: 5 + Math.random() * 7, a: 0.18, c: "180,200,255", ring: true
+            });
+          }
+        }
+        starList.forEach(function (s) {
+          if (s.ring) {
+            stctx.strokeStyle = "rgba(" + s.c + "," + s.a + ")";
+            stctx.beginPath();
+            stctx.ellipse(s.x, s.y, s.r, s.r * 0.4, 0.4, 0, Math.PI * 2);
+            stctx.stroke();
+          } else {
+            stctx.fillStyle = "rgba(" + s.c + "," + s.a + ")";
+            stctx.beginPath();
+            stctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+            stctx.fill();
+          }
+        });
+      }
+      paintStars();
+      if (window.addEventListener) window.addEventListener("resize", function () { starList = []; paintStars(); });
+      var pitch = 62;
+      var yaw = 0;
+      var scale = 0.72;
+      var userTookOver = false;
+      var speedMul = 1;
+      var t0 = Date.now();
+      var dragging = false;
+      var lx = 0, ly = 0;
+      var angles = { mercury: 40, venus: 120, earth: 200, mars: 80, jupiter: 30, saturn: 250, uranus: 10, neptune: 300 };
+      var moonA = 0;
+      Object.keys(PLANETS).forEach(function (id) {
+        var o = qs(".orbit." + id);
+        if (!o) return;
+        var ring = qs(".ring", o);
+        if (ring) ring.style.transform = "translate(-50%, -50%) rotateX(" + (90 + PLANETS[id].inc) + "deg)";
+      });
+      function setCam() {
+        cam.style.setProperty("--pitch", pitch + "deg");
+        cam.style.setProperty("--yaw", yaw + "deg");
+        cam.style.setProperty("--s", String(scale));
+      }
+      setCam();
+      function openCard(id) {
+        var d = FACTS[id];
+        if (!d) return;
+        var t = qs("#card-type"), n = qs("#card-name"), p = qs("#card-fact");
+        if (t) t.textContent = d.type;
+        if (n) n.textContent = d.name;
+        if (qs("#m-d")) qs("#m-d").textContent = d.d;
+        if (qs("#m-day")) qs("#m-day").textContent = d.day;
+        if (qs("#m-year")) qs("#m-year").textContent = d.year;
+        if (qs("#m-moons")) qs("#m-moons").textContent = d.moons;
+        if (qs("#m-temp")) qs("#m-temp").textContent = d.temp;
+        if (p) p.textContent = d.fact;
+        card.hidden = false;
+        card.classList.add("open");
+      }
+      function closeCard() {
+        card.classList.remove("open");
+      }
+      qsa("[data-id]").forEach(function (el) {
+        el.addEventListener("click", function (e) {
+          e.stopPropagation();
+          openCard(el.getAttribute("data-id"));
+        });
+        el.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openCard(el.getAttribute("data-id"));
+          }
+        });
+      });
+      var closeBtn = qs("#close");
+      if (closeBtn) closeBtn.addEventListener("click", closeCard);
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") closeCard();
+      });
+      speed.addEventListener("input", function () {
+        speedMul = parseFloat(speed.value) || 0;
+        if (speedOut) speedOut.textContent = speedMul.toFixed(1) + "×";
+      });
+      labelsBtn.addEventListener("click", function () {
+        var on = labelsBtn.getAttribute("aria-pressed") !== "true";
+        labelsBtn.setAttribute("aria-pressed", on ? "true" : "false");
+        document.body.classList.toggle("labels-on", on);
+      });
+      resetBtn.addEventListener("click", function () {
+        pitch = 62; yaw = 0; scale = 0.72; userTookOver = false; setCam();
+      });
+      persp.addEventListener("pointerdown", function (e) {
+        if (e.target && e.target.closest && e.target.closest("[data-id]")) return;
+        dragging = true; userTookOver = true; lx = e.clientX; ly = e.clientY;
+      });
+      window.addEventListener("pointermove", function (e) {
+        if (!dragging) return;
+        yaw += (e.clientX - lx) * 0.25;
+        pitch = Math.max(2, Math.min(89, pitch - (e.clientY - ly) * 0.2));
+        lx = e.clientX; ly = e.clientY;
+        setCam();
+      });
+      window.addEventListener("pointerup", function () { dragging = false; });
+      persp.addEventListener("wheel", function (e) {
+        e.preventDefault();
+        userTookOver = true;
+        pitch = Math.max(2, Math.min(89, pitch + (e.deltaY > 0 ? 2 : -2)));
+        setCam();
+      }, { passive: false });
+      var last = performance && performance.now ? performance.now() : Date.now();
+      function frame(now) {
+        var dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        if (!reduced && !userTookOver) {
+          yaw += 1.5 * dt;
+          setCam();
+        }
+        var earthYear = 12;
+        Object.keys(PLANETS).forEach(function (id) {
+          var p = PLANETS[id];
+          var wrap = qs(".orbit." + id + " .body-wrap");
+          var disc = qs(".orbit." + id + " .disc");
+          if (!wrap || !disc) return;
+          var degPerSec = (360 / (earthYear * p.period)) * speedMul;
+          angles[id] = (angles[id] + degPerSec * dt) % 360;
+          wrap.style.transform = "rotateX(" + p.inc + "deg) rotateY(" + angles[id] + "deg) translateX(" + p.r + "px)";
+          disc.style.transform = "rotateY(" + (-angles[id]) + "deg) rotateX(" + (-p.inc - pitch) + "deg) rotateY(" + (-yaw) + "deg)";
+          var lx = 50 + Math.cos(angles[id] * Math.PI / 180) * 32;
+          var ly = 42 - Math.sin(pitch * Math.PI / 180) * 18;
+          disc.style.setProperty("--lx", lx + "%");
+          disc.style.setProperty("--ly", ly + "%");
+        });
+        var moonWrap = qs(".moon-wrap");
+        var moonDisc = qs(".moon-disc");
+        if (moonWrap && moonDisc) {
+          moonA = (moonA + (360 / (earthYear * (27.3 / 365.25))) * speedMul * dt) % 360;
+          moonWrap.style.transform = "rotateY(" + moonA + "deg) translateX(18px)";
+          moonDisc.style.transform = "rotateY(" + (-moonA - angles.earth) + "deg) rotateX(" + (-pitch) + "deg) rotateY(" + (-yaw) + "deg)";
+        }
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

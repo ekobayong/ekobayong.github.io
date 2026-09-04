@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apiary Studio — Honeycomb Navigation</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body {
+      background: radial-gradient(ellipse at 18% 12%, #4A2606 0%, #2A1604 42%, #150A02 100%);
+      font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+      color: #F8E7C4;
+      perspective: 1200px;
+    }
+    .sweep {
+      position: fixed; inset: -20%;
+      background: linear-gradient(115deg, transparent 0 38%, rgba(255,210,122,0.16) 44%, #FFF0C8 50%, rgba(255,210,122,0.28) 56%, transparent 64% 100%);
+      mix-blend-mode: screen;
+      pointer-events: none;
+      z-index: 2;
+      animation: sweep 14s linear infinite;
+    }
+    @keyframes sweep {
+      0% { transform: translateX(-30%) rotate(8deg); }
+      50% { transform: translateX(18%) rotate(8deg); }
+      100% { transform: translateX(-30%) rotate(8deg); }
+    }
+    .brand {
+      position: fixed; top: 28px; left: 32px; z-index: 4; pointer-events: none;
+    }
+    .brand h1 { font-size: clamp(28px, 4vw, 44px); font-weight: 400; }
+    .brand h1 em { font-style: italic; color: #FFD27A; font-weight: 400; }
+    .brand p {
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase; color: #C9A36A;
+      margin-top: 6px;
+    }
+    .hint {
+      position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: #C9A36A;
+      z-index: 4; pointer-events: none;
+    }
+    #comb {
+      position: fixed; inset: 0;
+      transform-style: preserve-3d;
+      z-index: 1;
+    }
+    .hex {
+      position: absolute;
+      clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+      background:
+        linear-gradient(135deg, rgba(255,220,150,0.18), transparent 42%),
+        linear-gradient(180deg, #6B3A0A, #3D2005);
+      transform-style: preserve-3d;
+      transition: transform 0.5s cubic-bezier(.2,.8,.2,1), filter 0.5s cubic-bezier(.2,.8,.2,1), opacity 0.45s ease;
+      will-change: transform, filter;
+    }
+    .hex::after {
+      content: "";
+      position: absolute; inset: 3px;
+      clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+      box-shadow: inset 0 0 0 1px rgba(255, 210, 122, 0.18);
+      pointer-events: none;
+    }
+    .hex.nav {
+      background:
+        radial-gradient(circle at 35% 28%, rgba(255,240,200,0.55), transparent 46%),
+        linear-gradient(180deg, #F0A83A, #C47A18);
+      z-index: 3;
+      cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+      color: #1C0F03;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    .hex.nav:hover { filter: brightness(1.18) !important; }
+    .hex.nav:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(255, 240, 200, 0.85);
+    }
+    .hex.nav span {
+      font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600;
+    }
+    .hex.nav svg { width: 22px; height: 22px; stroke: #1C0F03; fill: none; stroke-width: 1.6; }
+    #comb.dimmed .hex { opacity: 0.22; filter: brightness(0.7) !important; transform: none !important; }
+    #comb.dimmed .hex.nav.is-open { opacity: 0; }
+    #comb.dimmed .hex.nav:not(.is-open) { pointer-events: none; }
+    .panel {
+      position: fixed; z-index: 6;
+      background: linear-gradient(180deg, #3d220c, #241406);
+      color: #F8E7C4;
+      overflow: hidden;
+      clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+      border-radius: 0;
+      opacity: 0; pointer-events: none;
+    }
+    .panel.show {
+      opacity: 1; pointer-events: auto;
+      transition: left 0.7s cubic-bezier(.2,.8,.2,1), top 0.7s cubic-bezier(.2,.8,.2,1),
+        width 0.7s cubic-bezier(.2,.8,.2,1), height 0.7s cubic-bezier(.2,.8,.2,1),
+        clip-path 0.7s cubic-bezier(.2,.8,.2,1), border-radius 0.7s cubic-bezier(.2,.8,.2,1);
+    }
+    .panel .inner {
+      opacity: 0; padding: 48px 52px 40px; height: 100%; overflow: auto;
+      transition: opacity 0.4s ease 0.35s;
+    }
+    .panel.ready .inner { opacity: 1; }
+    .panel .kicker {
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase; color: #C9A36A;
+    }
+    .panel h2 { font-size: clamp(32px, 5vw, 64px); font-weight: 400; margin: 8px 0 16px; line-height: 1.05; }
+    .panel p { font-size: 16px; line-height: 1.55; color: #ead6b0; margin-bottom: 12px; max-width: 58ch; }
+    .tags { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 18px; }
+    .tags li { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; letter-spacing: 0.08em; color: #FFD27A; }
+    .tags li::before { content: "⬡ "; color: #F0A83A; }
+    .close {
+      position: absolute; top: 16px; right: 16px; width: 40px; height: 40px;
+      border-radius: 50%; border: 1px solid rgba(255,210,122,0.4);
+      background: rgba(0,0,0,0.2); color: #FFD27A; cursor: pointer;
+      font-size: 22px; line-height: 1;
+    }
+    .close:hover { transform: rotate(90deg); }
+    @media (prefers-reduced-motion: reduce) {
+      .sweep { animation: none; }
+      .hex, .panel, .panel .inner, .close { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sweep" id="sweep"></div>
+  <div class="brand">
+    <h1>Apiary <em>Studio</em></h1>
+    <p>Design harvested from the comb</p>
+  </div>
+  <div class="hint" id="hint">Choose a cell · Work Studio Journal Lab People Contact</div>
+  <div id="comb"></div>
+  <div class="panel" id="panel">
+    <button class="close" id="close" type="button" aria-label="Close">×</button>
+    <div class="inner" id="panel-inner"></div>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var comb = qs("#comb");
+      var panel = qs("#panel");
+      var inner = qs("#panel-inner");
+      var closeBtn = qs("#close");
+      var hint = qs("#hint");
+      var sweep = qs("#sweep");
+      if (!comb || !panel || !inner) return;
+      var reduced = false;
+      if (typeof window.matchMedia === "function") {
+        reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      }
+      if (reduced && sweep) sweep.style.animation = "none";
+      var hexes = [];
+      var cols = 0, rows = 0, hw = 100, hh = 115.47, gap = 4, vgap = 3;
+      var mx = window.innerWidth / 2, my = window.innerHeight / 2;
+      var lastMove = Date.now();
+      var phantom = true;
+      var open = false;
+      var t0 = Date.now();
+
+      var NAV = [
+        { dx: 1, dy: 0, id: "work", label: "Work", icon: "M4 8h16v11H4zM8 8V6h8v2" },
+        { dx: 0, dy: -1, id: "studio", label: "Studio", icon: "M4 11l8-7 8 7v9H4z" },
+        { dx: -1, dy: 0, id: "journal", label: "Journal", icon: "M6 4h12v16H6zM10 8h6M10 12h6" },
+        { dx: -1, dy: 1, id: "lab", label: "Lab", icon: "M9 3h6M10 3v6l-5 10h14l-5-10V3" },
+        { dx: 0, dy: 1, id: "people", label: "People", icon: "M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM15 10a2.4 2.4 0 1 0 0-4.8M4 19c.4-3 2.6-5 5-5s4.6 2 5 5M14 14c2.2 0 4 1.6 4.5 4" },
+        { dx: 1, dy: 1, id: "contact", label: "Contact", icon: "M3 6h18v12H3zM3 6l9 7 9-7" }
+      ];
+      var COPY = {
+        work: {
+          kicker: "Cell 01 · Projects in wax",
+          title: "Work",
+          paras: [
+            "We design identities, editorial systems and spatial graphics for houses that still believe in paper and light. Recent combs include a botanical press, a northern ferry timetable, and a perfume house whose bottles catch the afternoon.",
+            "Every commission begins as a cell: a constraint, a material, a season. We let the structure tessellate before we add honey."
+          ],
+          tags: ["identity", "print", "spatial", "packaging"]
+        },
+        studio: {
+          kicker: "Cell 02 · The hive",
+          title: "Studio",
+          paras: [
+            "Apiary occupies a long room above a joinery shop. The floor is warm, the windows face west, and the walls are pinned with proofs that never quite dried.",
+            "We keep a small library of type specimens, a press for tests, and a table large enough for six people and one argument about kerning."
+          ],
+          tags: ["atelier", "west light", "proofs"]
+        },
+        journal: {
+          kicker: "Cell 03 · Notes from the comb",
+          title: "Journal",
+          paras: [
+            "Essays on amber, on the ethics of slow production, and on why a hexagon is kinder than a square. We publish when the season turns, never on a calendar.",
+            "Issue 12 considered the colour of honey under museum glass. Issue 13 is a walk through a wax museum that does not exist."
+          ],
+          tags: ["essays", "seasonal", "amber"]
+        },
+        lab: {
+          kicker: "Cell 04 · Experiments",
+          title: "Lab",
+          paras: [
+            "The lab is where we fail usefully: edible inks, type cast in beeswax, a navigation system that buzzes when you hover.",
+            "Nothing ships from here without first spending a week on the window ledge in the sun."
+          ],
+          tags: ["materials", "type", "prototype"]
+        },
+        people: {
+          kicker: "Cell 05 · Keepers",
+          title: "People",
+          paras: [
+            "Six keepers, one visiting typesetter, and a cat named Comb. We hire for patience and for the ability to hold a colour in memory.",
+            "Partners: Mira Sol, Jules Hart, and the quiet printer downstairs who still answers the door in ink."
+          ],
+          tags: ["studio", "collaboration"]
+        },
+        contact: {
+          kicker: "Cell 06 · Write to the hive",
+          title: "Contact",
+          paras: [
+            "Letters to Apiary Studio, Comb Lane, or a note at hello@apiary.studio. We answer within a week, often with a sample of paper.",
+            "Visits by appointment on Thursdays when the light is honest."
+          ],
+          tags: ["hello@apiary.studio", "Comb Lane", "Thursdays"]
+        }
+      };
+
+      function hexSize() {
+        var w = window.innerWidth || 1200;
+        if (w < 640) return 64;
+        if (w < 900) return 82;
+        if (w < 1400) return 100;
+        if (w < 2200) return 132;
+        return 180;
+      }
+      function layout() {
+        comb.innerHTML = "";
+        hexes = [];
+        hw = hexSize();
+        hh = hw * 1.1547;
+        var stepX = hw + gap;
+        var stepY = hh * 0.75 + vgap;
+        cols = Math.ceil(window.innerWidth / stepX) + 3;
+        rows = Math.ceil(window.innerHeight / stepY) + 3;
+        var r, c, el, ox, oy;
+        var cx = Math.floor(cols / 2);
+        var cy = Math.floor(rows / 2);
+        for (r = 0; r < rows; r++) {
+          for (c = 0; c < cols; c++) {
+            el = document.createElement("div");
+            el.className = "hex";
+            ox = (r % 2) * (stepX / 2);
+            oy = 0;
+            el.style.width = hw + "px";
+            el.style.height = hh + "px";
+            el.style.left = (c * stepX + ox - stepX) + "px";
+            el.style.top = (r * stepY + oy - stepY) + "px";
+            el._cx = c * stepX + ox - stepX + hw / 2;
+            el._cy = r * stepY + oy - stepY + hh / 2;
+            el._c = c; el._r = r;
+            comb.appendChild(el);
+            hexes.push(el);
+          }
+        }
+        var n, target, found;
+        for (n = 0; n < NAV.length; n++) {
+          found = null;
+          for (r = 0; r < hexes.length; r++) {
+            if (hexes[r]._c === cx + NAV[n].dx && hexes[r]._r === cy + NAV[n].dy) {
+              found = hexes[r];
+              break;
+            }
+          }
+          if (!found) continue;
+          found.classList.add("nav");
+          found.setAttribute("tabindex", "0");
+          found.setAttribute("role", "button");
+          found.setAttribute("aria-label", NAV[n].label);
+          found._nav = NAV[n].id;
+          found.innerHTML = '<svg viewBox="0 0 24 24"><path d="' + NAV[n].icon + '"/></svg><span>' + NAV[n].label + "</span>";
+          found.addEventListener("click", (function (id, node) {
+            return function () { openPanel(id, node); };
+          })(NAV[n].id, found));
+          found.addEventListener("keydown", (function (id, node) {
+            return function (e) {
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPanel(id, node); }
+            };
+          })(NAV[n].id, found));
+        }
+      }
+
+      function smoothstep(e0, e1, x) {
+        var t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+        return t * t * (3 - 2 * t);
+      }
+      function applyPointer(px, py) {
+        if (open) return;
+        var i, h, d, f, lift, sc, br, sat, rx, ry, radius;
+        radius = 3.2 * hw;
+        for (i = 0; i < hexes.length; i++) {
+          h = hexes[i];
+          d = Math.hypot(h._cx - px, h._cy - py);
+          f = 1 - smoothstep(0, radius, d);
+          lift = f * 34;
+          sc = 0.96 + f * 0.06;
+          br = 1 + f * 0.55;
+          sat = 1 + f * 0.3;
+          rx = ((py - h._cy) / radius) * 14 * f;
+          ry = ((h._cx - px) / radius) * 14 * f;
+          h.style.transform = "translateZ(" + lift + "px) scale(" + sc + ") rotateX(" + rx + "deg) rotateY(" + ry + "deg)";
+          h.style.filter = "brightness(" + br + ") saturate(" + sat + ")";
+        }
+      }
+
+      function openPanel(id, node) {
+        var data = COPY[id];
+        if (!data || open) return;
+        open = true;
+        node.classList.add("is-open");
+        comb.classList.add("dimmed");
+        if (hint) hint.style.opacity = "0";
+        var r = node.getBoundingClientRect();
+        panel.className = "panel";
+        panel.style.left = r.left + "px";
+        panel.style.top = r.top + "px";
+        panel.style.width = r.width + "px";
+        panel.style.height = r.height + "px";
+        panel.style.clipPath = "polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)";
+        panel.style.borderRadius = "0";
+        inner.innerHTML = "<div class='kicker'>" + data.kicker + "</div><h2>" + data.title + "</h2>" +
+          data.paras.map(function (p) { return "<p>" + p + "</p>"; }).join("") +
+          "<ul class='tags'>" + data.tags.map(function (t) { return "<li>" + t + "</li>"; }).join("") + "</ul>";
+        panel.classList.add("show");
+        var go = function () {
+          var pw = Math.min(880, window.innerWidth - 40);
+          var ph = Math.min(620, window.innerHeight - 40);
+          panel.style.left = ((window.innerWidth - pw) / 2) + "px";
+          panel.style.top = ((window.innerHeight - ph) / 2) + "px";
+          panel.style.width = pw + "px";
+          panel.style.height = ph + "px";
+          panel.style.clipPath = "polygon(0 0, 50% 0, 100% 0, 100% 100%, 50% 100%, 0 100%)";
+          panel.style.borderRadius = "24px";
+          panel.classList.add("ready");
+        };
+        if (reduced) go();
+        else setTimeout(go, 30);
+      }
+      function closePanel() {
+        if (!open) return;
+        var openHex = comb.querySelector(".hex.nav.is-open");
+        var r = openHex ? openHex.getBoundingClientRect() : { left: window.innerWidth / 2, top: window.innerHeight / 2, width: hw, height: hh };
+        panel.classList.remove("ready");
+        panel.style.left = r.left + "px";
+        panel.style.top = r.top + "px";
+        panel.style.width = r.width + "px";
+        panel.style.height = r.height + "px";
+        panel.style.clipPath = "polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)";
+        panel.style.borderRadius = "0";
+        var finish = function () {
+          panel.classList.remove("show");
+          comb.classList.remove("dimmed");
+          if (openHex) openHex.classList.remove("is-open");
+          if (hint) hint.style.opacity = "1";
+          open = false;
+        };
+        if (reduced) finish();
+        else setTimeout(finish, 700);
+      }
+
+      window.addEventListener("pointermove", function (e) {
+        mx = e.clientX; my = e.clientY;
+        lastMove = Date.now();
+        phantom = false;
+        applyPointer(mx, my);
+      });
+      if (closeBtn) closeBtn.addEventListener("click", closePanel);
+      window.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") closePanel();
+      });
+      window.addEventListener("resize", function () {
+        if (open) closePanel();
+        layout();
+      });
+
+      function idle() {
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(idle);
+        if (reduced || open) return;
+        if (Date.now() - lastMove > 4000) {
+          phantom = true;
+          var t = (Date.now() - t0) / 1000;
+          var px = window.innerWidth * 0.5 + Math.sin(t * 0.7) * window.innerWidth * 0.28;
+          var py = window.innerHeight * 0.5 + Math.sin(t * 1.1) * window.innerHeight * 0.22;
+          applyPointer(px, py);
+        }
+      }
+      layout();
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(idle);
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

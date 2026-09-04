@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Organic Wave Lab</title>
+  <style>
+    :root {
+      --ink: #f4efe6;
+      --muted: rgba(244,239,230,.55);
+      --accent: #f0c98a;
+      --panel: rgba(14,16,24,.42);
+      --hair: rgba(255,255,255,.16);
+      --sans: "Helvetica Neue", "Avenir Next", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; background: #111; color: var(--ink); }
+    body { font-family: var(--sans); font-weight: 300; }
+    canvas#waves { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    .title {
+      position: fixed; top: 18px; left: 22px; z-index: 3; font-weight: 200; letter-spacing: .08em;
+      font-size: 22px; pointer-events: none;
+    }
+    .title em { font-style: normal; color: var(--accent); font-weight: 300; }
+    .panel {
+      position: fixed; top: 16px; right: 16px; bottom: 16px; width: min(340px, 92vw);
+      background: var(--panel); backdrop-filter: blur(18px); border: 1px solid var(--hair);
+      border-radius: 18px; box-shadow: 0 24px 50px rgba(0,0,0,.35);
+      z-index: 4; display: flex; flex-direction: column; padding: 16px 16px 12px;
+      overflow: auto; color: var(--ink);
+      transition: transform .35s ease, opacity .35s ease;
+    }
+    body.light .panel { background: rgba(255,248,236,.72); color: #2a241c; --hair: rgba(40,30,20,.16); --ink: #2a241c; --muted: rgba(42,36,28,.55); }
+    body.panel-hidden .panel { transform: translateX(110%); opacity: 0; pointer-events: none; }
+    .lbl { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin: 10px 0 6px; }
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pills button, .toggles button, .icon-btn, .wide {
+      font-family: inherit; font-weight: 300; font-size: 12px; letter-spacing: .06em;
+      background: transparent; color: inherit; border: 1px solid var(--hair); border-radius: 999px;
+      padding: 6px 10px; cursor: pointer;
+    }
+    .pills button[aria-pressed="true"] { background: var(--accent); color: #2a241c; border-color: var(--accent); }
+    .toggles { display: flex; gap: 6px; }
+    .toggles button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+    .layers { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+    .chip {
+      display: grid; grid-template-columns: 14px 14px 1fr auto auto auto; gap: 8px; align-items: center;
+      border: 1px solid var(--hair); border-radius: 10px; padding: 6px 8px; cursor: pointer;
+    }
+    .chip.sel { border-color: var(--accent); }
+    .chip .grip { cursor: grab; color: var(--muted); }
+    .sw { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+    .chip .meta { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10px; color: var(--muted); }
+    .chip button { background: none; border: 0; color: inherit; cursor: pointer; font-size: 12px; padding: 2px; }
+    .ctrls label { display: grid; grid-template-columns: 88px 1fr 52px; gap: 8px; align-items: center; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 6px 0; }
+    .ctrls input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .ctrls output { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: inherit; text-align: right; }
+    .color-row { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; }
+    .color-row input[type="color"] { width: 36px; height: 28px; border: 0; background: none; cursor: pointer; }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .wide { flex: 1; border-radius: 10px; }
+    .hide-btn {
+      position: fixed; bottom: 18px; right: 18px; z-index: 5; width: 44px; height: 44px; border-radius: 50%;
+      border: 1px solid var(--hair); background: var(--panel); backdrop-filter: blur(12px); color: inherit; cursor: pointer;
+      font-size: 16px;
+    }
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(12px);
+      background: rgba(14,16,24,.7); color: #fff; border: 1px solid var(--hair); border-radius: 999px;
+      padding: 8px 14px; font-size: 12px; letter-spacing: .08em; opacity: 0; pointer-events: none;
+      transition: opacity .3s ease, transform .3s ease; z-index: 6;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    @media (max-width: 720px) {
+      .panel {
+        top: auto; left: 8px; right: 8px; bottom: 0; width: auto; height: 52vh;
+        border-radius: 18px 18px 0 0;
+      }
+      body.panel-hidden .panel { transform: translateY(110%); }
+      .hide-btn { bottom: auto; top: 16px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .panel, .toast { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="waves" aria-label="Wave composition"></canvas>
+  <div class="title">Organic <em>Wave</em> Lab</div>
+  <aside class="panel" id="panel">
+    <div class="lbl">Preset</div>
+    <div class="pills" id="presets">
+      <button type="button" data-p="Dunes" aria-pressed="true">Dunes</button>
+      <button type="button" data-p="Aurora" aria-pressed="false">Aurora</button>
+      <button type="button" data-p="Tide" aria-pressed="false">Tide</button>
+      <button type="button" data-p="Silk" aria-pressed="false">Silk</button>
+      <button type="button" data-p="Nebula" aria-pressed="false">Nebula</button>
+    </div>
+    <div class="lbl">Time</div>
+    <div class="toggles">
+      <button type="button" id="harmony" aria-pressed="false">Harmony</button>
+      <button type="button" id="flow" aria-pressed="true">Flow</button>
+    </div>
+    <div id="fundWrap" hidden>
+      <label class="ctrls" style="display:grid;margin-top:8px">Fundamental <input id="fund" type="range" min="20" max="240" value="70"> <output id="fundOut">0.70</output></label>
+    </div>
+    <div class="lbl">Layers</div>
+    <div class="layers" id="layers"></div>
+    <div class="ctrls" id="ctrls"></div>
+    <div class="row">
+      <button type="button" class="wide" id="add">Add layer</button>
+      <button type="button" class="wide" id="surprise">Surprise me</button>
+      <button type="button" class="wide" id="export">Export SVG</button>
+    </div>
+  </aside>
+  <button type="button" class="hide-btn" id="hide" aria-label="Hide panel">H</button>
+  <div class="toast" id="toast"></div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    function init() {
+      var canvas = qs("#waves");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var NAMES = ["Crest", "Swell", "Drift", "Undertow", "Haze", "Bed"];
+      var RATIOS = [1, 3 / 2, 2, 5 / 4, 5 / 3, 5 / 2];
+      var PRESETS = {
+        Dunes: {
+          bg: ["#f2e4cf", "#c9a27a"], blend: "source-over", style: "shade", light: false,
+          layers: [
+            { amp: 48, freq: 0.6, phase: 0.2, speed: 0.18, base: 22, col: "#e9cfa8", vis: true },
+            { amp: 56, freq: 0.85, phase: 1.1, speed: 0.14, base: 38, col: "#d4a86f", vis: true },
+            { amp: 44, freq: 1.1, phase: 0.4, speed: 0.22, base: 54, col: "#b7804a", vis: true },
+            { amp: 36, freq: 1.4, phase: 2.0, speed: 0.12, base: 70, col: "#8a5a33", vis: true },
+            { amp: 28, freq: 0.9, phase: 0.8, speed: 0.08, base: 86, col: "#5b3a22", vis: true }
+          ]
+        },
+        Aurora: {
+          bg: ["#03050f", "#0b1b2b"], blend: "screen", style: "fade", light: true,
+          layers: [
+            { amp: 70, freq: 0.55, phase: 0.1, speed: 0.2, base: 18, col: "#36f2b5", vis: true },
+            { amp: 64, freq: 0.8, phase: 1.4, speed: 0.16, base: 34, col: "#3ac8ff", vis: true },
+            { amp: 52, freq: 1.05, phase: 0.6, speed: 0.24, base: 50, col: "#a86cff", vis: true },
+            { amp: 40, freq: 1.3, phase: 2.2, speed: 0.18, base: 66, col: "#ff6ad5", vis: true },
+            { amp: 34, freq: 0.7, phase: 0.9, speed: 0.1, base: 80, col: "#1ef0d8", vis: true }
+          ]
+        },
+        Tide: {
+          bg: ["#dfeaf1", "#7fa4bd"], blend: "multiply", style: "shade", light: false,
+          layers: [
+            { amp: 40, freq: 0.5, phase: 0, speed: 0.12, base: 24, col: "#bcd8e6", vis: true },
+            { amp: 48, freq: 0.75, phase: 0.8, speed: 0.16, base: 40, col: "#8fb8cc", vis: true },
+            { amp: 42, freq: 1.0, phase: 1.6, speed: 0.2, base: 56, col: "#5a8eaa", vis: true },
+            { amp: 36, freq: 1.25, phase: 0.3, speed: 0.14, base: 72, col: "#2c5d78", vis: true },
+            { amp: 30, freq: 0.9, phase: 2.1, speed: 0.09, base: 88, col: "#123a52", vis: true }
+          ]
+        },
+        Silk: {
+          bg: ["#1a1520", "#3a2740"], blend: "screen", style: "fade", light: true,
+          layers: [
+            { amp: 58, freq: 0.65, phase: 0.2, speed: 0.15, base: 20, col: "#f7c9d8", vis: true },
+            { amp: 50, freq: 0.9, phase: 1.1, speed: 0.19, base: 38, col: "#c9b8f5", vis: true },
+            { amp: 46, freq: 1.15, phase: 0.5, speed: 0.13, base: 55, col: "#9fd6f0", vis: true },
+            { amp: 38, freq: 1.4, phase: 1.8, speed: 0.21, base: 70, col: "#f6e3b4", vis: true },
+            { amp: 32, freq: 0.8, phase: 0.9, speed: 0.1, base: 84, col: "#e9a5c9", vis: true }
+          ]
+        },
+        Nebula: {
+          bg: ["#050208", "#150a26"], blend: "lighter", style: "fade", light: true,
+          layers: [
+            { amp: 62, freq: 0.5, phase: 0.1, speed: 0.17, base: 16, col: "#5a1a8c", vis: true },
+            { amp: 58, freq: 0.72, phase: 0.9, speed: 0.2, base: 30, col: "#c026a6", vis: true },
+            { amp: 50, freq: 0.95, phase: 1.7, speed: 0.14, base: 44, col: "#ff4f7a", vis: true },
+            { amp: 46, freq: 1.18, phase: 0.4, speed: 0.22, base: 58, col: "#3b3cff", vis: true },
+            { amp: 40, freq: 1.4, phase: 2.0, speed: 0.11, base: 72, col: "#ffb26a", vis: true },
+            { amp: 34, freq: 0.8, phase: 1.2, speed: 0.16, base: 86, col: "#22e0ff", vis: true }
+          ]
+        }
+      };
+      var preset = "Dunes";
+      var layers = PRESETS.Dunes.layers.map(clone);
+      var blend = "source-over", gstyle = "shade", bg = PRESETS.Dunes.bg.slice();
+      var harmony = false, flow = !reduce, fund = 0.7, sel = 0, time = 0;
+      var bumps = [];
+      var dpr = 1, W = 0, H = 0;
+      var dragging = false, lastY = 0, lastX = 0, dragLayer = -1;
+      function clone(L) { return { amp: L.amp, freq: L.freq, phase: L.phase, speed: L.speed, base: L.base, col: L.col, vis: L.vis }; }
+      function hexToRgb(h) {
+        h = h.replace("#", "");
+        if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+        return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+      }
+      function shade(col, f) {
+        var r = hexToRgb(col);
+        return "rgb(" + ((r[0]*f)|0) + "," + ((r[1]*f)|0) + "," + ((r[2]*f)|0) + ")";
+      }
+      function rgba(col, a) {
+        var r = hexToRgb(col);
+        return "rgba(" + r[0] + "," + r[1] + "," + r[2] + "," + a + ")";
+      }
+      function toast(msg) {
+        var t = qs("#toast"); if (!t) return;
+        t.textContent = msg; t.classList.add("show");
+        setTimeout(function () { t.classList.remove("show"); }, 1800);
+      }
+      function applyPreset(name) {
+        var p = PRESETS[name]; if (!p) return;
+        preset = name; bg = p.bg.slice(); blend = p.blend; gstyle = p.style;
+        layers = p.layers.map(clone);
+        sel = 0;
+        document.body.classList.toggle("light", !p.light);
+        qsa("#presets button").forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-p") === name ? "true" : "false"); });
+        renderPanel();
+      }
+      function freqOf(i, L) {
+        if (harmony) return fund * RATIOS[i % RATIOS.length];
+        return L.freq;
+      }
+      function surfaceY(L, x, i, t) {
+        var f = freqOf(i, L);
+        var ph = L.phase * Math.PI + t * L.speed;
+        var s = Math.sin(x * f * 0.012 + ph)
+          + 0.38 * Math.sin(x * f * 0.012 * 2.17 + ph * 1.3)
+          + 0.16 * Math.sin(x * f * 0.012 * 4.3 + ph * 0.7);
+        var y = H * (L.base / 100) + s * L.amp * (H / 900);
+        bumps.forEach(function (b) {
+          var dx = x - b.x, dy = (L.base / 100 * H) - b.y;
+          var g = Math.exp(-(dx * dx) / (2 * 110 * 110) - (dy * dy) / (2 * 160 * 160));
+          var prox = 1 - Math.min(1, Math.abs(L.base / 100 * H - b.y) / (H * 0.5));
+          y += b.str * g * prox;
+        });
+        return y;
+      }
+      function pathFor(L, i, t) {
+        var n = 220, pts = [];
+        for (var s = 0; s <= n; s++) {
+          var x = (s / n) * W;
+          pts.push({ x: x, y: surfaceY(L, x, i, t) });
+        }
+        return pts;
+      }
+      function trace(pts) {
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (var i = 1; i < pts.length - 1; i++) {
+          var mx = (pts[i].x + pts[i + 1].x) / 2;
+          var my = (pts[i].y + pts[i + 1].y) / 2;
+          ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+        }
+        ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+        ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+      }
+      function drawCrest(pts) {
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (var i = 1; i < pts.length - 1; i++) {
+          var mx = (pts[i].x + pts[i + 1].x) / 2;
+          var my = (pts[i].y + pts[i + 1].y) / 2;
+          ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+        }
+        ctx.stroke();
+      }
+      function draw() {
+        W = canvas.width; H = canvas.height;
+        var g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, bg[0]); g.addColorStop(1, bg[1]);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        var light = ctx.createRadialGradient(W * 0.18, H * 0.12, 0, W * 0.18, H * 0.12, W * 0.55);
+        light.addColorStop(0, "rgba(255,255,255,.16)"); light.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = light; ctx.fillRect(0, 0, W, H);
+        layers.forEach(function (L, i) {
+          if (!L.vis) return;
+          var pts = pathFor(L, i, time);
+          ctx.globalCompositeOperation = blend;
+          var fill = ctx.createLinearGradient(0, 0, 0, H);
+          if (gstyle === "fade") {
+            fill.addColorStop(0, rgba(L.col, 0.85)); fill.addColorStop(1, rgba(L.col, 0));
+          } else {
+            fill.addColorStop(0, L.col); fill.addColorStop(1, shade(L.col, 0.55));
+          }
+          ctx.fillStyle = fill;
+          trace(pts); ctx.fill();
+          ctx.globalCompositeOperation = "source-over";
+          ctx.strokeStyle = "rgba(255,255,255," + (0.22 + i * 0.01) + ")";
+          ctx.lineWidth = 1.2 * dpr;
+          drawCrest(pts);
+        });
+        var vig = ctx.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.85);
+        vig.addColorStop(0, "rgba(0,0,0,0)"); vig.addColorStop(1, "rgba(0,0,0,.28)");
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+      }
+      function svgPath(pts) {
+        var d = "M " + pts[0].x.toFixed(1) + " " + pts[0].y.toFixed(1);
+        for (var i = 1; i < pts.length - 1; i++) {
+          var mx = (pts[i].x + pts[i + 1].x) / 2;
+          var my = (pts[i].y + pts[i + 1].y) / 2;
+          d += " Q " + pts[i].x.toFixed(1) + " " + pts[i].y.toFixed(1) + " " + mx.toFixed(1) + " " + my.toFixed(1);
+        }
+        d += " L " + W.toFixed(1) + " " + H.toFixed(1) + " L 0 " + H.toFixed(1) + " Z";
+        return d;
+      }
+      function exportSvg() {
+        var blendCss = { "source-over": "normal", screen: "screen", multiply: "multiply", lighter: "lighter" }[blend] || "normal";
+        var s = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">';
+        s += "<defs><linearGradient id='bg' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='" + bg[0] + "'/><stop offset='1' stop-color='" + bg[1] + "'/></linearGradient>";
+        layers.forEach(function (L, i) {
+          s += "<linearGradient id='g" + i + "' x1='0' y1='0' x2='0' y2='1'>";
+          if (gstyle === "fade") s += "<stop offset='0' stop-color='" + L.col + "' stop-opacity='0.85'/><stop offset='1' stop-color='" + L.col + "' stop-opacity='0'/>";
+          else s += "<stop offset='0' stop-color='" + L.col + "'/><stop offset='1' stop-color='" + shade(L.col, 0.55) + "'/>";
+          s += "</linearGradient>";
+        });
+        s += "</defs><rect width='100%' height='100%' fill='url(#bg)'/>";
+        layers.forEach(function (L, i) {
+          if (!L.vis) return;
+          var pts = pathFor(L, i, time);
+          s += '<path d="' + svgPath(pts) + '" fill="url(#g' + i + ')" style="mix-blend-mode:' + blendCss + '"/>';
+        });
+        s += "</svg>";
+        var blob = new Blob([s], { type: "image/svg+xml" });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a"); a.href = url; a.download = "organic-wave-lab.svg"; a.click();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+        toast("SVG exported");
+      }
+      function renderPanel() {
+        var list = qs("#layers"); if (!list) return;
+        list.innerHTML = "";
+        layers.forEach(function (L, i) {
+          var chip = document.createElement("div");
+          chip.className = "chip" + (i === sel ? " sel" : "");
+          chip.setAttribute("draggable", "true");
+          chip.innerHTML = '<span class="grip" title="Reorder">☰</span><span class="sw" style="background:' + L.col + ';color:' + L.col + '"></span><span>' + (NAMES[i] || ("Layer " + (i + 1))) + '</span><span class="meta">ƒ ' + freqOf(i, L).toFixed(2) + " · A " + L.amp + '</span>';
+          var vis = document.createElement("button"); vis.type = "button"; vis.textContent = L.vis ? "◉" : "○"; vis.title = "Visibility";
+          vis.addEventListener("click", function (e) { e.stopPropagation(); L.vis = !L.vis; renderPanel(); });
+          var del = document.createElement("button"); del.type = "button"; del.textContent = "✕"; del.title = "Delete";
+          del.addEventListener("click", function (e) { e.stopPropagation(); if (layers.length < 2) return; layers.splice(i, 1); if (sel >= layers.length) sel = layers.length - 1; renderPanel(); });
+          chip.appendChild(vis); chip.appendChild(del);
+          chip.addEventListener("click", function () { sel = i; renderPanel(); });
+          chip.addEventListener("dragstart", function (e) { dragLayer = i; chip.style.opacity = ".5"; if (e.dataTransfer) e.dataTransfer.effectAllowed = "move"; });
+          chip.addEventListener("dragend", function () { dragLayer = -1; renderPanel(); });
+          chip.addEventListener("dragover", function (e) { e.preventDefault(); });
+          chip.addEventListener("drop", function (e) {
+            e.preventDefault();
+            if (dragLayer < 0 || dragLayer === i) return;
+            var m = layers.splice(dragLayer, 1)[0];
+            layers.splice(i, 0, m); sel = i; renderPanel();
+          });
+          list.appendChild(chip);
+        });
+        var ctrls = qs("#ctrls"); if (!ctrls) return;
+        var L = layers[sel]; if (!L) { ctrls.innerHTML = ""; return; }
+        function row(key, label, min, max, step, fmt) {
+          var lab = document.createElement("label");
+          lab.textContent = label;
+          var inp = document.createElement("input");
+          inp.type = "range"; inp.min = min; inp.max = max; inp.step = step || 1;
+          inp.value = L[key];
+          if (key === "freq" && harmony) inp.disabled = true;
+          var out = document.createElement("output");
+          out.textContent = fmt(L[key]);
+          inp.addEventListener("input", function () {
+            L[key] = Number(inp.value); out.textContent = fmt(L[key]); renderPanel();
+          });
+          lab.appendChild(inp); lab.appendChild(out); return lab;
+        }
+        ctrls.innerHTML = "";
+        ctrls.appendChild(row("amp", "Amplitude", 8, 120, 1, function (v) { return String(v); }));
+        ctrls.appendChild(row("freq", "Frequency", 0.2, 2.4, 0.01, function (v) { return Number(v).toFixed(2); }));
+        var ph = document.createElement("label"); ph.textContent = "Phase";
+        var pin = document.createElement("input"); pin.type = "range"; pin.min = "0"; pin.max = "200"; pin.value = String(L.phase * 100);
+        var pout = document.createElement("output"); pout.textContent = L.phase.toFixed(2) + " π";
+        pin.addEventListener("input", function () { L.phase = Number(pin.value) / 100; pout.textContent = L.phase.toFixed(2) + " π"; });
+        ph.appendChild(pin); ph.appendChild(pout); ctrls.appendChild(ph);
+        ctrls.appendChild(row("speed", "Speed", 0, 0.6, 0.01, function (v) { return Number(v).toFixed(2); }));
+        ctrls.appendChild(row("base", "Baseline", 5, 95, 1, function (v) { return v + "%"; }));
+        var cr = document.createElement("div"); cr.className = "color-row";
+        var cp = document.createElement("input"); cp.type = "color"; cp.value = L.col;
+        var hx = document.createElement("span"); hx.textContent = L.col;
+        cp.addEventListener("input", function () { L.col = cp.value; hx.textContent = L.col; renderPanel(); });
+        cr.appendChild(cp); cr.appendChild(hx); ctrls.appendChild(cr);
+      }
+      function resize() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(window.innerWidth * dpr);
+        canvas.height = Math.round(window.innerHeight * dpr);
+        W = canvas.width; H = canvas.height;
+      }
+      window.addEventListener("resize", resize);
+      resize();
+      var last = performance.now ? performance.now() : 0;
+      function loop(now) {
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+        var dt = Math.min(0.05, (now - last) / 1000); last = now;
+        if (flow && !reduce) time += dt;
+        bumps = bumps.filter(function (b) { b.str *= Math.pow(0.08, dt); return Math.abs(b.str) > 0.4; });
+        draw();
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+      else setInterval(function () { if (flow && !reduce) time += 0.03; draw(); }, 40);
+      qsa("#presets button").forEach(function (b) {
+        b.addEventListener("click", function () { applyPreset(b.getAttribute("data-p")); });
+      });
+      var harmBtn = qs("#harmony"), flowBtn = qs("#flow"), fundWrap = qs("#fundWrap"), fundEl = qs("#fund");
+      if (harmBtn) harmBtn.addEventListener("click", function () {
+        harmony = !harmony; harmBtn.setAttribute("aria-pressed", harmony ? "true" : "false");
+        if (fundWrap) fundWrap.hidden = !harmony; renderPanel();
+      });
+      if (flowBtn) flowBtn.addEventListener("click", function () {
+        flow = !flow; flowBtn.setAttribute("aria-pressed", flow ? "true" : "false");
+      });
+      if (fundEl) fundEl.addEventListener("input", function () {
+        fund = Number(fundEl.value) / 100;
+        var o = qs("#fundOut"); if (o) o.textContent = fund.toFixed(2);
+        renderPanel();
+      });
+      var add = qs("#add");
+      if (add) add.addEventListener("click", function () {
+        if (layers.length >= 6) { toast("Six is a chorus. Seven is a crowd."); return; }
+        layers.push({ amp: 36, freq: 0.9 + layers.length * 0.1, phase: Math.random() * 2, speed: 0.12, base: 20 + layers.length * 12, col: "#f0c98a", vis: true });
+        sel = layers.length - 1; renderPanel();
+      });
+      var surprise = qs("#surprise");
+      if (surprise) surprise.addEventListener("click", function () {
+        var keys = Object.keys(PRESETS);
+        applyPreset(keys[(Math.random() * keys.length) | 0]);
+        layers.forEach(function (L, i) {
+          L.amp = 24 + ((Math.random() * 50) | 0);
+          L.freq = 0.4 + Math.random() * 1.4;
+          L.phase = Math.random() * 2;
+          L.speed = 0.06 + Math.random() * 0.22;
+          L.base = 14 + i * (70 / Math.max(1, layers.length - 1));
+        });
+        renderPanel(); toast("A new weather");
+      });
+      var exp = qs("#export");
+      if (exp) exp.addEventListener("click", exportSvg);
+      var hide = qs("#hide");
+      if (hide) hide.addEventListener("click", function () { document.body.classList.toggle("panel-hidden"); });
+      document.addEventListener("keydown", function (e) {
+        if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+        if (e.code === "Space") { e.preventDefault(); flow = !flow; if (flowBtn) flowBtn.setAttribute("aria-pressed", flow ? "true" : "false"); }
+        if (e.key === "h" || e.key === "H") document.body.classList.toggle("panel-hidden");
+        if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+          e.preventDefault();
+          var j = sel + (e.key === "ArrowUp" ? -1 : 1);
+          if (j < 0 || j >= layers.length) return;
+          var m = layers.splice(sel, 1)[0];
+          layers.splice(j, 0, m); sel = j; renderPanel();
+        }
+      });
+      canvas.addEventListener("pointerdown", function (ev) {
+        dragging = true; lastX = ev.clientX * dpr; lastY = ev.clientY * dpr;
+      });
+      canvas.addEventListener("pointermove", function (ev) {
+        if (!dragging) return;
+        var x = ev.clientX * dpr, y = ev.clientY * dpr;
+        var dy = y - lastY;
+        bumps.push({ x: x, y: y, str: dy * 0.9 });
+        lastX = x; lastY = y;
+      });
+      canvas.addEventListener("pointerup", function () { dragging = false; });
+      applyPreset("Dunes");
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

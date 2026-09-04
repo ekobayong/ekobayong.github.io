@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Little Meridian — An Isometric City Block</title>
+  <style>
+    :root {
+      --s: 1;
+      --sky1: #5faaff;
+      --sky2: #e1f2ff;
+      --night: 0;
+      --clock: "12:00";
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(var(--sky1), var(--sky2));
+      overflow: hidden;
+      font-family: ui-sans-serif, system-ui, "Helvetica Neue", sans-serif;
+      color: #1a1a22;
+    }
+    .stars {
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      opacity: var(--night);
+      background-image:
+        radial-gradient(1px 1px at 8% 20%, #fff, transparent),
+        radial-gradient(1px 1px at 22% 40%, #fff, transparent),
+        radial-gradient(1.5px 1.5px at 40% 12%, #fff, transparent),
+        radial-gradient(1px 1px at 70% 28%, #fff, transparent),
+        radial-gradient(1px 1px at 88% 16%, #fff, transparent),
+        radial-gradient(1.4px 1.4px at 60% 8%, #fff, transparent),
+        radial-gradient(1px 1px at 14% 70%, #fff, transparent),
+        radial-gradient(1px 1px at 92% 60%, #fff, transparent);
+    }
+    .sun, .moon {
+      position: fixed; width: 46px; height: 46px; border-radius: 50%; z-index: 1; pointer-events: none;
+    }
+    .sun {
+      background: radial-gradient(circle at 35% 35%, #fff6c8, #ffb347);
+      box-shadow: 0 0 40px 12px rgba(255,180,70,0.55);
+      left: var(--sunx, 20%);
+      top: var(--suny, 18%);
+      opacity: var(--suno, 1);
+    }
+    .moon {
+      background: radial-gradient(circle at 35% 35%, #f4f0e4, #c8c4d8);
+      box-shadow: 0 0 24px rgba(220,220,255,0.4);
+      left: var(--moonx, 70%);
+      top: var(--moony, 80%);
+      opacity: var(--moono, 0);
+    }
+    .cloud {
+      position: fixed; z-index: 2; pointer-events: none;
+      width: 160px; height: 40px; border-radius: 40px;
+      background: rgba(255,255,255,0.55);
+      filter: blur(2px);
+      animation: drift 110s linear infinite;
+    }
+    .cloud:nth-child(2) { top: 12%; animation-duration: 90s; opacity: 0.5; }
+    .cloud:nth-child(3) { top: 22%; width: 220px; animation-duration: 130s; animation-delay: -40s; }
+    .cloud:nth-child(4) { top: 8%; width: 120px; animation-duration: 100s; }
+    body.rain .cloud { opacity: 0.85; filter: blur(6px); }
+    .stage-wrap {
+      position: absolute; inset: 0; display: grid; place-items: center; z-index: 3;
+      perspective: 1200px;
+    }
+    .iso {
+      width: 540px; height: 540px;
+      transform: scale(var(--s)) rotateX(60deg) rotateZ(45deg);
+      transform-style: preserve-3d;
+      transform-origin: 50% 50%;
+      background:
+        linear-gradient(#d9d3c7, #d9d3c7) center/100% 90px no-repeat,
+        linear-gradient(#d9d3c7, #d9d3c7) center/90px 100% no-repeat,
+        #b9d59a;
+      box-shadow:
+        0 0 0 10px #c9c2b4,
+        40px 50px 40px rgba(0,0,0,0.22);
+    }
+    .iso::before {
+      content: "";
+      position: absolute; inset: 0;
+      background:
+        linear-gradient(#5b5f6b, #5b5f6b) center/100% 90px no-repeat,
+        linear-gradient(#5b5f6b, #5b5f6b) center/90px 100% no-repeat;
+      pointer-events: none;
+    }
+    .iso::after {
+      content: "";
+      position: absolute; inset: 0;
+      background:
+        repeating-linear-gradient(90deg, transparent 0 18px, #f3ead2 18px 28px) center/100% 4px no-repeat,
+        repeating-linear-gradient(0deg, transparent 0 18px, #f3ead2 18px 28px) center/4px 100% no-repeat;
+      pointer-events: none;
+    }
+    .nightveil {
+      position: absolute; inset: 0; pointer-events: none; z-index: 8;
+      background: rgba(18,24,66, calc(var(--night) * 0.38));
+    }
+    .tree {
+      position: absolute; width: 22px; height: 22px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #8ac27a, #4f8a48);
+      transform: translateZ(10px);
+      box-shadow: 0 10px 0 -8px #6a4a2a;
+    }
+    .slot {
+      position: absolute;
+      width: var(--w);
+      height: var(--d);
+      left: var(--x);
+      top: var(--y);
+      transform-style: preserve-3d;
+      transform: translateZ(0);
+      transition: transform 0.45s cubic-bezier(0.2, 1.3, 0.3, 1);
+      cursor: pointer;
+    }
+    .slot:hover, .slot:focus {
+      transform: translateZ(24px);
+      outline: none;
+    }
+    .face {
+      position: absolute; left: 0; top: 0;
+      transform-origin: 0 0;
+      background: var(--c);
+    }
+    .top {
+      width: var(--w); height: var(--d);
+      transform: translateZ(var(--h));
+      background: linear-gradient(rgba(255,255,255,0.28), rgba(255,255,255,0.08)), var(--c);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
+    }
+    .south {
+      width: var(--w); height: var(--h);
+      transform: translateY(var(--d)) translateZ(var(--h)) rotateX(-90deg);
+      filter: brightness(0.96);
+    }
+    .east {
+      width: var(--d); height: var(--h);
+      transform: translateX(var(--w)) translateZ(var(--h)) rotateZ(90deg) rotateX(-90deg);
+      filter: brightness(0.74);
+    }
+    .south::before, .east::before {
+      content: "";
+      position: absolute; inset: 0;
+      background: rgba(18,24,66, calc(var(--night) * 0.28));
+      pointer-events: none;
+    }
+    .windows {
+      display: grid;
+      grid-template-columns: repeat(var(--cols, 4), 1fr);
+      gap: 4px;
+      padding: 8px 6px 16px;
+      height: 100%;
+    }
+    .win {
+      background: linear-gradient(160deg, #9ec4e6, #3d5a78);
+      border-radius: 1px;
+      position: relative;
+    }
+    .win.on::after {
+      content: "";
+      position: absolute; inset: 0;
+      background: #ffd58a;
+      opacity: var(--night);
+    }
+    .win.on.cream::after { background: #ffe9b8; }
+    .win.on.cool::after { background: #cfe6ff; }
+    .door {
+      position: absolute;
+      bottom: 4px; left: 50%;
+      width: 10px; height: 16px;
+      transform: translateX(-50%);
+      background: #3a322c;
+      border-radius: 2px 2px 0 0;
+    }
+    .shadow {
+      position: absolute;
+      left: var(--x); top: var(--y);
+      width: var(--w); height: var(--d);
+      background: rgba(30,40,20,0.28);
+      filter: blur(6px);
+      transform: translate(calc(var(--shx) * 1px), calc(var(--shy) * 1px));
+      opacity: calc(0.55 - var(--night) * 0.45);
+      pointer-events: none;
+    }
+    .tag {
+      position: absolute;
+      left: 50%;
+      top: -8px;
+      transform: translate(-50%, -100%) translateZ(var(--h)) rotateZ(-45deg) rotateX(-60deg);
+      background: rgba(255,252,245,0.9);
+      backdrop-filter: blur(8px);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+    }
+    .slot:hover .tag, .slot:focus .tag { opacity: 1; }
+    .tag b { display: block; font-family: Georgia, "Iowan Old Style", Palatino, serif; }
+    .neon {
+      position: absolute;
+      left: 18px; top: -18px;
+      transform: translateZ(48px) rotateZ(-45deg) rotateX(-60deg);
+      background: #2a2038;
+      color: #ff5fb8;
+      font-family: Georgia, Palatino, serif;
+      font-style: italic;
+      padding: 4px 10px;
+      font-size: 12px;
+      text-shadow: 0 0 6px #ff5fb8, 0 0 12px #ff5fb8, 0 0 20px #c23a88;
+      animation: bob 2.4s ease-in-out infinite, flicker 1.8s steps(2, end) infinite;
+      pointer-events: none;
+    }
+    .car {
+      position: absolute;
+      width: 22px; height: 10px;
+      border-radius: 3px;
+      transform-style: preserve-3d;
+      z-index: 6;
+    }
+    .car::before, .car::after {
+      content: "";
+      position: absolute; top: 2px; width: 4px; height: 6px; border-radius: 1px;
+    }
+    .car::before { left: -2px; background: #fff; box-shadow: 0 0 calc(var(--night) * 8px) #fff; }
+    .car::after { right: -2px; background: #e33; box-shadow: 0 0 calc(var(--night) * 8px) #e33; }
+    .c1 { background: #ff6f61; top: 265px; animation: roadH 10s linear infinite; }
+    .c2 { background: #2ec4b6; left: 265px; animation: roadV 12s linear infinite; }
+    .c3 { background: #ffd166; top: 265px; animation: roadH 8s linear infinite reverse; }
+    .c4 { background: #9aa7ff; left: 265px; animation: roadV 11s linear infinite reverse; }
+    .toolbar {
+      position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+      z-index: 10;
+      display: flex; gap: 8px;
+      background: rgba(255,255,255,0.78);
+      backdrop-filter: blur(12px);
+      padding: 8px 12px;
+      border-radius: 999px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+    }
+    .toolbar button {
+      border: 0; background: transparent; font: inherit; padding: 6px 10px; cursor: pointer; border-radius: 999px;
+    }
+    .toolbar button[aria-pressed="true"] { background: #1a1a22; color: #fff; }
+    .clock {
+      position: fixed; top: 16px; right: 18px; z-index: 10;
+      font-family: Georgia, "Iowan Old Style", Palatino, serif;
+      font-size: 18px;
+      color: #fff;
+      text-shadow: 0 1px 8px rgba(0,0,0,0.35);
+    }
+    .caption {
+      position: fixed; left: 18px; bottom: 18px; z-index: 10;
+      font-size: 12px; color: rgba(255,255,255,0.9);
+      text-shadow: 0 1px 6px rgba(0,0,0,0.4);
+    }
+    .rainlayer {
+      display: none;
+      position: fixed; inset: 0; z-index: 9; pointer-events: none;
+      background:
+        repeating-linear-gradient(110deg, transparent 0 12px, rgba(200,220,255,0.18) 12px 13px),
+        repeating-linear-gradient(100deg, transparent 0 18px, rgba(180,200,255,0.12) 18px 19px);
+      animation: rain 0.5s linear infinite;
+    }
+    body.rain .rainlayer { display: block; }
+    body.rain .iso { filter: brightness(0.86); }
+    @keyframes drift { from { left: -20%; } to { left: 120%; } }
+    @keyframes bob { 0%,100% { transform: translateZ(48px) rotateZ(-45deg) rotateX(-60deg) translateY(0); } 50% { transform: translateZ(48px) rotateZ(-45deg) rotateX(-60deg) translateY(-6px); } }
+    @keyframes flicker { 0%,80%,100% { opacity: 1; } 81%,90% { opacity: 0.45; } }
+    @keyframes roadH { from { left: -30px; } to { left: 550px; } }
+    @keyframes roadV { from { top: -30px; } to { top: 550px; } }
+    @keyframes rain { to { background-position: 20px 40px, -16px 50px; } }
+    @media (prefers-reduced-motion: reduce) {
+      .cloud, .neon, .car, .rainlayer { animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="stars"></div>
+  <div class="sun"></div>
+  <div class="moon"></div>
+  <div class="cloud"></div><div class="cloud"></div><div class="cloud"></div>
+  <div class="rainlayer"></div>
+  <div class="clock" id="clock">12:00 · Day</div>
+  <div class="caption" id="caption">Little Meridian</div>
+  <div class="stage-wrap">
+    <div class="iso" id="iso">
+      <div class="nightveil"></div>
+      <div class="tree" style="left:40px;top:40px"></div>
+      <div class="tree" style="left:470px;top:36px"></div>
+      <div class="tree" style="left:48px;top:470px"></div>
+      <div class="tree" style="left:480px;top:480px"></div>
+      <div class="tree" style="left:160px;top:160px"></div>
+      <div class="tree" style="left:390px;top:150px"></div>
+      <div class="car c1"></div><div class="car c2"></div><div class="car c3"></div><div class="car c4"></div>
+    </div>
+  </div>
+  <div class="toolbar">
+    <button type="button" id="pause" aria-pressed="false">Pause cycle</button>
+    <button type="button" id="rain" aria-pressed="false">Rain</button>
+    <button type="button" id="skip">Skip to night/day</button>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    var BUILDINGS = [
+      { name: "Harbor Tower", use: "Offices", floors: 14, x: 30, y: 30, w: 70, d: 60, h: 220, c: "#a9b7c9", cols: 5, rows: 12 },
+      { name: "Marigold Flats", use: "Residences", floors: 6, x: 120, y: 28, w: 80, d: 55, h: 110, c: "#e9c1a0", cols: 4, rows: 6 },
+      { name: "Linden Court", use: "Courtyard flats", floors: 5, x: 30, y: 110, w: 60, d: 70, h: 90, c: "#b9d4c2", cols: 3, rows: 5 },
+      { name: "The Prism", use: "Gallery", floors: 4, x: 400, y: 30, w: 70, d: 70, h: 100, c: "#c9bfe0", cols: 4, rows: 5 },
+      { name: "Cobalt Works", use: "Studios", floors: 7, x: 430, y: 120, w: 70, d: 55, h: 140, c: "#9fb8d8", cols: 4, rows: 7 },
+      { name: "Night Market", use: "Arcade", floors: 2, x: 130, y: 360, w: 140, d: 50, h: 42, c: "#e6a49a", cols: 8, rows: 2, neon: true },
+      { name: "Pillow Bank", use: "Bank", floors: 5, x: 30, y: 360, w: 70, d: 80, h: 100, c: "#e8dcc4", cols: 4, rows: 5 },
+      { name: "Ferris Apartments", use: "Residences", floors: 8, x: 360, y: 360, w: 70, d: 70, h: 150, c: "#dcb3b8", cols: 4, rows: 8 },
+      { name: "Saltbox Studios", use: "Workshops", floors: 3, x: 450, y: 360, w: 50, d: 80, h: 70, c: "#c3ccb0", cols: 3, rows: 4 },
+      { name: "Aurora Spire", use: "Observatory", floors: 16, x: 360, y: 130, w: 55, d: 55, h: 260, c: "#a8cfd0", cols: 3, rows: 14 },
+      { name: "Tin Roof Diner", use: "Diner", floors: 1, x: 220, y: 30, w: 90, d: 50, h: 36, c: "#ecd9a1", cols: 5, rows: 2 },
+      { name: "Meridian House", use: "Town hall", floors: 4, x: 30, y: 220, w: 80, d: 70, h: 88, c: "#cfc5d6", cols: 4, rows: 4 }
+    ];
+    var SKY = [
+      { t: 0, a: "#0c1028", b: "#1e2246", n: 1, phase: "Night" },
+      { t: 0.12, a: "#2a1848", b: "#6a3a7a", n: 0.7, phase: "Violet dawn" },
+      { t: 0.22, a: "#ff966e", b: "#ffd7aa", n: 0.2, phase: "Sunrise" },
+      { t: 0.38, a: "#5faaff", b: "#e1f2ff", n: 0, phase: "Day" },
+      { t: 0.58, a: "#5faaff", b: "#e1f2ff", n: 0, phase: "Day" },
+      { t: 0.7, a: "#ff9a4a", b: "#ffd7aa", n: 0.15, phase: "Amber dusk" },
+      { t: 0.82, a: "#6a2a6a", b: "#c07090", n: 0.55, phase: "Plum evening" },
+      { t: 0.92, a: "#0c1028", b: "#1e2246", n: 0.9, phase: "Night" },
+      { t: 1, a: "#0c1028", b: "#1e2246", n: 1, phase: "Night" }
+    ];
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function hexRgb(h) {
+      return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+    }
+    function rgbHex(r) {
+      function h(n) { n = Math.max(0, Math.min(255, n | 0)); return (n < 16 ? "0" : "") + n.toString(16); }
+      return "#" + h(r[0]) + h(r[1]) + h(r[2]);
+    }
+    function mixHex(a, b, t) {
+      var A = hexRgb(a), B = hexRgb(b);
+      return rgbHex([lerp(A[0], B[0], t), lerp(A[1], B[1], t), lerp(A[2], B[2], t)]);
+    }
+    function smooth(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
+    function init() {
+      var iso = qs("#iso");
+      var clock = qs("#clock");
+      var caption = qs("#caption");
+      var pauseBtn = qs("#pause");
+      var rainBtn = qs("#rain");
+      var skipBtn = qs("#skip");
+      if (!iso || !clock || !caption || !pauseBtn || !rainBtn || !skipBtn) return;
+      var reduced = false;
+      if (typeof window.matchMedia === "function") {
+        try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e4) { reduced = false; }
+      }
+      BUILDINGS.forEach(function (b) {
+        var sh = document.createElement("div");
+        sh.className = "shadow";
+        sh.style.setProperty("--x", b.x + "px");
+        sh.style.setProperty("--y", b.y + "px");
+        sh.style.setProperty("--w", b.w + "px");
+        sh.style.setProperty("--d", b.d + "px");
+        iso.appendChild(sh);
+        var slot = document.createElement("div");
+        slot.className = "slot";
+        slot.tabIndex = 0;
+        slot.style.setProperty("--x", b.x + "px");
+        slot.style.setProperty("--y", b.y + "px");
+        slot.style.setProperty("--w", b.w + "px");
+        slot.style.setProperty("--d", b.d + "px");
+        slot.style.setProperty("--h", b.h + "px");
+        slot.style.setProperty("--c", b.c);
+        slot.style.setProperty("--cols", String(b.cols));
+        slot.innerHTML = '<div class="face top"></div><div class="face south"><div class="windows" data-rows="' + b.rows + '"></div><div class="door"></div></div><div class="face east"><div class="windows" data-rows="' + b.rows + '"></div></div><div class="tag"><b>' + b.name + "</b>" + b.floors + " floors · " + b.use + "</div>";
+        if (b.neon) {
+          var n = document.createElement("div");
+          n.className = "neon";
+          n.textContent = "Night Market";
+          slot.appendChild(n);
+        }
+        iso.appendChild(slot);
+        slot.addEventListener("mouseenter", function () { caption.textContent = b.name + " · " + b.floors + " floors · " + b.use; });
+        slot.addEventListener("focus", function () { caption.textContent = b.name + " · " + b.floors + " floors · " + b.use; });
+        b._shadow = sh;
+      });
+      var wins = [];
+      Array.prototype.forEach.call(iso.querySelectorAll(".windows"), function (grid) {
+        var rows = parseInt(grid.getAttribute("data-rows"), 10) || 4;
+        var cols = parseInt(grid.parentNode.parentNode.style.getPropertyValue("--cols"), 10) || 4;
+        var r, c, el;
+        for (r = 0; r < rows * cols; r++) {
+          el = document.createElement("span");
+          el.className = "win" + (Math.random() > 0.55 ? " on" : "") + (Math.random() > 0.8 ? " cream" : (Math.random() > 0.85 ? " cool" : ""));
+          grid.appendChild(el);
+          wins.push(el);
+        }
+      });
+      function fit() {
+        var s = Math.max(0.42, Math.min(1.7, Math.min(window.innerWidth / 780, window.innerHeight / 780)));
+        document.documentElement.style.setProperty("--s", s.toFixed(3));
+      }
+      fit();
+      window.addEventListener("resize", fit);
+      var t = 0.4, paused = reduced, last = Date.now();
+      function skyAt(u) {
+        var i;
+        for (i = 0; i < SKY.length - 1; i++) {
+          if (u >= SKY[i].t && u <= SKY[i + 1].t) {
+            var k = smooth((u - SKY[i].t) / (SKY[i + 1].t - SKY[i].t || 1));
+            return {
+              a: mixHex(SKY[i].a, SKY[i + 1].a, k),
+              b: mixHex(SKY[i].b, SKY[i + 1].b, k),
+              n: lerp(SKY[i].n, SKY[i + 1].n, k),
+              phase: k > 0.5 ? SKY[i + 1].phase : SKY[i].phase
+            };
+          }
+        }
+        return SKY[0];
+      }
+      function apply() {
+        var sk = skyAt(t);
+        var root = document.documentElement;
+        root.style.setProperty("--sky1", sk.a);
+        root.style.setProperty("--sky2", sk.b);
+        root.style.setProperty("--night", sk.n.toFixed(3));
+        var ang = t * Math.PI * 2;
+        root.style.setProperty("--sunx", (50 + Math.cos(ang) * 38) + "%");
+        root.style.setProperty("--suny", (58 - Math.sin(ang) * 46) + "%");
+        root.style.setProperty("--suno", Math.max(0, Math.sin(ang)));
+        root.style.setProperty("--moonx", (50 + Math.cos(ang + Math.PI) * 38) + "%");
+        root.style.setProperty("--moony", (58 - Math.sin(ang + Math.PI) * 46) + "%");
+        root.style.setProperty("--moono", Math.max(0, Math.sin(ang + Math.PI)));
+        var hour = (t * 24) % 24;
+        var hh = Math.floor(hour);
+        var mm = Math.floor((hour - hh) * 60);
+        clock.textContent = (hh < 10 ? "0" : "") + hh + ":" + (mm < 10 ? "0" : "") + mm + " · " + sk.phase;
+        var shx = Math.cos(ang) * 0.55;
+        var shy = Math.sin(ang) * 0.2;
+        BUILDINGS.forEach(function (b) {
+          if (!b._shadow) return;
+          b._shadow.style.setProperty("--shx", (shx * b.h / 100).toFixed(2));
+          b._shadow.style.setProperty("--shy", (shy * b.h / 100).toFixed(2));
+        });
+      }
+      function tick() {
+        var now = Date.now();
+        var dt = (now - last) / 1000;
+        last = now;
+        if (!paused) t = (t + dt / 120) % 1;
+        apply();
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(tick);
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(tick);
+      else apply();
+      window.setInterval(function () {
+        var i, el;
+        for (i = 0; i < 8; i++) {
+          el = wins[(Math.random() * wins.length) | 0];
+          if (el) el.classList.toggle("on");
+        }
+      }, 380);
+      pauseBtn.addEventListener("click", function () {
+        paused = !paused;
+        pauseBtn.setAttribute("aria-pressed", paused ? "true" : "false");
+      });
+      rainBtn.addEventListener("click", function () {
+        var on = !document.body.classList.contains("rain");
+        document.body.classList.toggle("rain", on);
+        rainBtn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      skipBtn.addEventListener("click", function () {
+        t = t < 0.5 ? 0.92 : 0.4;
+        apply();
+      });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === " ") { e.preventDefault(); pauseBtn.click(); }
+        if (e.key === "r" || e.key === "R") rainBtn.click();
+      });
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

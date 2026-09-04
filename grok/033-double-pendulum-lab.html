@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Double Pendulum Laboratory — Chaos Instrument No. 7</title>
+  <style>
+    :root {
+      --bg: #1b1a18; --p1: #232220; --p2: #2c2a27;
+      --brass: #b8955a; --lbrass: #dcc08a; --cop: #b86f43; --lcop: #d9925f;
+      --cream: #e9dfcb; --dim: #a89e8a;
+      --serif: "Iowan Old Style", Palatino, Georgia, ui-serif, serif;
+      --mono: ui-monospace, Menlo, "Courier New", monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--cream); font-family: var(--serif); }
+    header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 18px 24px 10px; border-bottom: 1px solid rgba(184,149,90,0.25);
+    }
+    h1 { margin: 0; font-size: clamp(22px, 3vw, 34px); font-weight: 400; }
+    header em { font-style: italic; color: var(--lbrass); font-size: 16px; margin-left: 12px; }
+    .plate {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--brass);
+    }
+    .layout {
+      display: grid; grid-template-columns: 1fr 340px; min-height: calc(100vh - 70px);
+    }
+    .stage {
+      min-height: 60vh; position: relative; border-right: 1px solid transparent;
+      border-image: linear-gradient(var(--brass), transparent, var(--brass)) 1;
+    }
+    canvas { display: block; width: 100%; height: 100%; min-height: 60vh; }
+    .hud {
+      position: absolute; top: 14px; left: 16px;
+      font-family: var(--mono); font-size: 12px; color: var(--cream); line-height: 1.6;
+      pointer-events: none;
+    }
+    .hud .cop { color: var(--lcop); }
+    .btns { position: absolute; top: 14px; right: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .btns button {
+      background: var(--p2); color: var(--cream); border: 1px solid var(--brass);
+      font-family: var(--serif); font-size: 13px; padding: 6px 12px; cursor: pointer;
+      box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+    }
+    .btns button.primary { background: #3a3326; color: var(--lbrass); }
+    .btns button.copper { border-color: var(--cop); color: var(--lcop); }
+    .btns button:hover { box-shadow: 0 0 10px rgba(184,149,90,0.45), 2px 2px 0 rgba(0,0,0,0.5); }
+    .btns button:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 rgba(0,0,0,0.5); }
+    .side { background: var(--p1); padding: 18px 18px 40px; overflow: auto; }
+    h2 { font-size: 18px; font-weight: 400; color: var(--lbrass); margin: 0 0 14px; font-style: italic; }
+    .param { margin-bottom: 12px; }
+    .param label { display: flex; justify-content: space-between; font-style: italic; font-size: 14px; color: var(--dim); }
+    .param output { font-family: var(--mono); font-style: normal; color: var(--lbrass); font-size: 12px; }
+    input[type=range] {
+      width: 100%; appearance: none; height: 4px; border-radius: 2px;
+      background: linear-gradient(90deg, var(--cop), var(--brass)); outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      appearance: none; width: 14px; height: 14px; border-radius: 50%;
+      background: var(--brass); border: 1px solid var(--lbrass); cursor: pointer;
+    }
+    .readout {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 18px 0 22px;
+    }
+    .cell {
+      background: var(--p2); border: 1px solid rgba(184,149,90,0.25); padding: 8px 10px;
+      font-family: var(--mono); font-size: 12px;
+    }
+    .cell span { display: block; color: var(--dim); font-size: 10px; letter-spacing: 0.08em; }
+    .cell.cop { color: var(--lcop); }
+    .notebook {
+      background: #2a2722;
+      background-image: repeating-linear-gradient(transparent 0 27px, rgba(184,149,90,0.18) 27px 28px);
+      border: 1px solid rgba(184,149,90,0.25);
+      padding: 12px 12px 12px 28px;
+      position: relative; font-size: 13px; color: var(--dim); line-height: 28px;
+    }
+    .notebook::before {
+      content: ""; position: absolute; left: 16px; top: 0; bottom: 0; width: 1px; background: var(--cop);
+    }
+    .eq { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; color: var(--cream); }
+    .frac { display: flex; flex-direction: column; align-items: center; line-height: 1.2; }
+    .frac .num { border-bottom: 1px solid var(--brass); padding: 0 4px 2px; }
+    .sym { color: var(--brass); font-style: italic; }
+    .dotacc { position: relative; display: inline-block; }
+    .dotacc::before { content: "··"; position: absolute; top: -10px; left: 0; right: 0; text-align: center; font-size: 10px; color: var(--brass); letter-spacing: 1px; }
+    .note { font-style: italic; margin-top: 10px; color: var(--dim); line-height: 1.45; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .stage { border-right: 0; } }
+    @media (prefers-reduced-motion: reduce) {
+      .btns button { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Double Pendulum Laboratory <em>Chaos Instrument No. 7</em></h1>
+    <div class="plate">RK4 · Δt 1/240 s · Lagrangian</div>
+  </header>
+  <div class="layout">
+    <div class="stage">
+      <canvas id="stage"></canvas>
+      <div class="hud" id="hud">t 0.00 s<br>E 0.000 J</div>
+      <div class="btns">
+        <button type="button" class="primary" id="pauseBtn">Pause</button>
+        <button type="button" id="resetBtn">Reset</button>
+        <button type="button" class="copper" id="twinBtn">Add pendulum</button>
+      </div>
+    </div>
+    <aside class="side">
+      <h2>Parameters</h2>
+      <div class="param"><label>mass <i>m₁</i> <output id="om1">1.00 kg</output></label><input id="m1" type="range" min="0.2" max="4" step="0.01" value="1"></div>
+      <div class="param"><label>mass <i>m₂</i> <output id="om2">1.00 kg</output></label><input id="m2" type="range" min="0.2" max="4" step="0.01" value="1"></div>
+      <div class="param"><label>length <i>ℓ₁</i> <output id="ol1">1.00 m</output></label><input id="l1" type="range" min="0.3" max="1.6" step="0.01" value="1"></div>
+      <div class="param"><label>length <i>ℓ₂</i> <output id="ol2">1.00 m</output></label><input id="l2" type="range" min="0.3" max="1.6" step="0.01" value="1"></div>
+      <div class="param"><label>gravity <i>g</i> <output id="og">9.81 m/s²</output></label><input id="g" type="range" min="0.5" max="25" step="0.01" value="9.81"></div>
+      <div class="param"><label>damping <i>γ</i> <output id="ogam">0.00</output></label><input id="gam" type="range" min="0" max="0.5" step="0.001" value="0"></div>
+      <div class="param"><label>trail length <output id="otr">800</output></label><input id="tr" type="range" min="50" max="2000" step="1" value="800"></div>
+      <h2>Readout</h2>
+      <div class="readout">
+        <div class="cell"><span>θ₁</span><b id="rth1">0.000</b></div>
+        <div class="cell"><span>θ₂</span><b id="rth2">0.000</b></div>
+        <div class="cell"><span>ω₁</span><b id="rw1">0.000</b></div>
+        <div class="cell"><span>ω₂</span><b id="rw2">0.000</b></div>
+        <div class="cell"><span>Steps</span><b id="rsteps">0</b></div>
+        <div class="cell cop"><span>Divergence</span><b id="rdiv">—</b></div>
+      </div>
+      <h2>Notebook</h2>
+      <div class="notebook">
+        <div class="eq"><span class="dotacc sym">θ</span><sub>1</sub> =
+          <span class="frac"><span class="num">−g (2m<sub>1</sub>+m<sub>2</sub>) sin θ<sub>1</sub> − m<sub>2</sub> g sin(θ<sub>1</sub>−2θ<sub>2</sub>) − 2 sin Δ · m<sub>2</sub> (ω<sub>2</sub>² ℓ<sub>2</sub> + ω<sub>1</sub>² ℓ<sub>1</sub> cos Δ)</span><span>ℓ<sub>1</sub> (2m<sub>1</sub> + m<sub>2</sub> − m<sub>2</sub> cos 2Δ)</span></span>
+        </div>
+        <div class="eq"><span class="dotacc sym">θ</span><sub>2</sub> =
+          <span class="frac"><span class="num">2 sin Δ · (ω<sub>1</sub>² ℓ<sub>1</sub> (m<sub>1</sub>+m<sub>2</sub>) + g (m<sub>1</sub>+m<sub>2</sub>) cos θ<sub>1</sub> + ω<sub>2</sub>² ℓ<sub>2</sub> m<sub>2</sub> cos Δ)</span><span>ℓ<sub>2</sub> (2m<sub>1</sub> + m<sub>2</sub> − m<sub>2</sub> cos 2Δ)</span></span>
+        </div>
+        <div class="eq">RK4: y<sub>n+1</sub> = y<sub>n</sub> + (k<sub>1</sub>+2k<sub>2</sub>+2k<sub>3</sub>+k<sub>4</sub>)/6 , Δt = 1/240 s</div>
+        <p class="note">two systems 0.001 rad apart diverge exponentially — the butterfly, measured in millimetres of brass.</p>
+      </div>
+    </aside>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var canvas = qs("#stage");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var p = { m1: 1, m2: 1, l1: 1, l2: 1, g: 9.81, gam: 0, trail: reduce ? 200 : 800 };
+      var s = { th1: Math.PI * 0.85, th2: Math.PI * 0.4, w1: 0, w2: 0 };
+      var twin = null, t = 0, steps = 0, paused = false, acc = 0, DT = 1 / 240;
+      var trailA = [], trailB = [];
+      var dragging = null;
+      function deriv(st) {
+        var m1 = p.m1, m2 = p.m2, l1 = p.l1, l2 = p.l2, g = p.g, gam = p.gam;
+        var th1 = st.th1, th2 = st.th2, w1 = st.w1, w2 = st.w2;
+        var d = th1 - th2;
+        var den = 2 * m1 + m2 - m2 * Math.cos(2 * d);
+        var a1 = (-g * (2 * m1 + m2) * Math.sin(th1) - m2 * g * Math.sin(th1 - 2 * th2)
+          - 2 * Math.sin(d) * m2 * (w2 * w2 * l2 + w1 * w1 * l1 * Math.cos(d))) / (l1 * den) - gam * w1;
+        var a2 = (2 * Math.sin(d) * (w1 * w1 * l1 * (m1 + m2) + g * (m1 + m2) * Math.cos(th1)
+          + w2 * w2 * l2 * m2 * Math.cos(d))) / (l2 * den) - gam * w2;
+        return { th1: w1, th2: w2, w1: a1, w2: a2 };
+      }
+      function add(a, b, k) {
+        return { th1: a.th1 + b.th1 * k, th2: a.th2 + b.th2 * k, w1: a.w1 + b.w1 * k, w2: a.w2 + b.w2 * k };
+      }
+      function rk4(st) {
+        var k1 = deriv(st);
+        var k2 = deriv(add(st, k1, DT / 2));
+        var k3 = deriv(add(st, k2, DT / 2));
+        var k4 = deriv(add(st, k3, DT));
+        return {
+          th1: st.th1 + (k1.th1 + 2 * k2.th1 + 2 * k3.th1 + k4.th1) * DT / 6,
+          th2: st.th2 + (k1.th2 + 2 * k2.th2 + 2 * k3.th2 + k4.th2) * DT / 6,
+          w1: st.w1 + (k1.w1 + 2 * k2.w1 + 2 * k3.w1 + k4.w1) * DT / 6,
+          w2: st.w2 + (k1.w2 + 2 * k2.w2 + 2 * k3.w2 + k4.w2) * DT / 6
+        };
+      }
+      function energy(st) {
+        var m1 = p.m1, m2 = p.m2, l1 = p.l1, l2 = p.l2, g = p.g;
+        var y1 = -l1 * Math.cos(st.th1);
+        var y2 = y1 - l2 * Math.cos(st.th2);
+        var vx1 = st.w1 * l1 * Math.cos(st.th1);
+        var vy1 = st.w1 * l1 * Math.sin(st.th1);
+        var vx2 = vx1 + st.w2 * l2 * Math.cos(st.th2);
+        var vy2 = vy1 + st.w2 * l2 * Math.sin(st.th2);
+        var T = 0.5 * m1 * (vx1 * vx1 + vy1 * vy1) + 0.5 * m2 * (vx2 * vx2 + vy2 * vy2);
+        var V = m1 * g * y1 + m2 * g * y2;
+        return T + V;
+      }
+      function pos(st, scale) {
+        var x1 = Math.sin(st.th1) * p.l1 * scale;
+        var y1 = Math.cos(st.th1) * p.l1 * scale;
+        var x2 = x1 + Math.sin(st.th2) * p.l2 * scale;
+        var y2 = y1 + Math.cos(st.th2) * p.l2 * scale;
+        return { x1: x1, y1: y1, x2: x2, y2: y2 };
+      }
+      function reset() {
+        s = { th1: Math.PI * 0.85, th2: Math.PI * 0.4, w1: 0, w2: 0 };
+        if (twin) twin = { th1: s.th1 + 0.001, th2: s.th2, w1: 0, w2: 0 };
+        t = 0; steps = 0; trailA = []; trailB = []; acc = 0;
+      }
+      function bind(id, key, out, fmt) {
+        var el = qs("#" + id); var o = qs("#" + out);
+        if (!el) return;
+        function up() {
+          p[key] = Number(el.value);
+          if (o) o.textContent = fmt(p[key]);
+        }
+        el.addEventListener("input", up); up();
+      }
+      bind("m1", "m1", "om1", function (v) { return v.toFixed(2) + " kg"; });
+      bind("m2", "m2", "om2", function (v) { return v.toFixed(2) + " kg"; });
+      bind("l1", "l1", "ol1", function (v) { return v.toFixed(2) + " m"; });
+      bind("l2", "l2", "ol2", function (v) { return v.toFixed(2) + " m"; });
+      bind("g", "g", "og", function (v) { return v.toFixed(2) + " m/s²"; });
+      bind("gam", "gam", "ogam", function (v) { return v.toFixed(3); });
+      var trEl = qs("#tr"), otr = qs("#otr");
+      if (reduce && trEl) { trEl.value = "200"; p.trail = 200; }
+      if (trEl) {
+        trEl.addEventListener("input", function () {
+          p.trail = Number(trEl.value);
+          if (otr) otr.textContent = String(p.trail);
+        });
+        if (otr) otr.textContent = String(p.trail);
+      }
+      var pauseBtn = qs("#pauseBtn"), resetBtn = qs("#resetBtn"), twinBtn = qs("#twinBtn");
+      if (pauseBtn) pauseBtn.addEventListener("click", function () {
+        paused = !paused;
+        pauseBtn.textContent = paused ? "Resume" : "Pause";
+      });
+      if (resetBtn) resetBtn.addEventListener("click", reset);
+      if (twinBtn) twinBtn.addEventListener("click", function () {
+        if (twin) { twin = null; trailB = []; twinBtn.textContent = "Add pendulum"; }
+        else { twin = { th1: s.th1 + 0.001, th2: s.th2, w1: s.w1, w2: s.w2 }; twinBtn.textContent = "Remove twin"; }
+      });
+      window.addEventListener("keydown", function (e) {
+        if (e.key === " " && e.target === document.body) {
+          e.preventDefault();
+          paused = !paused;
+          if (pauseBtn) pauseBtn.textContent = paused ? "Resume" : "Pause";
+        }
+        if (e.key === "r" || e.key === "R") reset();
+      });
+      function fit() {
+        var r = Math.min(window.devicePixelRatio || 1, 3);
+        var w = canvas.clientWidth, h = canvas.clientHeight || Math.max(window.innerHeight * 0.6, 400);
+        canvas.width = Math.floor(w * r); canvas.height = Math.floor(h * r);
+        ctx.setTransform(r, 0, 0, r, 0, 0);
+        return { w: w, h: h };
+      }
+      function bob(x, y, rad, copper) {
+        var g = ctx.createRadialGradient(x - rad * 0.35, y - rad * 0.35, rad * 0.1, x, y, rad);
+        g.addColorStop(0, "#f0e2c0");
+        g.addColorStop(0.35, copper ? "#d9925f" : "#dcc08a");
+        g.addColorStop(1, copper ? "#5a2e18" : "#5a4524");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = copper ? "#b86f43" : "#b8955a"; ctx.stroke();
+      }
+      function drawTrail(arr, hueOff) {
+        for (var i = 1; i < arr.length; i++) {
+          var u = i / arr.length;
+          var a = u * u;
+          ctx.strokeStyle = "hsla(" + ((arr[i].hue + hueOff) % 360) + ",70%," + (45 + u * 25) + "%," + a + ")";
+          ctx.lineWidth = 0.6 + u * 3.2;
+          ctx.beginPath(); ctx.moveTo(arr[i - 1].x, arr[i - 1].y); ctx.lineTo(arr[i].x, arr[i].y); ctx.stroke();
+        }
+      }
+      var last = performance.now();
+      function frame(now) {
+        var dt = Math.min(0.05, (now - last) / 1000); last = now;
+        if (!paused && dragging == null) {
+          acc += dt;
+          while (acc >= DT) {
+            s = rk4(s);
+            if (twin) twin = rk4(twin);
+            t += DT; steps++; acc -= DT;
+          }
+        }
+        var dim = fit();
+        var W = dim.w, H = dim.h;
+        ctx.fillStyle = "#1b1a18"; ctx.fillRect(0, 0, W, H);
+        var px = W * 0.5, py = H * 0.18;
+        var scale = Math.min(W, H) / (2.2 * (p.l1 + p.l2));
+        ctx.strokeStyle = "rgba(184,149,90,0.35)"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(px - 80, py); ctx.lineTo(px + 80, py); ctx.stroke();
+        for (var hx = px - 70; hx < px + 80; hx += 8) {
+          ctx.beginPath(); ctx.moveTo(hx, py); ctx.lineTo(hx + 6, py - 8); ctx.stroke();
+        }
+        ctx.setLineDash([3, 5]);
+        ctx.beginPath(); ctx.arc(px, py, p.l1 * scale, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(px, py, (p.l1 + p.l2) * scale, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        var P = pos(s, scale);
+        var x1 = px + P.x1, y1 = py + P.y1, x2 = px + P.x2, y2 = py + P.y2;
+        if (!paused && dragging == null) {
+          trailA.push({ x: x2, y: y2, hue: (t * 40) % 360 });
+          if (trailA.length > p.trail) trailA.shift();
+        }
+        drawTrail(trailA, 0);
+        var Q = null;
+        if (twin) {
+          Q = pos(twin, scale);
+          if (!paused && dragging == null) {
+            trailB.push({ x: px + Q.x2, y: py + Q.y2, hue: (t * 40) % 360 });
+            if (trailB.length > p.trail) trailB.shift();
+          }
+          drawTrail(trailB, 180);
+        }
+        ctx.strokeStyle = "#b8955a"; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        bob(px, py, 7, false);
+        bob(x1, y1, 6 + Math.sqrt(p.m1) * 7, false);
+        bob(x2, y2, 6 + Math.sqrt(p.m2) * 7, false);
+        if (twin && Q) {
+          ctx.strokeStyle = "#b86f43"; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Q.x1, py + Q.y1); ctx.lineTo(px + Q.x2, py + Q.y2); ctx.stroke();
+          bob(px + Q.x1, py + Q.y1, 5 + Math.sqrt(p.m1) * 5, true);
+          bob(px + Q.x2, py + Q.y2, 5 + Math.sqrt(p.m2) * 5, true);
+        }
+        var hud = qs("#hud");
+        if (hud) {
+          var e = energy(s);
+          var html = "t " + t.toFixed(2) + " s<br>E " + e.toFixed(3) + " J";
+          if (twin && Q) {
+            var dx = P.x2 - Q.x2, dy = P.y2 - Q.y2;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            var dtxt = dist < 0.001 ? dist.toExponential(2) + " m" : dist.toFixed(4) + " m";
+            html += "<br><span class='cop'>Δbob " + dtxt + "</span>";
+          }
+          hud.innerHTML = html;
+        }
+        function setTxt(id, v) { var el = qs(id); if (el) el.textContent = v; }
+        setTxt("#rth1", s.th1.toFixed(3));
+        setTxt("#rth2", s.th2.toFixed(3));
+        setTxt("#rw1", s.w1.toFixed(3));
+        setTxt("#rw2", s.w2.toFixed(3));
+        setTxt("#rsteps", String(steps));
+        if (twin && Q) {
+          var d2 = Math.hypot(P.x2 - Q.x2, P.y2 - Q.y2);
+          setTxt("#rdiv", d2 < 0.001 ? d2.toExponential(2) : d2.toFixed(4));
+        } else setTxt("#rdiv", "—");
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      }
+      canvas.addEventListener("pointerdown", function (e) {
+        var dim = { w: canvas.clientWidth, h: canvas.clientHeight };
+        var px = dim.w * 0.5, py = dim.h * 0.18;
+        var scale = Math.min(dim.w, dim.h) / (2.2 * (p.l1 + p.l2));
+        var P = pos(s, scale);
+        var rect = canvas.getBoundingClientRect();
+        var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        var d1 = Math.hypot(mx - (px + P.x1), my - (py + P.y1));
+        var d2 = Math.hypot(mx - (px + P.x2), my - (py + P.y2));
+        dragging = (d1 < 30 && d1 < d2) ? 1 : 2;
+        s.w1 = 0; s.w2 = 0; trailA = []; trailB = [];
+        if (twin) { twin.w1 = 0; twin.w2 = 0; }
+      });
+      canvas.addEventListener("pointermove", function (e) {
+        if (!dragging) return;
+        var dim = { w: canvas.clientWidth, h: canvas.clientHeight };
+        var px = dim.w * 0.5, py = dim.h * 0.18;
+        var scale = Math.min(dim.w, dim.h) / (2.2 * (p.l1 + p.l2));
+        var P = pos(s, scale);
+        var rect = canvas.getBoundingClientRect();
+        var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        if (dragging === 1) s.th1 = Math.atan2(mx - px, my - py);
+        else s.th2 = Math.atan2(mx - (px + P.x1), my - (py + P.y1));
+        if (twin) { twin.th1 = s.th1 + 0.001; twin.th2 = s.th2; }
+      });
+      function endDrag() {
+        if (!dragging) return;
+        dragging = null; t = 0; paused = false;
+        if (pauseBtn) pauseBtn.textContent = "Pause";
+      }
+      canvas.addEventListener("pointerup", endDrag);
+      canvas.addEventListener("pointerleave", endDrag);
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

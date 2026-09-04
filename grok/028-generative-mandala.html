@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kaleido — Symmetric Mandala Studio</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 50% 45%, #1a1b1e, #0d0e10 70%);
+      color: #e8e8ea;
+    }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+    .vignette {
+      position: fixed; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.55) 100%);
+    }
+    .brand {
+      position: fixed; top: 18px; left: 22px; z-index: 2;
+    }
+    .brand h1 {
+      font-weight: 300;
+      letter-spacing: 0.32em;
+      font-size: 18px;
+    }
+    .brand p {
+      font-size: 9px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #8b8c91;
+      margin-top: 4px;
+    }
+    .status {
+      position: fixed; top: 18px; right: 22px; z-index: 2;
+      font-family: ui-monospace, "Cascadia Code", Consolas, "Courier New", monospace;
+      font-size: 11px;
+      text-align: right;
+      color: #8b8c91;
+      line-height: 1.55;
+    }
+    .status b { color: #f0b35a; font-weight: 500; }
+    .bar {
+      position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+      z-index: 3;
+      display: flex; gap: 6px; align-items: center;
+      padding: 8px 10px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.14);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-radius: 999px;
+      box-shadow: 0 18px 40px rgba(0,0,0,.45);
+    }
+    .bar button, .chip {
+      font: inherit; font-size: 12px;
+      background: transparent; color: #e8e8ea;
+      border: 0; border-radius: 999px;
+      padding: 8px 12px; cursor: pointer;
+      white-space: nowrap;
+    }
+    .bar button:hover, .chip:hover { background: rgba(255,255,255,.08); }
+    .bar button.active, #autoBtn.active { background: #f0b35a; color: #1a1b1e; }
+    .pop {
+      position: absolute; bottom: 58px; left: 50%;
+      transform: translate(-50%, 8px);
+      background: rgba(20,20,24,.92);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 16px;
+      padding: 10px;
+      display: none;
+      opacity: 0;
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+    .pop.open { display: flex; flex-wrap: wrap; gap: 6px; opacity: 1; transform: translate(-50%, 0); }
+    .swatch, .hue {
+      display: inline-block; width: 28px; height: 12px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.2); vertical-align: middle; margin-right: 4px;
+    }
+    .hue {
+      background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
+    }
+    @media (max-width: 640px) {
+      .bar .txt { display: none; }
+      .status { font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="vignette"></div>
+  <div class="brand">
+    <h1>KALEIDO</h1>
+    <p>Symmetric mandala studio</p>
+  </div>
+  <div class="status" id="status">
+    symmetry <b id="stN">8</b><br>
+    mirror <b id="stM">on</b><br>
+    strokes <b id="stS">0</b><br>
+    palette <b id="stP">Drift</b>
+  </div>
+  <div class="bar" id="bar">
+    <button type="button" id="clearBtn"><span class="txt">Clear</span> ⌫</button>
+    <button type="button" id="undoBtn"><span class="txt">Undo</span> ↩</button>
+    <button type="button" id="saveBtn"><span class="txt">Save PNG</span> ⬇</button>
+    <span style="position:relative">
+      <button type="button" id="symBtn"><span class="txt">Symmetry</span> ✱</button>
+      <div class="pop" id="symPop">
+        <button class="chip" data-n="6">6</button>
+        <button class="chip" data-n="8">8</button>
+        <button class="chip" data-n="12">12</button>
+        <button class="chip" data-n="16">16</button>
+      </div>
+    </span>
+    <button type="button" id="mirrorBtn" class="active"><span class="txt">Mirror</span> ↔</button>
+    <span style="position:relative">
+      <button type="button" id="palBtn"><span class="txt">Palette</span> ◈</button>
+      <div class="pop" id="palPop">
+        <button class="chip" data-pal="drift"><i class="hue"></i> Drift</button>
+        <button class="chip" data-pal="ember"><i class="swatch" style="background:linear-gradient(90deg,#ffb347,#ff7a3a,#e0335a)"></i> Ember</button>
+        <button class="chip" data-pal="lagoon"><i class="swatch" style="background:linear-gradient(90deg,#a7f3d0,#22d3ee,#1e3a8a)"></i> Lagoon</button>
+        <button class="chip" data-pal="gilded"><i class="swatch" style="background:linear-gradient(90deg,#fff6d5,#f0b35a,#7a4b12)"></i> Gilded</button>
+        <button class="chip" data-pal="ivory"><i class="swatch" style="background:linear-gradient(90deg,#f7f4ee,#d9d4c8,#8a8680)"></i> Ivory</button>
+      </div>
+    </span>
+    <button type="button" id="autoBtn"><span class="txt">Auto-draw</span> ∞</button>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    var PALS = {
+      ember: ["#ffb347", "#ff7a3a", "#ff5e3a", "#e0335a", "#c81d5a"],
+      lagoon: ["#a7f3d0", "#5eead4", "#22d3ee", "#3b82f6", "#1e3a8a"],
+      gilded: ["#fff6d5", "#f7dd9a", "#f0b35a", "#c98a2c", "#7a4b12"],
+      ivory: ["#ffffff", "#f4f1ea", "#d9d4c8", "#b4afa6", "#8a8680"]
+    };
+    function noise(x) {
+      var s = Math.sin(x * 127.1) * 43758.5453;
+      return s - Math.floor(s);
+    }
+    function init() {
+      var canvas = qs("#c");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var N = 8, mirror = true, palette = "drift", hue = 20;
+      var strokes = [];
+      var current = null;
+      var dpr = 1, W = 0, H = 0, cx = 0, cy = 0;
+      var auto = false, autoPath = null;
+      var widthSm = 4;
+
+      function resize() {
+        dpr = window.devicePixelRatio ? Math.min(window.devicePixelRatio, 3) : 1;
+        W = window.innerWidth; H = window.innerHeight;
+        canvas.width = Math.floor(W * dpr);
+        canvas.height = Math.floor(H * dpr);
+        canvas.style.width = W + "px";
+        canvas.style.height = H + "px";
+        cx = W / 2; cy = H / 2;
+        redraw();
+      }
+      function colorAt(i) {
+        if (palette === "drift") {
+          return "hsla(" + ((hue + i * 0.35) % 360) + ",85%,62%,0.92)";
+        }
+        var arr = PALS[palette] || PALS.ember;
+        return arr[i % arr.length];
+      }
+      function drawStroke(st) {
+        var pts = st.pts;
+        if (!pts || pts.length < 2) return;
+        var k, m, p0, p1, p2, mx1, my1, mx2, my2, ang, j, copies;
+        copies = st.n;
+        for (j = 0; j < copies; j++) {
+          ang = (j / copies) * Math.PI * 2;
+          drawCopy(pts, ang, false, st);
+          if (st.mirror) drawCopy(pts, ang, true, st);
+        }
+      }
+      function drawCopy(pts, ang, flip, st) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(ang);
+        if (flip) ctx.scale(-1, 1);
+        ctx.translate(-cx, -cy);
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.shadowBlur = 12;
+        var i, a, b, c, mx, my, nx, ny;
+        for (i = 1; i < pts.length - 1; i++) {
+          a = pts[i - 1]; b = pts[i]; c = pts[i + 1];
+          mx = (a.x + b.x) / 2; my = (a.y + b.y) / 2;
+          nx = (b.x + c.x) / 2; ny = (b.y + c.y) / 2;
+          ctx.beginPath();
+          ctx.strokeStyle = colorAt(st.hue0 + i);
+          ctx.shadowColor = ctx.strokeStyle;
+          ctx.globalAlpha = 0.92;
+          ctx.lineWidth = b.w;
+          ctx.moveTo(mx, my);
+          ctx.quadraticCurveTo(b.x, b.y, nx, ny);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      function redraw() {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, W, H);
+        var i;
+        for (i = 0; i < strokes.length; i++) drawStroke(strokes[i]);
+        if (current) drawStroke(current);
+        status();
+      }
+      function status() {
+        var a, b, c, d;
+        a = qs("#stN"); b = qs("#stM"); c = qs("#stS"); d = qs("#stP");
+        if (a) a.textContent = String(N);
+        if (b) b.textContent = mirror ? "on" : "off";
+        if (c) c.textContent = String(strokes.length);
+        if (d) d.textContent = palette === "drift" ? "Drift" : palette.charAt(0).toUpperCase() + palette.slice(1);
+      }
+      function addPoint(x, y, prev) {
+        var dx = prev ? x - prev.x : 0, dy = prev ? y - prev.y : 0;
+        var spd = Math.sqrt(dx * dx + dy * dy);
+        var tw = spd < 1 ? 14 : Math.max(1.2, 14 - spd * 0.45);
+        widthSm = widthSm * 0.72 + tw * 0.28;
+        return { x: x, y: y, w: widthSm };
+      }
+      function startStroke(x, y) {
+        current = { pts: [{ x: x, y: y, w: 6 }], n: N, mirror: mirror, hue0: hue };
+        widthSm = 6;
+      }
+      function moveStroke(x, y) {
+        if (!current) return;
+        var last = current.pts[current.pts.length - 1];
+        current.pts.push(addPoint(x, y, last));
+        if (palette === "drift") hue = (hue + 0.7) % 360;
+        redraw();
+      }
+      function endStroke() {
+        if (current && current.pts.length > 1) strokes.push(current);
+        current = null;
+        redraw();
+      }
+      canvas.addEventListener("pointerdown", function (e) {
+        canvas.setPointerCapture(e.pointerId);
+        startStroke(e.clientX, e.clientY);
+      });
+      canvas.addEventListener("pointermove", function (e) {
+        if (!current) return;
+        moveStroke(e.clientX, e.clientY);
+      });
+      canvas.addEventListener("pointerup", endStroke);
+      canvas.addEventListener("pointercancel", endStroke);
+
+      function clearAll() { strokes = []; current = null; redraw(); }
+      function undo() { strokes.pop(); redraw(); }
+      function savePng() {
+        var off = document.createElement("canvas");
+        off.width = canvas.width; off.height = canvas.height;
+        var o = off.getContext("2d");
+        if (!o) return;
+        var g = o.createRadialGradient(off.width/2, off.height/2, 0, off.width/2, off.height/2, off.width*0.7);
+        g.addColorStop(0, "#1a1b1e");
+        g.addColorStop(1, "#0d0e10");
+        o.fillStyle = g;
+        o.fillRect(0, 0, off.width, off.height);
+        o.drawImage(canvas, 0, 0);
+        var a = document.createElement("a");
+        a.href = off.toDataURL("image/png");
+        a.download = "kaleido.png";
+        a.click();
+      }
+
+      function closePops() {
+        qsa(".pop").forEach(function (p) { p.classList.remove("open"); });
+      }
+      var symBtn = qs("#symBtn"), palBtn = qs("#palBtn"), symPop = qs("#symPop"), palPop = qs("#palPop");
+      if (symBtn && symPop) symBtn.addEventListener("click", function (e) {
+        e.stopPropagation(); palPop && palPop.classList.remove("open");
+        symPop.classList.toggle("open");
+      });
+      if (palBtn && palPop) palBtn.addEventListener("click", function (e) {
+        e.stopPropagation(); symPop && symPop.classList.remove("open");
+        palPop.classList.toggle("open");
+      });
+      qsa("[data-n]").forEach(function (b) {
+        b.addEventListener("click", function () { N = parseInt(b.getAttribute("data-n"), 10) || 8; status(); closePops(); });
+      });
+      qsa("[data-pal]").forEach(function (b) {
+        b.addEventListener("click", function () { palette = b.getAttribute("data-pal") || "drift"; status(); closePops(); });
+      });
+      var mirrorBtn = qs("#mirrorBtn");
+      if (mirrorBtn) mirrorBtn.addEventListener("click", function () {
+        mirror = !mirror;
+        mirrorBtn.classList.toggle("active", mirror);
+        status();
+      });
+      var autoBtn = qs("#autoBtn");
+      if (autoBtn) autoBtn.addEventListener("click", function () {
+        auto = !auto;
+        autoBtn.classList.toggle("active", auto);
+        if (auto) beginAuto();
+      });
+      var clearBtn = qs("#clearBtn"), undoBtn = qs("#undoBtn"), saveBtn = qs("#saveBtn");
+      if (clearBtn) clearBtn.addEventListener("click", clearAll);
+      if (undoBtn) undoBtn.addEventListener("click", undo);
+      if (saveBtn) saveBtn.addEventListener("click", savePng);
+
+      var autoT = 0, autoRing = 0, autoLife = 0, autoDir = 1, autoR = 80, autoAng = 0, autoW = 4;
+      function beginAuto() {
+        autoRing = 0; autoLife = 120 + Math.random() * 160; autoDir = Math.random() < 0.5 ? -1 : 1;
+        autoR = 40 + autoRing * 36; autoAng = Math.random() * Math.PI * 2; autoW = 2 + Math.random() * 5;
+        startStroke(cx + Math.cos(autoAng) * autoR, cy + Math.sin(autoAng) * autoR);
+      }
+      function autoStep() {
+        if (!auto) return;
+        autoT += 0.016;
+        var n1 = noise(autoT * 1.7 + autoRing);
+        var n2 = noise(autoT * 0.9 + 20);
+        autoAng += autoDir * (0.04 + n1 * 0.08);
+        autoR += (n2 - 0.5) * 3.2;
+        var x = cx + Math.cos(autoAng) * autoR;
+        var y = cy + Math.sin(autoAng) * autoR;
+        moveStroke(x, y);
+        autoLife -= 1;
+        if (autoLife <= 0) {
+          endStroke();
+          autoRing = (autoRing + 1) % 5;
+          autoLife = 120 + Math.random() * 160;
+          autoDir = Math.random() < 0.5 ? -1 : 1;
+          autoR = 50 + autoRing * 42;
+          autoAng = Math.random() * Math.PI * 2;
+          if (auto) startStroke(cx + Math.cos(autoAng) * autoR, cy + Math.sin(autoAng) * autoR);
+        }
+      }
+      function loop() {
+        autoStep();
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+      }
+
+      window.addEventListener("keydown", function (e) {
+        if (e.key === "a" || e.key === "A") { if (autoBtn) autoBtn.click(); }
+        if (e.key === "c" || e.key === "C") clearAll();
+        if (e.key === "z" || e.key === "Z") undo();
+        if (e.key === "s" || e.key === "S") { e.preventDefault(); savePng(); }
+        if (e.key === "m" || e.key === "M") { if (mirrorBtn) mirrorBtn.click(); }
+        if (e.key === "Escape") closePops();
+      });
+      window.addEventListener("resize", resize);
+      resize();
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

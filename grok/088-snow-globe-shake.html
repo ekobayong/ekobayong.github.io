@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Winter, kept — Interactive Snow Globe</title>
+  <style>
+    :root { --size: min(78vw, 56vh, 520px); --gold: #fbe7a3; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      min-height: 100dvh;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% 100%, #123a3d, transparent 60%),
+        radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.55) 100%),
+        radial-gradient(circle at 50% 40%, #0e2a2e, #061518);
+      color: #e8f0ee;
+      font-family: Georgia, "Iowan Old Style", Palatino, serif;
+      overflow-x: hidden;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 1.1rem 0.8rem 1.4rem;
+    }
+    header { text-align: center; z-index: 2; }
+    .eye { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase; color: #9bb8b4; }
+    h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 400; color: #eef6f4; }
+    h1 i { font-style: italic; color: #fbe7a3; }
+    .string { position: fixed; top: 0; left: 0; width: 100%; height: 90px; pointer-events: none; z-index: 0; }
+    .bokeh {
+      position: fixed; border-radius: 50%; filter: blur(10px); pointer-events: none;
+      animation: float 10s ease-in-out infinite alternate;
+    }
+    @keyframes float {
+      from { transform: translateY(0); } to { transform: translateY(-16px); }
+    }
+    .assembly {
+      width: var(--size); margin-top: 0.6rem; position: relative;
+      transform-origin: 50% 100%;
+    }
+    .sphere {
+      width: var(--size); height: var(--size); border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #1d4d63, #0d2c42 55%, #061a2b);
+      overflow: hidden; position: relative;
+      box-shadow: 0 28px 50px rgba(0,0,0,.55), inset 0 0 40px rgba(0,0,0,.25);
+    }
+    .scene { width: 100%; height: 100%; display: block; transform-origin: 50% 70%; }
+    canvas#snow {
+      position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%;
+    }
+    .glass {
+      position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+      background:
+        radial-gradient(ellipse 40% 28% at 28% 22%, rgba(255,255,255,.42), transparent 70%),
+        radial-gradient(ellipse 22% 16% at 72% 74%, rgba(255,255,255,.16), transparent 70%),
+        radial-gradient(circle at 50% 50%, transparent 64%, rgba(255,255,255,.35) 72%, transparent 73.5%),
+        linear-gradient(125deg, rgba(255,255,255,.18), transparent 40%, transparent 60%, rgba(255,255,255,.08));
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.55), inset 0 0 0 calc(var(--size) * 0.035) rgba(255,255,255,.08);
+    }
+    .glass::after {
+      content: ""; position: absolute; width: 18%; height: 6%; left: 22%; top: 16%;
+      background: rgba(255,255,255,.7); filter: blur(4px); border-radius: 40%; transform: rotate(-28deg);
+    }
+    .neck {
+      height: calc(var(--size) * 0.07); margin: -2px auto 0; width: 42%;
+      background: linear-gradient(90deg, #6f5218, #d9b25a, #fbe7a3, #d9b25a, #6f5218);
+      border-radius: 2px;
+    }
+    .base {
+      width: 72%; margin: 0 auto; position: relative;
+      background:
+        repeating-linear-gradient(90deg, rgba(0,0,0,.08) 0 2px, transparent 2px 5px),
+        linear-gradient(180deg, #8d5a40, #7a4a33 30%, #4a2a1c 70%, #2a150e);
+      height: calc(var(--size) * 0.22); border-radius: 0 0 46% 46% / 0 0 70% 70%;
+      box-shadow: 0 18px 24px rgba(0,0,0,.4);
+    }
+    .trim {
+      position: absolute; left: 6%; right: 6%; top: 8px; height: 8px; border-radius: 8px;
+      background: repeating-linear-gradient(90deg, #d9b25a 0 6px, #6f5218 6px 8px);
+    }
+    .collar {
+      position: absolute; left: 18%; right: 18%; top: -6px; height: 10px;
+      background: linear-gradient(90deg, #6f5218, #fbe7a3, #6f5218); border-radius: 4px;
+    }
+    .plaque {
+      position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%);
+      font-style: italic; font-size: clamp(0.58rem, 1.6vw, 0.78rem); color: #fbe7a3;
+      white-space: nowrap; text-shadow: 0 1px 0 #2a150e;
+    }
+    .key {
+      position: absolute; right: -18%; top: 28%; width: 48px; height: 48px; cursor: pointer;
+      background: none; border: 0; transform-origin: 0% 50%;
+    }
+    .controls { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; justify-content: center; }
+    .controls button {
+      appearance: none; border: 1px solid rgba(251,231,163,.4); background: rgba(14,42,46,.6);
+      color: var(--gold); font-family: inherit; padding: 0.4rem 0.85rem; border-radius: 999px; cursor: pointer;
+    }
+    footer {
+      margin-top: auto; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.68rem;
+      letter-spacing: 0.12em; color: #9bb8b4; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .meter { width: 88px; height: 6px; background: #0a1c1e; border-radius: 4px; overflow: hidden; }
+    .meter > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #d9b25a, #fbe7a3); }
+    .lamp { transform-origin: 50% 50%; animation: breathe 4s ease-in-out infinite; }
+    .win { animation: flicker 1.8s ease-in-out infinite; }
+    .smoke { animation: puff 5s ease-in-out infinite; }
+    @keyframes breathe { 50% { opacity: 0.55; } }
+    @keyframes flicker { 50% { opacity: 0.75; } }
+    @keyframes puff { 50% { transform: translateY(-4px); opacity: 0.5; } }
+    @media (prefers-reduced-motion: reduce) {
+      .bokeh, .lamp, .win, .smoke { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <svg class="string" viewBox="0 0 1000 90" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M40 18 C200 50 400 8 600 32 C780 52 900 12 980 28" fill="none" stroke="#061012" stroke-width="2"/>
+  </svg>
+  <header>
+    <p class="eye">Object 088 · Glass, brass, walnut, water, glycerine</p>
+    <h1>Winter, <i>kept</i></h1>
+  </header>
+  <div class="assembly" id="globe">
+    <div class="sphere" id="sphere">
+      <svg class="scene" id="scene" viewBox="0 0 300 300">
+        <defs>
+          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#0b1a33"/><stop offset="100%" stop-color="#1d4d63"/>
+          </linearGradient>
+          <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#f4fbff"/><stop offset="100%" stop-color="#cfe8f3"/>
+          </linearGradient>
+          <radialGradient id="winG" cx="50%" cy="50%"><stop offset="0%" stop-color="#ffd27a"/><stop offset="100%" stop-color="#e58f2a"/></radialGradient>
+          <radialGradient id="lampG" cx="50%" cy="40%"><stop offset="0%" stop-color="#ffe6a0"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+        </defs>
+        <rect width="300" height="300" fill="url(#sky)"/>
+        <circle cx="228" cy="48" r="18" fill="none" stroke="#f4e7b0" stroke-width="3"/>
+        <path d="M228 30 A18 18 0 1 0 246 48" fill="#0b1a33"/>
+        <g fill="#eef6ff">
+          <circle cx="40" cy="36" r="1.2"/><circle cx="70" cy="58" r="0.9"/><circle cx="110" cy="28" r="1.1"/>
+          <circle cx="160" cy="44" r="0.8"/><circle cx="250" cy="70" r="1"/>
+        </g>
+        <ellipse cx="80" cy="170" rx="90" ry="28" fill="#0a2430"/>
+        <path d="M0 188 Q150 150 300 200 L300 300 L0 300 Z" fill="url(#ground)"/>
+        <g>
+          <polygon points="48,178 62,128 76,178" fill="#14351f"/>
+          <polygon points="70,182 86,118 102,182" fill="#1c4a28"/>
+          <polygon points="92,184 108,138 124,184" fill="#245832"/>
+          <ellipse cx="62" cy="130" rx="8" ry="4" fill="#f4fbff"/>
+          <ellipse cx="86" cy="120" rx="10" ry="5" fill="#f4fbff"/>
+          <ellipse cx="108" cy="140" rx="7" ry="3.5" fill="#f4fbff"/>
+        </g>
+        <g>
+          <rect x="132" y="158" width="58" height="42" fill="#5a3a22"/>
+          <path d="M124 158 L161 128 L198 158 Z" fill="#7a3a28"/>
+          <path d="M128 156 L161 130 L194 156" fill="none" stroke="#f4fbff" stroke-width="4"/>
+          <rect x="170" y="132" width="8" height="16" fill="#4a2a1c"/>
+          <g class="smoke" fill="rgba(220,230,240,.45)">
+            <ellipse cx="174" cy="118" rx="6" ry="4"/>
+            <ellipse cx="180" cy="108" rx="5" ry="3.5"/>
+          </g>
+          <rect class="win" x="140" y="168" width="16" height="14" fill="url(#winG)"/>
+          <rect class="win" x="166" y="168" width="16" height="14" fill="url(#winG)"/>
+          <path d="M148 168 V182 M140 175 H156 M174 168 V182 M166 175 H182" stroke="#3a2214" stroke-width="1"/>
+          <rect x="154" y="180" width="12" height="20" fill="#2a150e"/>
+          <circle cx="164" cy="190" r="1.3" fill="#d9b25a"/>
+        </g>
+        <g>
+          <rect x="232" y="150" width="4" height="48" fill="#1a120c"/>
+          <circle class="lamp" cx="234" cy="148" r="22" fill="url(#lampG)"/>
+          <circle cx="234" cy="148" r="5" fill="#ffe6a0"/>
+        </g>
+        <ellipse cx="150" cy="250" rx="90" ry="22" fill="#ffffff" opacity="0.85"/>
+      </svg>
+      <canvas id="snow"></canvas>
+      <div class="glass"></div>
+    </div>
+    <div class="neck"></div>
+    <div class="base" id="base">
+      <div class="collar"></div>
+      <div class="trim"></div>
+      <div class="plaque">Blessington Lane · Christmas Eve</div>
+      <button type="button" class="key" id="key" aria-label="Wind the key">
+        <svg viewBox="0 0 48 48" width="48" height="48">
+          <rect x="0" y="20" width="22" height="6" rx="2" fill="#d9b25a"/>
+          <circle cx="32" cy="16" r="8" fill="none" stroke="#fbe7a3" stroke-width="3"/>
+          <circle cx="32" cy="32" r="8" fill="none" stroke="#fbe7a3" stroke-width="3"/>
+          <rect x="20" y="14" width="4" height="20" fill="#d9b25a"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+  <div class="controls">
+    <button type="button" id="shake">Shake</button>
+    <button type="button" id="wind">Wind the key</button>
+  </div>
+  <footer>flurry <div class="meter"><i id="meter"></i></div></footer>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var canvas = qs("#snow");
+      var globe = qs("#globe");
+      var sphere = qs("#sphere");
+      var scene = qs("#scene");
+      var base = qs("#base");
+      var key = qs("#key");
+      var shakeBtn = qs("#shake");
+      var windBtn = qs("#wind");
+      var meter = qs("#meter");
+      if (!canvas || !globe || !sphere || !scene || !base || !key || !shakeBtn || !windBtn || !meter) return;
+      var ctx = canvas.getContext ? canvas.getContext("2d") : null;
+      if (!ctx) return;
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var bokehColors = ["rgba(255,214,140,0.55)", "rgba(160,220,220,0.35)"];
+      var i;
+      if (!reduce) {
+        for (i = 0; i < 11; i++) {
+          var b = document.createElement("div");
+          b.className = "bokeh";
+          var s = 10 + (i % 5) * 8;
+          b.style.width = b.style.height = s + "px";
+          b.style.background = bokehColors[i % 2];
+          b.style.left = (6 + i * 8.2) + "%";
+          b.style.top = (i % 3 === 0 ? 4 : (i % 2 ? 10 : 2)) + "%";
+          b.style.animationDuration = (7 + (i % 8)) + "s";
+          document.body.appendChild(b);
+        }
+      }
+      var N = reduce ? 220 : 460;
+      var flakes = [];
+      var energy = 0, ang = 0, angV = 0, offX = 0, offY = 0, vX = 0, vY = 0;
+      var dragOn = false, lastP = null, lastT = 0;
+      var spinY = 0, spinDecay = 0;
+      var W = 1, H = 1, dpr = 1, cx = 0, cy = 0, R = 0;
+      function resize() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var r = sphere.getBoundingClientRect();
+        var oldW = W, oldH = H;
+        W = r.width; H = r.height;
+        canvas.width = Math.floor(W * dpr);
+        canvas.height = Math.floor(H * dpr);
+        canvas.style.width = W + "px";
+        canvas.style.height = H + "px";
+        cx = W / 2; cy = H / 2; R = Math.min(W, H) / 2 - 2;
+        if (oldW > 1) {
+          flakes.forEach(function (f) { f.x *= W / oldW; f.y *= H / oldH; });
+        }
+      }
+      function spawn(settled) {
+        var a = Math.random() * Math.PI * 2;
+        var rr = Math.random() * R * 0.86;
+        return {
+          x: cx + Math.cos(a) * rr, y: settled ? cy + R * (0.52 + Math.random() * 0.06) : cy + Math.sin(a) * rr,
+          vx: 0, vy: 0, z: 0.3 + Math.random() * 0.7, r: 0.7 + Math.random() * 1.9, settled: !!settled
+        };
+      }
+      for (i = 0; i < N; i++) flakes.push(spawn(i % 5 === 0));
+      resize();
+      window.addEventListener("resize", resize);
+      function inject(imp) {
+        energy = Math.min(1.6, energy + imp);
+        angV += (Math.random() - 0.5) * imp * 2.2;
+        flakes.forEach(function (f) {
+          if (energy > 0.35 && f.settled && Math.random() < energy) {
+            f.settled = false;
+            f.vy = -40 - Math.random() * 80 * energy;
+            f.vx += (Math.random() - 0.5) * 60 * energy;
+          }
+        });
+      }
+      function phys(dt) {
+        if (dt > 0.04) dt = 0.04;
+        energy *= Math.exp(-dt / 2.6);
+        angV += (-42 * ang - 3.2 * angV) * dt;
+        ang += angV * dt;
+        offX += (0 - offX) * (dragOn ? 0 : 0.12);
+        offY += (0 - offY) * (dragOn ? 0 : 0.12);
+        globe.style.transform = "translate(" + offX + "px," + offY + "px) rotate(" + ang + "deg)";
+        base.style.transform = "rotate(" + (ang * 0.18) + "deg)";
+        if (spinDecay > 0) {
+          spinY += spinDecay * dt * 40;
+          spinDecay *= Math.exp(-dt / 7);
+          scene.style.transform = "perspective(600px) rotateY(" + spinY + "deg) translateX(" + Math.sin(spinY * 0.04) * 6 + "px)";
+        }
+        meter.style.width = Math.min(100, energy * 70) + "%";
+        var floorBase = R * 0.52;
+        flakes.forEach(function (f) {
+          if (f.settled && energy < 0.22) return;
+          var g = 55 * f.r;
+          var turb = energy * 40;
+          f.vx += Math.sin(f.y * 0.04 + performance.now() * 0.001) * turb * dt;
+          f.vy += Math.cos(f.x * 0.03) * turb * 0.5 * dt;
+          f.vy += g * dt;
+          var drag = 0.8 + energy * 1.4;
+          f.vx *= Math.exp(-drag * dt);
+          f.vy *= Math.exp(-0.35 * dt);
+          f.vx += angV * 18 * dt;
+          f.x += f.vx * dt; f.y += f.vy * dt;
+          var dx = f.x - cx, dy = f.y - cy, dist = Math.hypot(dx, dy);
+          if (dist > R - f.r) {
+            var n = { x: dx / dist, y: dy / dist };
+            var vn = f.vx * n.x + f.vy * n.y;
+            f.vx -= 1.7 * vn * n.x; f.vy -= 1.7 * vn * n.y;
+            f.x = cx + n.x * (R - f.r - 0.5);
+            f.y = cy + n.y * (R - f.r - 0.5);
+          }
+          var floor = cy + floorBase + f.z * R * 0.06;
+          if (f.y > floor && Math.abs(f.vy) < 18) {
+            f.y = floor; f.vy = 0; f.vx *= 0.5; f.settled = true;
+          }
+        });
+      }
+      function draw() {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, W, H);
+        flakes.forEach(function (f) {
+          ctx.beginPath();
+          ctx.fillStyle = f.z > 0.6 ? "rgba(255,255,255," + (0.45 + f.z * 0.4) + ")" : "rgba(200,224,240," + (0.3 + f.z * 0.4) + ")";
+          ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+      var prev = performance.now ? performance.now() : 0;
+      function loop(now) {
+        phys((now - prev) / 1000);
+        prev = now;
+        draw();
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+      globe.addEventListener("pointerdown", function (ev) {
+        dragOn = true; lastP = { x: ev.clientX, y: ev.clientY }; lastT = performance.now();
+        globe.setPointerCapture(ev.pointerId);
+      });
+      globe.addEventListener("pointermove", function (ev) {
+        if (!dragOn || !lastP) return;
+        var dx = ev.clientX - lastP.x, dy = ev.clientY - lastP.y;
+        var t = performance.now(), dt = Math.max(0.008, (t - lastT) / 1000);
+        var spd = Math.hypot(dx, dy) / dt;
+        offX = Math.max(-28, Math.min(28, offX + dx * 0.35));
+        offY = Math.max(-20, Math.min(20, offY + dy * 0.35));
+        if (spd > 900) {
+          inject(Math.min(1.2, (spd - 900) / 1800));
+          angV += (dx / dt) * 0.0008;
+        }
+        lastP = { x: ev.clientX, y: ev.clientY }; lastT = t;
+      });
+      globe.addEventListener("pointerup", function () { dragOn = false; lastP = null; });
+      shakeBtn.addEventListener("click", function () {
+        inject(1.1); angV += (Math.random() - 0.5) * 6;
+        if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+          DeviceMotionEvent.requestPermission().catch(function () {});
+        }
+      });
+      function onMotion(ev) {
+        var a = ev.accelerationIncludingGravity || ev.acceleration;
+        if (!a) return;
+        var mag = Math.hypot(a.x || 0, a.y || 0, a.z || 0);
+        if (mag > 13) inject((mag - 13) / 12);
+      }
+      if (typeof window.DeviceMotionEvent !== "undefined") {
+        if (typeof DeviceMotionEvent.requestPermission !== "function") {
+          window.addEventListener("devicemotion", onMotion);
+        } else {
+          shakeBtn.addEventListener("click", function once() {
+            DeviceMotionEvent.requestPermission().then(function (s) {
+              if (s === "granted") window.addEventListener("devicemotion", onMotion);
+            }).catch(function () {});
+          }, { once: true });
+        }
+      }
+      function windKey() {
+        key.style.transition = "transform 1.1s cubic-bezier(.22,1,.36,1)";
+        key.style.transform = "rotate(720deg)";
+        setTimeout(function () { key.style.transition = "none"; key.style.transform = "rotate(0deg)"; }, 1150);
+        spinDecay = 1;
+        try {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return;
+          var ac = new AC();
+          var notes = [523.25, 659.25, 783.99, 659.25, 587.33, 523.25, 392.0, 523.25];
+          notes.forEach(function (f, n) {
+            var o = ac.createOscillator();
+            var o2 = ac.createOscillator();
+            var g = ac.createGain();
+            o.type = "sine"; o2.type = "triangle";
+            o.frequency.value = f; o2.frequency.value = f * 2;
+            o.connect(g); o2.connect(g); g.connect(ac.destination);
+            var t = ac.currentTime + n * 0.28;
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(0.08, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+            o.start(t); o2.start(t); o.stop(t + 0.42); o2.stop(t + 0.42);
+          });
+        } catch (e) {}
+      }
+      key.addEventListener("click", function (ev) { ev.stopPropagation(); windKey(); });
+      windBtn.addEventListener("click", windKey);
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

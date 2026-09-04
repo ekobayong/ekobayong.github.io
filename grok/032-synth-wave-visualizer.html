@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEON//OSC — Polyphonic Wavetable MK II</title>
+  <style>
+    :root {
+      --bg: #05030a;
+      --panel: #0d0916;
+      --pink: #ff2d95;
+      --lav: #b78bff;
+      --blue: #2de2ff;
+      --dim: #4a3f66;
+      --text: #efe6ff;
+      --mono: ui-monospace, Menlo, "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      overflow-x: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 110%, rgba(255,45,149,0.22), transparent 60%),
+        radial-gradient(ellipse 60% 40% at 50% -10%, rgba(45,226,255,0.16), transparent 55%);
+    }
+    body::after {
+      content: "";
+      position: fixed; inset: 0; pointer-events: none; z-index: 80;
+      background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.035) 0 1px, transparent 1px 3px);
+      mix-blend-mode: overlay;
+    }
+    .wrap { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 28px 22px 48px; }
+    header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
+    .logo {
+      font-family: var(--mono); font-weight: 700; font-size: clamp(28px, 5vw, 48px);
+      background: linear-gradient(90deg, var(--pink), var(--lav), var(--blue));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      filter: drop-shadow(0 0 12px rgba(255,45,149,0.7));
+      margin: 0; letter-spacing: 0.04em;
+    }
+    .sub {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.28em;
+      color: var(--lav); margin: 6px 0 0;
+    }
+    .status {
+      display: flex; align-items: center; gap: 8px;
+      border: 1px solid rgba(183,139,255,0.35);
+      border-radius: 999px; padding: 6px 12px;
+      font-family: var(--mono); font-size: 11px; color: var(--dim);
+      background: rgba(13,9,22,0.7);
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+    .status.live .dot { background: var(--blue); animation: blink 1.2s ease-in-out 1; }
+    .status.live { color: var(--text); }
+    @keyframes blink { 0%,100%{opacity:1} 40%{opacity:0.15} }
+    .scopes { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid rgba(183,139,255,0.18);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .panel h3 {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em;
+      text-transform: uppercase; color: var(--dim); margin: 0 0 10px;
+    }
+    .scope-canvas, .spec-canvas { width: 100%; display: block; border-radius: 8px; background: #07050f; }
+    .spec-wrap { aspect-ratio: 1; }
+    .spec-wrap canvas { height: 100%; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 16px; }
+    .card { min-height: 170px; }
+    .waves { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .seg {
+      background: #120c1e; border: 1px solid rgba(183,139,255,0.2);
+      color: var(--text); border-radius: 10px; padding: 10px 8px;
+      font-family: var(--mono); font-size: 11px; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .seg.active {
+      background: linear-gradient(180deg, rgba(255,45,149,0.45), rgba(183,139,255,0.25));
+      box-shadow: 0 0 18px rgba(255,45,149,0.55); border-color: var(--pink);
+    }
+    .knob-wrap { display: flex; align-items: center; gap: 16px; }
+    .knob {
+      width: 84px; height: 84px; border-radius: 50%; position: relative;
+      background:
+        conic-gradient(from 225deg, var(--blue) var(--arc, 135deg), #1a1428 0);
+      padding: 7px;
+      cursor: ns-resize;
+    }
+    .knob::before {
+      content: ""; position: absolute; inset: 7px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #2a2038, #0c0814);
+      box-shadow: inset 0 4px 10px rgba(0,0,0,0.6), 0 0 0 1px #2a2038;
+    }
+    .knob .needle {
+      position: absolute; left: 50%; top: 12px; width: 2px; height: 28px;
+      background: var(--blue); transform-origin: 50% 30px;
+      box-shadow: 0 0 8px var(--blue); z-index: 2; border-radius: 1px;
+    }
+    .readout { font-family: var(--mono); font-size: 18px; color: var(--blue); letter-spacing: 0.04em; }
+    .toggles { display: flex; flex-direction: column; gap: 12px; }
+    .switch {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      background: #120c1e; border-radius: 999px; padding: 8px 12px;
+      border: 1px solid rgba(183,139,255,0.2); cursor: pointer; color: var(--text);
+      font-family: var(--mono); font-size: 12px;
+    }
+    .thumb {
+      width: 44px; height: 22px; border-radius: 999px; background: #1a1428;
+      position: relative; flex-shrink: 0;
+    }
+    .thumb::after {
+      content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+      border-radius: 50%; background: var(--dim);
+      transition: transform 0.45s cubic-bezier(0.22, 1.4, 0.36, 1);
+    }
+    .switch.on { box-shadow: 0 0 16px rgba(255,45,149,0.45); border-color: var(--pink); }
+    .switch.on .thumb::after { transform: translateX(22px); background: var(--pink); box-shadow: 0 0 10px var(--pink); }
+    .hints { font-family: var(--mono); font-size: 12px; color: var(--dim); line-height: 1.8; }
+    kbd {
+      display: inline-block; min-width: 18px; text-align: center;
+      border: 1px solid rgba(183,139,255,0.3); border-radius: 4px;
+      padding: 1px 5px; color: var(--text); background: #120c1e; font-family: var(--mono);
+    }
+    .keys { position: relative; height: 160px; user-select: none; touch-action: none; }
+    .white {
+      position: absolute; top: 0; bottom: 0; width: calc(10%);
+      background: linear-gradient(#efe6ff, #c8bdd8);
+      border: 1px solid #1a1428; border-radius: 0 0 8px 8px;
+      box-shadow: 0 8px 0 #8a7aa0;
+    }
+    .white.down {
+      background: linear-gradient(var(--pink), var(--lav));
+      box-shadow: 0 4px 0 #8a2a60, 0 0 28px var(--pink);
+      transform: translateY(2px);
+    }
+    .black {
+      position: absolute; top: 0; height: 58%;
+      width: calc(6.2%);
+      background: linear-gradient(#2a2238, #0a0612);
+      border-radius: 0 0 6px 6px; z-index: 2;
+      box-shadow: 0 6px 0 #05030a;
+    }
+    .black.down {
+      background: linear-gradient(var(--blue), var(--lav));
+      box-shadow: 0 3px 0 #1a5060, 0 0 24px var(--blue);
+      transform: translateY(2px);
+    }
+    @media (max-width: 800px) { .scopes { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) {
+      .thumb::after { transition-duration: 0.05s; }
+      .status.live .dot { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1 class="logo">NEON//OSC</h1>
+        <p class="sub">POLYPHONIC WAVETABLE · MK II</p>
+      </div>
+      <div class="status" id="status"><span class="dot"></span> Audio live · 48 kHz</div>
+    </header>
+    <div class="scopes">
+      <div class="panel">
+        <h3>Oscilloscope</h3>
+        <canvas class="scope-canvas" id="scope" width="800" height="220"></canvas>
+      </div>
+      <div class="panel spec-wrap">
+        <h3>Circular spectrum</h3>
+        <canvas class="spec-canvas" id="spec" width="420" height="420"></canvas>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="panel card">
+        <h3>Waveform</h3>
+        <div class="waves" id="waves">
+          <button class="seg active" data-wave="sine" type="button">
+            <svg width="36" height="16" viewBox="0 0 36 16"><path d="M1 8 C6 8 6 2 10 2 C14 2 14 14 18 14 C22 14 22 2 26 2 C30 2 30 8 35 8" fill="none" stroke="#efe6ff" stroke-width="1.6"/></svg>
+            sine
+          </button>
+          <button class="seg" data-wave="sawtooth" type="button">
+            <svg width="36" height="16" viewBox="0 0 36 16"><path d="M1 14 L18 2 L18 14 L35 2" fill="none" stroke="#efe6ff" stroke-width="1.6"/></svg>
+            saw
+          </button>
+          <button class="seg" data-wave="square" type="button">
+            <svg width="36" height="16" viewBox="0 0 36 16"><path d="M1 14 V2 H18 V14 H35 V2" fill="none" stroke="#efe6ff" stroke-width="1.6"/></svg>
+            square
+          </button>
+          <button class="seg" data-wave="triangle" type="button">
+            <svg width="36" height="16" viewBox="0 0 36 16"><path d="M1 14 L10 2 L26 14 L35 2" fill="none" stroke="#efe6ff" stroke-width="1.6"/></svg>
+            triangle
+          </button>
+        </div>
+      </div>
+      <div class="panel card">
+        <h3>Filter Cutoff</h3>
+        <div class="knob-wrap">
+          <div class="knob" id="knob" role="slider" aria-valuemin="80" aria-valuemax="12000" aria-valuenow="4000" aria-label="Filter Cutoff" tabindex="0">
+            <div class="needle" id="needle"></div>
+          </div>
+          <div>
+            <div class="readout" id="cutoffRead">4.0k HZ · LOWPASS</div>
+          </div>
+        </div>
+      </div>
+      <div class="panel card">
+        <h3>Space</h3>
+        <div class="toggles">
+          <div class="switch" id="delaySw" role="switch" aria-checked="false" tabindex="0">Feedback Delay<span class="thumb"></span></div>
+          <div class="switch" id="subSw" role="switch" aria-checked="false" tabindex="0">Sub Oscillator<span class="thumb"></span></div>
+        </div>
+      </div>
+      <div class="panel card">
+        <h3>Play</h3>
+        <div class="hints">
+          White: <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd> <kbd>G</kbd> <kbd>H</kbd> <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd> <kbd>;</kbd><br>
+          Black: <kbd>W</kbd> <kbd>E</kbd> <kbd>T</kbd> <kbd>Y</kbd> <kbd>U</kbd> <kbd>O</kbd> <kbd>P</kbd><br>
+          Octave: <kbd>Z</kbd> / <kbd>X</kbd>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Keyboard · C4–E5</h3>
+      <div class="keys" id="keys"></div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    function init() {
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var wave = "sine";
+      var cutoff = 4000;
+      var delayOn = false, subOn = false, octave = 4;
+      var ctx = null, filter = null, dry = null, delay = null, delayGain = null, wet = null, master = null, analyser = null, compressor = null;
+      var voices = {};
+      var held = 0;
+      var WHITE = [
+        { k: "a", n: 0, name: "C4" }, { k: "s", n: 2, name: "D4" }, { k: "d", n: 4, name: "E4" },
+        { k: "f", n: 5, name: "F4" }, { k: "g", n: 7, name: "G4" }, { k: "h", n: 9, name: "A4" },
+        { k: "j", n: 11, name: "B4" }, { k: "k", n: 12, name: "C5" }, { k: "l", n: 14, name: "D5" },
+        { k: ";", n: 16, name: "E5" }
+      ];
+      var BLACK = [
+        { k: "w", n: 1 }, { k: "e", n: 3 }, { k: "t", n: 6 }, { k: "y", n: 8 },
+        { k: "u", n: 10 }, { k: "o", n: 13 }, { k: "p", n: 15 }
+      ];
+      var keysEl = qs("#keys");
+      if (!keysEl) return;
+      WHITE.forEach(function (w, i) {
+        var el = document.createElement("div");
+        el.className = "white";
+        el.style.left = (i * 10) + "%";
+        el.setAttribute("data-note", String(w.n));
+        el.setAttribute("data-key", w.k);
+        keysEl.appendChild(el);
+      });
+      var blackPos = [0.62, 1.62, 3.62, 4.62, 5.62, 7.62, 8.62];
+      BLACK.forEach(function (b, i) {
+        var el = document.createElement("div");
+        el.className = "black";
+        el.style.left = (blackPos[i] * 10) + "%";
+        el.setAttribute("data-note", String(b.n));
+        el.setAttribute("data-key", b.k);
+        keysEl.appendChild(el);
+      });
+      function midi(n) { return 440 * Math.pow(2, ((octave * 12 + n) - 69) / 12); }
+      function ensureAudio() {
+        if (ctx) return;
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        ctx = new AC();
+        filter = ctx.createBiquadFilter();
+        filter.type = "lowpass"; filter.Q.value = 3; filter.frequency.value = cutoff;
+        dry = ctx.createGain(); dry.gain.value = 1;
+        delay = ctx.createDelay(1); delay.delayTime.value = 0.32;
+        delayGain = ctx.createGain(); delayGain.gain.value = 0.42;
+        wet = ctx.createGain(); wet.gain.value = 0;
+        master = ctx.createGain(); master.gain.value = 0.7;
+        compressor = ctx.createDynamicsCompressor();
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0.82;
+        filter.connect(dry); dry.connect(master);
+        filter.connect(delay); delay.connect(delayGain); delayGain.connect(delay); delay.connect(wet); wet.connect(master);
+        master.connect(compressor); compressor.connect(analyser); analyser.connect(ctx.destination);
+        var st = qs("#status");
+        if (st) st.classList.add("live");
+      }
+      function noteOn(n) {
+        ensureAudio();
+        if (!ctx) return;
+        if (voices[n]) noteOff(n, true);
+        var osc = ctx.createOscillator();
+        osc.type = wave;
+        osc.frequency.value = midi(n);
+        var g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.08);
+        osc.connect(g); g.connect(filter);
+        osc.start();
+        var sub = null, sg = null;
+        if (subOn) {
+          sub = ctx.createOscillator();
+          sub.type = "sine";
+          sub.frequency.value = midi(n) / 2;
+          sg = ctx.createGain(); sg.gain.value = 0.11;
+          sub.connect(sg); sg.connect(filter);
+          sub.start();
+        }
+        voices[n] = { osc: osc, g: g, sub: sub, sg: sg };
+        held++;
+        paintKey(n, true);
+      }
+      function noteOff(n, silent) {
+        var v = voices[n];
+        if (!v || !ctx) return;
+        try {
+          v.g.gain.cancelScheduledValues(ctx.currentTime);
+          v.g.gain.setValueAtTime(Math.max(0.0001, v.g.gain.value), ctx.currentTime);
+          v.g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+          v.osc.stop(ctx.currentTime + 0.36);
+          if (v.sub) v.sub.stop(ctx.currentTime + 0.36);
+        } catch (e) {}
+        delete voices[n];
+        held = Math.max(0, held - 1);
+        if (!silent) paintKey(n, false);
+      }
+      function releaseAll() {
+        Object.keys(voices).forEach(function (k) { noteOff(Number(k)); });
+      }
+      function paintKey(n, on) {
+        qsa("[data-note='" + n + "']", keysEl).forEach(function (el) {
+          if (on) el.classList.add("down"); else el.classList.remove("down");
+        });
+      }
+      function setCutoff(v) {
+        cutoff = Math.max(80, Math.min(12000, v));
+        var t = Math.log(cutoff / 80) / Math.log(12000 / 80);
+        var knob = qs("#knob");
+        var needle = qs("#needle");
+        var read = qs("#cutoffRead");
+        if (knob) {
+          knob.style.setProperty("--arc", (t * 270) + "deg");
+          knob.setAttribute("aria-valuenow", String(Math.round(cutoff)));
+        }
+        if (needle) needle.style.transform = "rotate(" + (t * 270 - 135) + "deg)";
+        if (read) {
+          var s = cutoff >= 1000 ? (cutoff / 1000).toFixed(1) + "k" : String(Math.round(cutoff));
+          read.textContent = s + " HZ · LOWPASS";
+        }
+        if (filter) filter.frequency.setTargetAtTime(cutoff, ctx.currentTime, 0.02);
+      }
+      setCutoff(4000);
+      qsa(".seg").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          qsa(".seg").forEach(function (b) { b.classList.remove("active"); });
+          btn.classList.add("active");
+          wave = btn.getAttribute("data-wave") || "sine";
+          Object.keys(voices).forEach(function (k) {
+            if (voices[k] && voices[k].osc) voices[k].osc.type = wave;
+          });
+        });
+      });
+      function toggleSw(el, onFn) {
+        if (!el) return;
+        function go() {
+          var on = el.getAttribute("aria-checked") !== "true";
+          el.setAttribute("aria-checked", on ? "true" : "false");
+          if (on) el.classList.add("on"); else el.classList.remove("on");
+          onFn(on);
+        }
+        el.addEventListener("click", go);
+        el.addEventListener("keydown", function (e) {
+          if (e.key === " " || e.key === "Enter") { e.preventDefault(); go(); }
+        });
+      }
+      toggleSw(qs("#delaySw"), function (on) {
+        delayOn = on;
+        if (wet) wet.gain.setTargetAtTime(on ? 0.5 : 0, ctx.currentTime, 0.04);
+      });
+      toggleSw(qs("#subSw"), function (on) { subOn = on; });
+      var knob = qs("#knob");
+      if (knob) {
+        var dragging = false, lastY = 0;
+        knob.addEventListener("pointerdown", function (e) {
+          dragging = true; lastY = e.clientY;
+          try { knob.setPointerCapture(e.pointerId); } catch (err) {}
+        });
+        knob.addEventListener("pointermove", function (e) {
+          if (!dragging) return;
+          var dy = lastY - e.clientY;
+          lastY = e.clientY;
+          var t = Math.log(cutoff / 80) / Math.log(12000 / 80);
+          t += dy / 180;
+          setCutoff(80 * Math.pow(12000 / 80, Math.max(0, Math.min(1, t))));
+        });
+        knob.addEventListener("pointerup", function () { dragging = false; });
+        knob.addEventListener("wheel", function (e) {
+          e.preventDefault();
+          var t = Math.log(cutoff / 80) / Math.log(12000 / 80);
+          t += (e.deltaY > 0 ? -0.04 : 0.04);
+          setCutoff(80 * Math.pow(12000 / 80, Math.max(0, Math.min(1, t))));
+        }, { passive: false });
+        knob.addEventListener("keydown", function (e) {
+          var step = e.shiftKey ? 1.25 : 1.08;
+          if (e.key === "ArrowUp" || e.key === "ArrowRight") { e.preventDefault(); setCutoff(cutoff * step); }
+          if (e.key === "ArrowDown" || e.key === "ArrowLeft") { e.preventDefault(); setCutoff(cutoff / step); }
+        });
+      }
+      var keymap = {};
+      WHITE.concat(BLACK).forEach(function (x) { keymap[x.k] = x.n; });
+      var downKeys = {};
+      window.addEventListener("keydown", function (e) {
+        var k = e.key.toLowerCase();
+        if (k === "z") { octave = Math.max(1, octave - 1); releaseAll(); return; }
+        if (k === "x") { octave = Math.min(7, octave + 1); releaseAll(); return; }
+        if (keymap[k] == null || downKeys[k] || e.repeat) return;
+        downKeys[k] = true;
+        noteOn(keymap[k]);
+      });
+      window.addEventListener("keyup", function (e) {
+        var k = e.key.toLowerCase();
+        if (keymap[k] == null) return;
+        downKeys[k] = false;
+        noteOff(keymap[k]);
+      });
+      window.addEventListener("blur", releaseAll);
+      var dragNote = null;
+      function noteFromPoint(x, y) {
+        var el = document.elementFromPoint(x, y);
+        if (!el) return null;
+        var n = el.getAttribute && el.getAttribute("data-note");
+        return n == null ? null : Number(n);
+      }
+      keysEl.addEventListener("pointerdown", function (e) {
+        keysEl.setPointerCapture(e.pointerId);
+        var n = noteFromPoint(e.clientX, e.clientY);
+        if (n == null) return;
+        dragNote = n; noteOn(n);
+      });
+      keysEl.addEventListener("pointermove", function (e) {
+        if (dragNote == null) return;
+        var n = noteFromPoint(e.clientX, e.clientY);
+        if (n == null || n === dragNote) return;
+        noteOff(dragNote); dragNote = n; noteOn(n);
+      });
+      keysEl.addEventListener("pointerup", function () {
+        if (dragNote != null) noteOff(dragNote);
+        dragNote = null;
+      });
+      var scope = qs("#scope");
+      var spec = qs("#spec");
+      if (!scope || !spec) return;
+      var sctx = scope.getContext("2d");
+      var xctx = spec.getContext("2d");
+      if (!sctx || !xctx) return;
+      var tdata = new Float32Array(2048);
+      var fdata = new Uint8Array(1024);
+      var t0 = 0;
+      function fit(c, ctx2, ratio) {
+        var r = Math.min(window.devicePixelRatio || 1, 3);
+        var w = c.clientWidth, h = c.clientHeight || (c === spec ? c.clientWidth : 220);
+        if (c === spec) h = c.clientWidth;
+        c.width = Math.max(1, Math.floor(w * r));
+        c.height = Math.max(1, Math.floor(h * r));
+        ctx2.setTransform(r, 0, 0, r, 0, 0);
+        return { w: w, h: h };
+      }
+      function synthWave(i, n, t) {
+        var p = (i / n + t * 0.4) % 1;
+        if (wave === "sine") return Math.sin(p * Math.PI * 2);
+        if (wave === "square") return p < 0.5 ? 1 : -1;
+        if (wave === "sawtooth") return p * 2 - 1;
+        return p < 0.5 ? p * 4 - 1 : 3 - p * 4;
+      }
+      function draw() {
+        t0 += reduce ? 0.004 : 0.016;
+        var S = fit(scope, sctx);
+        var X = fit(spec, xctx);
+        sctx.fillStyle = "#07050f";
+        sctx.fillRect(0, 0, S.w, S.h);
+        sctx.strokeStyle = "rgba(183,139,255,0.12)";
+        sctx.lineWidth = 1;
+        for (var g = 0; g <= 8; g++) {
+          sctx.beginPath(); sctx.moveTo((S.w / 8) * g, 0); sctx.lineTo((S.w / 8) * g, S.h); sctx.stroke();
+        }
+        var live = analyser && held > 0;
+        if (live) analyser.getFloatTimeDomainData(tdata);
+        var grad = sctx.createLinearGradient(0, 0, S.w, 0);
+        grad.addColorStop(0, "#ff2d95"); grad.addColorStop(0.5, "#b78bff"); grad.addColorStop(1, "#2de2ff");
+        sctx.strokeStyle = grad; sctx.lineWidth = 2.2; sctx.shadowColor = "#ff2d95"; sctx.shadowBlur = 10;
+        sctx.beginPath();
+        var n = live ? tdata.length : 256;
+        for (var i = 0; i < n; i++) {
+          var v = live ? tdata[i] : synthWave(i, n, t0) * 0.55;
+          var x = (i / (n - 1)) * S.w;
+          var y = S.h * 0.5 - v * S.h * 0.38;
+          if (i === 0) sctx.moveTo(x, y); else sctx.lineTo(x, y);
+        }
+        sctx.stroke(); sctx.shadowBlur = 0;
+        xctx.fillStyle = "#07050f";
+        xctx.fillRect(0, 0, X.w, X.h);
+        var cx = X.w / 2, cy = X.h / 2, min = Math.min(X.w, X.h);
+        var ring = min * 0.26;
+        var bars = 96;
+        if (analyser) analyser.getByteFrequencyData(fdata);
+        var bass = 0;
+        for (var b = 0; b < bars; b++) {
+          var bin = Math.floor(Math.pow(b / bars, 1.7) * (fdata.length * 0.45));
+          var mag = analyser && held > 0
+            ? fdata[bin] / 255
+            : 0.18 + 0.12 * Math.sin(t0 * 2 + b * 0.18) + 0.08 * Math.sin(t0 * 0.7 + b * 0.05);
+          if (b < 12) bass += mag;
+          var ang = (b / bars) * Math.PI * 2 - Math.PI / 2;
+          var len = 8 + mag * min * 0.22;
+          var x1 = cx + Math.cos(ang) * ring, y1 = cy + Math.sin(ang) * ring;
+          var x2 = cx + Math.cos(ang) * (ring + len), y2 = cy + Math.sin(ang) * (ring + len);
+          var lg = xctx.createLinearGradient(x1, y1, x2, y2);
+          lg.addColorStop(0, "#2de2ff"); lg.addColorStop(0.5, "#b78bff"); lg.addColorStop(1, "#ff2d95");
+          xctx.strokeStyle = lg; xctx.lineWidth = Math.max(2, min * 0.012);
+          xctx.lineCap = "round"; xctx.shadowColor = "#b78bff"; xctx.shadowBlur = 6 * mag;
+          xctx.beginPath(); xctx.moveTo(x1, y1); xctx.lineTo(x2, y2); xctx.stroke();
+        }
+        xctx.shadowBlur = 0;
+        var core = 0.25 + (bass / 12) * 0.6;
+        var rg = xctx.createRadialGradient(cx, cy, 0, cx, cy, ring * 0.85);
+        rg.addColorStop(0, "rgba(45,226,255," + (0.35 + core * 0.4) + ")");
+        rg.addColorStop(1, "rgba(255,45,149,0)");
+        xctx.fillStyle = rg; xctx.beginPath(); xctx.arc(cx, cy, ring * 0.85, 0, Math.PI * 2); xctx.fill();
+        xctx.fillStyle = "#efe6ff";
+        xctx.font = "11px ui-monospace, Menlo, Courier New, monospace";
+        xctx.textAlign = "center";
+        xctx.fillText("OCT " + octave, cx, cy - 6);
+        xctx.fillText(wave.toUpperCase(), cx, cy + 10);
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(draw);
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(draw);
+      document.addEventListener("pointerdown", function () { ensureAudio(); if (ctx && ctx.resume) ctx.resume(); }, { once: true });
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lumen — ambient light OS</title>
+  <style>
+    :root {
+      --ink: #eef0ff;
+      --ink-62: rgba(238, 240, 255, 0.62);
+      --ink-38: rgba(238, 240, 255, 0.38);
+      --violet: #8b7dff;
+      --teal: #4ee6c7;
+      --rose: #ff7ab6;
+      --amber: #ffc46b;
+      --glass: rgba(255, 255, 255, 0.07);
+      --glass-border: rgba(255, 255, 255, 0.14);
+      --mx: 50%;
+      --my: 50%;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+      color: var(--ink);
+      background: radial-gradient(120% 80% at 50% 110%, #101a48 0%, #070a1c 55%);
+      overflow-x: hidden;
+    }
+    .sky {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background: radial-gradient(90% 70% at 50% 100%, #101a48 0%, #070a1c 62%);
+    }
+    .aurora {
+      position: absolute; inset: -20%;
+      filter: blur(66px);
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+    .aurora-conic {
+      width: 140vmax; height: 140vmax; left: -20%; top: -40%;
+      background: conic-gradient(from 20deg, transparent 0 18%, #8b7dff 22%, transparent 28% 48%, #4ee6c7 54%, transparent 60% 78%, #ff7ab6 84%, transparent 90%);
+      opacity: 0.5;
+      animation: spin-aurora 48s linear infinite;
+    }
+    .aurora-cloud {
+      width: 90vmax; height: 70vmax; left: 10%; top: -10%;
+      background: radial-gradient(ellipse at 40% 50%, #4ee6c7 0%, transparent 55%), radial-gradient(ellipse at 70% 40%, #8b7dff 0%, transparent 50%);
+      opacity: 0.45;
+      animation: cloud-drift 62s ease-in-out infinite alternate, hue-spin 28s linear infinite;
+    }
+    .aurora-streak {
+      width: 160vmax; height: 28vmax; left: -30%; top: 18%;
+      background: linear-gradient(95deg, transparent, #ffc46b 28%, #ff7ab6 62%, transparent);
+      opacity: 0.42;
+      transform: rotate(-12deg);
+      animation: streak-drift 54s ease-in-out infinite alternate;
+    }
+    .stars {
+      position: absolute; inset: 0;
+      background-image:
+        radial-gradient(1.2px 1.2px at 8% 12%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 18% 28%, #fff 50%, transparent 51%),
+        radial-gradient(1.4px 1.4px at 32% 8%, #eef0ff 50%, transparent 51%),
+        radial-gradient(1px 1px at 44% 22%, #fff 50%, transparent 51%),
+        radial-gradient(1.1px 1.1px at 58% 14%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 72% 30%, #fff 50%, transparent 51%),
+        radial-gradient(1.3px 1.3px at 86% 10%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 12% 48%, #fff 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 26% 62%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 41% 54%, #fff 50%, transparent 51%),
+        radial-gradient(1.4px 1.4px at 63% 44%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 78% 58%, #fff 50%, transparent 51%),
+        radial-gradient(1.1px 1.1px at 91% 42%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 6% 78%, #fff 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 22% 88%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 49% 76%, #fff 50%, transparent 51%),
+        radial-gradient(1.3px 1.3px at 67% 84%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 84% 72%, #fff 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 95% 88%, #fff 50%, transparent 51%);
+      animation: twinkle 5.6s ease-in-out infinite;
+      opacity: 0.85;
+    }
+    .grain {
+      position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0.06;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+    }
+    .wrap {
+      position: relative; z-index: 2;
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+    @media (min-width: 1800px) {
+      .wrap { width: min(1480px, calc(100% - 64px)); }
+    }
+    header.nav {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 18px;
+      padding: 22px 0 8px;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px;
+      color: var(--ink); text-decoration: none; font-weight: 600; letter-spacing: -0.02em;
+    }
+    .brand svg { width: 34px; height: 34px; display: block; }
+    .nav-pill {
+      justify-self: center;
+      display: flex; gap: 4px;
+      padding: 6px;
+      background: rgba(255,255,255,0.055);
+      border: 1px solid var(--glass-border);
+      border-radius: 999px;
+      backdrop-filter: blur(20px) saturate(150%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22);
+    }
+    .nav-pill a {
+      color: var(--ink-62);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 8px 16px;
+      border-radius: 999px;
+    }
+    .nav-pill a:hover { color: var(--ink); background: rgba(255,255,255,0.08); }
+    .request {
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 9px 18px;
+      border-radius: 999px;
+      border: 1px solid var(--glass-border);
+      background: rgba(255,255,255,0.055);
+      backdrop-filter: blur(18px) saturate(140%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22);
+    }
+    .request:hover { background: rgba(255,255,255,0.1); }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 48px;
+      align-items: center;
+      padding: 56px 0 80px;
+      min-height: calc(100vh - 88px);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 14px 6px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(18px) saturate(150%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+      font-size: 12px;
+      color: var(--ink-62);
+      letter-spacing: 0.02em;
+    }
+    .led {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--teal);
+      box-shadow: 0 0 10px var(--teal);
+      animation: pulse-led 1.8s ease-in-out infinite;
+    }
+    h1 {
+      margin: 22px 0 18px;
+      font-size: clamp(42px, 6.4vw, 88px);
+      font-weight: 600;
+      letter-spacing: -0.035em;
+      line-height: 0.98;
+    }
+    .shimmer {
+      background: linear-gradient(90deg, #fff, #8b7dff, #4ee6c7, #ff7ab6, #fff);
+      background-size: 220% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: shimmer 7s linear infinite;
+    }
+    .lede {
+      max-width: 42ch;
+      color: var(--ink-62);
+      font-size: 17px;
+      line-height: 1.55;
+      margin-bottom: 28px;
+    }
+    .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+    .btn-primary {
+      position: relative;
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 13px 24px;
+      border: 0; border-radius: 999px;
+      background: linear-gradient(105deg, var(--violet), var(--teal));
+      color: #0b1024;
+      font-weight: 600;
+      font-size: 15px;
+      text-decoration: none;
+      isolation: isolate;
+      transition: transform 0.25s ease;
+    }
+    .btn-primary::after {
+      content: "";
+      position: absolute; inset: -6px;
+      background: linear-gradient(105deg, var(--violet), var(--teal));
+      filter: blur(16px);
+      opacity: 0.45;
+      z-index: -1;
+      border-radius: 999px;
+      transition: opacity 0.25s ease;
+    }
+    .btn-primary:hover { transform: translateY(-2px); }
+    .btn-primary:hover::after { opacity: 0.8; }
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 22px;
+      border-radius: 999px;
+      border: 1px solid var(--glass-border);
+      background: rgba(255,255,255,0.055);
+      color: var(--ink);
+      text-decoration: none;
+      backdrop-filter: blur(20px) saturate(150%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22);
+    }
+    .btn-ghost .arrow { display: inline-block; transition: transform 0.25s ease; }
+    .btn-ghost:hover .arrow { transform: translateX(5px); }
+    .stage {
+      position: relative;
+      min-height: 520px;
+    }
+    .panel {
+      position: absolute;
+      background: rgba(255,255,255,0.075);
+      border: 1px solid var(--glass-border);
+      border-radius: 22px;
+      backdrop-filter: blur(22px) saturate(155%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 20px 50px rgba(4, 8, 28, 0.35);
+      padding: 18px;
+      will-change: transform;
+    }
+    .now-playing { width: 250px; top: 18px; left: 40px; z-index: 3; }
+    .kelvin-card { width: 190px; top: 48px; right: 18px; z-index: 2; }
+    .schedule { width: 230px; bottom: 48px; left: 18px; z-index: 2; }
+    .orb {
+      width: 92px; height: 92px; border-radius: 50%;
+      right: 70px; bottom: 70px; padding: 0;
+      background: radial-gradient(circle at 35% 30%, #fff, var(--teal) 35%, var(--violet) 80%);
+      box-shadow: 0 0 40px rgba(78, 230, 199, 0.45), inset 0 1px 0 rgba(255,255,255,0.4);
+      z-index: 1;
+    }
+    .panel h3 { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: var(--ink-62); }
+    .ring-wrap { display: grid; place-items: center; height: 148px; }
+    .ring {
+      width: 118px; height: 118px; border-radius: 50%;
+      background: conic-gradient(from 0deg, var(--violet), var(--teal), var(--amber), var(--rose), var(--violet));
+      mask: radial-gradient(farthest-side, transparent calc(100% - 10px), #000 calc(100% - 9px));
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 10px), #000 calc(100% - 9px));
+      animation: spin-aurora 18s linear infinite;
+    }
+    .scene-name { text-align: center; font-size: 15px; margin-top: -8px; }
+    .k-value { font-size: 28px; letter-spacing: -0.03em; font-weight: 600; }
+    .k-bar {
+      margin-top: 12px; height: 8px; border-radius: 999px;
+      background: linear-gradient(90deg, #ffc46b, #eef0ff, #8b7dff);
+      position: relative;
+    }
+    .k-thumb {
+      position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%;
+      background: #fff; transform: translate(-50%, -50%);
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.18);
+      left: 38%;
+    }
+    .sched-row { display: flex; justify-content: space-between; font-size: 13px; padding: 7px 0; color: var(--ink-62); border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .sched-row:last-child { border-bottom: 0; }
+    .sched-row strong { color: var(--ink); font-weight: 560; }
+    .ideas { padding: 12px 0 80px; }
+    .ideas h2 { font-size: clamp(26px, 3vw, 36px); letter-spacing: -0.03em; margin-bottom: 22px; }
+    .cards {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px;
+    }
+    .card {
+      position: relative;
+      overflow: hidden;
+      padding: 22px;
+      min-height: 240px;
+      background: rgba(255,255,255,0.065);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      backdrop-filter: blur(20px) saturate(150%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22);
+    }
+    .card::before {
+      content: "";
+      position: absolute; inset: 0;
+      background: radial-gradient(220px 160px at var(--mx) var(--my), rgba(139,125,255,0.22), transparent 70%);
+      pointer-events: none;
+    }
+    .tag {
+      position: absolute; top: 16px; right: 16px;
+      font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-38);
+    }
+    .icon-tile {
+      width: 48px; height: 48px; border-radius: 14px;
+      display: grid; place-items: center;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--glass-border);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22);
+      margin-bottom: 22px;
+      transition: transform 0.35s ease;
+    }
+    .card:hover .icon-tile { transform: translateY(-4px) rotate(-8deg); }
+    .card h3 { font-size: 22px; letter-spacing: -0.03em; margin-bottom: 10px; }
+    .card p { color: var(--ink-62); font-size: 14.5px; line-height: 1.55; }
+    footer {
+      display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+      padding: 22px 0 40px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      color: var(--ink-38); font-size: 12px;
+    }
+    #local-light { color: var(--ink-62); font-variant-numeric: tabular-nums; }
+    @keyframes spin-aurora { to { transform: rotate(360deg); } }
+    @keyframes cloud-drift {
+      from { transform: translate(-4%, 2%) rotate(-6deg); }
+      to { transform: translate(8%, -4%) rotate(10deg); }
+    }
+    @keyframes hue-spin { to { filter: hue-rotate(360deg); } }
+    @keyframes streak-drift {
+      from { transform: rotate(-12deg) translateX(-6%); }
+      to { transform: rotate(-8deg) translateX(8%); }
+    }
+    @keyframes twinkle { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+    @keyframes pulse-led { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+    @keyframes shimmer { to { background-position: 220% 0; } }
+    @media (max-width: 960px) {
+      .hero { grid-template-columns: 1fr; min-height: auto; }
+      .stage { min-height: 480px; }
+    }
+    @media (max-width: 720px) {
+      .cards { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 640px) {
+      .nav-pill { display: none; }
+      header.nav { grid-template-columns: auto auto; }
+      .request { justify-self: end; }
+    }
+    @media (max-width: 520px) {
+      .cards { grid-template-columns: 1fr; }
+      .now-playing { left: 8px; }
+      .kelvin-card { right: 8px; width: 160px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .aurora { opacity: 0.18; animation: none !important; }
+      .stars, .led, .ring, .shimmer, .aurora-conic, .aurora-cloud, .aurora-streak { animation: none !important; }
+      .btn-primary, .btn-ghost .arrow, .icon-tile { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sky" aria-hidden="true">
+    <div class="aurora aurora-conic"></div>
+    <div class="aurora aurora-cloud"></div>
+    <div class="aurora aurora-streak"></div>
+    <div class="stars"></div>
+  </div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="wrap">
+    <header class="nav">
+      <a class="brand" href="#top">
+        <svg viewBox="0 0 34 34" aria-hidden="true">
+          <defs>
+            <radialGradient id="sunCore" cx="42%" cy="38%">
+              <stop offset="0%" stop-color="#fff"/>
+              <stop offset="45%" stop-color="#ffc46b"/>
+              <stop offset="100%" stop-color="#8b7dff"/>
+            </radialGradient>
+          </defs>
+          <circle cx="17" cy="17" r="8" fill="url(#sunCore)"/>
+          <g stroke="#ffc46b" stroke-width="1.6" stroke-linecap="round">
+            <path d="M17 3v4M17 27v4M3 17h4M27 17h4M7.2 7.2l2.8 2.8M24 24l2.8 2.8M7.2 26.8L10 24M24 10l2.8-2.8"/>
+          </g>
+        </svg>
+        Lumen
+      </a>
+      <nav class="nav-pill" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#scenes">Scenes</a>
+        <a href="#hardware">Hardware</a>
+        <a href="#journal">Journal</a>
+      </nav>
+      <a class="request" href="#access">Request access</a>
+    </header>
+    <section class="hero" id="top">
+      <div>
+        <div class="eyebrow"><span class="led" aria-hidden="true"></span> Lumen OS 3 · Now in private beta</div>
+        <h1>Light that <span class="shimmer">listens</span> to the room.</h1>
+        <p class="lede">Lumen — ambient light OS tunes every lamp in a home to the time of day. It reads the hour, the weather at the window, and the quiet of the house, then writes a single colour temperature across the ceiling.</p>
+        <div class="ctas">
+          <a class="btn-primary" href="#access">Join the beta</a>
+          <a class="btn-ghost" href="#features">See how it works <span class="arrow">→</span></a>
+        </div>
+      </div>
+      <div class="stage" id="stage">
+        <article class="panel now-playing" data-depth="18">
+          <h3>Now playing</h3>
+          <div class="ring-wrap"><div class="ring" aria-hidden="true"></div></div>
+          <p class="scene-name">Harbor dusk</p>
+        </article>
+        <article class="panel kelvin-card" data-depth="10">
+          <h3>Colour temperature</h3>
+          <div class="k-value" id="hero-k">3200 K</div>
+          <div class="k-bar"><span class="k-thumb" id="k-thumb"></span></div>
+        </article>
+        <article class="panel schedule" data-depth="14" id="scenes">
+          <h3>Tonight</h3>
+          <div class="sched-row"><span>18:40</span><strong>Harbor dusk</strong></div>
+          <div class="sched-row"><span>21:15</span><strong>Reading amber</strong></div>
+          <div class="sched-row"><span>23:00</span><strong>Night hush</strong></div>
+        </article>
+        <div class="panel orb" data-depth="24" aria-hidden="true"></div>
+      </div>
+    </section>
+    <section class="ideas" id="features">
+      <h2>Three ideas behind Lumen</h2>
+      <div class="cards">
+        <article class="card">
+          <span class="tag">Rhythm</span>
+          <div class="icon-tile">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4ee6c7" stroke-width="1.7"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>
+          </div>
+          <h3>Circadian by default</h3>
+          <p>Lamps follow a cosine of daylight. Warmth arrives at dusk without a switch, and cools again as the house sleeps.</p>
+        </article>
+        <article class="card" id="hardware">
+          <span class="tag">Blend</span>
+          <div class="icon-tile">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8b7dff" stroke-width="1.7"><path d="M4 16c4-8 12-8 16 0"/><path d="M4 8c4 8 12 8 16 0"/></svg>
+          </div>
+          <h3>Scenes that blend</h3>
+          <p>Harbor dusk does not snap to reading amber. Colour and intensity crossfade so the room never notices the seam.</p>
+        </article>
+        <article class="card" id="journal">
+          <span class="tag">Quiet</span>
+          <div class="icon-tile">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff7ab6" stroke-width="1.7"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6M9 13h4"/></svg>
+          </div>
+          <h3>Local silent yours</h3>
+          <p>Schedules live on the hub. No cloud, no voice, no listening. Light that belongs to the walls that hold it.</p>
+        </article>
+      </div>
+    </section>
+    <footer id="access">
+      <span>© Lumen — ambient light OS</span>
+      <span id="local-light">Local light · — K</span>
+    </footer>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    function kelvinFromClock(d) {
+      var h = d.getHours() + d.getMinutes() / 60;
+      var peak = 13;
+      var ang = ((h - peak) / 24) * Math.PI * 2;
+      var c = Math.cos(ang);
+      return Math.round(3750 + 1850 * c);
+    }
+    function init() {
+      var local = qs("#local-light");
+      var heroK = qs("#hero-k");
+      var thumb = qs("#k-thumb");
+      function tickKelvin() {
+        var k = kelvinFromClock(new Date());
+        if (local) local.textContent = "Local light · " + k.toLocaleString("en-US") + " K";
+        if (heroK) heroK.textContent = k + " K";
+        if (thumb) {
+          var t = (k - 1900) / (5600 - 1900);
+          if (t < 0) t = 0;
+          if (t > 1) t = 1;
+          thumb.style.left = (t * 100) + "%";
+        }
+      }
+      tickKelvin();
+      setInterval(tickKelvin, 30000);
+
+      var cards = qsa(".card");
+      cards.forEach(function (card) {
+        card.addEventListener("pointermove", function (e) {
+          var r = card.getBoundingClientRect();
+          card.style.setProperty("--mx", ((e.clientX - r.left) / r.width * 100) + "%");
+          card.style.setProperty("--my", ((e.clientY - r.top) / r.height * 100) + "%");
+        });
+      });
+
+      var reduce = false;
+      if (typeof window.matchMedia === "function") {
+        reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      }
+      var coarse = false;
+      if (typeof window.matchMedia === "function") {
+        coarse = window.matchMedia("(pointer: coarse)").matches;
+      }
+      var panels = qsa("[data-depth]");
+      if (reduce || coarse || !panels.length) return;
+      var tx = 0, ty = 0, cx = 0, cy = 0;
+      window.addEventListener("pointermove", function (e) {
+        var nx = (e.clientX / window.innerWidth) * 2 - 1;
+        var ny = (e.clientY / window.innerHeight) * 2 - 1;
+        tx = nx; ty = ny;
+      });
+      if (typeof window.requestAnimationFrame !== "function") return;
+      function loop() {
+        cx += (tx - cx) * 0.08;
+        cy += (ty - cy) * 0.08;
+        panels.forEach(function (p) {
+          var d = parseFloat(p.getAttribute("data-depth")) || 8;
+          p.style.transform = "translate(" + (cx * d) + "px," + (cy * d) + "px)";
+        });
+        window.requestAnimationFrame(loop);
+      }
+      window.requestAnimationFrame(loop);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>THE HARMONOGRAPH — Victorian Pendulum Drawing Machine</title>
+  <style>
+    :root {
+      --mahog: #2c1810;
+      --brass: #f1d98a;
+      --brass-2: #c9a24a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background:
+        repeating-linear-gradient(90deg, transparent 0 13px, rgba(0,0,0,.08) 13px 14px),
+        radial-gradient(ellipse 90% 40% at 50% 0%, rgba(201,162,74,.18), transparent 55%),
+        linear-gradient(180deg, #2c1810, #26140b 50%, #150a05);
+      color: var(--brass);
+      font-family: Georgia, "Times New Roman", serif;
+      padding: 22px 18px 40px;
+    }
+    header { text-align: center; margin-bottom: 18px; }
+    header h1 {
+      font-size: clamp(22px, 3.4vw, 36px);
+      letter-spacing: 0.18em;
+      color: #f1d98a;
+      text-shadow: 0 2px 0 #150a05, 0 4px 12px rgba(0,0,0,.5);
+    }
+    header .sub {
+      font-style: italic;
+      font-size: 14px;
+      color: #d8c48a;
+      margin-top: 8px;
+    }
+    .orn { display: block; margin: 10px auto 0; }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 22px;
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+    .bed {
+      background: linear-gradient(180deg, #5a3320, #3b1f12 55%, #2a150c);
+      border: 3px solid #c9a24a;
+      border-radius: 6px;
+      padding: 28px;
+      position: relative;
+      box-shadow: inset 0 0 0 4px #6e4f16, 0 18px 40px rgba(0,0,0,.45);
+    }
+    .screw {
+      position: absolute;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #f3d58a, #8a6620 60%, #5a3a0c);
+      box-shadow: 0 1px 2px #000;
+    }
+    .screw::after {
+      content: "";
+      position: absolute;
+      left: 3px; right: 3px; top: 8px; height: 2px;
+      background: #3a2408;
+    }
+    .screw.tl { top: 8px; left: 8px; }
+    .screw.tr { top: 8px; right: 8px; }
+    .screw.bl { bottom: 8px; left: 8px; }
+    .screw.br { bottom: 8px; right: 8px; }
+    .plate-wrap {
+      position: relative;
+      background: radial-gradient(ellipse at 50% 40%, #141720, #07080c);
+      border-radius: 4px;
+      overflow: hidden;
+      aspect-ratio: 1;
+    }
+    canvas { display: block; width: 100%; height: 100%; position: absolute; inset: 0; }
+    #grid { z-index: 1; }
+    #pen { z-index: 2; }
+    #arm { z-index: 3; pointer-events: none; }
+    .readout {
+      position: absolute; top: 10px; right: 12px; z-index: 3;
+      font-family: "Courier New", monospace;
+      font-size: 11px; color: rgba(201,162,74,.7);
+      text-align: right; line-height: 1.45;
+    }
+    .plate-cap {
+      position: absolute; bottom: 8px; left: 0; right: 0; z-index: 3;
+      text-align: center; letter-spacing: .28em; font-size: 10px;
+      color: rgba(201,162,74,.55);
+    }
+    .panel {
+      background: linear-gradient(180deg, #b78f3c, #8a6620 40%, #6e4f16);
+      border-radius: 6px;
+      padding: 12px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,230,160,.4);
+    }
+    .subplate {
+      background: linear-gradient(180deg, #d8c48a, #c2ab68);
+      border: 1px solid #5a3a0c;
+      box-shadow: inset 0 1px 0 rgba(255,255,220,.5);
+      border-radius: 4px;
+      padding: 10px 10px 8px;
+      margin-bottom: 8px;
+      color: #3a2408;
+    }
+    .subplate h2 {
+      font-size: 10px;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      text-shadow: 0 1px 0 rgba(255,240,200,.5);
+      margin-bottom: 6px;
+    }
+    .row { display: grid; grid-template-columns: 42px 1fr 52px; align-items: center; gap: 6px; margin: 4px 0; font-size: 11px; }
+    .row output { font-family: "Courier New", monospace; text-align: right; }
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none;
+      height: 8px; border-radius: 4px;
+      background: #2a150c;
+      box-shadow: inset 0 1px 3px #000;
+      width: 100%;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #f3d58a, #8a6620);
+      border: 1px solid #3a2408; cursor: pointer;
+    }
+    .inks { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+    .ink {
+      width: 22px; height: 22px; border-radius: 50%; border: 2px solid #3a2408;
+      cursor: pointer; padding: 0;
+    }
+    .ink.on { outline: 2px solid #fff6c8; }
+    .ink.rainbow { background: conic-gradient(#8ef7c3, #6fd7ff, #ff7ab8, #ffc46b, #b48bff, #8ef7c3); }
+    .chk { font-size: 12px; display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+    .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+    .btns button, .primary {
+      background: linear-gradient(#4a3018, #2a180c);
+      color: #f1d98a; border: 1px solid #1a0c04;
+      box-shadow: 0 3px 0 #1a0c04, inset 0 1px 0 rgba(255,220,140,.15);
+      padding: 8px 6px; font-family: Georgia, serif; font-size: 11px;
+      letter-spacing: .06em; cursor: pointer;
+    }
+    .primary {
+      grid-column: 1 / -1;
+      background: linear-gradient(#8a1e24, #5a1014);
+      color: #f8e6d0;
+      font-size: 13px; letter-spacing: .12em; text-transform: uppercase;
+    }
+    .eq {
+      font-style: italic; font-size: 11px; color: #3a2408;
+      margin-top: 6px; line-height: 1.4;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .panel { max-width: 520px; margin: 0 auto; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>THE HARMONOGRAPH</h1>
+    <p class="sub">A drawing instrument of coupled, decaying pendulums — patent of the imagination, 1874</p>
+    <svg class="orn" width="120" height="14" viewBox="0 0 120 14" aria-hidden="true">
+      <line x1="4" y1="7" x2="46" y2="7" stroke="#c9a24a" stroke-width="1"/>
+      <polygon points="60,2 66,7 60,12 54,7" fill="none" stroke="#c9a24a"/>
+      <circle cx="74" cy="7" r="1.6" fill="#c9a24a"/>
+      <circle cx="80" cy="7" r="1.6" fill="#c9a24a"/>
+      <line x1="88" y1="7" x2="116" y2="7" stroke="#c9a24a" stroke-width="1"/>
+    </svg>
+  </header>
+  <div class="layout">
+    <div class="bed">
+      <span class="screw tl"></span><span class="screw tr"></span>
+      <span class="screw bl"></span><span class="screw br"></span>
+      <div class="plate-wrap" id="plate">
+        <canvas id="grid"></canvas>
+        <canvas id="pen"></canvas>
+        <canvas id="arm"></canvas>
+        <div class="readout" id="readout">t=0.00<br>f1=3.00 f2=2.00</div>
+        <div class="plate-cap">SMOKED GLASS PLATE · No. 7</div>
+      </div>
+    </div>
+    <aside class="panel">
+      <div class="subplate">
+        <h2>Lateral pendulum</h2>
+        <div class="row"><label>Freq</label><input id="f1" type="range" min="1" max="6" step="0.01" value="3"><output id="o-f1">3.00</output></div>
+        <div class="row"><label>Phase</label><input id="p1" type="range" min="0" max="6.2832" step="0.01" value="0"><output id="o-p1">0.00</output></div>
+        <div class="row"><label>Damp</label><input id="d1" type="range" min="0" max="0.02" step="0.0001" value="0.004"><output id="o-d1">0.0040</output></div>
+        <div class="row"><label>Ampl</label><input id="a1" type="range" min="0" max="1" step="0.01" value="0.92"><output id="o-a1">0.92</output></div>
+      </div>
+      <div class="subplate">
+        <h2>Longitudinal pendulum</h2>
+        <div class="row"><label>Freq</label><input id="f2" type="range" min="1" max="6" step="0.01" value="2"><output id="o-f2">2.00</output></div>
+        <div class="row"><label>Phase</label><input id="p2" type="range" min="0" max="6.2832" step="0.01" value="1.57"><output id="o-p2">1.57</output></div>
+        <div class="row"><label>Damp</label><input id="d2" type="range" min="0" max="0.02" step="0.0001" value="0.004"><output id="o-d2">0.0040</output></div>
+        <div class="row"><label>Ampl</label><input id="a2" type="range" min="0" max="1" step="0.01" value="0.92"><output id="o-a2">0.92</output></div>
+      </div>
+      <div class="subplate">
+        <h2>Rotary table</h2>
+        <label class="chk"><input type="checkbox" id="rot"> Engage rotary table</label>
+        <div class="row"><label>Freq</label><input id="f3" type="range" min="0.2" max="4" step="0.01" value="1"><output id="o-f3">1.00</output></div>
+        <div class="row"><label>Ampl</label><input id="a3" type="range" min="0" max="0.6" step="0.01" value="0.18"><output id="o-a3">0.18</output></div>
+        <div class="row"><label>Damp</label><input id="d3" type="range" min="0" max="0.02" step="0.0001" value="0.003"><output id="o-d3">0.0030</output></div>
+      </div>
+      <div class="subplate">
+        <h2>Ink &amp; motion</h2>
+        <div class="row"><label>Speed</label><input id="spd" type="range" min="1" max="40" step="1" value="12"><output id="o-spd">12×</output></div>
+        <div class="inks" id="inks">
+          <button type="button" class="ink on" data-ink="phos" style="background:#8ef7c3" title="phosphor green"></button>
+          <button type="button" class="ink" data-ink="cyan" style="background:#6fd7ff" title="cyan"></button>
+          <button type="button" class="ink" data-ink="rose" style="background:#ff7ab8" title="rose"></button>
+          <button type="button" class="ink" data-ink="amber" style="background:#ffc46b" title="amber"></button>
+          <button type="button" class="ink" data-ink="violet" style="background:#b48bff" title="violet"></button>
+          <button type="button" class="ink" data-ink="ivory" style="background:#f2e9d2" title="ivory"></button>
+          <button type="button" class="ink rainbow" data-ink="rainbow" title="hue shifts over time"></button>
+        </div>
+        <div class="btns">
+          <button type="button" class="primary" id="btnDraw">Lower pen &amp; draw</button>
+          <button type="button" id="btnLift">Lift pen</button>
+          <button type="button" id="btnReplay">Replay</button>
+          <button type="button" id="btnRand">Randomize</button>
+          <button type="button" id="btnClear">Clear plate</button>
+          <button type="button" id="btnExport">Export PNG</button>
+        </div>
+        <p class="eq">x(t) = Σ Aᵢ sin(fᵢt + φᵢ)·e^(−dᵢt)</p>
+      </div>
+    </aside>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    function init() {
+      var plate = qs("#plate");
+      var cGrid = qs("#grid");
+      var cPen = qs("#pen");
+      var cArm = qs("#arm");
+      if (!plate || !cGrid || !cPen) return;
+      var gctx = cGrid.getContext("2d");
+      var pctx = cPen.getContext("2d");
+      if (!gctx || !pctx) return;
+      var actx = cArm ? cArm.getContext("2d") : null;
+      var ids = ["f1","p1","d1","a1","f2","p2","d2","a2","f3","a3","d3","spd"];
+      var el = {};
+      ids.forEach(function (id) { el[id] = qs("#" + id); });
+      var rot = qs("#rot");
+      var readout = qs("#readout");
+      var reduced = false;
+      if (typeof window.matchMedia === "function") {
+        try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e1) {}
+      }
+      if (reduced && el.spd) el.spd.value = "40";
+      var INKS = {
+        phos: [142,247,195], cyan: [111,215,255], rose: [255,122,184],
+        amber: [255,196,107], violet: [180,139,255], ivory: [242,233,210]
+      };
+      var inkKey = "phos";
+      var drawing = false;
+      var t = 0;
+      var last = 0;
+      var px = 0; var py = 0; var hasPrev = false;
+      var history = [];
+      var currentTrace = null;
+      var lastParams = null;
+      var W = 0; var H = 0; var dpr = 1;
+      var DT = 0.012;
+      var TMAX = 260;
+      function val(id, fallback) {
+        var n = el[id] ? parseFloat(el[id].value) : fallback;
+        return isNaN(n) ? fallback : n;
+      }
+      function params() {
+        return {
+          f1: val("f1", 3), p1: val("p1", 0), d1: val("d1", 0.004), a1: val("a1", 0.92),
+          f2: val("f2", 2), p2: val("p2", 1.57), d2: val("d2", 0.004), a2: val("a2", 0.92),
+          f3: val("f3", 1), a3: val("a3", 0.18), d3: val("d3", 0.003),
+          rot: !!(rot && rot.checked),
+          ink: inkKey,
+          spd: val("spd", 12)
+        };
+      }
+      function posAt(pr, tt) {
+        var x = pr.a1 * Math.sin(pr.f1 * tt + pr.p1) * Math.exp(-pr.d1 * tt);
+        var y = pr.a2 * Math.sin(pr.f2 * tt + pr.p2) * Math.exp(-pr.d2 * tt);
+        if (pr.rot) {
+          var e = Math.exp(-pr.d3 * tt);
+          x += pr.a3 * e * Math.cos(pr.f3 * tt);
+          y += pr.a3 * e * Math.sin(pr.f3 * tt);
+        }
+        var amp = pr.a1 + pr.a2 + (pr.rot ? pr.a3 : 0) + 0.08;
+        var sc = Math.min(W, H) * 0.42 / amp;
+        return { x: W / 2 + x * sc, y: H / 2 + y * sc };
+      }
+      function inkRgb(pr, tt) {
+        if (pr.ink === "rainbow") {
+          var h = (tt * 8) % 360;
+          var c = 0.55, x = c * (1 - Math.abs((h / 60) % 2 - 1));
+          var r = 0, g = 0, b = 0;
+          if (h < 60) { r = c; g = x; }
+          else if (h < 120) { r = x; g = c; }
+          else if (h < 180) { g = c; b = x; }
+          else if (h < 240) { g = x; b = c; }
+          else if (h < 300) { r = x; b = c; }
+          else { r = c; b = x; }
+          return [Math.round((r + 0.45) * 255), Math.round((g + 0.45) * 255), Math.round((b + 0.45) * 255)];
+        }
+        return INKS[pr.ink] || INKS.phos;
+      }
+      function strokeSeg(ctx, x0, y0, x1, y1, rgb) {
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.strokeStyle = "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ",0.35)";
+        ctx.lineWidth = 2.6;
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+        ctx.strokeStyle = "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ",0.9)";
+        ctx.lineWidth = 0.7;
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+        ctx.restore();
+      }
+      function drawGraticule() {
+        gctx.setTransform(1, 0, 0, 1, 0, 0);
+        gctx.clearRect(0, 0, cGrid.width, cGrid.height);
+        gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        var cx = W / 2, cy = H / 2, m = Math.min(W, H);
+        gctx.strokeStyle = "rgba(201,162,74,0.08)";
+        gctx.lineWidth = 1;
+        [0.18, 0.32, 0.46, 0.6].forEach(function (k) {
+          gctx.beginPath(); gctx.arc(cx, cy, m * k * 0.5, 0, Math.PI * 2); gctx.stroke();
+        });
+        gctx.beginPath();
+        gctx.moveTo(cx - m * 0.42, cy); gctx.lineTo(cx + m * 0.42, cy);
+        gctx.moveTo(cx, cy - m * 0.42); gctx.lineTo(cx, cy + m * 0.42);
+        gctx.stroke();
+      }
+      function redrawHistory() {
+        pctx.setTransform(1, 0, 0, 1, 0, 0);
+        pctx.clearRect(0, 0, cPen.width, cPen.height);
+        pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        history.forEach(function (tr) { replayTrace(tr, true); });
+      }
+      function replayTrace(tr, silent) {
+        if (!tr || !tr.pr) return;
+        var tt = 0, prev = null;
+        while (tt <= tr.endT) {
+          var p = posAt(tr.pr, tt);
+          if (prev) strokeSeg(pctx, prev.x, prev.y, p.x, p.y, inkRgb(tr.pr, tt));
+          prev = p;
+          tt += DT * 4;
+        }
+        if (!silent && readout) readout.innerHTML = "replay t=" + tr.endT.toFixed(2);
+      }
+      function resize() {
+        var r = plate.getBoundingClientRect();
+        dpr = window.devicePixelRatio || 1;
+        W = Math.max(1, r.width);
+        H = Math.max(1, r.height);
+        [cGrid, cPen, cArm].forEach(function (c) {
+          if (!c) return;
+          c.width = Math.floor(W * dpr);
+          c.height = Math.floor(H * dpr);
+        });
+        drawGraticule();
+        redrawHistory();
+        if (currentTrace && currentTrace.pts) {
+          var i, prev = null;
+          for (i = 0; i < currentTrace.pts.length; i++) {
+            var pt = currentTrace.pts[i];
+            if (prev) strokeSeg(pctx, prev.x, prev.y, pt.x, pt.y, inkRgb(currentTrace.pr, pt.t));
+            prev = pt;
+          }
+        }
+      }
+      function startDraw(fromReplay) {
+        var pr = fromReplay && lastParams ? lastParams : params();
+        lastParams = pr;
+        t = 0; hasPrev = false; drawing = true;
+        currentTrace = { pr: pr, endT: 0, pts: [] };
+        last = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+      }
+      function stopDraw() {
+        drawing = false;
+        if (currentTrace) {
+          currentTrace.endT = t;
+          history.push({ pr: currentTrace.pr, endT: t });
+          currentTrace = null;
+        }
+      }
+      function frame(now) {
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+        if (!drawing) return;
+        var dtms = Math.min(48, now - last);
+        last = now;
+        var steps = Math.max(1, Math.floor((dtms / 16.6) * val("spd", 12)));
+        var pr = currentTrace.pr;
+        var i;
+        for (i = 0; i < steps; i++) {
+          t += DT;
+          if (t > TMAX) { stopDraw(); break; }
+          var p = posAt(pr, t);
+          if (hasPrev) strokeSeg(pctx, px, py, p.x, p.y, inkRgb(pr, t));
+          px = p.x; py = p.y; hasPrev = true;
+          if (currentTrace.pts.length < 8000 && i % 4 === 0) currentTrace.pts.push({ x: p.x, y: p.y, t: t });
+        }
+        if (readout) {
+          readout.innerHTML = "t=" + t.toFixed(2) + "<br>f1=" + pr.f1.toFixed(2) + " f2=" + pr.f2.toFixed(2);
+        }
+        drawPenArm(px, py);
+      }
+      function drawPenArm(x, y) {
+        if (!actx || !cArm) return;
+        actx.setTransform(1, 0, 0, 1, 0, 0);
+        actx.clearRect(0, 0, cArm.width, cArm.height);
+        actx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (!hasPrev) return;
+        actx.strokeStyle = "rgba(201,162,74,0.55)";
+        actx.lineWidth = 1.2;
+        actx.beginPath();
+        actx.moveTo(x, y);
+        actx.lineTo(W + 8, -8);
+        actx.stroke();
+        actx.shadowColor = "#fff";
+        actx.shadowBlur = 12;
+        actx.fillStyle = "#fff";
+        actx.beginPath();
+        actx.arc(x, y, 3.2, 0, Math.PI * 2);
+        actx.fill();
+        actx.shadowBlur = 0;
+      }
+      function bindOutputs() {
+        ids.forEach(function (id) {
+          var inp = el[id];
+          var out = qs("#o-" + id);
+          if (!inp) return;
+          function sync() {
+            if (!out) return;
+            var n = parseFloat(inp.value);
+            if (id === "spd") out.textContent = Math.round(n) + "×";
+            else if (id.charAt(0) === "d") out.textContent = n.toFixed(4);
+            else out.textContent = n.toFixed(2);
+          }
+          inp.addEventListener("input", sync);
+          sync();
+        });
+      }
+      bindOutputs();
+      qsa(".ink").forEach(function (b) {
+        b.addEventListener("click", function () {
+          inkKey = b.getAttribute("data-ink") || "phos";
+          qsa(".ink").forEach(function (x) { x.classList.remove("on"); });
+          b.classList.add("on");
+        });
+      });
+      var btnDraw = qs("#btnDraw");
+      var btnLift = qs("#btnLift");
+      var btnReplay = qs("#btnReplay");
+      var btnRand = qs("#btnRand");
+      var btnClear = qs("#btnClear");
+      var btnExport = qs("#btnExport");
+      if (btnDraw) btnDraw.addEventListener("click", function () { startDraw(false); });
+      if (btnLift) btnLift.addEventListener("click", function () { if (drawing) stopDraw(); });
+      if (btnReplay) btnReplay.addEventListener("click", function () {
+        if (drawing) stopDraw();
+        startDraw(true);
+      });
+      if (btnClear) btnClear.addEventListener("click", function () {
+        drawing = false; currentTrace = null; history = [];
+        pctx.setTransform(1, 0, 0, 1, 0, 0);
+        pctx.clearRect(0, 0, cPen.width, cPen.height);
+        pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      });
+      if (btnExport) btnExport.addEventListener("click", function () {
+        var a = document.createElement("a");
+        a.href = cPen.toDataURL("image/png");
+        a.download = "harmonograph-plate.png";
+        a.click();
+      });
+      var ratios = [[3,2],[4,3],[5,3],[5,4],[3,1],[7,5],[8,5],[9,7]];
+      if (btnRand) btnRand.addEventListener("click", function () {
+        var r = ratios[Math.floor(Math.random() * ratios.length)];
+        var base = 1.2 + Math.random() * 1.4;
+        if (el.f1) el.f1.value = (r[0] * base * (1 + (Math.random() - 0.5) * 0.03)).toFixed(2);
+        if (el.f2) el.f2.value = (r[1] * base * (1 + (Math.random() - 0.5) * 0.03)).toFixed(2);
+        if (el.p1) el.p1.value = (Math.random() * Math.PI * 2).toFixed(2);
+        if (el.p2) el.p2.value = (Math.random() * Math.PI * 2).toFixed(2);
+        if (el.d1) el.d1.value = (0.002 + Math.random() * 0.006).toFixed(4);
+        if (el.d2) el.d2.value = (0.002 + Math.random() * 0.006).toFixed(4);
+        if (rot) rot.checked = Math.random() > 0.45;
+        var keys = Object.keys(INKS).concat(["rainbow"]);
+        inkKey = keys[Math.floor(Math.random() * keys.length)];
+        qsa(".ink").forEach(function (x) {
+          if (x.getAttribute("data-ink") === inkKey) x.classList.add("on");
+          else x.classList.remove("on");
+        });
+        ids.forEach(function (id) {
+          var inp = el[id]; var out = qs("#o-" + id);
+          if (inp && out) {
+            var n = parseFloat(inp.value);
+            if (id === "spd") out.textContent = Math.round(n) + "×";
+            else if (id.charAt(0) === "d") out.textContent = n.toFixed(4);
+            else out.textContent = n.toFixed(2);
+          }
+        });
+        drawing = false; currentTrace = null; history = [];
+        pctx.setTransform(1, 0, 0, 1, 0, 0);
+        pctx.clearRect(0, 0, cPen.width, cPen.height);
+        pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        startDraw(false);
+      });
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === " " || ev.code === "Space") {
+          ev.preventDefault();
+          if (drawing) stopDraw(); else startDraw(false);
+        }
+        if (ev.key === "r" || ev.key === "R") { if (btnRand) btnRand.click(); }
+        if (ev.key === "c" || ev.key === "C") { if (btnClear) btnClear.click(); }
+      });
+      window.addEventListener("resize", resize);
+      resize();
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

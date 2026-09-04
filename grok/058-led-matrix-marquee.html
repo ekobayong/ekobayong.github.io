@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DOTMATRIX-7 // Marquee controller</title>
+  <style>
+    :root {
+      --bg: #0c0d0f;
+      --text: #c9ced4;
+      --dim: #6f777f;
+      --panel: #171a1e;
+      --panel2: #1f2328;
+      --line: #2c3238;
+      --accent: #ffb000;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse 80% 40% at 50% 0%, rgba(255,176,0,0.10), transparent 55%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0 1px, transparent 1px 4px),
+        #0c0d0f;
+      color: var(--text);
+      font-family: "Courier New", ui-monospace, monospace;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      padding: 28px 18px 40px;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; }
+    header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px;
+    }
+    h1 { font-size: clamp(16px, 2.4vw, 22px); font-weight: 400; }
+    .link {
+      width: 10px; height: 10px; border-radius: 50%; background: #39ff5a;
+      box-shadow: 0 0 10px #39ff5a; animation: blink 1.2s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0.2; } }
+    .bezel {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.12), transparent 40%, rgba(0,0,0,0.25)),
+        repeating-linear-gradient(90deg, #3a3e44 0 5px, #2f3338 5px 10px, #34383e 10px 15px, #2b2f34 15px 20px);
+      padding: 22px 22px 16px;
+      box-shadow: 0 22px 40px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.2);
+      position: relative;
+    }
+    .screw {
+      position: absolute; width: 14px; height: 14px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #d0d4da, #6a7078 70%);
+    }
+    .screw::before, .screw::after {
+      content: ""; position: absolute; left: 50%; top: 50%; width: 10px; height: 1px; background: #2a2e32;
+    }
+    .screw::before { transform: translate(-50%, -50%) rotate(var(--r, 20deg)); }
+    .screw::after { transform: translate(-50%, -50%) rotate(calc(var(--r, 20deg) + 90deg)); }
+    .s1 { top: 8px; left: 8px; --r: 18deg; }
+    .s2 { top: 8px; right: 8px; --r: 55deg; }
+    .s3 { bottom: 8px; left: 8px; --r: 8deg; }
+    .s4 { bottom: 8px; right: 8px; --r: 70deg; }
+    .glass {
+      background: #050607;
+      box-shadow: inset 0 0 24px rgba(0,0,0,0.9), inset 0 0 0 2px #111;
+      position: relative; overflow: hidden;
+    }
+    .glass::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(125deg, rgba(255,255,255,0.08), transparent 42%);
+    }
+    canvas { display: block; width: 100%; height: auto; }
+    .plate {
+      font-size: 10px; color: var(--dim); letter-spacing: 0.22em; margin: 8px 0 18px; text-align: center;
+    }
+    .console {
+      display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px;
+      margin: 8px 0 18px;
+    }
+    .card {
+      background: linear-gradient(#171a1e, #1f2328);
+      border: 1px solid var(--line); padding: 14px;
+    }
+    .card h2 { font-size: 11px; color: var(--dim); margin-bottom: 10px; font-weight: 400; }
+    label { display: block; font-size: 10px; color: var(--dim); margin-bottom: 6px; }
+    input[type="text"] {
+      width: 100%; background: #0e1013; color: var(--text); border: 1px solid var(--line);
+      padding: 8px; font: inherit; letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .count { float: right; color: var(--accent); }
+    .modes { display: flex; gap: 12px; position: relative; }
+    .modes button {
+      background: none; border: 0; color: var(--dim); font: inherit; cursor: pointer; padding: 6px 0;
+    }
+    .modes button.on { color: var(--text); }
+    .modes .ul {
+      position: absolute; bottom: 0; height: 2px; background: var(--accent); width: 48px; left: 0;
+      transition: left 220ms ease, width 220ms ease;
+    }
+    .swatches { display: flex; gap: 10px; }
+    .sw {
+      width: 28px; height: 28px; border-radius: 50%; border: 2px solid #2c3238; cursor: pointer;
+      box-shadow: inset 0 -4px 6px rgba(0,0,0,0.4), 0 0 0 0 var(--accent);
+    }
+    .sw.on { box-shadow: 0 0 12px var(--c), inset 0 -4px 6px rgba(0,0,0,0.3); border-color: var(--c); }
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none; width: 100%; height: 6px;
+      background: #0e1013; border: 1px solid var(--line); outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px; background: linear-gradient(#8a9098, #3a3e44);
+      border: 1px solid #c9ced4; cursor: pointer; border-radius: 2px;
+    }
+    .pixels {
+      font-size: 12px; line-height: 1.6; color: var(--text);
+    }
+    .pixels b { color: var(--accent); }
+    .clock-bezel { max-width: 520px; margin: 0 auto; }
+    footer { text-align: center; color: var(--dim); font-size: 10px; margin-top: 18px; }
+    @media (max-width: 800px) { .console { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) {
+      .link { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>DOTMATRIX-7 // Marquee controller</h1>
+      <span class="link" id="link" title="Link"></span>
+    </header>
+    <div class="bezel">
+      <span class="screw s1"></span><span class="screw s2"></span>
+      <span class="screw s3"></span><span class="screw s4"></span>
+      <div class="glass"><canvas id="main" height="140"></canvas></div>
+    </div>
+    <p class="plate">Display A · matrix</p>
+    <div class="console">
+      <div class="card">
+        <h2>Message</h2>
+        <label>Text <span class="count" id="ch">0 CH</span></label>
+        <input type="text" id="msg" maxlength="120" value="DOTMATRIX-7  HELLO WORLD">
+        <div class="modes" id="modes" style="margin-top:12px">
+          <button type="button" data-m="scroll" class="on">Scroll</button>
+          <button type="button" data-m="static">Static</button>
+          <button type="button" data-m="bounce">Bounce</button>
+          <span class="ul" id="ul"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Colour / speed</h2>
+        <label>LED colour</label>
+        <div class="swatches" id="swatches">
+          <button type="button" class="sw on" data-c="#ffb000" style="--c:#ffb000;background:#ffb000" aria-label="amber"></button>
+          <button type="button" class="sw" data-c="#ff2a1a" style="--c:#ff2a1a;background:#ff2a1a" aria-label="red"></button>
+          <button type="button" class="sw" data-c="#39ff5a" style="--c:#39ff5a;background:#39ff5a" aria-label="green"></button>
+          <button type="button" class="sw" data-c="#29e6ff" style="--c:#29e6ff;background:#29e6ff" aria-label="cyan"></button>
+          <button type="button" class="sw" data-c="#f4f4ff" style="--c:#f4f4ff;background:#f4f4ff" aria-label="white"></button>
+        </div>
+        <label style="margin-top:12px">Speed <span id="spdLab">40</span> col/s</label>
+        <input type="range" id="speed" min="5" max="120" value="40">
+        <label style="margin-top:10px">Pixel size <span id="pixLab">12</span> px</label>
+        <input type="range" id="pitch" min="7" max="26" value="12">
+      </div>
+      <div class="card">
+        <h2>PIXELS</h2>
+        <div class="pixels" id="pixels">LIT 0<br>TOTAL 0<br>GRID 0 × 11</div>
+      </div>
+    </div>
+    <div class="bezel clock-bezel">
+      <span class="screw s1"></span><span class="screw s2"></span>
+      <span class="screw s3"></span><span class="screw s4"></span>
+      <div class="glass"><canvas id="clock" height="80"></canvas></div>
+    </div>
+    <p class="plate">Display B · local time</p>
+    <footer>SN 7-4418-A · DOTMATRIX-7 · firmware 1.06</footer>
+  </div>
+  <script>
+(function () {
+  "use strict";
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  function qs(sel, root) {
+    try { return (root || document).querySelector(sel); } catch (e) { return null; }
+  }
+  var FONT = {
+    "A": [0x0e,0x11,0x11,0x1f,0x11,0x11,0x11],
+    "B": [0x1e,0x11,0x11,0x1e,0x11,0x11,0x1e],
+    "C": [0x0e,0x11,0x10,0x10,0x10,0x11,0x0e],
+    "D": [0x1e,0x11,0x11,0x11,0x11,0x11,0x1e],
+    "E": [0x1f,0x10,0x10,0x1e,0x10,0x10,0x1f],
+    "F": [0x1f,0x10,0x10,0x1e,0x10,0x10,0x10],
+    "G": [0x0e,0x11,0x10,0x13,0x11,0x11,0x0e],
+    "H": [0x11,0x11,0x11,0x1f,0x11,0x11,0x11],
+    "I": [0x0e,0x04,0x04,0x04,0x04,0x04,0x0e],
+    "J": [0x07,0x01,0x01,0x01,0x11,0x11,0x0e],
+    "K": [0x11,0x12,0x14,0x18,0x14,0x12,0x11],
+    "L": [0x10,0x10,0x10,0x10,0x10,0x10,0x1f],
+    "M": [0x11,0x1b,0x15,0x15,0x11,0x11,0x11],
+    "N": [0x11,0x19,0x15,0x13,0x11,0x11,0x11],
+    "O": [0x0e,0x11,0x11,0x11,0x11,0x11,0x0e],
+    "P": [0x1e,0x11,0x11,0x1e,0x10,0x10,0x10],
+    "Q": [0x0e,0x11,0x11,0x11,0x15,0x12,0x0d],
+    "R": [0x1e,0x11,0x11,0x1e,0x14,0x12,0x11],
+    "S": [0x0e,0x11,0x10,0x0e,0x01,0x11,0x0e],
+    "T": [0x1f,0x04,0x04,0x04,0x04,0x04,0x04],
+    "U": [0x11,0x11,0x11,0x11,0x11,0x11,0x0e],
+    "V": [0x11,0x11,0x11,0x11,0x11,0x0a,0x04],
+    "W": [0x11,0x11,0x11,0x15,0x15,0x1b,0x11],
+    "X": [0x11,0x11,0x0a,0x04,0x0a,0x11,0x11],
+    "Y": [0x11,0x11,0x0a,0x04,0x04,0x04,0x04],
+    "Z": [0x1f,0x01,0x02,0x04,0x08,0x10,0x1f],
+    "0": [0x0e,0x11,0x13,0x15,0x19,0x11,0x0e],
+    "1": [0x04,0x0c,0x04,0x04,0x04,0x04,0x0e],
+    "2": [0x0e,0x11,0x01,0x06,0x08,0x10,0x1f],
+    "3": [0x0e,0x11,0x01,0x06,0x01,0x11,0x0e],
+    "4": [0x02,0x06,0x0a,0x12,0x1f,0x02,0x02],
+    "5": [0x1f,0x10,0x1e,0x01,0x01,0x11,0x0e],
+    "6": [0x06,0x08,0x10,0x1e,0x11,0x11,0x0e],
+    "7": [0x1f,0x01,0x02,0x04,0x08,0x08,0x08],
+    "8": [0x0e,0x11,0x11,0x0e,0x11,0x11,0x0e],
+    "9": [0x0e,0x11,0x11,0x0f,0x01,0x02,0x0c],
+    " ": [0,0,0,0,0,0,0],
+    ".": [0,0,0,0,0,0x04,0x04],
+    ",": [0,0,0,0,0x04,0x04,0x08],
+    "!": [0x04,0x04,0x04,0x04,0x04,0,0x04],
+    "?": [0x0e,0x11,0x01,0x06,0x04,0,0x04],
+    "'": [0x04,0x04,0x08,0,0,0,0],
+    "\"": [0x0a,0x0a,0,0,0,0,0],
+    "-": [0,0,0,0x1f,0,0,0],
+    "_": [0,0,0,0,0,0,0x1f],
+    ":": [0,0x04,0,0,0,0x04,0],
+    ";": [0,0x04,0,0,0x04,0x04,0x08],
+    "/": [0x01,0x02,0x04,0x04,0x08,0x10,0x10],
+    "&": [0x0c,0x12,0x0c,0x15,0x12,0x11,0x0d],
+    "+": [0,0x04,0x04,0x1f,0x04,0x04,0],
+    "=": [0,0,0x1f,0,0x1f,0,0],
+    "(": [0x02,0x04,0x08,0x08,0x08,0x04,0x02],
+    ")": [0x08,0x04,0x02,0x02,0x02,0x04,0x08],
+    "#": [0x0a,0x1f,0x0a,0x0a,0x1f,0x0a,0],
+    "$": [0x04,0x0f,0x14,0x0e,0x05,0x1e,0x04],
+    "%": [0x19,0x1a,0x02,0x04,0x08,0x13,0x13],
+    "@": [0x0e,0x11,0x17,0x15,0x17,0x10,0x0e],
+    "*": [0x04,0x15,0x0e,0x04,0x0e,0x15,0x04],
+    "<": [0x02,0x04,0x08,0x10,0x08,0x04,0x02],
+    ">": [0x08,0x04,0x02,0x01,0x02,0x04,0x08],
+    "♥": [0x0a,0x1f,0x1f,0x1f,0x0e,0x04,0]
+  };
+  FONT["<3"] = FONT["♥"];
+  function glyphCols(ch) {
+    var rows = FONT[ch] || FONT[ch.toUpperCase()] || [0x1f,0x11,0x11,0x11,0x11,0x11,0x1f];
+    var cols = [0,0,0,0,0];
+    var r, c;
+    for (c = 0; c < 5; c++) {
+      var mask = 0;
+      for (r = 0; r < 7; r++) {
+        if (rows[r] & (1 << (4 - c))) mask |= (1 << r);
+      }
+      cols[c] = mask;
+    }
+    return cols;
+  }
+  function raster(text) {
+    var cols = [], i, g, c;
+    text = String(text || "").toUpperCase();
+    for (i = 0; i < text.length; i++) {
+      if (text.charAt(i) === "<" && text.charAt(i + 1) === "3") {
+        g = glyphCols("♥"); i++;
+      } else g = glyphCols(text.charAt(i));
+      for (c = 0; c < 5; c++) cols.push(g[c]);
+      cols.push(0);
+    }
+    return cols;
+  }
+  function init() {
+    var main = qs("#main"), clock = qs("#clock");
+    var msg = qs("#msg"), ch = qs("#ch"), modes = qs("#modes"), ul = qs("#ul");
+    var speed = qs("#speed"), pitch = qs("#pitch"), pixels = qs("#pixels");
+    var spdLab = qs("#spdLab"), pixLab = qs("#pixLab");
+    var swatches = qs("#swatches");
+    if (!main || !clock) return;
+    var mctx = main.getContext("2d");
+    var cctx = clock.getContext("2d");
+    if (!mctx || !cctx) return;
+    var reduced = false;
+    if (typeof window.matchMedia === "function") {
+      try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+    }
+    var color = "#ffb000";
+    var mode = "scroll";
+    var offset = 0;
+    var bounceDir = 1;
+    var last = performance.now();
+    var litCount = 0, cols = 0, pitchPx = 12;
+    var columns = raster(msg ? msg.value : "DOTMATRIX-7");
+
+    function hexRgb(h) {
+      h = h.replace("#", "");
+      return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+    }
+    function fit(cv, p) {
+      var w = cv.parentElement ? cv.parentElement.clientWidth : 800;
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var rows = 11;
+      var n = Math.max(16, Math.floor(w / p));
+      cv.width = Math.floor(n * p * dpr);
+      cv.height = Math.floor(rows * p * dpr);
+      cv.style.width = (n * p) + "px";
+      cv.style.height = (rows * p) + "px";
+      return { n: n, dpr: dpr, p: p, rows: rows };
+    }
+    function led(ctx, x, y, p, on, rgb, dpr) {
+      var cx = (x + 0.5) * p * dpr, cy = (y + 0.5) * p * dpr, r = p * dpr * 0.38;
+      if (!on) {
+        ctx.fillStyle = "#171a1e";
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+        return;
+      }
+      ctx.fillStyle = "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ",0.16)";
+      ctx.beginPath(); ctx.arc(cx, cy, r * 1.55, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "rgb(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ")";
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.beginPath(); ctx.arc(cx - r * 0.35, cy - r * 0.35, r * 0.22, 0, Math.PI * 2); ctx.fill();
+    }
+    function colAt(src, i) {
+      if (!src.length) return 0;
+      if (i < 0 || i >= src.length) return 0;
+      return src[i];
+    }
+    function drawGrid(ctx, geo, src, off, centerIfShort) {
+      var rgb = hexRgb(color);
+      var r, c, lit = 0;
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.fillStyle = "#050607";
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      var start = Math.floor(off);
+      var padTop = 2;
+      for (c = 0; c < geo.n; c++) {
+        var ci = start + c;
+        var bits = 0;
+        if (centerIfShort && src.length <= geo.n) {
+          var left = Math.floor((geo.n - src.length) / 2);
+          bits = (c >= left && c < left + src.length) ? src[c - left] : 0;
+        } else {
+          bits = colAt(src, ci);
+        }
+        for (r = 0; r < 7; r++) {
+          var on = !!(bits & (1 << r));
+          if (on) lit++;
+          led(ctx, c, r + padTop, geo.p, on, rgb, geo.dpr);
+        }
+        for (r = 0; r < padTop; r++) led(ctx, c, r, geo.p, false, rgb, geo.dpr);
+        for (r = 9; r < 11; r++) led(ctx, c, r, geo.p, false, rgb, geo.dpr);
+      }
+      return lit;
+    }
+
+    function loop(now) {
+      var dt = Math.min(0.05, (now - last) / 1000 || 0.016);
+      last = now;
+      pitchPx = pitch ? parseFloat(pitch.value) : 12;
+      var spd = speed ? parseFloat(speed.value) : 40;
+      if (reduced) spd /= 3;
+      var geo = fit(main, pitchPx);
+      cols = geo.n;
+      var src = columns;
+      var gap = 8;
+      var loopW = src.length + gap;
+      if (mode === "scroll") {
+        offset += spd * dt;
+        if (loopW > 0) offset = offset % loopW;
+        var tiled = src.concat([0,0,0,0,0,0,0,0]).concat(src);
+        litCount = drawGrid(mctx, geo, tiled, offset, false);
+      } else if (mode === "static") {
+        if (src.length > geo.n) {
+          var mid = Math.max(0, Math.floor((src.length - geo.n) / 2));
+          litCount = drawGrid(mctx, geo, src, mid, false);
+        } else litCount = drawGrid(mctx, geo, src, 0, true);
+      } else {
+        var maxOff = Math.max(0, src.length - geo.n);
+        offset += bounceDir * spd * dt;
+        if (offset >= maxOff) { offset = maxOff; bounceDir = -1; }
+        if (offset <= 0) { offset = 0; bounceDir = 1; }
+        if (src.length <= geo.n) litCount = drawGrid(mctx, geo, src, 0, true);
+        else litCount = drawGrid(mctx, geo, src, offset, false);
+      }
+      var cgeo = fit(clock, Math.max(7, pitchPx * 0.72));
+      var d = new Date();
+      var hh = String(d.getHours()).padStart(2, "0");
+      var mm = String(d.getMinutes()).padStart(2, "0");
+      var ss = String(d.getSeconds()).padStart(2, "0");
+      var colon = (reduced || d.getMilliseconds() < 500) ? ":" : " ";
+      var tcols = raster(hh + colon + mm + colon + ss);
+      drawGrid(cctx, cgeo, tcols, 0, true);
+      if (pixels && now % 250 < 20) {
+        pixels.innerHTML = "LIT <b>" + litCount + "</b><br>TOTAL " + (geo.n * 11) + "<br>GRID " + geo.n + " × 11";
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+    }
+
+    function layoutUl() {
+      if (!modes || !ul) return;
+      var on = qs("button.on", modes);
+      if (!on) return;
+      ul.style.left = on.offsetLeft + "px";
+      ul.style.width = on.offsetWidth + "px";
+    }
+    if (msg && ch) {
+      function upd() {
+        ch.textContent = msg.value.length + " CH";
+        columns = raster(msg.value);
+        offset = 0;
+      }
+      msg.addEventListener("input", upd);
+      upd();
+    }
+    if (modes) {
+      modes.addEventListener("click", function (e) {
+        var b = e.target.closest("button");
+        if (!b) return;
+        mode = b.getAttribute("data-m") || "scroll";
+        var bs = modes.querySelectorAll("button");
+        var i;
+        for (i = 0; i < bs.length; i++) bs[i].classList.toggle("on", bs[i] === b);
+        offset = 0; bounceDir = 1;
+        layoutUl();
+      });
+      layoutUl();
+    }
+    if (swatches) {
+      swatches.addEventListener("click", function (e) {
+        var b = e.target.closest(".sw");
+        if (!b) return;
+        color = b.getAttribute("data-c") || "#ffb000";
+        document.documentElement.style.setProperty("--accent", color);
+        var bs = swatches.querySelectorAll(".sw");
+        var i;
+        for (i = 0; i < bs.length; i++) bs[i].classList.toggle("on", bs[i] === b);
+      });
+    }
+    if (speed && spdLab) speed.addEventListener("input", function () { spdLab.textContent = speed.value; });
+    if (pitch && pixLab) pitch.addEventListener("input", function () { pixLab.textContent = pitch.value; });
+    window.addEventListener("resize", layoutUl);
+    if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+  </script>
+</body>
+</html>

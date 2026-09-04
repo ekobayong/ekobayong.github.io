@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Living Landscape — Animated Topographic Contours, Sheet 040</title>
+  <style>
+    :root {
+      --paper: #f3eee3; --ink: #2b2a28; --accent: #b5482b; --glass: rgba(243,238,227,0.78);
+      --line: rgba(43,42,40,0.42); --index: rgba(43,42,40,0.92); --label: #2b2a28;
+      --serif: Georgia, "Iowan Old Style", Palatino, ui-serif, serif;
+      --sans: ui-sans-serif, system-ui, sans-serif;
+      --mono: ui-monospace, "Courier New", monospace;
+    }
+    body[data-pal="terrain"] {
+      --paper: #d8d2c2; --ink: #3a2c22; --accent: #8a4b2a; --glass: rgba(232,226,210,0.78);
+      --line: rgba(74,48,28,0.5); --index: rgba(58,36,20,0.92); --label: #3a2c22;
+    }
+    body[data-pal="night"] {
+      --paper: #0a1a33; --ink: #d9ecff; --accent: #7fd1ff; --glass: rgba(10,26,51,0.72);
+      --line: rgba(127,209,255,0.42); --index: rgba(217,236,255,0.95); --label: #d9ecff;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper); color: var(--ink); font-family: var(--sans); }
+    canvas#map { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    .graticule {
+      position: fixed; inset: 0; pointer-events: none; z-index: 1;
+      background-image:
+        linear-gradient(var(--line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line) 1px, transparent 1px);
+      background-size: 120px 120px; opacity: 0.35; mix-blend-mode: multiply;
+    }
+    body[data-pal="night"] .graticule { mix-blend-mode: screen; opacity: 0.28; }
+    .ui { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+    .ui > * { pointer-events: auto; }
+    .card {
+      background: var(--glass); backdrop-filter: blur(10px);
+      border-radius: 6px; border: 1px solid rgba(43,42,40,0.18);
+      padding: 12px 14px;
+    }
+    body[data-pal="night"] .card { border-color: rgba(127,209,255,0.28); }
+    .title {
+      position: absolute; top: 16px; left: 16px; max-width: 360px;
+      box-shadow: inset 0 0 0 1px rgba(43,42,40,0.15);
+    }
+    .sheet {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
+      text-transform: uppercase; font-variant: small-caps; color: var(--accent); margin-bottom: 6px;
+    }
+    h1 { font-family: var(--serif); font-size: 26px; font-weight: 500; margin: 0 0 8px; letter-spacing: -0.02em; }
+    h1 em { font-style: italic; color: var(--accent); }
+    .title p { margin: 0; font-size: 13px; line-height: 1.45; }
+    .pals { position: absolute; top: 16px; right: 16px; display: flex; gap: 6px; }
+    .pals button {
+      border: 1px solid rgba(43,42,40,0.2); background: var(--glass); color: var(--ink);
+      border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 12px; font-variant: small-caps; letter-spacing: 0.06em;
+    }
+    .pals button[aria-pressed="true"] { outline: 2px solid var(--accent); }
+    .readout {
+      position: absolute; left: 16px; bottom: 16px; min-width: 250px;
+      font-variant: small-caps; letter-spacing: 0.06em;
+    }
+    .nums { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .nums b { display: block; font-family: var(--serif); font-size: 22px; font-variant-numeric: tabular-nums; letter-spacing: 0; font-variant: normal; }
+    .nums span { font-size: 10px; color: var(--accent); }
+    .scale { display: flex; align-items: center; gap: 8px; font-size: 11px; margin: 8px 0; }
+    .bar { width: 80px; height: 6px; border: 1px solid var(--ink); border-top: 0; position: relative; }
+    .bar::before, .bar::after { content: ""; position: absolute; top: -4px; width: 1px; height: 10px; background: var(--ink); }
+    .bar::before { left: 0; } .bar::after { right: 0; }
+    .legend { font-size: 11px; margin: 6px 0 10px; }
+    .legend i { display: inline-block; width: 22px; height: 0; border-top: 1.6px solid var(--index); margin: 0 6px 0 0; vertical-align: middle; }
+    .legend i.m { border-top-width: 0.7px; border-color: var(--line); }
+    .ctrls { display: flex; align-items: center; gap: 10px; }
+    .ctrls label { font-size: 11px; }
+    input[type=range] { width: 110px; accent-color: var(--accent); }
+    .ctrls button {
+      border: 1px solid var(--accent); background: transparent; color: var(--ink);
+      border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px;
+    }
+    .rose { position: absolute; right: 18px; bottom: 18px; width: 120px; height: 120px; animation: sway 12s ease-in-out infinite; }
+    @keyframes sway { 0%,100% { transform: rotate(-1.2deg); } 50% { transform: rotate(1.2deg); } }
+    @media (max-width: 720px) {
+      .title p, .rose { display: none; }
+      .pals { top: auto; bottom: 16px; right: 16px; left: 16px; justify-content: center; }
+      .readout { bottom: 64px; }
+    }
+    @media (prefers-reduced-motion: reduce) { .rose { animation: none; } }
+  </style>
+</head>
+<body data-pal="paper">
+  <canvas id="map"></canvas>
+  <div class="graticule"></div>
+  <div class="ui">
+    <div class="card title">
+      <div class="sheet">Sheet 040 · Series L-7 / 1 : 25 000</div>
+      <h1>The Living <em>Landscape</em></h1>
+      <p>Contours every 40 m from a 180 m datum; every fifth line is an index contour at 200 m. The heightfield is a drifting five-octave noise so ridges migrate like weather.</p>
+    </div>
+    <div class="pals" id="pals">
+      <button type="button" data-pal="paper" aria-pressed="true">Paper &amp; Ink</button>
+      <button type="button" data-pal="terrain">Terrain</button>
+      <button type="button" data-pal="night">Night Blueprint</button>
+    </div>
+    <div class="card readout">
+      <div class="nums">
+        <div><span>Elevation (m)</span><b id="elv">—</b></div>
+        <div><span>Slope (degrees)</span><b id="slp">—</b></div>
+        <div><span>Aspect</span><b id="asp">—</b></div>
+      </div>
+      <div class="scale"><div class="bar"></div> 1 km</div>
+      <div class="legend"><i class="m"></i> 40 m &nbsp; <i></i> 200 m index</div>
+      <div class="ctrls">
+        <label for="flow">Flow</label>
+        <input id="flow" type="range" min="0" max="100" value="35">
+        <button type="button" id="pause">Pause</button>
+      </div>
+    </div>
+    <svg class="rose" viewBox="0 0 120 120" aria-hidden="true">
+      <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="1"/>
+      <circle cx="60" cy="60" r="44" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.5"/>
+      <g stroke="currentColor" stroke-width="1">
+        <line x1="60" y1="8" x2="60" y2="16"/><line x1="60" y1="104" x2="60" y2="112"/>
+        <line x1="8" y1="60" x2="16" y2="60"/><line x1="104" y1="60" x2="112" y2="60"/>
+      </g>
+      <polygon points="60,22 66,60 60,54 54,60" fill="#b5482b"/>
+      <g transform="rotate(45 60 60)" opacity="0.45">
+        <polygon points="60,28 64,60 60,56 56,60" fill="currentColor"/>
+        <polygon points="60,92 64,60 60,64 56,60" fill="none" stroke="currentColor"/>
+      </g>
+      <polygon points="60,22 66,60 60,54 54,60" fill="#b5482b"/>
+      <polygon points="60,98 66,60 60,66 54,60" fill="currentColor" opacity="0.35"/>
+      <polygon points="22,60 60,54 60,66" fill="currentColor" opacity="0.2"/>
+      <polygon points="98,60 60,54 60,66" fill="currentColor" opacity="0.55"/>
+      <circle cx="60" cy="60" r="3" fill="currentColor"/>
+      <text x="60" y="18" text-anchor="middle" font-size="10" font-family="Georgia, serif" fill="currentColor">N</text>
+      <text x="60" y="116" text-anchor="middle" font-size="10" font-family="Georgia, serif" fill="currentColor">S</text>
+      <text x="8" y="64" text-anchor="middle" font-size="10" font-family="Georgia, serif" fill="currentColor">W</text>
+      <text x="112" y="64" text-anchor="middle" font-size="10" font-family="Georgia, serif" fill="currentColor">E</text>
+    </svg>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    function init() {
+      var canvas = qs("#map");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var pal = "paper", flow = 0.35, paused = reduce, time = 0, mx = -1, my = -1;
+      var grid = [], gw = 0, gh = 0, cell = 8, W = 0, H = 0;
+      var off = document.createElement("canvas");
+      var octx = off.getContext("2d");
+      if (!octx) return;
+      var perm = new Uint8Array(512), grads = [];
+      (function seed() {
+        var p = []; for (var i = 0; i < 256; i++) p[i] = i;
+        var s = 91;
+        function rnd() { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }
+        for (var j = 255; j > 0; j--) { var k = (rnd() * (j + 1)) | 0, t = p[j]; p[j] = p[k]; p[k] = t; }
+        for (var n = 0; n < 512; n++) perm[n] = p[n & 255];
+        var g3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+        for (var gi = 0; gi < 256; gi++) grads[gi] = g3[perm[gi] % 12];
+      })();
+      function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function n3(x, y, z) {
+        var X = Math.floor(x) & 255, Y = Math.floor(y) & 255, Z = Math.floor(z) & 255;
+        var xf = x - Math.floor(x), yf = y - Math.floor(y), zf = z - Math.floor(z);
+        var u = fade(xf), v = fade(yf), w = fade(zf);
+        function dot(ix, iy, iz, dx, dy, dz) {
+          var g = grads[perm[perm[perm[ix] + iy] + iz]];
+          return g[0] * dx + g[1] * dy + g[2] * dz;
+        }
+        var n000 = dot(X, Y, Z, xf, yf, zf), n100 = dot(X + 1, Y, Z, xf - 1, yf, zf);
+        var n010 = dot(X, Y + 1, Z, xf, yf - 1, zf), n110 = dot(X + 1, Y + 1, Z, xf - 1, yf - 1, zf);
+        var n001 = dot(X, Y, Z + 1, xf, yf, zf - 1), n101 = dot(X + 1, Y, Z + 1, xf - 1, yf, zf - 1);
+        var n011 = dot(X, Y + 1, Z + 1, xf, yf - 1, zf - 1), n111 = dot(X + 1, Y + 1, Z + 1, xf - 1, yf - 1, zf - 1);
+        return lerp(lerp(lerp(n000, n100, u), lerp(n010, n110, u), v), lerp(lerp(n001, n101, u), lerp(n011, n111, u), v), w);
+      }
+      function fbm(x, y, z) {
+        var wx = n3(x * 0.6 + 20, y * 0.6, z * 0.4) * 0.35;
+        var wy = n3(x * 0.6, y * 0.6 + 40, z * 0.4) * 0.35;
+        var s = 0, a = 0.5, f = 1;
+        for (var i = 0; i < 5; i++) {
+          s += a * n3((x + wx) * f, (y + wy) * f, z * f * 0.7);
+          a *= 0.5; f *= 2;
+        }
+        return s;
+      }
+      function heightAt(i, j, t) {
+        var n = fbm(i * 0.035, j * 0.035, t);
+        return 180 + (n + 0.15) * 520;
+      }
+      function rebuild() {
+        W = window.innerWidth; H = window.innerHeight;
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(W * dpr); canvas.height = Math.floor(H * dpr);
+        canvas.style.width = W + "px"; canvas.style.height = H + "px";
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        cell = Math.max(5, Math.floor(Math.max(W, H) / 200));
+        gw = Math.ceil(W / cell) + 1; gh = Math.ceil(H / cell) + 1;
+        off.width = gw; off.height = gh;
+        grid = new Float32Array(gw * gh);
+      }
+      var rT = 0;
+      window.addEventListener("resize", function () { clearTimeout(rT); rT = setTimeout(rebuild, 120); });
+      function hypso(h, shade) {
+        var stops = [
+          [180, 62, 110, 74], [280, 122, 150, 82], [420, 200, 178, 122],
+          [560, 150, 112, 78], [680, 120, 104, 92], [800, 242, 239, 230]
+        ];
+        var r = stops[0][1], g = stops[0][2], b = stops[0][3];
+        for (var i = 0; i < stops.length - 1; i++) {
+          if (h >= stops[i][0] && h <= stops[i + 1][0]) {
+            var t = (h - stops[i][0]) / (stops[i + 1][0] - stops[i][0]);
+            r = lerp(stops[i][1], stops[i + 1][1], t);
+            g = lerp(stops[i][2], stops[i + 1][2], t);
+            b = lerp(stops[i][3], stops[i + 1][3], t);
+            break;
+          }
+          if (h > stops[stops.length - 1][0]) {
+            r = 242; g = 239; b = 230;
+          }
+        }
+        return [r * shade, g * shade, b * shade];
+      }
+      function sample(x, y) {
+        var i = x / cell, j = y / cell;
+        var i0 = Math.max(0, Math.min(gw - 2, Math.floor(i)));
+        var j0 = Math.max(0, Math.min(gh - 2, Math.floor(j)));
+        var tx = i - i0, ty = j - j0;
+        var a = grid[j0 * gw + i0], b = grid[j0 * gw + i0 + 1], c = grid[(j0 + 1) * gw + i0], d = grid[(j0 + 1) * gw + i0 + 1];
+        return lerp(lerp(a, b, tx), lerp(c, d, tx), ty);
+      }
+      function draw() {
+        var i, j;
+        for (j = 0; j < gh; j++) for (i = 0; i < gw; i++) grid[j * gw + i] = heightAt(i, j, time);
+        var img = octx.createImageData(gw, gh);
+        var d = img.data;
+        for (j = 0; j < gh; j++) {
+          for (i = 0; i < gw; i++) {
+            var h = grid[j * gw + i];
+            var hx = (i < gw - 1 ? grid[j * gw + i + 1] : h) - (i > 0 ? grid[j * gw + i - 1] : h);
+            var hy = (j < gh - 1 ? grid[(j + 1) * gw + i] : h) - (j > 0 ? grid[(j - 1) * gw + i] : h);
+            var nx = -hx, ny = -hy, nz = 2.4;
+            var inv = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz);
+            var shade = Math.max(0.25, (nx * 0.5 + ny * 0.7 + nz * 0.5) * inv);
+            var p = (j * gw + i) * 4;
+            var col;
+            if (pal === "paper") {
+              var v = 232 + shade * 18;
+              col = [v, v - 4, v - 12];
+            } else if (pal === "terrain") {
+              col = hypso(h, 0.55 + shade * 0.55);
+            } else {
+              col = [10 + shade * 40, 26 + shade * 50, 51 + shade * 70];
+            }
+            d[p] = col[0]; d[p + 1] = col[1]; d[p + 2] = col[2]; d[p + 3] = 255;
+          }
+        }
+        octx.putImageData(img, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(off, 0, 0, W, H);
+        var levels = [];
+        for (var lv = 0; lv < 26; lv++) levels.push(180 + lv * 40);
+        var labels = {};
+        function interp(a, b, ia, ib, iso) {
+          var t = (iso - a) / ((b - a) || 1e-6);
+          return [lerp(ia[0], ib[0], t), lerp(ia[1], ib[1], t)];
+        }
+        var cases = {
+          1: [[0, 3]], 2: [[0, 1]], 3: [[1, 3]], 4: [[1, 2]], 6: [[0, 2]], 7: [[2, 3]],
+          8: [[2, 3]], 9: [[0, 2]], 11: [[1, 2]], 12: [[1, 3]], 13: [[0, 1]], 14: [[0, 3]]
+        };
+        levels.forEach(function (iso, li) {
+          var index = li % 5 === 0;
+          ctx.strokeStyle = index ? (pal === "night" ? "rgba(217,236,255,0.95)" : pal === "terrain" ? "rgba(74,48,28,0.9)" : "rgba(43,42,40,0.92)")
+            : (pal === "night" ? "rgba(127,209,255,0.42)" : pal === "terrain" ? "rgba(74,48,28,0.45)" : "rgba(43,42,40,0.42)");
+          ctx.lineWidth = index ? 1.6 : 0.7;
+          ctx.beginPath();
+          var segs = [];
+          for (j = 0; j < gh - 1; j++) {
+            for (i = 0; i < gw - 1; i++) {
+              var v0 = grid[j * gw + i], v1 = grid[j * gw + i + 1], v2 = grid[(j + 1) * gw + i + 1], v3 = grid[(j + 1) * gw + i];
+              var c0 = v0 >= iso ? 1 : 0, c1 = v1 >= iso ? 2 : 0, c2 = v2 >= iso ? 4 : 0, c3 = v3 >= iso ? 8 : 0;
+              var code = c0 | c1 | c2 | c3;
+              if (code === 0 || code === 15) continue;
+              var p0 = [i * cell, j * cell], p1 = [(i + 1) * cell, j * cell], p2 = [(i + 1) * cell, (j + 1) * cell], p3 = [i * cell, (j + 1) * cell];
+              var e = [
+                interp(v0, v1, p0, p1, iso),
+                interp(v1, v2, p1, p2, iso),
+                interp(v2, v3, p2, p3, iso),
+                interp(v3, v0, p3, p0, iso)
+              ];
+              var pairs = cases[code];
+              if (code === 5 || code === 10) {
+                var center = (v0 + v1 + v2 + v3) / 4 >= iso;
+                pairs = (code === 5) ? (center ? [[0, 1], [2, 3]] : [[0, 3], [1, 2]]) : (center ? [[0, 3], [1, 2]] : [[0, 1], [2, 3]]);
+              }
+              if (!pairs) continue;
+              pairs.forEach(function (pr) {
+                ctx.moveTo(e[pr[0]][0], e[pr[0]][1]);
+                ctx.lineTo(e[pr[1]][0], e[pr[1]][1]);
+                segs.push([e[pr[0]], e[pr[1]]]);
+              });
+            }
+          }
+          ctx.stroke();
+          if (index) {
+            labels[iso] = [];
+            segs.forEach(function (sg) {
+              var mx2 = (sg[0][0] + sg[1][0]) / 2, my2 = (sg[0][1] + sg[1][1]) / 2;
+              if (mx2 < 40 || my2 < 40 || mx2 > W - 40 || my2 > H - 40) return;
+              var ok = labels[iso].every(function (q) { return Math.hypot(q[0] - mx2, q[1] - my2) > 150; });
+              if (!ok || labels[iso].length > 6) return;
+              var ang = Math.atan2(sg[1][1] - sg[0][1], sg[1][0] - sg[0][0]);
+              if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
+              labels[iso].push([mx2, my2, ang]);
+            });
+            labels[iso].forEach(function (L) {
+              ctx.save();
+              ctx.translate(L[0], L[1]); ctx.rotate(L[2]);
+              ctx.fillStyle = pal === "night" ? "#0a1a33" : pal === "terrain" ? "#d8d2c2" : "#f3eee3";
+              ctx.fillRect(-14, -7, 28, 12);
+              ctx.fillStyle = pal === "night" ? "#d9ecff" : "#2b2a28";
+              ctx.font = "bold 10px ui-sans-serif, system-ui, sans-serif";
+              ctx.textAlign = "center"; ctx.textBaseline = "middle";
+              ctx.fillText(String(iso), 0, 0);
+              ctx.restore();
+            });
+          }
+        });
+        if (mx >= 0) {
+          var h = sample(mx, my);
+          var hx = sample(mx + cell, my) - sample(mx - cell, my);
+          var hy = sample(mx, my + cell) - sample(mx, my - cell);
+          var acc = pal === "night" ? "#7fd1ff" : pal === "terrain" ? "#8a4b2a" : "#b5482b";
+          var rg = ctx.createRadialGradient(mx, my, 0, mx, my, 90);
+          rg.addColorStop(0, "rgba(255,255,255,0.18)"); rg.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(mx, my, 90, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = acc; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.arc(mx, my, 18, 0, Math.PI * 2); ctx.stroke();
+          [[0, -26], [0, 26], [-26, 0], [26, 0]].forEach(function (t) {
+            ctx.beginPath(); ctx.moveTo(mx + t[0] * 0.5, my + t[1] * 0.5); ctx.lineTo(mx + t[0], my + t[1]); ctx.stroke();
+          });
+          ctx.fillStyle = pal === "night" ? "#0a1a33" : "#f3eee3";
+          ctx.fillRect(mx + 22, my - 18, 54, 16);
+          ctx.fillStyle = pal === "night" ? "#d9ecff" : "#2b2a28";
+          ctx.font = "11px ui-monospace, Courier New, monospace";
+          ctx.textAlign = "left";
+          ctx.fillText(Math.round(h) + " m", mx + 26, my - 6);
+          var elv = qs("#elv"), slp = qs("#slp"), asp = qs("#asp");
+          var slopeRad = Math.atan(Math.hypot(hx, hy) / (2.5 * 2));
+          var slope = slopeRad * 180 / Math.PI;
+          var aspect = Math.atan2(hx, -hy) * 180 / Math.PI;
+          if (aspect < 0) aspect += 360;
+          var dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+          var di = Math.round(aspect / 45) % 8;
+          if (elv) elv.textContent = String(Math.round(h));
+          if (slp) slp.textContent = slope.toFixed(1);
+          if (asp) asp.textContent = dirs[di];
+        }
+      }
+      var last = 0, accT = 0;
+      function frame(now) {
+        var dt = last ? (now - last) / 1000 : 0.016; last = now;
+        if (!paused) time += dt * flow * 0.35;
+        accT += dt;
+        if (accT >= 1 / 30 || reduce) {
+          accT = 0;
+          draw();
+        }
+        if (!reduce && typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      }
+      canvas.addEventListener("pointermove", function (e) {
+        var r = canvas.getBoundingClientRect();
+        mx = e.clientX - r.left; my = e.clientY - r.top;
+        if (paused || reduce) draw();
+      });
+      canvas.addEventListener("pointerleave", function () { mx = -1; my = -1; });
+      var flowEl = qs("#flow"), pauseBtn = qs("#pause");
+      if (flowEl) flowEl.addEventListener("input", function () { flow = Number(flowEl.value) / 100; });
+      function togPause() {
+        paused = !paused;
+        if (pauseBtn) pauseBtn.textContent = paused ? "Resume" : "Pause";
+        if (!paused && typeof window.requestAnimationFrame === "function") { last = 0; window.requestAnimationFrame(frame); }
+      }
+      if (pauseBtn) pauseBtn.addEventListener("click", togPause);
+      window.addEventListener("keydown", function (e) {
+        if (e.key === " " ) { e.preventDefault(); togPause(); }
+        if (e.key === "1") setPal("paper");
+        if (e.key === "2") setPal("terrain");
+        if (e.key === "3") setPal("night");
+      });
+      function setPal(p) {
+        pal = p;
+        document.body.setAttribute("data-pal", p);
+        qsa("#pals button").forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-pal") === p ? "true" : "false"); });
+        draw();
+      }
+      qsa("#pals button").forEach(function (b) {
+        b.addEventListener("click", function () { setPal(b.getAttribute("data-pal")); });
+      });
+      rebuild();
+      if (reduce) { paused = true; if (pauseBtn) pauseBtn.textContent = "Resume"; draw(); }
+      else if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      else draw();
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  })();
+  </script>
+</body>
+</html>

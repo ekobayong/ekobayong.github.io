@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arbor recursiva — Generative L-System Botanical Plate</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: Georgia, "Iowan Old Style", Palatino, serif;
+      color: #2b2318;
+      background: linear-gradient(#f1e7d3, #e4d6ba);
+      overflow: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed; inset: 0; pointer-events: none;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      mix-blend-mode: multiply; opacity: 0.22;
+    }
+    .plate {
+      position: fixed; inset: 22px;
+      border: 1px solid rgba(43,35,24,.35);
+      outline: 1px solid rgba(43,35,24,.35);
+      outline-offset: 4px;
+    }
+    header {
+      position: absolute; top: 18px; left: 22px; right: 22px;
+      display: flex; justify-content: space-between; gap: 16px;
+      pointer-events: none;
+    }
+    .plate-no {
+      font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase; color: #6b5b45;
+    }
+    h1 {
+      font-style: italic; font-weight: 400; font-size: clamp(22px, 3vw, 34px); margin-top: 4px;
+    }
+    .family { font-style: italic; color: #6b5b45; font-size: 13px; margin-top: 4px; }
+    .rules {
+      font-family: "Courier New", ui-monospace, monospace;
+      font-size: 11px; color: #6b5b45; text-align: right; line-height: 1.45; white-space: pre;
+    }
+    canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+    .bar {
+      position: absolute; left: 16px; right: 16px; bottom: 14px;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px;
+      background: rgba(241,231,211,0.82); border: 1px solid rgba(43,35,24,.25);
+      padding: 10px 14px;
+    }
+    .pills { display: flex; gap: 6px; }
+    .pills button {
+      border: 1px solid #2b2318; background: transparent; color: #2b2318;
+      font: 11px/1 Georgia, Palatino, serif; letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 6px;
+    }
+    .pills button.on { background: #2b2318; color: #f1e7d3; }
+    .sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .wind { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6b5b45; }
+    .wind input[type="range"] {
+      -webkit-appearance: none; appearance: none; width: 140px; height: 1px; background: #2b2318; outline: none;
+    }
+    .wind input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 12px; height: 12px; background: #f1e7d3; border: 1px solid #2b2318; cursor: pointer;
+    }
+    .plant {
+      margin-left: auto; background: #2b2318; color: #f1e7d3; border: 1px solid #2b2318;
+      font: 12px/1 Georgia, Palatino, serif; padding: 8px 14px; cursor: pointer;
+    }
+    .plant:hover { background: #f1e7d3; color: #2b2318; }
+    .toast {
+      position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
+      font-style: italic; opacity: 0; pointer-events: none; transition: opacity 400ms ease;
+    }
+    .toast.show { opacity: 1; }
+    @media (prefers-reduced-motion: reduce) {
+      .toast, .plant { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="plate">
+    <header>
+      <div>
+        <div class="plate-no">Plate XVII · Lindenmayer Herbarium</div>
+        <h1>Arbor recursiva var. lindenmayeri</h1>
+        <p class="family">Grammaticaceae — a stochastic bracketed L-system, five derivations</p>
+      </div>
+      <pre class="rules">axiom X
+X → F[+X]F[−X]+X
+X → F[−X]F[+X]−X
+X → F[+X][−X]FX
+F → FF
+angle 22–28°, jittered</pre>
+    </header>
+    <canvas id="c"></canvas>
+    <div class="toast" id="toast">Sapling planted</div>
+    <div class="bar">
+      <div class="pills" id="seasons">
+        <button type="button" data-s="spring" class="on"><span class="sw" style="background:#f4a9bc"></span>Spring</button>
+        <button type="button" data-s="summer"><span class="sw" style="background:#5f8f45"></span>Summer</button>
+        <button type="button" data-s="autumn"><span class="sw" style="background:#d98a2c"></span>Autumn</button>
+        <button type="button" data-s="winter"><span class="sw" style="background:#e8e4dc"></span>Winter</button>
+      </div>
+      <label class="wind">
+        <span id="windLab">gentle</span>
+        <input type="range" id="wind" min="0" max="100" value="28">
+        <span>still / gentle / brisk / gale</span>
+      </label>
+      <button type="button" class="plant" id="plant">Plant new tree</button>
+    </div>
+  </div>
+  <script>
+(function () {
+  "use strict";
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  function qs(sel, root) {
+    try { return (root || document).querySelector(sel); } catch (e) { return null; }
+  }
+  function Xor(seed) {
+    this.s = seed >>> 0 || 1;
+  }
+  Xor.prototype.next = function () {
+    var x = this.s;
+    x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
+    this.s = x >>> 0;
+    return (this.s) / 4294967296;
+  };
+  var RULES = [
+    "F[+X]F[-X]+X",
+    "F[-X]F[+X]-X",
+    "F[+X][-X]FX"
+  ];
+  var PAL = {
+    spring: ["#f4a9bc", "#f9c9d5", "#ea8ea6", "#fff1f3"],
+    summer: ["#5f8f45", "#78a659", "#3e6d33", "#93bb6e"],
+    autumn: ["#d98a2c", "#c2561f", "#e6b04b", "#a63d1a"],
+    winter: []
+  };
+  function init() {
+    var canvas = qs("#c");
+    var plantBtn = qs("#plant");
+    var windEl = qs("#wind");
+    var windLab = qs("#windLab");
+    var seasons = qs("#seasons");
+    var toast = qs("#toast");
+    if (!canvas) return;
+    var ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    var reduced = false;
+    if (typeof window.matchMedia === "function") {
+      try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+    }
+    var dpr = 1, W = 0, H = 0;
+    var trees = [];
+    var season = "spring";
+    var leafScale = 1, leafTarget = 1;
+    var snow = [];
+    var mist = [{ x: 0.2, p: 0 }, { x: 0.55, p: 1.7 }, { x: 0.8, p: 3.2 }];
+    var t0 = performance.now();
+
+    function size() {
+      var r = canvas.getBoundingClientRect();
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = Math.max(1, Math.floor(r.width * dpr));
+      H = Math.max(1, Math.floor(r.height * dpr));
+      canvas.width = W; canvas.height = H;
+    }
+
+    function derive(rng) {
+      var s = "X", n, i, out, ch;
+      for (n = 0; n < 5; n++) {
+        out = "";
+        for (i = 0; i < s.length; i++) {
+          ch = s.charAt(i);
+          if (ch === "X") out += RULES[Math.floor(rng.next() * RULES.length)];
+          else if (ch === "F") out += "FF";
+          else out += ch;
+        }
+        s = out;
+      }
+      return s;
+    }
+
+    function build(seed, baseX, baseY, scale) {
+      var rng = new Xor(seed);
+      var str = derive(rng);
+      var angle = (22 + rng.next() * 6) * Math.PI / 180;
+      var segs = [];
+      var stack = [];
+      var x = 0, y = 0, a = -Math.PI / 2, order = 0, depth = 0, maxOrder = 0, parent = -1;
+      var i, ch;
+      for (i = 0; i < str.length; i++) {
+        ch = str.charAt(i);
+        if (ch === "F") {
+          var nx = x + Math.cos(a), ny = y + Math.sin(a);
+          segs.push({
+            x0: x, y0: y, x1: nx, y1: ny, parent: parent,
+            a: a, order: order, depth: depth,
+            jitter: (rng.next() - 0.5) * 0.08,
+            leaf: rng.next(), col: Math.floor(rng.next() * 4),
+            rot: rng.next() * Math.PI
+          });
+          parent = segs.length - 1;
+          x = nx; y = ny; order++;
+          if (order > maxOrder) maxOrder = order;
+        } else if (ch === "+") a += angle + (rng.next() - 0.5) * 0.12;
+        else if (ch === "-") a -= angle + (rng.next() - 0.5) * 0.12;
+        else if (ch === "[") { stack.push({ x: x, y: y, a: a, order: order, depth: depth, parent: parent }); depth++; }
+        else if (ch === "]") {
+          var st = stack.pop();
+          if (st) { x = st.x; y = st.y; a = st.a; order = st.order; depth = st.depth; parent = st.parent; }
+        }
+      }
+      var born = performance.now();
+      return { segs: segs, maxOrder: maxOrder, baseX: baseX, baseY: baseY, scale: scale, born: born, seed: seed };
+    }
+
+    function plantAt(nx, ny) {
+      var seed = (Math.random() * 0xffffffff) >>> 0;
+      var yNorm = ny / H;
+      var scale = 7 + (1 - yNorm) * 4;
+      trees.push(build(seed, nx, ny, scale * dpr));
+      if (trees.length > 8) trees.shift();
+      if (toast) {
+        toast.classList.add("show");
+        window.setTimeout(function () { toast.classList.remove("show"); }, 1200);
+      }
+    }
+
+    function windLabel(v) {
+      if (v < 12) return "still";
+      if (v < 40) return "gentle";
+      if (v < 75) return "brisk";
+      return "gale";
+    }
+
+    function heading(tree, idx, time, windAmt) {
+      var s = tree.segs[idx];
+      var o = s.order / Math.max(1, tree.maxOrder);
+      var w1 = windAmt * (0.003 + 0.014 * o) * Math.sin(time * 1.6 + s.order * 0.35);
+      var w2 = windAmt * 0.002 * Math.sin(time * 3.4 + s.depth * 1.1);
+      return s.a + w1 + w2 + s.jitter;
+    }
+
+    function drawTree(tree, now, windAmt) {
+      var age = now - tree.born;
+      if (reduced) age = 1e9;
+      var ends = new Array(tree.segs.length);
+      var hasChild = new Array(tree.segs.length);
+      var i, s, len, grow, w, pal, leaves = [];
+      for (i = 0; i < tree.segs.length; i++) {
+        if (tree.segs[i].parent >= 0) hasChild[tree.segs[i].parent] = true;
+      }
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      for (i = 0; i < tree.segs.length; i++) {
+        s = tree.segs[i];
+        var start = s.order * 55;
+        grow = Math.max(0, Math.min(1, (age - start) / 100));
+        grow = 1 - Math.pow(1 - grow, 3);
+        var a = heading(tree, i, now / 1000, windAmt);
+        var p = s.parent >= 0 && ends[s.parent] ? ends[s.parent] : { x: tree.baseX, y: tree.baseY };
+        len = tree.scale * grow;
+        var x1 = p.x + Math.cos(a) * len;
+        var y1 = p.y + Math.sin(a) * len;
+        ends[i] = { x: x1, y: y1 };
+        w = Math.pow(1 - s.order / Math.max(1, tree.maxOrder), 1.6) * 7 * (tree.scale / 10);
+        ctx.strokeStyle = "#3b2a1c";
+        ctx.lineWidth = Math.max(0.6, w);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        if (season === "winter" && w > 2.2) {
+          ctx.strokeStyle = "rgba(255,255,255,0.55)";
+          ctx.lineWidth = Math.max(0.4, w * 0.25);
+          ctx.beginPath();
+          ctx.moveTo(p.x + Math.cos(a - 1.2) * w * 0.3, p.y + Math.sin(a - 1.2) * w * 0.3);
+          ctx.lineTo(x1 + Math.cos(a - 1.2) * w * 0.3, y1 + Math.sin(a - 1.2) * w * 0.3);
+          ctx.stroke();
+        }
+        if (grow >= 0.98 && !hasChild[i]) {
+          leaves.push({ x: x1, y: y1, s: s, t: Math.max(0, age - start - 100) });
+        }
+      }
+      pal = PAL[season] || PAL.spring;
+      if (pal.length) {
+        for (i = 0; i < leaves.length; i++) {
+          var L = leaves[i];
+          var ls = Math.min(1, L.t / 700);
+          ls = 1 - Math.pow(1 - ls, 2);
+          ls *= leafScale;
+          ctx.save();
+          ctx.translate(L.x, L.y);
+          ctx.rotate(L.s.rot);
+          ctx.scale(ls, ls);
+          ctx.fillStyle = pal[L.s.col % pal.length];
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 5.5, 3.2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+
+    function loop(now) {
+      var windAmt = windEl ? parseFloat(windEl.value) : 28;
+      leafScale += (leafTarget - leafScale) * 0.06;
+      ctx.clearRect(0, 0, W, H);
+      var sky = ctx.createLinearGradient(0, 0, 0, H);
+      var tint = { spring: "rgba(244,169,188,0.12)", summer: "rgba(95,143,69,0.10)", autumn: "rgba(217,138,44,0.12)", winter: "rgba(220,228,235,0.18)" };
+      sky.addColorStop(0, tint[season] || tint.spring);
+      sky.addColorStop(1, "rgba(241,231,211,0)");
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, W, H);
+      var groundY = H * 0.78;
+      var gg = ctx.createLinearGradient(0, groundY, 0, H);
+      gg.addColorStop(0, "rgba(90,70,40,0.12)");
+      gg.addColorStop(1, "rgba(70,50,30,0.28)");
+      ctx.fillStyle = gg;
+      ctx.fillRect(0, groundY, W, H - groundY);
+      ctx.strokeStyle = "rgba(43,35,24,0.45)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(24, groundY);
+      ctx.lineTo(W - 24, groundY);
+      ctx.stroke();
+      var t = now / 1000;
+      var g;
+      for (g = 0; g < 70; g++) {
+        var gx = (g / 70) * W;
+        var lean = windAmt * 0.12 * Math.sin(t * 1.6 + g);
+        ctx.beginPath();
+        ctx.moveTo(gx, groundY);
+        ctx.lineTo(gx + lean, groundY - 6 - (g % 5));
+        ctx.stroke();
+      }
+      var m;
+      for (m = 0; m < mist.length; m++) {
+        var mx = (0.15 + 0.7 * ((Math.sin(t * 0.12 + mist[m].p) + 1) / 2)) * W;
+        ctx.fillStyle = "rgba(255,252,245,0.18)";
+        ctx.beginPath();
+        ctx.ellipse(mx, groundY - 30, 90 * dpr, 18 * dpr, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      var i;
+      for (i = 0; i < trees.length; i++) drawTree(trees[i], now, windAmt);
+      if (season === "winter") {
+        if (snow.length < 80) snow.push({ x: Math.random() * W, y: Math.random() * H, v: 12 + Math.random() * 18, o: Math.random() });
+        for (i = 0; i < snow.length; i++) {
+          var fl = snow[i];
+          fl.y += fl.v * 0.016;
+          fl.x += Math.sin(t + fl.o * 6) * 0.4 + windAmt * 0.04;
+          if (fl.y > H) { fl.y = -4; fl.x = Math.random() * W; }
+          ctx.fillStyle = "rgba(255,255,255,0.8)";
+          ctx.beginPath(); ctx.arc(fl.x, fl.y, 1.4, 0, Math.PI * 2); ctx.fill();
+        }
+      } else snow = [];
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+    }
+
+    function newTree() {
+      trees = [build((Math.random() * 0xffffffff) >>> 0, W * 0.5, H * 0.78, 11 * dpr)];
+    }
+
+    if (plantBtn) plantBtn.addEventListener("click", newTree);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === " " || e.code === "Space") { e.preventDefault(); newTree(); }
+    });
+    canvas.addEventListener("click", function (e) {
+      var r = canvas.getBoundingClientRect();
+      plantAt((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr);
+    });
+    if (windEl && windLab) {
+      windEl.addEventListener("input", function () { windLab.textContent = windLabel(parseFloat(windEl.value)); });
+      windLab.textContent = windLabel(parseFloat(windEl.value));
+    }
+    if (seasons) {
+      seasons.addEventListener("click", function (e) {
+        var b = e.target.closest("button");
+        if (!b) return;
+        season = b.getAttribute("data-s") || "spring";
+        leafTarget = 0;
+        window.setTimeout(function () { leafTarget = 1; }, 420);
+        var bs = seasons.querySelectorAll("button");
+        var i;
+        for (i = 0; i < bs.length; i++) bs[i].classList.toggle("on", bs[i] === b);
+      });
+    }
+    window.addEventListener("resize", function () { size(); });
+    size();
+    newTree();
+    if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(loop);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+  </script>
+</body>
+</html>

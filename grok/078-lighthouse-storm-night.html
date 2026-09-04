@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Keeper's Light</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #050a14; color: #d7e4f0; }
+    body { font-family: "Iowan Old Style", Georgia, Palatino, ui-serif, serif; }
+    .sky {
+      position: absolute; inset: 0;
+      background: linear-gradient(#050a14, #0b1a30 46%, #12314a);
+    }
+    .moon {
+      position: absolute; top: 8%; right: 12%;
+      width: 90px; height: 90px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #e9f1f7, #8fa2b1);
+      box-shadow: 0 0 60px 24px rgba(180,200,220,0.22);
+      opacity: 0.55;
+    }
+    .clouds { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+    .cloud { position: absolute; opacity: 0.7; filter: blur(8px); animation: drift 80s linear infinite; }
+    .cloud.far { animation-duration: 120s; opacity: 0.45; filter: blur(12px); }
+    @keyframes drift { from { transform: translateX(0); } to { transform: translateX(-40%); } }
+    .scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .beam {
+      position: absolute; width: 240vmax; height: 240vmax;
+      left: 0; top: 0; pointer-events: none;
+      mix-blend-mode: screen;
+      transform-origin: 50% 50%;
+    }
+    .beam.a {
+      background: conic-gradient(from -8deg, transparent 0deg, rgba(255,217,138,0.42) 8deg, transparent 16deg);
+      filter: blur(14px);
+    }
+    .beam.b {
+      background: conic-gradient(from -14deg, transparent 0deg, rgba(255,217,138,0.14) 14deg, transparent 28deg);
+      filter: blur(30px);
+    }
+    .lamp-glow {
+      position: absolute; width: 28px; height: 28px; border-radius: 50%;
+      background: radial-gradient(circle, #ffd98a, rgba(255,179,71,0.2) 70%, transparent);
+      box-shadow: 0 0 24px 10px rgba(255,217,138,0.55);
+      animation: pulse 1.8s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes pulse { 50% { opacity: 0.65; transform: scale(1.15); } }
+    #wx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .flash {
+      position: absolute; inset: 0; background: rgba(210,230,255,0.0);
+      pointer-events: none; z-index: 6;
+    }
+    .flash.on {
+      background: rgba(210,230,255,0.55);
+      box-shadow: inset 0 0 80px rgba(180,210,255,0.8);
+    }
+    .title {
+      position: absolute; top: 22px; left: 24px; z-index: 7;
+    }
+    .title h1 { font-size: clamp(1.6rem, 3vw, 2.4rem); font-weight: 600; }
+    .title h1 em { font-style: italic; color: #ffd98a; }
+    .title p { font-size: 0.95rem; opacity: 0.8; max-width: 36ch; margin-top: 0.3rem; }
+    .log {
+      position: absolute; left: 24px; bottom: 22px; z-index: 7;
+      font-style: italic; font-size: 0.92rem; opacity: 0.85;
+    }
+    .panel {
+      position: absolute; right: 20px; bottom: 20px; z-index: 7;
+      background: rgba(5,12,24,0.55);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 14px 16px 16px;
+      min-width: 240px;
+    }
+    .panel label {
+      display: block; font-size: 0.78rem; letter-spacing: 0.08em;
+      text-transform: uppercase; margin-bottom: 8px; opacity: 0.8;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    input[type="range"] {
+      -webkit-appearance: none; width: 100%; height: 6px; border-radius: 999px;
+      background: linear-gradient(90deg, #12314a, #cfe8f2);
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #ffe7a8, #c9a24a);
+      box-shadow: 0 0 10px #ffd98a; cursor: pointer;
+    }
+    .scale { display: flex; justify-content: space-between; font-size: 0.7rem; opacity: 0.6; margin: 4px 0 10px; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .reads {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;
+      font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace;
+      font-size: 0.72rem;
+    }
+    .shake { animation: shake 0.45s ease; }
+    @keyframes shake {
+      0%,100% { transform: translate(0,0); }
+      20% { transform: translate(-6px, 3px); }
+      40% { transform: translate(7px, -2px); }
+      60% { transform: translate(-4px, 2px); }
+      80% { transform: translate(3px, -1px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cloud { animation: none; }
+      .beam { animation: none !important; }
+      .lamp-glow { animation: none; }
+      .shake { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sky"></div>
+  <div class="moon"></div>
+  <div class="clouds" id="clouds">
+    <svg class="cloud far" viewBox="0 0 800 200" width="900" style="top:6%;left:10%">
+      <ellipse cx="160" cy="90" rx="140" ry="40" fill="#1a2c44"/>
+      <ellipse cx="340" cy="80" rx="180" ry="50" fill="#1a2c44"/>
+      <ellipse cx="560" cy="95" rx="150" ry="38" fill="#1a2c44"/>
+    </svg>
+    <svg class="cloud" viewBox="0 0 800 200" width="1000" style="top:14%;left:30%">
+      <ellipse cx="200" cy="100" rx="160" ry="36" fill="#0f1d30"/>
+      <ellipse cx="420" cy="90" rx="170" ry="44" fill="#0f1d30"/>
+      <ellipse cx="640" cy="105" rx="130" ry="32" fill="#0f1d30"/>
+    </svg>
+  </div>
+  <svg class="scene" id="scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice" aria-label="Lighthouse on a rocky headland">
+    <defs>
+      <linearGradient id="rock" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#1d2632"/><stop offset="1" stop-color="#070b12"/>
+      </linearGradient>
+      <linearGradient id="tower" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#6c7480"/><stop offset="0.35" stop-color="#e8ebef"/>
+        <stop offset="0.7" stop-color="#b3bac4"/><stop offset="1" stop-color="#4c535d"/>
+      </linearGradient>
+      <linearGradient id="seaG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#10384a"/><stop offset="0.55" stop-color="#0a2a3a"/><stop offset="1" stop-color="#03111b"/>
+      </linearGradient>
+      <clipPath id="taper"><polygon points="742,210 858,210 890,620 710,620"/></clipPath>
+    </defs>
+    <rect x="0" y="620" width="1600" height="280" fill="url(#seaG)"/>
+    <path id="seaBack" fill="#0a2a3a" d="M0 680 Q 200 650 400 680 T 800 680 T 1200 680 T 1600 680 V900 H0 Z"/>
+    <path id="seaFront" fill="#10384a" d="M0 720 Q 200 690 400 720 T 800 720 T 1200 720 T 1600 720 V900 H0 Z"/>
+    <path id="foam" fill="none" stroke="#d7e8f0" stroke-width="2" opacity="0.45" d=""/>
+    <polygon points="0,620 180,560 320,600 480,520 620,570 760,500 900,560 1100,480 1300,560 1600,500 1600,900 0,900" fill="url(#rock)"/>
+    <polygon points="620,620 700,430 920,430 1000,620 920,700 700,700" fill="url(#rock)"/>
+    <g id="lighthouse">
+      <polygon points="742,210 858,210 890,620 710,620" fill="url(#tower)"/>
+      <g clip-path="url(#taper)">
+        <rect x="710" y="300" width="180" height="28" fill="#5a1c1c"/>
+        <rect x="710" y="300" width="180" height="10" fill="#c13a34"/>
+        <rect x="710" y="420" width="180" height="28" fill="#5a1c1c"/>
+        <rect x="710" y="420" width="180" height="10" fill="#c13a34"/>
+        <rect x="710" y="530" width="180" height="28" fill="#9a2c28"/>
+      </g>
+      <rect x="728" y="188" width="144" height="10" fill="#9aa3ad"/>
+      <rect x="736" y="196" width="8" height="16" fill="#6c7480"/>
+      <rect x="856" y="196" width="8" height="16" fill="#6c7480"/>
+      <rect x="748" y="132" width="104" height="58" fill="#ffd98a" id="lampRoom"/>
+      <g stroke="#3a424c" stroke-width="3" fill="none">
+        <line x1="774" y1="132" x2="774" y2="190"/><line x1="800" y1="132" x2="800" y2="190"/><line x1="826" y1="132" x2="826" y2="190"/>
+        <rect x="748" y="132" width="104" height="58"/>
+      </g>
+      <ellipse id="lampEl" cx="800" cy="160" rx="16" ry="16" fill="#ffb347"/>
+      <polygon points="740,132 860,132 830,92 770,92" fill="#2a3038"/>
+      <path d="M786 590 Q800 560 814 590 L814 620 L786 620 Z" fill="#1a1e24"/>
+    </g>
+    <g id="cottage" transform="translate(980,520)">
+      <polygon points="0,80 0,30 50,0 100,30 100,80" fill="#1a222c"/>
+      <rect x="12" y="38" width="22" height="22" fill="#ffe7a8">
+        <animate attributeName="opacity" values="1;0.55;1;0.8;1" dur="2.4s" repeatCount="indefinite"/>
+      </rect>
+      <ellipse cx="23" cy="49" rx="18" ry="14" fill="#e59b2c" opacity="0.25"/>
+    </g>
+  </svg>
+  <div class="beam a" id="beamA"></div>
+  <div class="beam b" id="beamB"></div>
+  <div class="lamp-glow" id="glow"></div>
+  <canvas id="wx"></canvas>
+  <div class="flash" id="flash"></div>
+  <div class="title">
+    <h1>The Keeper's <em>Light</em></h1>
+    <p>A single warm lamp turns against the gale, and the rocks remember every ship it saved.</p>
+  </div>
+  <p class="log" id="log">The keeper notes a rising swell. Glass is clear. The lamp is true.</p>
+  <div class="panel">
+    <label for="storm">Storm intensity</label>
+    <input type="range" id="storm" min="0" max="100" value="42">
+    <div class="scale"><span>calm</span><span>gale</span></div>
+    <div class="reads">
+      <div>wind <span id="wind">18</span> kn</div>
+      <div>swell <span id="swell">2.4</span> m</div>
+      <div>rain <span id="rain">42</span></div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var reduce = false;
+      if (typeof window.matchMedia === "function") {
+        reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      }
+      var stormEl = qs("#storm"), windEl = qs("#wind"), swellEl = qs("#swell"), rainEl = qs("#rain"), log = qs("#log");
+      var beamA = qs("#beamA"), beamB = qs("#beamB"), glow = qs("#glow"), lamp = qs("#lampEl");
+      var seaB = qs("#seaBack"), seaF = qs("#seaFront"), foam = qs("#foam"), flash = qs("#flash");
+      var canvas = qs("#wx");
+      if (!canvas || !canvas.getContext) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var intensity = 0.42, angle = 0, last = 0, nextStrike = 8;
+      var logs = [
+        "The keeper notes a rising swell. Glass is clear. The lamp is true.",
+        "Wind veers west. Spray climbs the gallery rail.",
+        "Rain needles the pane. The beam still finds the channel.",
+        "Gale on the headland. The cottage window holds its small gold.",
+        "The rocks take the full Atlantic. He does not leave the lamp."
+      ];
+      function storm() { return intensity; }
+      function resize() {
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(window.innerWidth * dpr);
+        canvas.height = Math.floor(window.innerHeight * dpr);
+        canvas.style.width = window.innerWidth + "px";
+        canvas.style.height = window.innerHeight + "px";
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        anchor();
+      }
+      function anchor() {
+        if (!lamp || !beamA || !beamB || !glow) return;
+        var r = lamp.getBoundingClientRect();
+        var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        [beamA, beamB].forEach(function (b) {
+          b.style.left = (cx - b.offsetWidth / 2) + "px";
+          b.style.top = (cy - b.offsetHeight / 2) + "px";
+        });
+        glow.style.left = (cx - 14) + "px";
+        glow.style.top = (cy - 14) + "px";
+      }
+      resize();
+      window.addEventListener("resize", resize);
+      if (stormEl) {
+        stormEl.addEventListener("input", function () {
+          intensity = (parseFloat(stormEl.value) || 0) / 100;
+          updateRead();
+        });
+      }
+      function updateRead() {
+        var kn = Math.round(4 + intensity * 48);
+        var sw = (0.6 + intensity * 6.2).toFixed(1);
+        if (windEl) windEl.textContent = String(kn);
+        if (swellEl) swellEl.textContent = sw;
+        if (rainEl) rainEl.textContent = String(Math.round(intensity * 100));
+        if (log) log.textContent = logs[Math.min(logs.length - 1, Math.floor(intensity * logs.length))];
+      }
+      updateRead();
+      var drops = [], spray = [];
+      function waveD(t, amp, y0) {
+        var x, d = "M0 " + y0;
+        for (x = 0; x <= 1600; x += 20) {
+          var y = y0
+            + Math.sin(x * 0.01 + t * (0.8 + intensity)) * amp
+            + Math.sin(x * 0.023 + t * 1.3) * amp * 0.45
+            + Math.sin(x * 0.047 + t * 0.7) * amp * 0.2;
+          d += " L" + x + " " + y;
+        }
+        d += " V900 H0 Z";
+        return d;
+      }
+      function strike() {
+        if (intensity < 0.15 && arguments.length === 0) return;
+        if (!flash) return;
+        flash.classList.add("on");
+        window.setTimeout(function () { flash.classList.remove("on"); }, 70);
+        window.setTimeout(function () { flash.classList.add("on"); }, 140);
+        window.setTimeout(function () { flash.classList.remove("on"); }, 200);
+        var delay = 450 + Math.random() * 500;
+        if (!reduce) {
+          window.setTimeout(function () {
+            document.body.classList.add("shake");
+            window.setTimeout(function () { document.body.classList.remove("shake"); }, 450);
+          }, delay);
+        }
+      }
+      document.addEventListener("click", function (e) {
+        if (e.target && e.target.closest && e.target.closest("input,button,label,.panel")) return;
+        strike(true);
+      });
+      function frame(now) {
+        var dt = Math.min(0.05, (now - (last || now)) / 1000);
+        last = now;
+        var t = now / 1000;
+        if (!reduce) angle += 38 * dt;
+        var fade = 0.35 + 0.65 * (0.5 + 0.5 * Math.cos(angle * Math.PI / 180));
+        if (beamA) {
+          beamA.style.transform = "rotate(" + angle + "deg)";
+          beamA.style.opacity = String(fade);
+        }
+        if (beamB) {
+          beamB.style.transform = "rotate(" + angle + "deg)";
+          beamB.style.opacity = String(fade * 0.8);
+        }
+        var amp = 10 + intensity * 38;
+        if (seaB) seaB.setAttribute("d", waveD(t * 0.7, amp * 0.55, 670));
+        if (seaF) seaF.setAttribute("d", waveD(t, amp, 720));
+        if (foam) {
+          var fd = "M0 720";
+          var x;
+          for (x = 0; x <= 1600; x += 16) {
+            var y = 720 + Math.sin(x * 0.01 + t) * amp + Math.sin(x * 0.023 + t * 1.3) * amp * 0.45;
+            fd += " L" + x + " " + y;
+          }
+          foam.setAttribute("d", fd);
+        }
+        var clouds = document.querySelectorAll(".cloud");
+        var c;
+        if (!reduce) {
+          for (c = 0; c < clouds.length; c++) {
+            clouds[c].style.animationDuration = (120 - intensity * 70) / (c + 1) + "s";
+          }
+        }
+        var want = reduce ? 60 : Math.round(60 + intensity * 1400);
+        var windA = -18 - intensity * 22;
+        while (drops.length < want) {
+          drops.push({
+            x: Math.random() * window.innerWidth * 1.2,
+            y: Math.random() * window.innerHeight,
+            len: 8 + Math.random() * 14 + intensity * 10,
+            sp: 500 + intensity * 900 + Math.random() * 200
+          });
+        }
+        if (drops.length > want) drops.length = want;
+        if (Math.random() < 0.15 + intensity * 0.5) {
+          spray.push({
+            x: window.innerWidth * (0.35 + Math.random() * 0.3),
+            y: window.innerHeight * 0.72,
+            vx: (Math.random() - 0.5) * 80,
+            vy: -80 - Math.random() * 140 * intensity,
+            life: 1
+          });
+        }
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        var i, d, rad = angle * Math.PI / 180, inBeam;
+        for (i = 0; i < drops.length; i++) {
+          d = drops[i];
+          d.x += Math.sin(windA * Math.PI / 180) * d.sp * dt;
+          d.y += Math.cos(windA * Math.PI / 180) * d.sp * dt;
+          if (d.y > window.innerHeight) { d.y = -20; d.x = Math.random() * window.innerWidth; }
+          inBeam = false;
+          if (i % 3 === 0 && lamp) {
+            var lr = lamp.getBoundingClientRect();
+            var lx = lr.left + lr.width / 2, ly = lr.top + lr.height / 2;
+            var ang = Math.atan2(d.y - ly, d.x - lx) * 180 / Math.PI;
+            var diff = Math.abs(((ang - angle + 540) % 360) - 180);
+            if (diff < 12) inBeam = true;
+          }
+          ctx.strokeStyle = inBeam ? "rgba(255,217,138,0.7)" : "rgba(180,200,220,0.28)";
+          ctx.beginPath();
+          ctx.moveTo(d.x, d.y);
+          ctx.lineTo(d.x + Math.sin(windA * Math.PI / 180) * d.len, d.y + d.len);
+          ctx.stroke();
+        }
+        for (i = spray.length - 1; i >= 0; i--) {
+          var p = spray[i];
+          p.vy += 220 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt * 0.8;
+          if (p.life <= 0) { spray.splice(i, 1); continue; }
+          ctx.fillStyle = "rgba(210,230,240," + (0.35 * p.life) + ")";
+          ctx.beginPath(); ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2); ctx.fill();
+        }
+        nextStrike -= dt;
+        if (intensity >= 0.15 && nextStrike <= 0) {
+          strike();
+          nextStrike = 6 + (1 - intensity) * 14 + Math.random() * 6;
+        }
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+      }
+      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(frame);
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

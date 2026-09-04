@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NGC 7741 Meridian — Spiral Galaxy Particle Observatory</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000000; }
+    body {
+      font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+      color: #c8cdd6;
+      cursor: grab;
+    }
+    body.is-dragging { cursor: grabbing; }
+    #sky {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      display: block;
+    }
+    .hud {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      animation: hudIn 2.4s ease-out forwards;
+    }
+    @keyframes hudIn { to { opacity: 1; } }
+    .designation {
+      position: absolute; top: 28px; left: 32px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 10px;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: #6D7787;
+    }
+    .title-block { position: absolute; top: 48px; left: 32px; max-width: 560px; }
+    h1 {
+      font-size: clamp(28px, 4.4vw, 52px);
+      font-weight: 400;
+      letter-spacing: 0.02em;
+      color: #e8e6df;
+      line-height: 1.05;
+    }
+    h1 em {
+      font-style: italic;
+      color: #FFD9A0;
+      text-shadow: 0 0 18px rgba(255, 217, 160, 0.45), 0 0 42px rgba(255, 180, 80, 0.2);
+    }
+    .class-line {
+      margin-top: 10px;
+      font-style: italic;
+      font-size: 14px;
+      color: #8a93a3;
+      max-width: 42ch;
+      line-height: 1.45;
+    }
+    .stats {
+      position: absolute; left: 32px; bottom: 28px;
+      display: flex; gap: 28px; flex-wrap: wrap;
+    }
+    .stat { min-width: 72px; }
+    .stat .label {
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 9px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: #6D7787;
+    }
+    .stat .value {
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-variant-numeric: tabular-nums;
+      font-size: 18px;
+      color: #d8dde6;
+      margin-top: 4px;
+    }
+    .compass {
+      position: absolute; top: 28px; right: 32px;
+      width: 72px; height: 72px;
+    }
+    .compass svg { width: 100%; height: 100%; overflow: visible; }
+    .tools {
+      position: absolute; right: 24px; top: 50%;
+      transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 12px;
+      pointer-events: auto;
+    }
+    .tools button {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 217, 160, 0.28);
+      background: rgba(18, 20, 28, 0.42);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: #FFD9A0;
+      cursor: pointer;
+      display: grid; place-items: center;
+      transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    }
+    .tools button:hover, .tools button:focus-visible {
+      transform: scale(1.12);
+      border-color: #FFD9A0;
+      box-shadow: 0 0 0 1px rgba(255, 217, 160, 0.4), 0 0 18px rgba(255, 180, 80, 0.35);
+      outline: none;
+    }
+    .tools button svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+    @media (prefers-reduced-motion: reduce) {
+      .hud { animation: none; opacity: 1; }
+      .tools button { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="sky"></canvas>
+  <div class="hud" id="hud">
+    <div class="designation">Meridian Observatory · Field plate NGC-7741 · II.a</div>
+    <div class="title-block">
+      <h1>NGC 7741 <em>Meridian</em></h1>
+      <p class="class-line">Barred spiral, SBc, Local Supercluster. Two logarithmic arms unwind from a warm nuclear bulge; dust lanes blush magenta at the rim.</p>
+    </div>
+    <svg class="compass" viewBox="0 0 72 72" aria-hidden="true">
+      <circle cx="36" cy="36" r="30" fill="none" stroke="#6D7787" stroke-width="0.6" opacity="0.7"/>
+      <circle cx="36" cy="36" r="22" fill="none" stroke="#6D7787" stroke-width="0.4" opacity="0.4"/>
+      <text x="36" y="12" text-anchor="middle" fill="#8a93a3" font-size="8" font-family="ui-monospace,monospace">N</text>
+      <g id="needle">
+        <polygon points="36,14 39,36 36,33 33,36" fill="#FFD9A0"/>
+        <polygon points="36,58 39,36 36,39 33,36" fill="#6D7787"/>
+      </g>
+    </svg>
+    <div class="stats">
+      <div class="stat"><div class="label">Particles</div><div class="value" id="stat-particles">0</div></div>
+      <div class="stat"><div class="label">Distance in Mly</div><div class="value" id="stat-distance">0</div></div>
+      <div class="stat"><div class="label">Diameter in kly</div><div class="value" id="stat-diameter">0</div></div>
+      <div class="stat"><div class="label">Tilt</div><div class="value" id="stat-tilt">48°</div></div>
+      <div class="stat"><div class="label">Zoom</div><div class="value" id="stat-zoom">1.00×</div></div>
+    </div>
+    <div class="tools">
+      <button type="button" id="btn-zoomin" title="zoom in" aria-label="zoom in">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.2-4.2M11 8v6M8 11h6"/></svg>
+      </button>
+      <button type="button" id="btn-zoomout" title="zoom out" aria-label="zoom out">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.2-4.2M8 11h6"/></svg>
+      </button>
+      <button type="button" id="btn-pause" title="pause" aria-label="pause">
+        <svg viewBox="0 0 24 24" id="pause-icon"><path d="M8 6h3v12H8zM13 6h3v12h-3z" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button type="button" id="btn-reset" title="reset" aria-label="reset">
+        <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v6h6"/></svg>
+      </button>
+    </div>
+  </div>
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function init() {
+      var canvas = qs("#sky");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var reduced = false;
+      if (typeof window.matchMedia === "function") {
+        reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      }
+      var N = reduced ? 14000 : 42000;
+      var PARTICLE_TARGET = N;
+      var DIST_TARGET = 38.4;
+      var DIA_TARGET = 44.2;
+      var yaw = 0.42;
+      var tilt = 0.92;
+      var zoom = 1;
+      var zoomTarget = 1;
+      var spinning = true;
+      var t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+      var last = t0;
+      var dragging = false;
+      var lastX = 0, lastY = 0;
+      var pinches = null;
+      var sprites = {};
+      var particles = [];
+      var nebulae = [];
+      var bgCanvas = null;
+      var dpr = 1;
+      var W = 0, H = 0;
+      var rafId = 0;
+
+      function lerpColor(a, b, t) {
+        t = Math.max(0, Math.min(1, t));
+        return [
+          (a[0] + (b[0] - a[0]) * t) | 0,
+          (a[1] + (b[1] - a[1]) * t) | 0,
+          (a[2] + (b[2] - a[2]) * t) | 0
+        ];
+      }
+      function hexToRgb(h) {
+        return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+      }
+      var C_CORE_A = hexToRgb("#FFEBBE");
+      var C_CORE_B = hexToRgb("#FFCD82");
+      var C_ARM_A = hexToRgb("#CDD7FF");
+      var C_ARM_B = hexToRgb("#91C3FF");
+      var C_DUST_A = hexToRgb("#AA7882");
+      var C_DUST_B = hexToRgb("#D25058");
+
+      function quantKey(r, g, b, hot) {
+        return ((r >> 3) << 16) | ((g >> 3) << 8) | (b >> 3) | (hot ? 0x1000000 : 0);
+      }
+      function makeSprite(r, g, b, hot) {
+        var s = document.createElement("canvas");
+        s.width = 32; s.height = 32;
+        var c = s.getContext("2d");
+        if (!c) return s;
+        var gdx = c.createRadialGradient(16, 16, 0, 16, 16, hot ? 15 : 12);
+        gdx.addColorStop(0, "rgba(" + r + "," + g + "," + b + "," + (hot ? 1 : 0.95) + ")");
+        gdx.addColorStop(0.22, "rgba(" + r + "," + g + "," + b + "," + (hot ? 0.55 : 0.38) + ")");
+        gdx.addColorStop(1, "rgba(" + r + "," + g + "," + b + ",0)");
+        c.fillStyle = gdx;
+        c.fillRect(0, 0, 32, 32);
+        return s;
+      }
+      function getSprite(r, g, b, hot) {
+        var k = quantKey(r, g, b, hot);
+        if (!sprites[k]) sprites[k] = makeSprite(r, g, b, hot);
+        return sprites[k];
+      }
+
+      function gauss() {
+        var u = 0, v = 0;
+        while (u === 0) u = Math.random();
+        while (v === 0) v = Math.random();
+        return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+      }
+      function expSample(mean, maxR) {
+        var r = -mean * Math.log(1 - Math.random() * 0.999);
+        return Math.min(r, maxR);
+      }
+
+      function colorForRadius(rn, isArm, hot) {
+        var rgb;
+        if (hot) {
+          rgb = lerpColor(C_ARM_A, C_ARM_B, 0.35);
+          return { r: rgb[0], g: rgb[1], b: rgb[2], hot: 1 };
+        }
+        if (!isArm || rn < 0.18) {
+          rgb = lerpColor(C_CORE_A, C_CORE_B, rn / 0.28);
+        } else if (rn < 0.72) {
+          var t = (rn - 0.18) / 0.54;
+          rgb = lerpColor(C_CORE_B, C_ARM_A, Math.min(1, t * 1.4));
+          if (t > 0.25) rgb = lerpColor(rgb, C_ARM_B, (t - 0.25) / 0.75);
+        } else {
+          rgb = lerpColor(C_ARM_B, lerpColor(C_DUST_A, C_DUST_B, (rn - 0.72) / 0.28), (rn - 0.72) / 0.28);
+        }
+        return { r: rgb[0], g: rgb[1], b: rgb[2], hot: 0 };
+      }
+
+      function buildParticles() {
+        particles = [];
+        var diskR = 1;
+        var bulgeN = Math.floor(N * 0.18);
+        var armN = N - bulgeN;
+        var i, p, col, r, th, arm, scatter;
+        for (i = 0; i < bulgeN; i++) {
+          r = Math.abs(gauss()) * 0.11;
+          th = Math.random() * Math.PI * 2;
+          col = colorForRadius(r, false, false);
+          p = {
+            r: r, a0: th, z: gauss() * 0.045,
+            size: 0.9 + Math.random() * 1.4,
+            bright: 0.55 + Math.random() * 0.45,
+            cr: col.r, cg: col.g, cb: col.b, hot: 0
+          };
+          p.spr = getSprite(p.cr, p.cg, p.cb, false);
+          particles.push(p);
+        }
+        var b = 0.28;
+        var a0 = 0.018;
+        var hotBudget = Math.floor(armN * 0.06);
+        for (i = 0; i < armN; i++) {
+          r = expSample(0.32 * diskR, diskR);
+          r = Math.max(0.02, r);
+          arm = i % 2;
+          th = Math.log(r / a0) / b + arm * Math.PI;
+          scatter = 0.04 + r * 0.55;
+          th += (Math.random() - 0.5) * scatter;
+          r += (Math.random() - 0.5) * 0.04 * r;
+          var isHot = hotBudget > 0 && Math.random() < 0.07;
+          if (isHot) hotBudget--;
+          col = colorForRadius(r, true, isHot);
+          p = {
+            r: r, a0: th,
+            z: gauss() * 0.06 * (0.4 + r),
+            size: isHot ? (2.4 + Math.random() * 2.2) : (0.55 + Math.random() * 1.1),
+            bright: isHot ? 1 : (0.28 + Math.random() * 0.62),
+            cr: col.r, cg: col.g, cb: col.b, hot: isHot ? 1 : 0
+          };
+          p.spr = getSprite(p.cr, p.cg, p.cb, isHot);
+          particles.push(p);
+        }
+        nebulae = [];
+        for (i = 0; i < 90; i++) {
+          r = 0.08 + Math.pow(Math.random(), 0.7) * 0.9;
+          arm = i % 2;
+          th = Math.log(Math.max(r, 0.03) / a0) / b + arm * Math.PI + (Math.random() - 0.5) * 0.35;
+          var peach = r < 0.28;
+          var wine = r > 0.62;
+          nebulae.push({
+            r: r, a0: th, z: (Math.random() - 0.5) * 0.04,
+            w: 28 + Math.random() * 70,
+            h: 16 + Math.random() * 36,
+            a: 0.06 + Math.random() * 0.03,
+            col: peach ? "255,210,170" : wine ? "160,70,90" : "90,120,200"
+          });
+        }
+      }
+
+      function paintBackground() {
+        bgCanvas = document.createElement("canvas");
+        bgCanvas.width = Math.max(1, W);
+        bgCanvas.height = Math.max(1, H);
+        var b = bgCanvas.getContext("2d");
+        if (!b) return;
+        b.fillStyle = "#000000";
+        b.fillRect(0, 0, W, H);
+        var stars = reduced ? 180 : 420;
+        var s;
+        for (s = 0; s < stars; s++) {
+          var sx = Math.random() * W, sy = Math.random() * H;
+          var br = 0.15 + Math.random() * 0.55;
+          b.fillStyle = "rgba(220,225,240," + br + ")";
+          b.fillRect(sx, sy, Math.random() < 0.12 ? 1.6 : 1, Math.random() < 0.12 ? 1.6 : 1);
+        }
+        var g, gx, gy, rx, ry, ang, grd;
+        for (g = 0; g < 12; g++) {
+          gx = Math.random() * W;
+          gy = Math.random() * H;
+          rx = 18 + Math.random() * 70;
+          ry = rx * (0.28 + Math.random() * 0.5);
+          ang = Math.random() * Math.PI;
+          b.save();
+          b.translate(gx, gy);
+          b.rotate(ang);
+          b.scale(1, ry / rx);
+          grd = b.createRadialGradient(0, 0, 0, 0, 0, rx);
+          var hue = Math.random() < 0.4 ? "210,200,230" : Math.random() < 0.5 ? "180,200,255" : "255,210,180";
+          grd.addColorStop(0, "rgba(" + hue + ",0.22)");
+          grd.addColorStop(0.45, "rgba(" + hue + ",0.08)");
+          grd.addColorStop(1, "rgba(" + hue + ",0)");
+          b.fillStyle = grd;
+          b.beginPath();
+          b.arc(0, 0, rx, 0, Math.PI * 2);
+          b.fill();
+          b.restore();
+        }
+      }
+
+      function resize() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        W = window.innerWidth || 1;
+        H = window.innerHeight || 1;
+        canvas.width = Math.floor(W * dpr);
+        canvas.height = Math.floor(H * dpr);
+        canvas.style.width = W + "px";
+        canvas.style.height = H + "px";
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        paintBackground();
+      }
+
+      function easeOutQuart(t) {
+        t = Math.max(0, Math.min(1, t));
+        return 1 - Math.pow(1 - t, 4);
+      }
+      function fmt(n, d) {
+        return n.toFixed(d);
+      }
+
+      var elP = qs("#stat-particles");
+      var elD = qs("#stat-distance");
+      var elDia = qs("#stat-diameter");
+      var elT = qs("#stat-tilt");
+      var elZ = qs("#stat-zoom");
+      var needle = qs("#needle");
+      var pauseBtn = qs("#btn-pause");
+
+      function project(r, ang, z) {
+        var x = r * Math.cos(ang);
+        var y = r * Math.sin(ang);
+        var cz = Math.cos(yaw), sz = Math.sin(yaw);
+        var x1 = x * cz - y * sz;
+        var y1 = x * sz + y * cz;
+        var ct = Math.cos(tilt), st = Math.sin(tilt);
+        var y2 = y1 * ct - z * st;
+        var z2 = y1 * st + z * ct;
+        return { x: x1, y: y2, z: z2 };
+      }
+
+      function frame(now) {
+        if (typeof window.requestAnimationFrame === "function") {
+          rafId = window.requestAnimationFrame(frame);
+        }
+        var dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        var elapsed = (now - t0) / 1000;
+        zoom += (zoomTarget - zoom) * (reduced ? 1 : 0.12);
+        if (spinning && !reduced) yaw += dt * 0.12;
+        else if (spinning) yaw += dt * 0.03;
+
+        var u = easeOutQuart(elapsed / 3.2);
+        if (elP) elP.textContent = String(Math.round(PARTICLE_TARGET * Math.min(1, u)));
+        if (elD) elD.textContent = fmt(DIST_TARGET * Math.min(1, u), 1);
+        if (elDia) elDia.textContent = fmt(DIA_TARGET * Math.min(1, u), 1);
+        if (elT) elT.textContent = Math.round(tilt * 180 / Math.PI) + "°";
+        if (elZ) elZ.textContent = fmt(zoom, 2) + "×";
+        if (needle) needle.setAttribute("transform", "rotate(" + (yaw * 180 / Math.PI) + " 36 36)");
+
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (bgCanvas) ctx.drawImage(bgCanvas, 0, 0, W, H);
+        else { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H); }
+
+        var cx = W * 0.5, cy = H * 0.52;
+        var scale = Math.min(W, H) * 0.42 * zoom;
+        var i, p, pr, ang, pt, px, py, sz, depth;
+
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        var core = ctx.createRadialGradient(cx, cy, 0, cx, cy, scale * 0.28);
+        core.addColorStop(0, "rgba(255, 220, 160, 0.28)");
+        core.addColorStop(0.4, "rgba(255, 180, 110, 0.08)");
+        core.addColorStop(1, "rgba(255, 160, 80, 0)");
+        ctx.fillStyle = core;
+        ctx.beginPath();
+        ctx.arc(cx, cy, scale * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+
+        for (i = 0; i < nebulae.length; i++) {
+          p = nebulae[i];
+          ang = p.a0 + 0.35 / (0.25 + p.r) * elapsed * (spinning ? 1 : 0);
+          pt = project(p.r, ang, p.z);
+          px = cx + pt.x * scale;
+          py = cy + pt.y * scale;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(ang * 0.2);
+          ctx.scale(1, 0.55 + Math.abs(Math.cos(tilt)) * 0.3);
+          var ng = ctx.createRadialGradient(0, 0, 0, 0, 0, p.w);
+          ng.addColorStop(0, "rgba(" + p.col + "," + p.a + ")");
+          ng.addColorStop(1, "rgba(" + p.col + ",0)");
+          ctx.fillStyle = ng;
+          ctx.beginPath();
+          ctx.arc(0, 0, p.w, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        for (i = 0; i < particles.length; i++) {
+          p = particles[i];
+          ang = p.a0 + (0.35 / (0.25 + p.r)) * elapsed * (spinning ? 1 : 0);
+          pt = project(p.r, ang, p.z);
+          depth = 1 + pt.z * 0.35;
+          sz = p.size * Math.max(0.35, depth) * (0.7 + zoom * 0.15);
+          px = cx + pt.x * scale;
+          py = cy + pt.y * scale;
+          if (px < -20 || py < -20 || px > W + 20 || py > H + 20) continue;
+          ctx.globalAlpha = Math.max(0.08, Math.min(1, p.bright * (0.7 + depth * 0.4)));
+          ctx.drawImage(p.spr, px - sz, py - sz, sz * 2, sz * 2);
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+
+        var vig = ctx.createRadialGradient(cx, cy, Math.min(W, H) * 0.22, cx, cy, Math.max(W, H) * 0.72);
+        vig.addColorStop(0, "rgba(0,0,0,0)");
+        vig.addColorStop(1, "rgba(0,0,0,0.72)");
+        ctx.fillStyle = vig;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      function setPauseIcon() {
+        if (!pauseBtn) return;
+        pauseBtn.setAttribute("aria-label", spinning ? "pause" : "pause");
+        pauseBtn.setAttribute("title", spinning ? "pause" : "pause");
+      }
+      function resetView() {
+        yaw = 0.42;
+        tilt = 0.92;
+        zoomTarget = 1;
+        spinning = true;
+        t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+        setPauseIcon();
+      }
+
+      canvas.addEventListener("pointerdown", function (e) {
+        dragging = true;
+        lastX = e.clientX; lastY = e.clientY;
+        document.body.classList.add("is-dragging");
+        try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+      });
+      canvas.addEventListener("pointermove", function (e) {
+        if (!dragging) return;
+        yaw += (e.clientX - lastX) * 0.005;
+        tilt += (e.clientY - lastY) * 0.004;
+        tilt = Math.max(0.18, Math.min(1.42, tilt));
+        lastX = e.clientX; lastY = e.clientY;
+      });
+      function endDrag() {
+        dragging = false;
+        document.body.classList.remove("is-dragging");
+      }
+      canvas.addEventListener("pointerup", endDrag);
+      canvas.addEventListener("pointercancel", endDrag);
+      canvas.addEventListener("wheel", function (e) {
+        e.preventDefault();
+        zoomTarget *= e.deltaY > 0 ? 0.9 : 1.11;
+        zoomTarget = Math.max(0.35, Math.min(6, zoomTarget));
+      }, { passive: false });
+      canvas.addEventListener("touchstart", function (e) {
+        if (e.touches && e.touches.length === 2) {
+          var dx = e.touches[0].clientX - e.touches[1].clientX;
+          var dy = e.touches[0].clientY - e.touches[1].clientY;
+          pinches = Math.hypot(dx, dy);
+        }
+      }, { passive: true });
+      canvas.addEventListener("touchmove", function (e) {
+        if (!e.touches || e.touches.length !== 2 || pinches == null) return;
+        var dx = e.touches[0].clientX - e.touches[1].clientX;
+        var dy = e.touches[0].clientY - e.touches[1].clientY;
+        var d = Math.hypot(dx, dy);
+        zoomTarget *= d / pinches;
+        zoomTarget = Math.max(0.35, Math.min(6, zoomTarget));
+        pinches = d;
+      }, { passive: true });
+
+      var zin = qs("#btn-zoomin");
+      var zout = qs("#btn-zoomout");
+      var rst = qs("#btn-reset");
+      if (zin) zin.addEventListener("click", function () {
+        zoomTarget = Math.min(6, zoomTarget * 1.22);
+      });
+      if (zout) zout.addEventListener("click", function () {
+        zoomTarget = Math.max(0.35, zoomTarget / 1.22);
+      });
+      if (pauseBtn) pauseBtn.addEventListener("click", function () {
+        spinning = !spinning;
+        setPauseIcon();
+      });
+      if (rst) rst.addEventListener("click", resetView);
+      window.addEventListener("keydown", function (e) {
+        if (e.code === "Space") {
+          e.preventDefault();
+          spinning = !spinning;
+          setPauseIcon();
+        }
+      });
+      window.addEventListener("resize", resize);
+
+      buildParticles();
+      resize();
+      if (typeof window.requestAnimationFrame === "function") {
+        rafId = window.requestAnimationFrame(frame);
+      }
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

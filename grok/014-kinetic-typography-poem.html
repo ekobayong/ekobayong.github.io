@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nocturne for the Sea — Kinetic Poem</title>
+  <style>
+    :root {
+      --bone: #ece6d9;
+      --dim: rgba(236,230,217,0.42);
+      --teal: #146c73;
+      --glow: #2aa3ab;
+      --bg: #0e0c0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--bone);
+      font-family: Georgia, "Iowan Old Style", Palatino, "Book Antiqua", ui-serif, serif;
+      overflow-x: hidden;
+    }
+    .grain, .water, .moon {
+      position: fixed;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .moon {
+      top: 8vh;
+      right: 10vw;
+      width: 88px;
+      height: 88px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 32% 30%, #f7f1e1, #d8d0bd 55%, #8f8877);
+      box-shadow:
+        inset -18px -8px 0 rgba(0,0,0,0.12),
+        inset 10px 14px 0 rgba(0,0,0,0.08),
+        0 0 24px rgba(236,230,217,0.45),
+        0 0 60px rgba(236,230,217,0.2);
+      transform: translateY(calc(var(--scroll, 0) * -28vh)) scale(calc(1 - var(--scroll, 0) * 0.45));
+      opacity: calc(1 - var(--scroll, 0) * 0.55);
+    }
+    .water {
+      left: 0; right: 0; bottom: -10vh;
+      height: 32vh;
+      background: radial-gradient(ellipse at 50% 100%, rgba(20,108,115, calc(0.22 + var(--scroll, 0) * 0.35)), transparent 70%);
+      filter: blur(18px);
+      animation: swell 11s ease-in-out infinite alternate;
+    }
+    .grain {
+      inset: 0;
+      opacity: 0.06;
+      mix-blend-mode: overlay;
+      background:
+        repeating-radial-gradient(circle at 20% 30%, #fff 0 1px, transparent 1px 3px),
+        repeating-radial-gradient(circle at 80% 70%, #000 0 1px, transparent 1px 4px);
+      background-size: 120px 120px, 90px 90px;
+    }
+    .rail {
+      position: fixed;
+      right: 22px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .track {
+      position: relative;
+      width: 1px;
+      height: 42vh;
+      background: rgba(236,230,217,0.18);
+    }
+    .fill {
+      position: absolute;
+      top: 0; left: 0; width: 1px;
+      height: calc(var(--scroll, 0) * 100%);
+      background: var(--glow);
+      box-shadow: 0 0 8px var(--glow);
+    }
+    .dots { display: flex; flex-direction: column; gap: 8px; }
+    .dots a {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: rgba(236,230,217,0.3);
+      display: block;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .dots a:hover, .dots a.cur { transform: scale(1.7); background: var(--glow); }
+    .counter {
+      writing-mode: vertical-rl;
+      font-family: ui-sans-serif, system-ui, "Helvetica Neue", sans-serif;
+      font-size: 10px;
+      letter-spacing: 0.28em;
+      color: var(--dim);
+    }
+    .hint {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 4;
+      text-align: center;
+      font-family: ui-sans-serif, system-ui, "Helvetica Neue", sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    .hint .drip {
+      display: block;
+      width: 1px;
+      height: 28px;
+      margin: 8px auto 0;
+      background: linear-gradient(var(--glow), transparent);
+      animation: drip 1.6s ease-in-out infinite;
+    }
+    body.scrolled .hint { opacity: 0; pointer-events: none; }
+    stanza, .stanza {
+      display: grid;
+      place-items: center;
+      min-height: 100svh;
+      position: relative;
+      z-index: 2;
+      padding: 8vh 6vw;
+    }
+    .num {
+      position: absolute;
+      top: 14vh;
+      font-family: ui-sans-serif, system-ui, "Helvetica Neue", sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.28em;
+      color: var(--teal);
+      opacity: calc(0.15 + var(--t, 0) * 0.85);
+    }
+    .col {
+      width: 22ch;
+      max-width: 90vw;
+      font-size: clamp(1.5rem, 1rem + 3.6vw, 4.4rem);
+      line-height: 1.22;
+      text-wrap: balance;
+    }
+    .s1 .ch {
+      display: inline-block;
+      transform: translateY(calc((1 - var(--t, 0)) * 1.1em)) rotate(calc((1 - var(--t, 0)) * 8deg));
+      opacity: var(--t, 0);
+      transition: transform 0.7s, opacity 0.7s;
+      transition-delay: calc(var(--i, 0) * 26ms);
+    }
+    .s2 .w {
+      display: inline-block;
+      transition: transform 0.8s cubic-bezier(0.22,1,0.36,1), opacity 0.8s;
+      transition-delay: calc(var(--i, 0) * 55ms);
+    }
+    .s2 .w.odd { transform: translateX(calc((1 - var(--t, 0)) * -30vw)); }
+    .s2 .w.even { transform: translateX(calc((1 - var(--t, 0)) * 30vw)); }
+    .s3 p { letter-spacing: calc(var(--p, 0) * 0.42em); }
+    .s3 .tight { letter-spacing: 0; font-style: italic; color: var(--dim); }
+    .s4 {
+      perspective: 900px;
+    }
+    .s4 .line {
+      transform-origin: bottom center;
+      transform: rotateX(calc((1 - var(--t, 0)) * 85deg)) translateZ(calc((1 - var(--t, 0)) * -80px));
+      opacity: calc(0.2 + var(--t, 0));
+    }
+    .s5 .filltext {
+      background-image: linear-gradient(to top, var(--glow) calc(var(--p, 0) * 100%), var(--bone) calc(var(--p, 0) * 100%));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .s6 .w {
+      display: inline-block;
+      filter: blur(calc((1 - var(--t, 0)) * 14px));
+      transform: scale(calc(1 + (1 - var(--t, 0)) * 0.25));
+      opacity: var(--t, 0);
+      transition: filter 0.8s, transform 0.8s, opacity 0.8s;
+      transition-delay: calc(var(--i, 0) * 70ms);
+    }
+    .s7 .w {
+      display: inline-block;
+      transform:
+        translate(calc((1 - var(--t, 0)) * var(--dx)), calc((1 - var(--t, 0)) * var(--dy)))
+        rotate(calc((1 - var(--t, 0)) * var(--dr)));
+    }
+    .s8 .ch {
+      display: inline-block;
+      transform: translateY(calc(sin((var(--p, 0) * 6.28 + var(--i, 0) * 0.45)) * (1 - var(--t, 0)) * 0.35em));
+    }
+    .teal { color: var(--glow); }
+    .s9 .close {
+      transform: scale(calc(1.35 - var(--t, 0) * 0.35));
+      letter-spacing: calc((1 - var(--t, 0)) * 0.2em);
+    }
+    .colophon {
+      margin-top: 2.4rem;
+      font-family: ui-sans-serif, system-ui, "Helvetica Neue", sans-serif;
+      font-size: 10px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    @keyframes swell {
+      from { transform: scaleX(1) scaleY(1); }
+      to { transform: scaleX(1.08) scaleY(1.18); }
+    }
+    @keyframes drip {
+      0% { height: 10px; opacity: 0.2; }
+      50% { height: 32px; opacity: 1; }
+      100% { height: 10px; opacity: 0.2; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .water, .hint .drip { animation: none; }
+      .s1 .ch, .s2 .w, .s4 .line, .s6 .w, .s7 .w, .s8 .ch, .s9 .close {
+        transform: none !important;
+        filter: none !important;
+        opacity: 1 !important;
+        letter-spacing: normal;
+      }
+      .s3 p { letter-spacing: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="moon" aria-hidden="true"></div>
+  <div class="water" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <nav class="rail" aria-label="Poem progress">
+    <div class="track"><div class="fill"></div></div>
+    <div class="dots">
+      <a href="#s1" class="cur"></a><a href="#s2"></a><a href="#s3"></a>
+      <a href="#s4"></a><a href="#s5"></a><a href="#s6"></a>
+      <a href="#s7"></a><a href="#s8"></a><a href="#s9"></a>
+    </div>
+    <div class="counter" id="counter">I / IX</div>
+  </nav>
+  <div class="hint" id="hint">Scroll<span class="drip"></span></div>
+
+  <section class="stanza s1" id="s1">
+    <div class="num">I</div>
+    <div class="col" data-split="letters">
+      The harbor holds its breath against the dark. Oars rest. The pilings listen.
+    </div>
+  </section>
+  <section class="stanza s2" id="s2">
+    <div class="num">II</div>
+    <div class="col" data-split="words">
+      Night pours itself into every hollow of the tide and calls the boats by nothing.
+    </div>
+  </section>
+  <section class="stanza s3" id="s3">
+    <div class="num">III</div>
+    <div class="col">
+      <p>Salt, then silence, then the long unscrolling of water remembering the moon.</p>
+      <p class="tight">Stay with the hush a little longer.</p>
+    </div>
+  </section>
+  <section class="stanza s4" id="s4">
+    <div class="num">IV</div>
+    <div class="col">
+      <p class="line">We came here once</p>
+      <p class="line">to name the black horizon</p>
+      <p class="line">and failed, beautifully.</p>
+    </div>
+  </section>
+  <section class="stanza s5" id="s5">
+    <div class="num">V</div>
+    <div class="col filltext">
+      The keel of the night draws a single silver line from here to nowhere.
+    </div>
+  </section>
+  <section class="stanza s6" id="s6">
+    <div class="num">VI</div>
+    <div class="col" data-split="words">
+      Fish-lanterns, far out— or are they stars that learned to swim?
+    </div>
+  </section>
+  <section class="stanza s7" id="s7">
+    <div class="num">VII</div>
+    <div class="col" data-split="words" data-scatter="1">
+      Every wave is a letter the dark cannot keep and will not send.
+    </div>
+  </section>
+  <section class="stanza s8" id="s8">
+    <div class="num">VIII</div>
+    <div class="col" data-split="letters">
+      If you listen past the surf you can hear the tide say <span class="teal">almost your name.</span>
+    </div>
+  </section>
+  <section class="stanza s9" id="s9">
+    <div class="num">IX</div>
+    <div class="col close">
+      Morning will arrive late, and <span class="teal">dripping light.</span>
+      <p class="colophon">Nocturne for the Sea · nine stanzas · one night</p>
+    </div>
+  </section>
+
+  <script>
+  (function () {
+    "use strict";
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    function qs(sel, root) {
+      try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    }
+    function qsa(sel, root) {
+      try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
+    }
+    function smoothstep(t) {
+      t = Math.max(0, Math.min(1, t));
+      return t * t * (3 - 2 * t);
+    }
+    var ROMAN = ["I","II","III","IV","V","VI","VII","VIII","IX"];
+    function splitLetters(el) {
+      var nodes = Array.prototype.slice.call(el.childNodes);
+      el.innerHTML = "";
+      nodes.forEach(function (node) {
+        if (node.nodeType === 3) {
+          var chars = node.textContent.split("");
+          chars.forEach(function (ch) {
+            var s = document.createElement("span");
+            s.className = "ch";
+            s.textContent = ch === " " ? "\u00a0" : ch;
+            el.appendChild(s);
+          });
+        } else {
+          el.appendChild(node);
+        }
+      });
+      qsa(".ch", el).forEach(function (s, i) { s.style.setProperty("--i", i); });
+    }
+    function splitWords(el, scatter) {
+      var html = el.innerHTML;
+      var parts = html.split(/(\s+)/);
+      el.innerHTML = "";
+      var idx = 0;
+      parts.forEach(function (p) {
+        if (!p) return;
+        if (/^\s+$/.test(p)) { el.appendChild(document.createTextNode(p)); return; }
+        var s = document.createElement("span");
+        s.className = "w " + (idx % 2 ? "even" : "odd");
+        s.innerHTML = p;
+        s.style.setProperty("--i", idx);
+        if (scatter) {
+          s.style.setProperty("--dx", ((Math.random() * 60 - 30).toFixed(1)) + "vw");
+          s.style.setProperty("--dy", ((Math.random() * 50 - 25).toFixed(1)) + "vh");
+          s.style.setProperty("--dr", ((Math.random() * 60 - 30).toFixed(1)) + "deg");
+        }
+        el.appendChild(s);
+        idx++;
+      });
+    }
+    function init() {
+      var stanzas = qsa(".stanza");
+      var dots = qsa(".dots a");
+      var counter = qs("#counter");
+      var hint = qs("#hint");
+      if (!stanzas.length) return;
+      var reduced = false;
+      if (typeof window.matchMedia === "function") {
+        try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e3) { reduced = false; }
+      }
+      stanzas.forEach(function (sec) {
+        var col = qs(".col", sec);
+        if (!col) return;
+        var mode = col.getAttribute("data-split");
+        if (mode === "letters") splitLetters(col);
+        if (mode === "words") splitWords(col, col.getAttribute("data-scatter") === "1");
+      });
+      if (typeof IntersectionObserver === "function") {
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (en) {
+            if (en.isIntersecting) en.target.classList.add("in");
+          });
+        }, { threshold: 0.35 });
+        stanzas.forEach(function (s) { io.observe(s); });
+      }
+      var scrolled = false;
+      function update() {
+        var sh = document.documentElement.scrollHeight - window.innerHeight;
+        var progress = sh > 0 ? window.scrollY / sh : 0;
+        document.body.style.setProperty("--scroll", progress.toFixed(4));
+        if (!scrolled && window.scrollY > 8) {
+          scrolled = true;
+          document.body.classList.add("scrolled");
+        }
+        var mid = window.scrollY + window.innerHeight * 0.5;
+        var current = 0;
+        stanzas.forEach(function (sec, i) {
+          var r = sec.getBoundingClientRect();
+          var vh = window.innerHeight || 1;
+          var center = r.top + r.height / 2;
+          var dist = 1 - Math.abs(center - vh / 2) / (vh * 0.6);
+          var t = smoothstep(dist);
+          var p = smoothstep(1 - (r.bottom / (vh + r.height)));
+          if (r.top < vh && r.bottom > 0) p = smoothstep((vh - r.top) / (vh + r.height));
+          else if (r.bottom <= 0) p = 1;
+          else p = 0;
+          sec.style.setProperty("--t", t.toFixed(4));
+          sec.style.setProperty("--p", p.toFixed(4));
+          if (Math.abs((r.top + r.height / 2) - vh / 2) < vh * 0.4) current = i;
+        });
+        dots.forEach(function (d, i) {
+          if (i === current) d.classList.add("cur");
+          else d.classList.remove("cur");
+        });
+        if (counter) counter.textContent = ROMAN[current] + " / IX";
+      }
+      function onScroll() {
+        if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(update);
+        else update();
+      }
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onScroll);
+      update();
+      function go(i) {
+        i = Math.max(0, Math.min(stanzas.length - 1, i));
+        stanzas[i].scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
+      }
+      document.addEventListener("keydown", function (e) {
+        var idx = 0;
+        stanzas.forEach(function (s, i) { if (s.classList.contains("in") || qs(".dots a.cur") === dots[i]) idx = i; });
+        dots.forEach(function (d, i) { if (d.classList.contains("cur")) idx = i; });
+        if (e.key === "ArrowDown" || e.key === "PageDown" || e.key === " ") {
+          e.preventDefault(); go(idx + 1);
+        }
+        if (e.key === "ArrowUp" || e.key === "PageUp") {
+          e.preventDefault(); go(idx - 1);
+        }
+      });
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>
