@@ -175,27 +175,27 @@ const html = `<!DOCTYPE html>
 <body>
 <div class="wrap">
   <header>
-    <div class="eyebrow">DeepSeek V4 · Flash</div>
-    <h1>Fable 5.1 — <span>100 HTML Files</span></h1>
-    <p class="lede">Seratus halaman mandiri: satu proyek per prompt, tanpa library eksternal —
-      semua di-generate di browser. Klik <b>Open</b> untuk membuka demo di tab baru, atau gunakan
-      tombol <b>Prompt</b> untuk menampilkan/menyembunyikan prompt asli.</p>
+    <div class="eyebrow">Collection · 100 studies</div>
+    <h1>Deepseek V4 Flash. <span>100 HTML Files</span></h1>
+    <p class="lede">One hundred self-contained visual studies — generative art, physics, typography,
+      interfaces and scenes — generated with Fable 5.1. Open any piece in a new tab, or expand a
+      card to read the original generation prompt.</p>
   </header>
 
   <div class="toolbar">
     <div class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
-      <input id="q" type="search" placeholder="Cari berdasarkan judul atau nama file…" autocomplete="off">
+      <input id="q" type="search" placeholder="Search by title or file name…" autocomplete="off">
     </div>
     <div class="count"><b id="shownCount">0</b> / <span id="totalCount">0</span> files</div>
   </div>
 
   <div class="list" id="list"></div>
-  <div class="empty" id="empty">Tidak ada yang cocok — coba kata kunci lain.</div>
+  <div class="empty" id="empty">No matches — try another keyword.</div>
 
   <footer>
-    <span>Generated dari <code>prompt.md</code> oleh <code>tools/build-index.js</code></span>
-    <span>Prompt lengkap juga tersedia sebagai file <code>NNN-….txt</code> terpisah</span>
+    <span>Generated from <code>prompt.md</code> by <code>tools/build-index.js</code></span>
+    <span>Full prompts also available as separate <code>NNN-….txt</code> files</span>
   </footer>
 </div>
 
