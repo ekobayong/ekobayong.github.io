@@ -1,4 +1,4 @@
-# Gemini Flash 3.8 · 100 HTML Files — Original Prompts
+# Deepseek V4 - Flash · 100 HTML Files — Original Prompts
 
 Source: https://miaai-lab.github.io/Fable-5.1-100-HTML-Files/
 

@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rosace du Nord — Gothic Rose Window</title>
+<style>
+  :root {
+    --bg-nave: #0b0908;
+    --stone-text: #a5937a;
+    --gold-text: #e8b93a;
+    --ui-border: rgba(165, 147, 122, 0.25);
+    --ui-bg: rgba(18, 15, 13, 0.75);
+    --sun-angle: 0deg;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--bg-nave);
+    color: var(--stone-text);
+    font-family: "Iowan Old Style", "Palatino Linotype", "URW Palladio L", P052, Palatino, Georgia, serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  /* Fullscreen Dust Motes Canvas */
+  #dustCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 15;
+    mix-blend-mode: screen;
+  }
+
+  /* Architectural vignette & ambience */
+  .nave-shadows {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 40%, transparent 40%, rgba(5, 4, 3, 0.85) 90%),
+                linear-gradient(to bottom, transparent 60%, rgba(4, 3, 2, 0.95) 100%);
+    z-index: 10;
+  }
+
+  header {
+    text-align: center;
+    padding: 2.2rem 1rem 1rem;
+    z-index: 20;
+    position: relative;
+  }
+
+  h1 {
+    font-size: clamp(1.4rem, 3.5vw, 2.4rem);
+    font-weight: 400;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #e2d7c5;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 30px rgba(232, 185, 58, 0.2);
+    margin-bottom: 0.4rem;
+  }
+
+  .subtitle {
+    font-style: italic;
+    font-size: clamp(0.85rem, 1.6vw, 1.05rem);
+    letter-spacing: 0.12em;
+    color: var(--stone-text);
+  }
+
+  /* Season Controls */
+  .controls-wrap {
+    margin-top: 1.2rem;
+    display: flex;
+    justify-content: center;
+    z-index: 20;
+  }
+
+  .season-pill {
+    display: inline-flex;
+    background: var(--ui-bg);
+    border: 1px solid var(--ui-border);
+    border-radius: 999px;
+    padding: 4px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.05);
+    backdrop-filter: blur(8px);
+  }
+
+  .season-btn {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--stone-text);
+    padding: 6px 18px;
+    font-family: inherit;
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.4s ease;
+  }
+
+  .season-btn:hover {
+    color: #fff;
+  }
+
+  .season-btn.active {
+    background: rgba(165, 147, 122, 0.2);
+    color: #f7ede0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+
+  /* Stage & Window */
+  .cathedral-stage {
+    position: relative;
+    width: 100%;
+    max-width: 960px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 5;
+    padding: 0 10px 40px;
+  }
+
+  svg#cathedralWindow {
+    width: 100%;
+    height: auto;
+    max-height: 86vh;
+    display: block;
+    filter: drop-shadow(0 20px 40px rgba(0,0,0,0.9));
+  }
+
+  /* Glass Panes Interactive */
+  .glass-pane {
+    cursor: pointer;
+    outline: none;
+    transition: filter 0.35s ease, opacity 0.35s ease;
+  }
+
+  .glass-pane:hover,
+  .glass-pane:focus {
+    filter: brightness(1.7) saturate(1.4) drop-shadow(0 0 10px rgba(255, 255, 230, 0.9));
+    opacity: 1 !important;
+  }
+
+  /* Floor Reflection / Pool */
+  .floor-reflection {
+    pointer-events: none;
+    mix-blend-mode: screen;
+    opacity: 0.55;
+    transition: transform 0.1s linear;
+  }
+
+  /* Information / Caption Desk */
+  .info-desk {
+    position: relative;
+    z-index: 20;
+    max-width: 640px;
+    margin: -10px auto 2.5rem;
+    text-align: center;
+    padding: 1.2rem 1.8rem;
+    background: var(--ui-bg);
+    border: 1px solid var(--ui-border);
+    border-radius: 6px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.7);
+    min-height: 84px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: opacity 0.3s ease, border-color 0.3s ease;
+  }
+
+  .pane-title {
+    font-size: 1.05rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #e8d0a7;
+    margin-bottom: 0.3rem;
+  }
+
+  .pane-desc {
+    font-style: italic;
+    font-size: 0.92rem;
+    line-height: 1.4;
+    color: #b8a690;
+  }
+
+  /* Floating Tooltip */
+  #tooltip {
+    position: fixed;
+    pointer-events: none;
+    padding: 6px 12px;
+    background: rgba(14, 11, 9, 0.92);
+    border: 1px solid rgba(232, 185, 58, 0.4);
+    border-radius: 4px;
+    color: #f7ede0;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+    opacity: 0;
+    transform: translate(-50%, -130%);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 100;
+    white-space: nowrap;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+  <canvas id="dustCanvas"></canvas>
+  <div class="nave-shadows"></div>
+  <div id="tooltip" role="tooltip">Panneau</div>
+
+  <header>
+    <h1>Rosace du Nord</h1>
+    <div class="subtitle">Cathédrale de Chartres — The Celestial Geometry of Rayonnant Tracery</div>
+
+    <div class="controls-wrap">
+      <div class="season-pill" role="radiogroup" aria-label="Daylight and Season">
+        <button class="season-btn" data-season="winter" role="radio" aria-checked="false">Winter Dawn</button>
+        <button class="season-btn active" data-season="summer" role="radio" aria-checked="true">Summer Zenith</button>
+        <button class="season-btn" data-season="evening" role="radio" aria-checked="false">Vesper Gold</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="cathedral-stage">
+    <svg id="cathedralWindow" viewBox="0 0 800 820" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Ashlar Blocks Stone Pattern -->
+        <pattern id="ashlarStone" width="70" height="40" patternUnits="userSpaceOnUse">
+          <rect width="70" height="40" fill="#2e2824"/>
+          <!-- Course 1 -->
+          <rect x="0" y="0" width="70" height="19" fill="#29231f" stroke="#1a1512" stroke-width="1.5"/>
+          <line x1="35" y1="0" x2="35" y2="19" stroke="#1a1512" stroke-width="1.5"/>
+          <line x1="1" y1="18.5" x2="69" y2="18.5" stroke="#463c35" stroke-width="1"/>
+          <!-- Course 2 (staggered) -->
+          <rect x="0" y="20" width="70" height="19" fill="#312a26" stroke="#1a1512" stroke-width="1.5"/>
+          <line x1="0" y1="20" x2="0" y2="39" stroke="#1a1512" stroke-width="1.5"/>
+          <line x1="70" y1="20" x2="70" y2="39" stroke="#1a1512" stroke-width="1.5"/>
+          <line x1="1" y1="38.5" x2="69" y2="38.5" stroke="#463c35" stroke-width="1"/>
+        </pattern>
+
+        <!-- Antique Glass Distort / Mottling Filter -->
+        <filter id="antiqueGlass" x="-15%" y="-15%" width="130%" height="130%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.055" numOctaves="3" result="noise" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="5" xChannelSelector="R" yChannelSelector="G" result="wobbly" />
+          <feColorMatrix type="matrix" values="
+            1 0 0 0 0
+            0 1 0 0 0
+            0 0 1 0 0
+            0 0 0 0.45 0" in="noise" result="mottleAlpha" />
+          <feBlend in="wobbly" in2="mottleAlpha" mode="overlay" />
+        </filter>
+
+        <!-- Floor Projection Blur Filter -->
+        <filter id="floorBlur" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="9" />
+        </filter>
+
+        <!-- Jewel-tone Glass Radial Gradients -->
+        <radialGradient id="grad-ruby" cx="45%" cy="40%" r="65%">
+          <stop offset="0%" stop-color="#ff5d70"/>
+          <stop offset="55%" stop-color="#b3142a"/>
+          <stop offset="100%" stop-color="#5a0812"/>
+        </radialGradient>
+
+        <radialGradient id="grad-sapphire" cx="45%" cy="40%" r="65%">
+          <stop offset="0%" stop-color="#6f95ff"/>
+          <stop offset="55%" stop-color="#1f3fb8"/>
+          <stop offset="100%" stop-color="#0a1656"/>
+        </radialGradient>
+
+        <radialGradient id="grad-emerald" cx="45%" cy="40%" r="65%">
+          <stop offset="0%" stop-color="#63e39a"/>
+          <stop offset="55%" stop-color="#128a4d"/>
+          <stop offset="100%" stop-color="#053c22"/>
+        </radialGradient>
+
+        <radialGradient id="grad-amber" cx="45%" cy="40%" r="65%">
+          <stop offset="0%" stop-color="#ffd27a"/>
+          <stop offset="55%" stop-color="#e08a12"/>
+          <stop offset="100%" stop-color="#6b3a02"/>
+        </radialGradient>
+
+        <radialGradient id="grad-amethyst" cx="45%" cy="40%" r="65%">
+          <stop offset="0%" stop-color="#d59bff"/>
+          <stop offset="55%" stop-color="#7a2fb4"/>
+          <stop offset="100%" stop-color="#32104f"/>
+        </radialGradient>
+
+        <radialGradient id="grad-gold" cx="45%" cy="40%" r="65%">
+          <stop offset="0%" stop-color="#fff2b0"/>
+          <stop offset="55%" stop-color="#e8b93a"/>
+          <stop offset="100%" stop-color="#7a5a0a"/>
+        </radialGradient>
+
+        <radialGradient id="grad-mysticrose" cx="50%" cy="50%" r="60%">
+          <stop offset="0%" stop-color="#ffffff"/>
+          <stop offset="30%" stop-color="#fff8d9"/>
+          <stop offset="70%" stop-color="#ffd25c"/>
+          <stop offset="100%" stop-color="#a66e0a"/>
+        </radialGradient>
+
+        <!-- Dynamic Sun Gradient behind the Glass -->
+        <radialGradient id="sunGlow" gradientUnits="userSpaceOnUse" cx="400" cy="360" r="380">
+          <stop id="sunStop0" offset="0%" stop-color="#fff6dc" stop-opacity="0.95"/>
+          <stop id="sunStop1" offset="40%" stop-color="#ffd47a" stop-opacity="0.5"/>
+          <stop id="sunStop2" offset="85%" stop-color="#ffd47a" stop-opacity="0"/>
+        </radialGradient>
+
+        <!-- Window Boundary Clip -->
+        <clipPath id="windowClip">
+          <circle cx="400" cy="360" r="300" />
+        </clipPath>
+
+        <!-- Primary Stone Spoke / Tracery Mullion (Repeated 12-fold) -->
+        <g id="mainSpoke">
+          <!-- Dark Base -->
+          <path d="M-5.5,58 L-4.5,234 L-7.5,272 L-10,300 L10,300 L7.5,272 L4.5,234 L5.5,58 Z" fill="#181310" />
+          <!-- Mid Stone Body -->
+          <path d="M-3.5,60 L-2.5,233 L-5,271 L-7,298 L7,298 L5,271 L2.5,233 L3.5,60 Z" fill="#4a4038" />
+          <!-- Thin Chamfer Highlight (offset ~1.5px right) -->
+          <path d="M-0.5,60 L0.5,232 L-2,270 L-3.5,297 L-1.5,297 L1,270 L2.2,232 L2.2,60 Z" fill="#7a6c60" opacity="0.85"/>
+        </g>
+
+        <!-- Outer Secondary Short Spoke (offset by 15° between outer rings) -->
+        <g id="shortSpoke">
+          <path d="M-4.5,234 L-7,272 L7,272 L4.5,234 Z" fill="#181310" />
+          <path d="M-2.5,235 L-4.5,271 L4.5,271 L2.5,235 Z" fill="#4a4038" />
+          <path d="M0,235 L-1.5,271 L0.5,271 L1.5,235 Z" fill="#7a6c60" opacity="0.8"/>
+        </g>
+      </defs>
+
+      <!-- Ashlar Masonry Nave Wall -->
+      <rect x="0" y="0" width="800" height="820" fill="url(#ashlarStone)" />
+
+      <!-- Deep Outer Arch Revel / Vault Chamfers -->
+      <circle cx="400" cy="360" r="338" fill="none" stroke="#14100d" stroke-width="26" />
+      <circle cx="400" cy="360" r="322" fill="none" stroke="#3d342d" stroke-width="8" />
+      <circle cx="400" cy="360" r="317.5" fill="none" stroke="#68594d" stroke-width="2" />
+      <circle cx="400" cy="360" r="306" fill="none" stroke="#120e0b" stroke-width="16" />
+
+      <!-- ================= GLASS LAYER (Filtered) ================= -->
+      <g id="masterGlassLayer" clip-path="url(#windowClip)" filter="url(#antiqueGlass)">
+        <!-- Underlying Backing -->
+        <circle cx="400" cy="360" r="300" fill="#150f0c" />
+
+        <!-- 1. Ring IV: 24 Outer Border Panes (radii 272 to 300) -->
+        <g id="ringOuterBorder">
+          <!-- Dynamically generated via JS for precise geometry -->
+        </g>
+
+        <!-- 2. Ring III: 12 Tall Lancets with Pointed Gothic Arches (radii 136 to 272) -->
+        <g id="ringTallLancets">
+          <!-- Dynamically generated via JS -->
+        </g>
+
+        <!-- 3. Ring II: 12 Shorter Labours Lancets rotated 15° (radii 60 to 136) -->
+        <g id="ringShortLancets">
+          <!-- Dynamically generated via JS -->
+        </g>
+
+        <!-- 4. Ring I: Central Rosette of Six Petals around White-Gold Mystic Rose -->
+        <g id="centralRosette" transform="translate(400, 360)">
+          <!-- 6 Petals -->
+          <g id="creationPetals"></g>
+          <!-- Center Core: The Mystic Rose -->
+          <circle id="coreMysticRose" class="glass-pane" cx="0" cy="0" r="23" fill="url(#grad-mysticrose)"
+                  tabindex="0" role="button" aria-label="The Mystic Rose"
+                  data-title="The Mystic Rose" data-desc="The spotless focal sphere of celestial divinity, where all cosmic rays converge." />
+        </g>
+
+        <!-- Travelling Sun Bloom (Screen blended over glass) -->
+        <circle id="sunDisc" cx="400" cy="360" r="300" fill="url(#sunGlow)" style="mix-blend-mode: screen; pointer-events: none;" />
+
+        <!-- Daylight Season Tint Rect -->
+        <rect id="seasonTint" x="100" y="60" width="600" height="600" fill="#ffd47a" opacity="0.18" style="mix-blend-mode: color; pointer-events: none;" />
+      </g>
+
+      <!-- ================= STONE TRACERY MULLIONS ================= -->
+      <g id="stoneTracery" transform="translate(400, 360)" pointer-events="none">
+        <!-- 12 Primary Spoke Mullions -->
+        <g id="primarySpokes"></g>
+        <!-- 12 Shorter Intermediate Spokes -->
+        <g id="intermediateSpokes"></g>
+
+        <!-- Concentric Stone Chamfered Rings at radii 60, 136, 234, 272 -->
+        <!-- Base Dark Strokes -->
+        <circle r="60" fill="none" stroke="#181310" stroke-width="8" />
+        <circle r="136" fill="none" stroke="#181310" stroke-width="9" />
+        <circle r="234" fill="none" stroke="#181310" stroke-width="8" />
+        <circle r="272" fill="none" stroke="#181310" stroke-width="8" />
+        <circle r="300" fill="none" stroke="#181310" stroke-width="12" />
+
+        <!-- Mid Stone Strokes -->
+        <circle r="60" fill="none" stroke="#4a4038" stroke-width="5" />
+        <circle r="136" fill="none" stroke="#4a4038" stroke-width="6" />
+        <circle r="234" fill="none" stroke="#4a4038" stroke-width="5" />
+        <circle r="272" fill="none" stroke="#4a4038" stroke-width="5" />
+        <circle r="300" fill="none" stroke="#4a4038" stroke-width="7" />
+
+        <!-- Thin Chamfer Highlight Strokes (offset 1.5px) -->
+        <circle cx="1.2" cy="-1.2" r="59.2" fill="none" stroke="#7a6c60" stroke-width="1.6" opacity="0.9" />
+        <circle cx="1.2" cy="-1.2" r="135.2" fill="none" stroke="#7a6c60" stroke-width="1.6" opacity="0.9" />
+        <circle cx="1.2" cy="-1.2" r="233.2" fill="none" stroke="#7a6c60" stroke-width="1.6" opacity="0.9" />
+        <circle cx="1.2" cy="-1.2" r="271.2" fill="none" stroke="#7a6c60" stroke-width="1.6" opacity="0.9" />
+        <circle cx="1.5" cy="-1.5" r="299" fill="none" stroke="#7a6c60" stroke-width="2" opacity="0.85" />
+      </g>
+
+      <!-- ================= NAVE FLOOR REFLECTED LIGHT POOL ================= -->
+      <g id="floorReflectionGroup" class="floor-reflection">
+        <use href="#masterGlassLayer" filter="url(#floorBlur)" />
+      </g>
+    </svg>
+  </main>
+
+  <!-- Descriptive Caption Plaque -->
+  <section class="info-desk" aria-live="polite">
+    <div class="pane-title" id="captionTitle">Rosace du Nord</div>
+    <div class="pane-desc" id="captionDesc">Explore the sacred panes. Behold the northern light passing through eight centuries of stained masterwork.</div>
+  </section>
+
+<script>
+(function() {
+  // --- Data Descriptions ---
+  const CREATION_DAYS = [
+    { title: "First Day — Fiat Lux", desc: "The parting of cosmic darkness; light enters the primordial void." },
+    { title: "Second Day — Firmament", desc: "The vault of heaven set high above the celestial waters." },
+    { title: "Third Day — Earth & Seas", desc: "Dry ground rises yielding green seed-bearing herbs and orchard blossoms." },
+    { title: "Fourth Day — Sun & Moon", desc: "Twin astral lanterns ignite to rule over the seasons, days, and years." },
+    { title: "Fifth Day — Life of Sea & Sky", desc: "Leviathans stirring in deep trenches and feathered wings across the sky." },
+    { title: "Sixth Day — Breath of Mankind", desc: "The dust of clay quickened with holy spirit to walk Eden's gardens." }
+  ];
+
+  const LABOURS = [
+    { title: "January — Janus Feasting", desc: "Two-headed vigil at hearthfire, contemplating departed years and dawn ahead." },
+    { title: "February — Pruning the Vine", desc: "Curved iron shears cutting dead canes while winter snow still blankets soil." },
+    { title: "March — Tilling the Furrow", desc: "Breaking heavy river mud under draught oxen before the vernal storm." },
+    { title: "April — Grafting & Spring Flowers", desc: "Binding fresh buds and gathering youthful garlands under gentle rains." },
+    { title: "May — Falconry & Maying", desc: "Gallant noble riding through green groves with hawk and silver horn." },
+    { title: "June — Haymaking in Meadows", desc: "Broad scythe sweeps through tall June grasses in river meadows." },
+    { title: "July — Wheat Harvest", desc: "Toothed bronze sickles cutting ripe stalks beneath the blinding summer sun." },
+    { title: "August — Threshing Grain", desc: "Wooden flails pounding heavy rye sheaves across the threshing floor." },
+    { title: "September — The Grape Vintage", desc: "Stomping purple wine in high wooden vats to fill the cellars." },
+    { title: "October — Sowing Winter Corn", desc: "Scattering seeds broadcast across damp loam to rest until spring." },
+    { title: "November — Oak Acorns for Swine", desc: "Beating high oak boughs to feed foraging pigs before the winter frost." },
+    { title: "December — Slaughter & Hearth Fire", desc: "Salting meat for long frost and stoking the cathedral hearthfire." }
+  ];
+
+  const GOSPEL_SCENES = [
+    { title: "The Annunciation — Archangel Gabriel", desc: "Gabriel holds the silver lily of royal humility before the Virgin." },
+    { title: "The Visitation — Elizabeth & Mary", desc: "Two expectant mothers embrace across the sunlit Judean hills." },
+    { title: "The Nativity — Star of Bethlehem", desc: "The Christ child laid in stone manger under ox and donkey breath." },
+    { title: "Adoration of the Magi — Golden Casque", desc: "Eastern Kings offer incense, gold, and frankincense to the child." },
+    { title: "Presentation in the Temple — Simeon's Canticle", desc: "Elder Simeon proclaims the Nunc Dimittis holding the young light." },
+    { title: "Flight into Egypt — Night Caravan", desc: "Joseph leads the donkey across desert sands under starry sapphire skies." },
+    { title: "Baptism in Jordan — The Dove", desc: "White river waters parted by the voice from above and holy breath." },
+    { title: "The Transfiguration — Mount Tabor", desc: "Garments blazing brighter than fuller's soap beside Moses and Elijah." },
+    { title: "Entry into Jerusalem — Palm Branches", desc: "Cloaks and palms cast before the gentle colt at the golden gate." },
+    { title: "The Mystical Supper — Chalice of Grace", desc: "Loaf broken and cup poured in the quiet upper room of Jerusalem." },
+    { title: "The Crucifixion — Stabat Mater", desc: "The supreme sacrifice beneath darkened midday sky and crimson sorrow." },
+    { title: "The Resurrection — Noli Me Tangere", desc: "Dawn tomb shattered, banner raised over conquered mortality." }
+  ];
+
+  const JEWEL_GRADIENTS = [
+    'url(#grad-ruby)',
+    'url(#grad-sapphire)',
+    'url(#grad-emerald)',
+    'url(#grad-amber)',
+    'url(#grad-amethyst)',
+    'url(#grad-gold)'
+  ];
+
+  // Helper polar -> cartesian
+  function pol2xy(cx, cy, r, deg) {
+    const rad = (deg - 90) * Math.PI / 180;
+    return {
+      x: cx + r * Math.cos(rad),
+      y: cy + r * Math.sin(rad)
+    };
+  }
+
+  // --- Geometry Construction ---
+  const cx = 400, cy = 360;
+
+  // 1. Spokes
+  const primSpokes = document.getElementById('primarySpokes');
+  const interSpokes = document.getElementById('intermediateSpokes');
+  for (let i = 0; i < 12; i++) {
+    const angle = i * 30;
+    const u1 = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    u1.setAttribute('href', '#mainSpoke');
+    u1.setAttribute('transform', `rotate(${angle})`);
+    primSpokes.appendChild(u1);
+
+    const u2 = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    u2.setAttribute('href', '#shortSpoke');
+    u2.setAttribute('transform', `rotate(${angle + 15})`);
+    interSpokes.appendChild(u2);
+  }
+
+  // 2. Central Rosette Petals (6 Ellipses)
+  const creationPetals = document.getElementById('creationPetals');
+  for (let i = 0; i < 6; i++) {
+    const deg = i * 60;
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+    p.setAttribute('cx', '0');
+    p.setAttribute('cy', '-36');
+    p.setAttribute('rx', '13');
+    p.setAttribute('ry', '21');
+    p.setAttribute('transform', `rotate(${deg})`);
+    p.setAttribute('fill', JEWEL_GRADIENTS[i % JEWEL_GRADIENTS.length]);
+    p.setAttribute('class', 'glass-pane');
+    p.setAttribute('tabindex', '0');
+    p.setAttribute('role', 'button');
+    p.setAttribute('aria-label', CREATION_DAYS[i].title);
+    p.setAttribute('data-title', CREATION_DAYS[i].title);
+    p.setAttribute('data-desc', CREATION_DAYS[i].desc);
+    creationPetals.appendChild(p);
+  }
+
+  // 3. Ring II: 12 Shorter Lancets (Labours of the Months, rotated 15°)
+  const ringShort = document.getElementById('ringShortLancets');
+  for (let i = 0; i < 12; i++) {
+    const midAngle = i * 30 + 15;
+    const rIn = 66, rOut = 130;
+    const da = 12.5;
+    const a1 = midAngle - da;
+    const a2 = midAngle + da;
+
+    const p1 = pol2xy(cx, cy, rIn, a1);
+    const p2 = pol2xy(cx, cy, rOut - 10, a1);
+    const apex = pol2xy(cx, cy, rOut, midAngle);
+    const p3 = pol2xy(cx, cy, rOut - 10, a2);
+    const p4 = pol2xy(cx, cy, rIn, a2);
+
+    const pathD = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} Q ${p2.x} ${p2.y} ${apex.x} ${apex.y} Q ${p3.x} ${p3.y} ${p3.x} ${p3.y} L ${p4.x} ${p4.y} A ${rIn} ${rIn} 0 0 0 ${p1.x} ${p1.y} Z`;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', pathD);
+    path.setAttribute('fill', JEWEL_GRADIENTS[(i * 2 + 1) % JEWEL_GRADIENTS.length]);
+    path.setAttribute('class', 'glass-pane');
+    path.setAttribute('tabindex', '0');
+    path.setAttribute('role', 'button');
+    path.setAttribute('aria-label', LABOURS[i].title);
+    path.setAttribute('data-title', LABOURS[i].title);
+    path.setAttribute('data-desc', LABOURS[i].desc);
+    ringShort.appendChild(path);
+  }
+
+  // 4. Ring III: 12 Tall Lancets (Saints and Gospel Scenes)
+  const ringTall = document.getElementById('ringTallLancets');
+  for (let i = 0; i < 12; i++) {
+    const midAngle = i * 30;
+    const rIn = 142, rOut = 228;
+    const da = 11.5;
+    const a1 = midAngle - da;
+    const a2 = midAngle + da;
+
+    const p1 = pol2xy(cx, cy, rIn, a1);
+    const p2 = pol2xy(cx, cy, rOut - 20, a1);
+    const apex = pol2xy(cx, cy, rOut, midAngle);
+    const p3 = pol2xy(cx, cy, rOut - 20, a2);
+    const p4 = pol2xy(cx, cy, rIn, a2);
+
+    // Quadratic curve Gothic apex
+    const pathD = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} Q ${p2.x} ${p2.y} ${apex.x} ${apex.y} Q ${p3.x} ${p3.y} ${p3.x} ${p3.y} L ${p4.x} ${p4.y} A ${rIn} ${rIn} 0 0 0 ${p1.x} ${p1.y} Z`;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', pathD);
+    path.setAttribute('fill', JEWEL_GRADIENTS[i % JEWEL_GRADIENTS.length]);
+    path.setAttribute('class', 'glass-pane');
+    path.setAttribute('tabindex', '0');
+    path.setAttribute('role', 'button');
+    path.setAttribute('aria-label', GOSPEL_SCENES[i].title);
+    path.setAttribute('data-title', GOSPEL_SCENES[i].title);
+    path.setAttribute('data-desc', GOSPEL_SCENES[i].desc);
+    ringTall.appendChild(path);
+  }
+
+  // 5. Ring IV: 24 Outer Border Panes (alternating Gold and Sapphire)
+  const ringOuter = document.getElementById('ringOuterBorder');
+  for (let i = 0; i < 24; i++) {
+    const a1 = i * 15 + 1.2;
+    const a2 = (i + 1) * 15 - 1.2;
+    const rIn = 275, rOut = 296;
+
+    const p1 = pol2xy(cx, cy, rIn, a1);
+    const p2 = pol2xy(cx, cy, rOut, a1);
+    const p3 = pol2xy(cx, cy, rOut, a2);
+    const p4 = pol2xy(cx, cy, rIn, a2);
+
+    const pathD = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} A ${rOut} ${rOut} 0 0 1 ${p3.x} ${p3.y} L ${p4.x} ${p4.y} A ${rIn} ${rIn} 0 0 0 ${p1.x} ${p1.y} Z`;
+
+    const isGold = (i % 2 === 0);
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', pathD);
+    path.setAttribute('fill', isGold ? 'url(#grad-gold)' : 'url(#grad-sapphire)');
+    path.setAttribute('class', 'glass-pane');
+    path.setAttribute('tabindex', '0');
+    path.setAttribute('role', 'button');
+    const bTitle = isGold ? `Border Jewel ${i+1} — Or` : `Border Jewel ${i+1} — Azur`;
+    const bDesc = isGold ? "Pure golden glass framing heaven with solar radiance." : "Deep cobalt sapphire glass invoking heavenly peace.";
+    path.setAttribute('aria-label', bTitle);
+    path.setAttribute('data-title', bTitle);
+    path.setAttribute('data-desc', bDesc);
+    ringOuter.appendChild(path);
+  }
+
+  // --- Seasons Settings & Color Logic ---
+  const seasons = {
+    winter: {
+      tint: '#dfe9ff',
+      tintOpacity: 0.22,
+      sunStops: ['#ffffff', '#e3eeff', '#c9d8ff'],
+      moteColor: 'rgba(215, 235, 255, '
+    },
+    summer: {
+      tint: '#ffe9b8',
+      tintOpacity: 0.16,
+      sunStops: ['#fff6dc', '#ffd47a', '#ffd47a'],
+      moteColor: 'rgba(255, 235, 185, '
+    },
+    evening: {
+      tint: '#ffb56b',
+      tintOpacity: 0.28,
+      sunStops: ['#ffd9a6', '#ff8a3c', '#ff5a1a'],
+      moteColor: 'rgba(255, 180, 110, '
+    }
+  };
+  let currentSeasonKey = 'summer';
+
+  const seasonTint = document.getElementById('seasonTint');
+  const sunStop0 = document.getElementById('sunStop0');
+  const sunStop1 = document.getElementById('sunStop1');
+  const sunStop2 = document.getElementById('sunStop2');
+  const seasonButtons = document.querySelectorAll('.season-btn');
+
+  function setSeason(seasonKey) {
+    currentSeasonKey = seasonKey;
+    const s = seasons[seasonKey];
+    seasonTint.setAttribute('fill', s.tint);
+    seasonTint.setAttribute('opacity', s.tintOpacity);
+    sunStop0.setAttribute('stop-color', s.sunStops[0]);
+    sunStop1.setAttribute('stop-color', s.sunStops[1]);
+    sunStop2.setAttribute('stop-color', s.sunStops[2]);
+
+    seasonButtons.forEach(btn => {
+      const active = btn.dataset.season === seasonKey;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-checked', active);
+    });
+  }
+
+  seasonButtons.forEach(btn => {
+    btn.addEventListener('click', () => setSeason(btn.dataset.season));
+  });
+
+  // --- Interactive Tooltips & Plaque ---
+  const tooltip = document.getElementById('tooltip');
+  const capTitle = document.getElementById('captionTitle');
+  const capDesc = document.getElementById('captionDesc');
+
+  function showPaneInfo(title, desc, x, y) {
+    capTitle.textContent = title;
+    capDesc.textContent = desc;
+    tooltip.textContent = title;
+    if (x !== undefined && y !== undefined) {
+      tooltip.style.left = x + 'px';
+      tooltip.style.top = y + 'px';
+    }
+    tooltip.style.opacity = '1';
+  }
+
+  function hidePaneInfo() {
+    tooltip.style.opacity = '0';
+  }
+
+  document.querySelectorAll('.glass-pane').forEach(el => {
+    el.addEventListener('pointerenter', (e) => {
+      showPaneInfo(el.dataset.title, el.dataset.desc, e.clientX, e.clientY);
+    });
+    el.addEventListener('pointermove', (e) => {
+      tooltip.style.left = e.clientX + 'px';
+      tooltip.style.top = e.clientY + 'px';
+    });
+    el.addEventListener('pointerleave', hidePaneInfo);
+
+    el.addEventListener('focus', () => {
+      const bbox = el.getBoundingClientRect();
+      showPaneInfo(el.dataset.title, el.dataset.desc, bbox.x + bbox.width / 2, bbox.y);
+    });
+    el.addEventListener('blur', hidePaneInfo);
+  });
+
+  // --- Sun Arc Motion & Nave Floor Projection ---
+  const sunGlow = document.getElementById('sunGlow');
+  const floorRefl = document.getElementById('floorReflectionGroup');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let startTime = performance.now();
+  const CYCLE_DURATION = 90000; // 90 seconds
+  let currentSunNormX = 0; // -1 to +1
+
+  function updateSolarCycle(now) {
+    let t = 0.5; // default center if reduced motion
+    if (!reducedMotion) {
+      t = ((now - startTime) % CYCLE_DURATION) / CYCLE_DURATION;
+    }
+
+    // Travel along arc behind window: cx goes from 180 to 620, cy rises and dips
+    // Sinusoidal arc path
+    const angle = t * Math.PI * 2;
+    // Map -cos for left-to-right sweep during daytime
+    const sunX = cx + Math.sin(angle) * 210;
+    const sunY = cy - Math.cos(angle) * 110;
+
+    sunGlow.setAttribute('cx', sunX.toFixed(1));
+    sunGlow.setAttribute('cy', sunY.toFixed(1));
+
+    // Floor Reflection: Lands opposite the sun position
+    // Center is (400, 360). When sun is left (sunX < 400), reflection lands right
+    currentSunNormX = (sunX - cx) / 210; // -1 to +1
+    const floorSlideX = -currentSunNormX * 70; // shifts opposite
+    const baseSkew = -28;
+    const skewDyn = baseSkew + (currentSunNormX * 9); // skews dynamically
+
+    // Place reflection on nave floor below the window: translated down, squashed to 34% height
+    floorRefl.setAttribute('transform',
+      `translate(${cx + floorSlideX}, 670) skewX(${skewDyn}) scale(1.05, 0.34) translate(${-cx}, ${-cy})`
+    );
+
+    if (!reducedMotion) {
+      requestAnimationFrame(updateSolarCycle);
+    }
+  }
+  requestAnimationFrame(updateSolarCycle);
+
+  // --- Dust Motes Simulation Canvas ---
+  const canvas = document.getElementById('dustCanvas');
+  const ctx = canvas.getContext('2d');
+  let width = canvas.width = window.innerWidth;
+  let height = canvas.height = window.innerHeight;
+
+  window.addEventListener('resize', () => {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+  });
+
+  const MOTE_COUNT = 135;
+  const motes = [];
+  for (let i = 0; i < MOTE_COUNT; i++) {
+    motes.push({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      r: Math.random() * 2.2 + 0.8,
+      speedY: Math.random() * 0.45 + 0.25,
+      swayAmp: Math.random() * 1.8 + 0.6,
+      swayFreq: Math.random() * 0.02 + 0.008,
+      phase: Math.random() * Math.PI * 2,
+      alpha: Math.random() * 0.5 + 0.25
+    });
+  }
+
+  function renderDust(now) {
+    ctx.clearRect(0, 0, width, height);
+
+    const baseCol = seasons[currentSeasonKey].moteColor;
+    // Central sunbeam cone leans away from sun
+    const beamOriginX = width * 0.5;
+    const beamTargetX = width * (0.5 - currentSunNormX * 0.28);
+
+    for (let i = 0; i < motes.length; i++) {
+      const m = motes[i];
+      if (!reducedMotion) {
+        m.y += m.speedY;
+        m.phase += m.swayFreq;
+        if (m.y > height + 10) {
+          m.y = -10;
+          m.x = Math.random() * width;
+        }
+      }
+
+      const curX = m.x + Math.sin(m.phase) * m.swayAmp;
+
+      // Cone factor: calculate proximity to the leaning beam
+      const progressY = Math.min(Math.max(m.y / height, 0), 1);
+      const beamCenterX = beamOriginX + (beamTargetX - beamOriginX) * progressY;
+      const beamHalfWidth = (width * 0.18) + (width * 0.35) * progressY;
+      const distFromBeam = Math.abs(curX - beamCenterX);
+
+      let intensity = 0.22;
+      if (distFromBeam < beamHalfWidth) {
+        // Bright inside the radiant sunlight shaft
+        const beamCore = 1 - (distFromBeam / beamHalfWidth);
+        intensity += beamCore * 0.75;
+      }
+
+      const finalAlpha = Math.min(m.alpha * intensity, 0.95);
+
+      ctx.beginPath();
+      ctx.arc(curX, m.y, m.r, 0, Math.PI * 2);
+      ctx.fillStyle = baseCol + finalAlpha + ')';
+      ctx.fill();
+    }
+
+    if (!reducedMotion) {
+      requestAnimationFrame(renderDust);
+    }
+  }
+  requestAnimationFrame(renderDust);
+
+})();
+</script>
+</body>
+</html>

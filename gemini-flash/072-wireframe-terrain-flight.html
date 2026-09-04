@@ -1,1566 +1,719 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Vector Horizon</title>
-  <style>
-    /* ==========================================================================
-       VECTOR HORIZON — SYSTEM TOKENS & RETRO HUD STYLING
-       ========================================================================== */
-    :root {
-      --hud-accent: #19f0ff;
-      --hud-glow: rgba(25, 240, 255, 0.55);
-      --hud-bg: rgba(6, 11, 20, 0.72);
-      --hud-border: rgba(25, 240, 255, 0.32);
-      --hud-text-dim: rgba(255, 255, 255, 0.55);
-      --hud-text-bright: #ffffff;
-      --horizon-sky: #083244;
-      --horizon-ground: #02131a;
-
-      --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Courier New', monospace;
-      --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      user-select: none;
-      -webkit-user-select: none;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: #010409;
-      color: var(--hud-text-bright);
-      font-family: var(--font-sans);
-      position: relative;
-    }
-
-    /* Main Viewport Canvas */
-    #flight-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      display: block;
-      z-index: 1;
-    }
-
-    /* Scanline & CRT Overlay */
-    .scanline-overlay {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 5;
-      background: repeating-linear-gradient(
-        to bottom,
-        rgba(0, 0, 0, 0.18) 0px,
-        rgba(0, 0, 0, 0.18) 1px,
-        transparent 1px,
-        transparent 4px
-      );
-      mix-blend-mode: multiply;
-    }
-
-    /* HUD Container Layer */
-    .hud-layer {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      z-index: 10;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-
-    /* Interactive HUD elements re-enable pointer events */
-    .interactive {
-      pointer-events: auto;
-    }
-
-    /* Top-Left Telemetry Panel */
-    .telemetry-panel {
-      width: 320px;
-      max-width: calc(100vw - 32px);
-      background: var(--hud-bg);
-      border: 1px solid var(--hud-border);
-      border-radius: 4px;
-      padding: 14px 16px;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 16px rgba(0, 0, 0, 0.3);
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .panel-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--hud-border);
-      padding-bottom: 6px;
-    }
-
-    .panel-title {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.22em;
-      color: var(--hud-accent);
-      text-shadow: 0 0 8px var(--hud-glow);
-      text-transform: uppercase;
-    }
-
-    .sys-badge {
-      font-family: var(--font-mono);
-      font-size: 9px;
-      letter-spacing: 0.12em;
-      padding: 2px 6px;
-      background: rgba(255, 255, 255, 0.08);
-      border-radius: 2px;
-      color: var(--hud-text-dim);
-    }
-
-    /* Readouts Grid */
-    .telemetry-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px 14px;
-    }
-
-    .telemetry-item {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .telemetry-label {
-      font-family: var(--font-mono);
-      font-size: 9px;
-      letter-spacing: 0.14em;
-      color: var(--hud-text-dim);
-    }
-
-    .telemetry-value {
-      font-family: var(--font-mono);
-      font-size: 17px;
-      font-weight: 700;
-      color: var(--hud-accent);
-      text-shadow: 0 0 10px var(--hud-glow);
-      font-variant-numeric: tabular-nums;
-      display: flex;
-      align-items: baseline;
-      gap: 3px;
-    }
-
-    .telemetry-unit {
-      font-size: 10px;
-      font-weight: 400;
-      color: var(--hud-text-dim);
-      text-shadow: none;
-    }
-
-    /* Segmented Controls */
-    .segmented-control {
-      display: flex;
-      background: rgba(0, 0, 0, 0.45);
-      border: 1px solid var(--hud-border);
-      border-radius: 3px;
-      padding: 2px;
-      gap: 2px;
-    }
-
-    .segment-btn {
-      flex: 1;
-      background: transparent;
-      border: none;
-      outline: none;
-      padding: 5px 0;
-      font-family: var(--font-mono);
-      font-size: 9.5px;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      color: var(--hud-text-dim);
-      cursor: pointer;
-      border-radius: 2px;
-      transition: all 0.15s ease;
-      text-align: center;
-      text-transform: uppercase;
-    }
-
-    .segment-btn:hover {
-      color: var(--hud-text-bright);
-      background: rgba(255, 255, 255, 0.08);
-    }
-
-    .segment-btn.active {
-      background: var(--hud-accent);
-      color: #040810;
-      font-weight: 700;
-      box-shadow: 0 0 12px var(--hud-glow);
-    }
-
-    /* Bottom-Right Cockpit Section */
-    .cockpit-bottom {
-      align-self: flex-end;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 10px;
-    }
-
-    .gauges-wrapper {
-      display: flex;
-      align-items: flex-end;
-      gap: 14px;
-      background: var(--hud-bg);
-      border: 1px solid var(--hud-border);
-      border-radius: 4px;
-      padding: 12px 14px;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    }
-
-    /* Vertical Throttle Bar */
-    .throttle-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      width: 44px;
-    }
-
-    .gauge-label {
-      font-family: var(--font-mono);
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: 0.14em;
-      color: var(--hud-accent);
-      text-shadow: 0 0 6px var(--hud-glow);
-    }
-
-    .throttle-track {
-      width: 22px;
-      height: 106px;
-      background: rgba(0, 0, 0, 0.6);
-      border: 1px solid var(--hud-border);
-      border-radius: 3px;
-      position: relative;
-      cursor: ns-resize;
-      display: flex;
-      align-items: flex-end;
-      padding: 2px;
-      overflow: hidden;
-    }
-
-    .throttle-ticks {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      background: repeating-linear-gradient(
-        to bottom,
-        rgba(255, 255, 255, 0.25) 0px,
-        rgba(255, 255, 255, 0.25) 1px,
-        transparent 1px,
-        transparent 13px
-      );
-      opacity: 0.4;
-      z-index: 2;
-    }
-
-    .throttle-fill {
-      width: 100%;
-      height: 60%;
-      background: var(--hud-accent);
-      border-radius: 1px;
-      box-shadow: 0 0 10px var(--hud-glow);
-      transition: height 0.06s linear;
-      z-index: 1;
-    }
-
-    .throttle-readout {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--hud-accent);
-      font-variant-numeric: tabular-nums;
-      text-shadow: 0 0 6px var(--hud-glow);
-    }
-
-    /* SVG Artificial Horizon Instrument */
-    .horizon-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .horizon-gauge {
-      width: 112px;
-      height: 112px;
-      border-radius: 50%;
-      box-shadow: 0 0 16px rgba(0, 0, 0, 0.7);
-      background: #02060d;
-    }
-
-    /* Help line */
-    .help-line {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      letter-spacing: 0.08em;
-      color: var(--hud-text-dim);
-      background: rgba(0, 0, 0, 0.6);
-      padding: 4px 10px;
-      border-radius: 3px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      white-space: nowrap;
-    }
-
-    .help-line span {
-      color: var(--hud-accent);
-      font-weight: 600;
-    }
-
-    /* Paused Overlay */
-    .pause-overlay {
-      position: absolute;
-      inset: 0;
-      background: rgba(2, 5, 12, 0.68);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      z-index: 20;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s ease;
-    }
-
-    .pause-overlay.active {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    .pause-card {
-      border: 1px solid var(--hud-accent);
-      padding: 24px 44px;
-      background: rgba(6, 12, 22, 0.85);
-      border-radius: 4px;
-      box-shadow: 0 0 35px var(--hud-glow);
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .pause-title {
-      font-family: var(--font-mono);
-      font-size: 26px;
-      font-weight: 700;
-      letter-spacing: 0.35em;
-      color: var(--hud-accent);
-      text-shadow: 0 0 18px var(--hud-glow);
-    }
-
-    .pause-sub {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      letter-spacing: 0.18em;
-      color: var(--hud-text-dim);
-    }
-
-    .resume-btn {
-      margin-top: 8px;
-      background: var(--hud-accent);
-      color: #040810;
-      border: none;
-      padding: 8px 18px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      border-radius: 3px;
-      cursor: pointer;
-      box-shadow: 0 0 15px var(--hud-glow);
-    }
-
-    /* Responsive adjustments */
-    @media (max-width: 680px) {
-      .hud-layer {
-        padding: 10px;
-      }
-      .telemetry-panel {
-        width: 270px;
-        padding: 10px 12px;
-        gap: 8px;
-      }
-      .telemetry-value {
-        font-size: 15px;
-      }
-      .gauges-wrapper {
-        padding: 8px 10px;
-        gap: 10px;
-      }
-      .horizon-gauge {
-        width: 90px;
-        height: 90px;
-      }
-      .throttle-track {
-        height: 84px;
-      }
-      .help-line {
-        font-size: 8.5px;
-        padding: 3px 6px;
-      }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Vector Horizon — Endless Wireframe Terrain Flight</title>
+<style>
+  :root {
+    --accent: #19f0ff;
+    --accent-glow: rgba(25, 240, 255, 0.4);
+    --bg-hud: rgba(5, 12, 22, 0.65);
+    --border-hud: rgba(25, 240, 255, 0.25);
+    --text-dim: #8fa3b8;
+  }
+  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; background: #010409;
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+  canvas {
+    display: block; width: 100vw; height: 100vh;
+    touch-action: none;
+  }
+  .hud-panel {
+    position: absolute;
+    background: var(--bg-hud);
+    border: 1px solid var(--border-hud);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 6px;
+    padding: 10px 14px;
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5), inset 0 0 10px rgba(255,255,255,0.02);
+    pointer-events: auto;
+  }
+  .mono {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'Courier New', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  #telemetry {
+    top: 18px; left: 18px; width: 190px;
+  }
+  .hud-title {
+    font-size: 9px; letter-spacing: 2px; color: var(--text-dim);
+    margin-bottom: 6px; font-weight: 700; text-transform: uppercase;
+  }
+  .metric-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin: 3px 0; font-size: 11px;
+  }
+  .metric-label { color: var(--text-dim); font-size: 10px; }
+  .metric-val {
+    color: var(--accent); font-weight: bold; font-size: 12px;
+    text-shadow: 0 0 8px var(--accent-glow);
+  }
+  #controls-top {
+    top: 18px; right: 18px; display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+  }
+  .segmented {
+    display: flex; background: rgba(0,0,0,0.5); border: 1px solid var(--border-hud);
+    border-radius: 4px; overflow: hidden;
+  }
+  .seg-btn {
+    background: transparent; border: none; outline: none;
+    color: var(--text-dim); font-size: 10px; font-weight: 600;
+    padding: 6px 10px; cursor: pointer; transition: all 0.15s ease;
+    letter-spacing: 0.5px;
+  }
+  .seg-btn:not(:last-child) { border-right: 1px solid var(--border-hud); }
+  .seg-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
+  .seg-btn.active {
+    background: var(--accent); color: #000;
+    box-shadow: 0 0 10px var(--accent-glow); font-weight: 700;
+  }
+  #flight-inst {
+    bottom: 18px; right: 18px;
+    display: flex; gap: 14px; align-items: center;
+  }
+  .throttle-wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .throttle-track {
+    width: 14px; height: 90px; background: rgba(0,0,0,0.6);
+    border: 1px solid var(--border-hud); border-radius: 3px;
+    position: relative; overflow: hidden;
+  }
+  .throttle-fill {
+    position: absolute; bottom: 0; left: 0; width: 100%;
+    background: var(--accent); box-shadow: 0 0 8px var(--accent-glow);
+    height: 50%;
+  }
+  .gyro-wrap {
+    width: 90px; height: 90px; position: relative;
+    border-radius: 50%; overflow: hidden;
+    border: 2px solid var(--border-hud); background: #000;
+  }
+  #gyro-svg { width: 100%; height: 100%; }
+  #help-banner {
+    position: absolute; bottom: 18px; left: 18px;
+    font-size: 10px; color: var(--text-dim); letter-spacing: 0.5px;
+    pointer-events: none; opacity: 0.8;
+  }
+  #pause-overlay {
+    position: absolute; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(0, 5, 12, 0.55); backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    color: #fff; font-size: 24px; font-weight: bold; letter-spacing: 6px;
+    text-shadow: 0 0 15px var(--accent); pointer-events: none;
+  }
+</style>
 </head>
 <body>
 
-  <!-- Background WebGL/2D Canvas -->
-  <canvas id="flight-canvas"></canvas>
+<canvas id="c"></canvas>
 
-  <!-- CRT 4px Scanline Overlay -->
-  <div class="scanline-overlay" aria-hidden="true"></div>
+<div id="telemetry" class="hud-panel">
+  <div class="hud-title mono">Telemetry System</div>
+  <div class="metric-row"><span class="metric-label mono">ALT (m)</span><span id="m-alt" class="metric-val mono">0000</span></div>
+  <div class="metric-row"><span class="metric-label mono">SPD (kn)</span><span id="m-spd" class="metric-val mono">000</span></div>
+  <div class="metric-row"><span class="metric-label mono">HDG (&deg;)</span><span id="m-hdg" class="metric-val mono">000</span></div>
+  <div class="metric-row"><span class="metric-label mono">DIST (km)</span><span id="m-dst" class="metric-val mono">00.0</span></div>
+</div>
 
-  <!-- Interactive Telemetry HUD Layer -->
-  <div class="hud-layer">
-    
-    <!-- Top-Left Telemetry & Mode Panel -->
-    <div class="telemetry-panel interactive">
-      <div class="panel-header">
-        <span class="panel-title">TELEMETRY</span>
-        <span class="sys-badge" id="sys-fps">60 FPS</span>
-      </div>
-
-      <div class="telemetry-grid">
-        <div class="telemetry-item">
-          <span class="telemetry-label">ALTITUDE</span>
-          <div class="telemetry-value">
-            <span id="alt-val">180</span>
-            <span class="telemetry-unit">m</span>
-          </div>
-        </div>
-        <div class="telemetry-item">
-          <span class="telemetry-label">AIRSPEED</span>
-          <div class="telemetry-value">
-            <span id="spd-val">420</span>
-            <span class="telemetry-unit">kn</span>
-          </div>
-        </div>
-        <div class="telemetry-item">
-          <span class="telemetry-label">HEADING</span>
-          <div class="telemetry-value">
-            <span id="hdg-val">000</span>
-            <span class="telemetry-unit">°</span>
-          </div>
-        </div>
-        <div class="telemetry-item">
-          <span class="telemetry-label">DISTANCE</span>
-          <div class="telemetry-value">
-            <span id="dst-val">0.0</span>
-            <span class="telemetry-unit">km</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Segmented Control: 4 Palettes -->
-      <div class="segmented-control" id="palette-controls">
-        <button class="segment-btn active" data-palette="tron">Tron</button>
-        <button class="segment-btn" data-palette="synth">Synth</button>
-        <button class="segment-btn" data-palette="amber">Amber</button>
-        <button class="segment-btn" data-palette="blueprint">Blueprint</button>
-      </div>
-
-      <!-- Segmented Control: Shading Mode & Pause -->
-      <div class="segmented-control" id="mode-controls">
-        <button class="segment-btn active" data-mode="wireframe">Wireframe</button>
-        <button class="segment-btn" data-mode="solid">Solid</button>
-        <button class="segment-btn" data-action="pause" id="pause-toggle-btn">Pause</button>
-      </div>
-    </div>
-
-    <!-- Bottom-Right Cockpit Readout: Throttle & Artificial Horizon -->
-    <div class="cockpit-bottom interactive">
-      <div class="gauges-wrapper">
-        <!-- Throttle Bar -->
-        <div class="throttle-container">
-          <span class="gauge-label">THR</span>
-          <div class="throttle-track" id="throttle-track" title="Drag or scroll to adjust throttle">
-            <div class="throttle-ticks"></div>
-            <div class="throttle-fill" id="throttle-fill"></div>
-          </div>
-          <span class="throttle-readout" id="throttle-readout">65%</span>
-        </div>
-
-        <!-- SVG Artificial Horizon Instrument -->
-        <div class="horizon-container">
-          <span class="gauge-label">ATTITUDE</span>
-          <svg class="horizon-gauge" viewBox="0 0 120 120" id="artificial-horizon">
-            <defs>
-              <clipPath id="horizon-clip-circle">
-                <circle cx="60" cy="60" r="50" />
-              </clipPath>
-            </defs>
-
-            <!-- Clipped Rotating/Pitching Sphere -->
-            <g clip-path="url(#horizon-clip-circle)">
-              <g id="horizon-card" transform="translate(60, 60) rotate(0) translate(0, 0)">
-                <!-- Sky Background Half -->
-                <rect x="-90" y="-130" width="180" height="130" fill="var(--horizon-sky)" />
-                <!-- Ground Background Half -->
-                <rect x="-90" y="0" width="180" height="130" fill="var(--horizon-ground)" />
-                <!-- Horizon White Line -->
-                <line x1="-90" y1="0" x2="90" y2="0" stroke="var(--hud-accent)" stroke-width="2" />
-                
-                <!-- Pitch Ladder Lines -->
-                <line x1="-22" y1="-14" x2="22" y2="-14" stroke="var(--hud-accent)" stroke-width="1.2" opacity="0.8" />
-                <line x1="-12" y1="-28" x2="12" y2="-28" stroke="var(--hud-accent)" stroke-width="1.2" opacity="0.8" />
-                <line x1="-22" y1="14" x2="22" y2="14" stroke="var(--hud-accent)" stroke-width="1.2" opacity="0.8" />
-                <line x1="-12" y1="28" x2="12" y2="28" stroke="var(--hud-accent)" stroke-width="1.2" opacity="0.8" />
-              </g>
-            </g>
-
-            <!-- Fixed Outer Bezel and Roll Ticks -->
-            <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255, 255, 255, 0.25)" stroke-width="2" />
-            <circle cx="60" cy="60" r="53" fill="none" stroke="rgba(0, 0, 0, 0.6)" stroke-width="4" />
-
-            <!-- Roll Index Ticks -->
-            <g stroke="rgba(255, 255, 255, 0.65)" stroke-width="1.4">
-              <line x1="60" y1="10" x2="60" y2="16" stroke="#ffe600" stroke-width="2" />
-              <line x1="60" y1="10" x2="60" y2="15" transform="rotate(10 60 60)" />
-              <line x1="60" y1="10" x2="60" y2="15" transform="rotate(-10 60 60)" />
-              <line x1="60" y1="10" x2="60" y2="15" transform="rotate(20 60 60)" />
-              <line x1="60" y1="10" x2="60" y2="15" transform="rotate(-20 60 60)" />
-              <line x1="60" y1="10" x2="60" y2="18" transform="rotate(30 60 60)" stroke-width="2" stroke="var(--hud-accent)" />
-              <line x1="60" y1="10" x2="60" y2="18" transform="rotate(-30 60 60)" stroke-width="2" stroke="var(--hud-accent)" />
-              <line x1="60" y1="10" x2="60" y2="18" transform="rotate(45 60 60)" stroke-width="2" />
-              <line x1="60" y1="10" x2="60" y2="18" transform="rotate(-45 60 60)" stroke-width="2" />
-              <line x1="60" y1="10" x2="60" y2="18" transform="rotate(60 60 60)" stroke-width="2" stroke="var(--hud-accent)" />
-              <line x1="60" y1="10" x2="60" y2="18" transform="rotate(-60 60 60)" stroke-width="2" stroke="var(--hud-accent)" />
-            </g>
-
-            <!-- Top Fixed Zero-Roll Pointer -->
-            <polygon points="60,18 56,23 64,23" fill="#ffe600" />
-
-            <!-- Fixed Yellow Miniature Aircraft Wings Symbol -->
-            <path d="M 38 60 L 52 60 L 56 64 L 60 58 L 64 64 L 68 60 L 82 60"
-                  fill="none" stroke="#ffe600" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
-            <circle cx="60" cy="60" r="2.2" fill="#ffe600" />
-          </svg>
-        </div>
-      </div>
-
-      <!-- Controls Guidance -->
-      <div class="help-line">
-        <span>MOUSE/ARROWS:</span> STEER &amp; BANK · <span>WHEEL/↑↓:</span> THROTTLE · <span>SPACE:</span> PAUSE
-      </div>
-    </div>
-
+<div id="controls-top">
+  <div class="segmented" id="palette-sel">
+    <button class="seg-btn active" data-pal="0">TRON</button>
+    <button class="seg-btn" data-pal="1">SYNTH</button>
+    <button class="seg-btn" data-pal="2">AMBER</button>
+    <button class="seg-btn" data-pal="3">BLUEPRINT</button>
   </div>
-
-  <!-- Fullscreen Centered "— PAUSED —" Overlay -->
-  <div class="pause-overlay" id="pause-overlay">
-    <div class="pause-card">
-      <div class="pause-title">— PAUSED —</div>
-      <div class="pause-sub">PRESS SPACE OR CLICK BELOW TO RESUME</div>
-      <button class="resume-btn" id="resume-btn">RESUME FLIGHT</button>
-    </div>
+  <div class="segmented">
+    <button class="seg-btn active" id="btn-wire">WIRE</button>
+    <button class="seg-btn" id="btn-solid">SOLID</button>
+    <button class="seg-btn" id="btn-pause">&#10074;&#10074;</button>
   </div>
+</div>
 
-  <!-- Main Engine Script -->
-  <script>
-    (function () {
-      'use strict';
+<div id="flight-inst" class="hud-panel">
+  <div class="throttle-wrap">
+    <div class="metric-label mono">THR</div>
+    <div class="throttle-track"><div id="throttle-bar" class="throttle-fill"></div></div>
+  </div>
+  <div class="gyro-wrap">
+    <svg id="gyro-svg" viewBox="0 0 100 100">
+      <defs>
+        <clipPath id="gyro-clip">
+          <circle cx="50" cy="50" r="48" />
+        </clipPath>
+      </defs>
+      <g clip-path="url(#gyro-clip)">
+        <g id="gyro-rot">
+          <rect id="gyro-sky" x="-100" y="-100" width="300" height="150" fill="#122538"/>
+          <rect id="gyro-gnd" x="-100" y="50" width="300" height="150" fill="#040910"/>
+          <line x1="-100" y1="50" x2="200" y2="50" stroke="#fff" stroke-width="1.5" opacity="0.6"/>
+          <line x1="30" y1="35" x2="70" y2="35" stroke="#fff" stroke-width="1" opacity="0.4"/>
+          <line x1="40" y1="20" x2="60" y2="20" stroke="#fff" stroke-width="1" opacity="0.4"/>
+          <line x1="30" y1="65" x2="70" y2="65" stroke="#fff" stroke-width="1" opacity="0.4"/>
+          <line x1="40" y1="80" x2="60" y2="80" stroke="#fff" stroke-width="1" opacity="0.4"/>
+        </g>
+      </g>
+      <circle cx="50" cy="50" r="48" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+      <path d="M 25 50 L 42 50 L 46 56 L 54 56 L 58 50 L 75 50" fill="none" stroke="#ffeb3b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="50" cy="50" r="2" fill="#ffeb3b"/>
+    </svg>
+  </div>
+</div>
 
-      /* ==========================================================================
-         1. PALETTES DEFINITION
-         ========================================================================== */
-      const PALETTES = {
-        tron: {
-          name: 'Tron',
-          skyTop: '#010409',
-          skyBottom: '#052a36',
-          skyBottomRgb: [5, 42, 54],
-          lineColor: '#19f0ff',
-          lineRgb: [25, 240, 255],
-          glowColor: '#19f0ff',
-          sunTop: '#ffb347',
-          sunBottom: '#ff3d81',
-          starColor: '#d0ffff',
-          horizonGlow: '#19f0ff',
-          horizonSky: '#083244',
-          horizonGround: '#02131a',
-          hudAccent: '#19f0ff',
-          hudGlow: 'rgba(25, 240, 255, 0.55)',
-          hudBorder: 'rgba(25, 240, 255, 0.32)'
-        },
-        synth: {
-          name: 'Synth',
-          skyTop: '#0b0018',
-          skyBottom: '#4a0f6a',
-          skyBottomRgb: [74, 15, 106],
-          lineColor: '#ff2bd6',
-          lineRgb: [255, 43, 214],
-          glowColor: '#ff2bd6',
-          sunTop: '#ffe259',
-          sunBottom: '#ff2bd6',
-          starColor: '#ffe5fa',
-          horizonGlow: '#ff2bd6',
-          horizonSky: '#4a0f6a',
-          horizonGround: '#180424',
-          hudAccent: '#ff2bd6',
-          hudGlow: 'rgba(255, 43, 214, 0.55)',
-          hudBorder: 'rgba(255, 43, 214, 0.32)'
-        },
-        amber: {
-          name: 'Amber',
-          skyTop: '#050300',
-          skyBottom: '#2a1600',
-          skyBottomRgb: [42, 22, 0],
-          lineColor: '#ffb000',
-          lineRgb: [255, 176, 0],
-          glowColor: '#ffb000',
-          sunTop: '#fff1c4',
-          sunBottom: '#ff8c00',
-          starColor: '#fff2d6',
-          horizonGlow: '#ffb000',
-          horizonSky: '#331c00',
-          horizonGround: '#140a00',
-          hudAccent: '#ffb000',
-          hudGlow: 'rgba(255, 176, 0, 0.55)',
-          hudBorder: 'rgba(255, 176, 0, 0.32)'
-        },
-        blueprint: {
-          name: 'Blueprint',
-          skyTop: '#062052',
-          skyBottom: '#12407f',
-          skyBottomRgb: [18, 64, 127],
-          lineColor: '#dbe9ff',
-          lineRgb: [219, 233, 255],
-          glowColor: '#dbe9ff',
-          sunTop: '#ffffff',
-          sunBottom: '#4ba3e3',
-          starColor: '#ffffff',
-          horizonGlow: '#9ec4ff',
-          horizonSky: '#1a4c8a',
-          horizonGround: '#081a38',
-          hudAccent: '#dbe9ff',
-          hudGlow: 'rgba(219, 233, 255, 0.55)',
-          hudBorder: 'rgba(219, 233, 255, 0.32)'
-        }
-      };
+<div id="help-banner" class="mono">
+  MOUSE / TOUCH DRAG: STEER &amp; THROTTLE &bull; ARROWS: STEER/THR &bull; WHEEL: SPEED &bull; SPACE: PAUSE
+</div>
 
-      let activePaletteKey = 'tron';
-      let activePalette = PALETTES[activePaletteKey];
-      let shadingMode = 'wireframe'; // 'wireframe' or 'solid'
-      let isPaused = false;
+<div id="pause-overlay" class="mono">&mdash; PAUSED &mdash;</div>
 
-      /* ==========================================================================
-         2. PROCEDURAL 2D VALUE NOISE WITH PERMUTATION TABLE
-         ========================================================================== */
-      const permTable = new Uint8Array(512);
-      (function initNoise() {
-        // Deterministic PRNG shuffle for 256 unique entries
-        let seed = 19840428;
-        function lcg() {
-          seed = (seed * 1664525 + 1013904223) >>> 0;
-          return (seed >>> 16) / 65536;
-        }
-        const p = [];
-        for (let i = 0; i < 256; i++) p[i] = i;
-        for (let i = 255; i > 0; i--) {
-          const j = Math.floor(lcg() * (i + 1));
-          const tmp = p[i];
-          p[i] = p[j];
-          p[j] = tmp;
-        }
-        for (let i = 0; i < 512; i++) {
-          permTable[i] = p[i & 255];
-        }
-      })();
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
 
-      // 2D Value Noise with smoothstep interpolation
-      function valueNoise2D(x, y) {
-        const xi = Math.floor(x) & 255;
-        const yi = Math.floor(y) & 255;
-        const xf = x - Math.floor(x);
-        const yf = y - Math.floor(y);
+  const PALETTES = [
+    {
+      name: 'Tron',
+      skyTop: '#010409',
+      skyHoriz: '#052a36',
+      line: '25, 240, 255',
+      glow: '#19f0ff',
+      sun0: '#ffb347',
+      sun1: '#ff3d81',
+      star: '#8cefff',
+      accent: '#19f0ff',
+      cssGlow: 'rgba(25, 240, 255, 0.4)'
+    },
+    {
+      name: 'Synth',
+      skyTop: '#0b0018',
+      skyHoriz: '#4a0f6a',
+      line: '255, 43, 214',
+      glow: '#ff2bd6',
+      sun0: '#ffe259',
+      sun1: '#ff2bd6',
+      star: '#ffe3fa',
+      accent: '#ff2bd6',
+      cssGlow: 'rgba(255, 43, 214, 0.4)'
+    },
+    {
+      name: 'Amber',
+      skyTop: '#050300',
+      skyHoriz: '#2a1600',
+      line: '255, 176, 0',
+      glow: '#ffb000',
+      sun0: '#fff1c4',
+      sun1: '#ff8c00',
+      star: '#ffdf99',
+      accent: '#ffb000',
+      cssGlow: 'rgba(255, 176, 0, 0.4)'
+    },
+    {
+      name: 'Blueprint',
+      skyTop: '#062052',
+      skyHoriz: '#12407f',
+      line: '219, 233, 255',
+      glow: '#a8cdfc',
+      sun0: '#ffffff',
+      sun1: '#549eff',
+      star: '#ffffff',
+      accent: '#82b7ff',
+      cssGlow: 'rgba(130, 183, 255, 0.4)'
+    }
+  ];
 
-        // Smoothstep: 3*t^2 - 2*t^3
-        const u = xf * xf * (3 - 2 * xf);
-        const v = yf * yf * (3 - 2 * yf);
+  let curPalIdx = 0;
+  let pal = PALETTES[0];
+  let isSolid = false;
+  let isPaused = false;
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-        const aa = permTable[permTable[xi] + yi] / 255.0;
-        const ba = permTable[permTable[xi + 1] + yi] / 255.0;
-        const ab = permTable[permTable[xi] + yi + 1] / 255.0;
-        const bb = permTable[permTable[xi + 1] + yi + 1] / 255.0;
+  const perm = new Uint8Array(512);
+  const pBase = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) pBase[i] = i;
+  let seed = 0x9e3779b9;
+  for (let i = 255; i > 0; i--) {
+    seed = (seed ^ (seed << 13)) >>> 0;
+    seed = (seed ^ (seed >>> 17)) >>> 0;
+    seed = (seed ^ (seed << 5)) >>> 0;
+    const j = seed % (i + 1);
+    const tmp = pBase[i]; pBase[i] = pBase[j]; pBase[j] = tmp;
+  }
+  for (let i = 0; i < 512; i++) perm[i] = pBase[i & 255];
 
-        const x1 = aa + u * (ba - aa);
-        const x2 = ab + u * (bb - ab);
-        return x1 + v * (x2 - x1);
+  const fade = t => t * t * (3 - 2 * t);
+  const hash2d = (x, y) => perm[(x & 255) + perm[y & 255]] / 255.0;
+
+  function valNoise(x, y) {
+    const xi = Math.floor(x);
+    const yi = Math.floor(y);
+    const xf = x - xi;
+    const yf = y - yi;
+    const u = fade(xf);
+    const v = fade(yf);
+    const d00 = hash2d(xi, yi);
+    const d10 = hash2d(xi + 1, yi);
+    const d01 = hash2d(xi, yi + 1);
+    const d11 = hash2d(xi + 1, yi + 1);
+    const nx0 = d00 + u * (d10 - d00);
+    const nx1 = d01 + u * (d11 - d01);
+    return nx0 + v * (nx1 - nx0);
+  }
+
+  function fbm(x, y) {
+    let t = 0, amp = 0.55, freq = 1.0;
+    for (let i = 0; i < 3; i++) {
+      t += valNoise(x * freq, y * freq) * amp;
+      freq *= 2.05;
+      amp *= 0.48;
+    }
+    return t;
+  }
+
+  const COLS = 64;
+  const ROWS = 48;
+  const VERT_COUNT = COLS * ROWS;
+  const projX = new Float32Array(VERT_COUNT);
+  const projY = new Float32Array(VERT_COUNT);
+  const worldY = new Float32Array(VERT_COUNT);
+  const worldZ = new Float32Array(VERT_COUNT);
+
+  const STARS_COUNT = 160;
+  const starsX = new Float32Array(STARS_COUNT);
+  const starsY = new Float32Array(STARS_COUNT);
+  const starsPhase = new Float32Array(STARS_COUNT);
+  for (let i = 0; i < STARS_COUNT; i++) {
+    starsX[i] = Math.random();
+    starsY[i] = Math.random() * 0.42;
+    starsPhase[i] = Math.random() * Math.PI * 2;
+  }
+
+  const SPEED_LINES = 32;
+  const spdAng = new Float32Array(SPEED_LINES);
+  const spdLen = new Float32Array(SPEED_LINES);
+  const spdSpeed = new Float32Array(SPEED_LINES);
+  for (let i = 0; i < SPEED_LINES; i++) {
+    spdAng[i] = Math.random() * Math.PI * 2;
+    spdLen[i] = 0.1 + Math.random() * 0.9;
+    spdSpeed[i] = 0.8 + Math.random() * 1.5;
+  }
+
+  let width = 0, height = 0, dpr = 1;
+  let throttle = 0.45;
+  let targetThrottle = 0.45;
+  let steer = 0;
+  let targetSteer = 0;
+  let bank = 0;
+  let posX = 0;
+  let posZ = 0;
+  let distanceTraveled = 0;
+  let lastTime = performance.now();
+  let lastHudUpdate = 0;
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function sampleTerrain(gx, gz) {
+    const vOffset = Math.sin(gz * 0.05) * 14.0 + Math.sin(gz * 0.015) * 32.0;
+    const dFromValley = Math.abs(gx - vOffset);
+    const valleyFactor = Math.min(1.0, Math.pow(Math.max(0, (dFromValley - 10.0) / 45.0), 1.6));
+    const noise = fbm(gx * 0.022, gz * 0.022);
+    const mountain = Math.pow(noise, 1.8) * 140.0;
+    return mountain * valleyFactor - 6.0;
+  }
+
+  window.addEventListener('mousemove', e => {
+    const nx = (e.clientX / width) * 2 - 1;
+    targetSteer = nx * 1.35;
+  });
+
+  window.addEventListener('wheel', e => {
+    targetThrottle = Math.max(0.05, Math.min(1.0, targetThrottle - e.deltaY * 0.0008));
+  }, { passive: true });
+
+  const keys = {};
+  window.addEventListener('keydown', e => {
+    keys[e.key] = true;
+    if (e.code === 'Space') {
+      isPaused = !isPaused;
+      document.getElementById('pause-overlay').style.display = isPaused ? 'flex' : 'none';
+      document.getElementById('btn-pause').classList.toggle('active', isPaused);
+    }
+  });
+  window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+  window.addEventListener('touchstart', e => {
+    if (e.target.closest('.hud-panel') || e.target.closest('#controls-top')) return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+
+  window.addEventListener('touchmove', e => {
+    if (e.target.closest('.hud-panel') || e.target.closest('#controls-top')) return;
+    const tx = e.touches[0].clientX;
+    const ty = e.touches[0].clientY;
+    const dx = (tx - touchStartX) / (width * 0.35);
+    const dy = (touchStartY - ty) / (height * 0.35);
+    targetSteer = Math.max(-1.5, Math.min(1.5, dx * 1.5));
+    targetThrottle = Math.max(0.05, Math.min(1.0, targetThrottle + dy * 0.02));
+    touchStartX = tx;
+    touchStartY = ty;
+  }, { passive: true });
+
+  window.addEventListener('touchend', () => { targetSteer = 0; });
+
+  function setPalette(idx) {
+    curPalIdx = idx;
+    pal = PALETTES[idx];
+    document.documentElement.style.setProperty('--accent', pal.accent);
+    document.documentElement.style.setProperty('--accent-glow', pal.cssGlow);
+    document.documentElement.style.setProperty('--border-hud', pal.glow + '44');
+    document.querySelectorAll('#palette-sel .seg-btn').forEach((btn, i) => {
+      btn.classList.toggle('active', i === idx);
+    });
+  }
+
+  document.querySelectorAll('#palette-sel .seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => setPalette(parseInt(btn.dataset.pal, 10)));
+  });
+
+  const btnWire = document.getElementById('btn-wire');
+  const btnSolid = document.getElementById('btn-solid');
+  const btnPause = document.getElementById('btn-pause');
+
+  btnWire.addEventListener('click', () => {
+    isSolid = false;
+    btnWire.classList.add('active');
+    btnSolid.classList.remove('active');
+  });
+  btnSolid.addEventListener('click', () => {
+    isSolid = true;
+    btnSolid.classList.add('active');
+    btnWire.classList.remove('active');
+  });
+  btnPause.addEventListener('click', () => {
+    isPaused = !isPaused;
+    document.getElementById('pause-overlay').style.display = isPaused ? 'flex' : 'none';
+    btnPause.classList.toggle('active', isPaused);
+  });
+
+  const mAlt = document.getElementById('m-alt');
+  const mSpd = document.getElementById('m-spd');
+  const mHdg = document.getElementById('m-hdg');
+  const mDst = document.getElementById('m-dst');
+  const throttleBar = document.getElementById('throttle-bar');
+  const gyroRot = document.getElementById('gyro-rot');
+  const gyroSky = document.getElementById('gyro-sky');
+  const gyroGnd = document.getElementById('gyro-gnd');
+
+  function render(time) {
+    requestAnimationFrame(render);
+    const dt = Math.min((time - lastTime) * 0.001, 0.1);
+    lastTime = time;
+
+    if (!isPaused) {
+      if (keys['ArrowLeft'] || keys['a']) targetSteer = -1.2;
+      else if (keys['ArrowRight'] || keys['d']) targetSteer = 1.2;
+      else if (!('ontouchstart' in window) && !keys['ArrowLeft'] && !keys['ArrowRight']) {
+        targetSteer *= 0.95;
       }
 
-      // Three fractal octaves
-      function fbm3(x, y) {
-        let total = 0;
-        let amp = 1.0;
-        let freq = 1.0;
-        let maxAmp = 0;
-        for (let o = 0; o < 3; o++) {
-          total += valueNoise2D(x * freq, y * freq) * amp;
-          maxAmp += amp;
-          freq *= 2.0;
-          amp *= 0.5;
-        }
-        return total / maxAmp;
+      if (keys['ArrowUp'] || keys['w']) targetThrottle = Math.min(1.0, targetThrottle + 0.5 * dt);
+      if (keys['ArrowDown'] || keys['s']) targetThrottle = Math.max(0.05, targetThrottle - 0.5 * dt);
+
+      steer += (targetSteer - steer) * Math.min(1, 8.0 * dt);
+      throttle += (targetThrottle - throttle) * Math.min(1, 5.0 * dt);
+      bank += (steer * 0.38 - bank) * Math.min(1, 7.0 * dt);
+
+      const maxSpeed = prefersReduced ? 120 : 260;
+      const speed = 30 + throttle * maxSpeed;
+      posX += steer * speed * 0.4 * dt;
+      posZ += speed * dt;
+      distanceTraveled += (speed * dt) / 1000;
+    }
+
+    const groundH = sampleTerrain(posX, posZ + 8.0);
+    const swayX = prefersReduced ? 0 : Math.sin(time * 0.0015) * 1.5;
+    const swayY = prefersReduced ? 0 : Math.sin(time * 0.0022) * 1.2;
+    const targetCamY = groundH + 20.0 + (1.0 - throttle) * 6.0 + swayY;
+    const camX = posX + swayX;
+    const camY = targetCamY;
+    const camZ = posZ;
+
+    const horizY = height * 0.42;
+    const focal = Math.max(width, height) * 0.72;
+    const cosB = Math.cos(bank);
+    const sinB = Math.sin(bank);
+    const cx = width * 0.5;
+    const cy = horizY;
+
+    // 1. Sky Gradient
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, height);
+    skyGrad.addColorStop(0, pal.skyTop);
+    skyGrad.addColorStop(0.42, pal.skyHoriz);
+    skyGrad.addColorStop(0.65, pal.skyTop);
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Stars
+    ctx.fillStyle = pal.star;
+    for (let i = 0; i < STARS_COUNT; i++) {
+      const sx = starsX[i] * width;
+      const sy = starsY[i] * height;
+      const tw = (Math.sin(time * 0.003 + starsPhase[i]) + 1.0) * 0.5;
+      ctx.globalAlpha = 0.2 + 0.8 * tw;
+      ctx.fillRect(sx, sy, 1.5, 1.5);
+    }
+    ctx.globalAlpha = 1.0;
+
+    // 3. Synthwave Sun
+    const sunR = Math.min(width, height) * 0.18;
+    const sunCx = width * 0.5;
+    const sunCy = horizY - sunR * 0.25;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(sunCx, sunCy, sunR * 1.3, 0, Math.PI * 2);
+    const sunGlow = ctx.createRadialGradient(sunCx, sunCy, sunR * 0.6, sunCx, sunCy, sunR * 1.35);
+    sunGlow.addColorStop(0, pal.sun1);
+    sunGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = sunGlow;
+    ctx.globalAlpha = 0.35;
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(sunCx, sunCy, sunR, 0, Math.PI * 2);
+    ctx.clip();
+
+    const sunGrad = ctx.createLinearGradient(sunCx, sunCy - sunR, sunCx, sunCy + sunR);
+    sunGrad.addColorStop(0, pal.sun0);
+    sunGrad.addColorStop(1, pal.sun1);
+    ctx.fillStyle = sunGrad;
+    ctx.fillRect(sunCx - sunR, sunCy - sunR, sunR * 2, sunR * 2);
+
+    const sliceCount = 9;
+    ctx.fillStyle = pal.skyTop;
+    for (let i = 0; i < sliceCount; i++) {
+      const frac = i / sliceCount;
+      const sy = sunCy + (frac * sunR * 1.05);
+      const sh = 1.5 + frac * 8.0;
+      ctx.fillRect(sunCx - sunR, sy, sunR * 2, sh);
+    }
+    ctx.restore();
+
+    // 4. Terrain projection
+    const nearZ = 8.0;
+    const farZ = 240.0;
+    const spanX = 260.0;
+
+    for (let r = 0; r < ROWS; r++) {
+      const normR = r / (ROWS - 1);
+      const zDepth = nearZ + Math.pow(normR, 1.85) * (farZ - nearZ);
+      const wz = camZ + zDepth;
+
+      for (let c = 0; c < COLS; c++) {
+        const normC = (c / (COLS - 1)) * 2.0 - 1.0;
+        const wx = camX + normC * (spanX * (zDepth / farZ * 0.85 + 0.25));
+        const wy = sampleTerrain(wx, wz);
+
+        const idx = r * COLS + c;
+        worldY[idx] = wy;
+        worldZ[idx] = zDepth;
+
+        const rx = wx - camX;
+        const ry = -(wy - camY);
+        const rz = zDepth;
+
+        const invZ = focal / rz;
+        const sx = cx + rx * invZ;
+        const sy = cy + ry * invZ;
+
+        const dx = sx - cx;
+        const dy = sy - cy;
+        projX[idx] = cx + (dx * cosB - dy * sinB);
+        projY[idx] = cy + (dx * sinB + dy * cosB);
       }
-
-      // Meandering valley center along two overlapping sine curves
-      function getValleyCenterX(z) {
-        return Math.sin(z * 0.0016) * 160 + Math.sin(z * 0.0042 + 1.4) * 90;
-      }
-
-      // Sample terrain heightfield
-      function sampleHeight(worldX, worldZ) {
-        const valleyX = getValleyCenterX(worldZ);
-        const distFromCenter = Math.abs(worldX - valleyX);
-
-        // Smoothly carve valley: inner flat floor transitioning to towering ridges
-        const innerRadius = 80;
-        const outerRadius = 360;
-        let t = (distFromCenter - innerRadius) / (outerRadius - innerRadius);
-        if (t < 0) t = 0;
-        if (t > 1) t = 1;
-        // Smoothstep transition factor
-        const valleyFactor = t * t * (3 - 2 * t);
-
-        // Sample noise
-        const rawNoise = fbm3(worldX * 0.0022, worldZ * 0.0022);
-
-        // Valley floor has slight subtle undulating relief, ridges soar up to ~320m
-        const floorRelief = Math.sin(worldX * 0.015) * Math.cos(worldZ * 0.015) * 5;
-        const mountainPeaks = Math.pow(rawNoise, 1.25) * 310;
-
-        return floorRelief * (1 - valleyFactor) + mountainPeaks * valleyFactor;
-      }
-
-      /* ==========================================================================
-         3. MESH GEOMETRY & TYPED ARRAYS
-         ========================================================================== */
-      const COLS = 64;
-      const ROWS = 48;
-      const TOTAL_VERTS = COLS * ROWS;
-
-      const heights = new Float32Array(TOTAL_VERTS);
-      const projX = new Float32Array(TOTAL_VERTS);
-      const projY = new Float32Array(TOTAL_VERTS);
-      const rowZ = new Float32Array(ROWS);
-      const rowFog = new Float32Array(ROWS);
-
-      const NEAR_Z = 24.0;
-      const FAR_Z = 1280.0;
-
-      // Initialize row depths with power curve: near rows dense, far rows sparse
-      for (let r = 0; r < ROWS; r++) {
-        const t = r / (ROWS - 1);
-        const z = NEAR_Z + (FAR_Z - NEAR_Z) * Math.pow(t, 1.78);
-        rowZ[r] = z;
-        // Fog factor: (1 - (z/far)^1.1)
-        const fog = 1.0 - Math.pow(z / FAR_Z, 1.1);
-        rowFog[r] = Math.max(0, Math.min(1, fog));
-      }
-
-      /* ==========================================================================
-         4. STARS & SPEED LINES
-         ========================================================================== */
-      const NUM_STARS = 160;
-      const stars = [];
-      for (let i = 0; i < NUM_STARS; i++) {
-        stars.push({
-          normX: Math.random(),
-          normY: Math.random() * 0.40, // within the sky above horizon
-          size: 0.8 + Math.random() * 1.6,
-          phase: Math.random() * Math.PI * 2,
-          twinkleSpeed: 1.5 + Math.random() * 4.0
-        });
-      }
-
-      const NUM_SPEED_LINES = 45;
-      const speedLines = [];
-      for (let i = 0; i < NUM_SPEED_LINES; i++) {
-        speedLines.push({
-          angle: Math.random() * Math.PI * 2,
-          dist: 20 + Math.random() * 600,
-          len: 40 + Math.random() * 90,
-          speed: 700 + Math.random() * 850
-        });
-      }
-
-      /* ==========================================================================
-         5. FLIGHT DYNAMICS & CAMERA STATE
-         ========================================================================== */
-      let cameraX = 0;
-      let cameraY = 160;
-      let targetCameraY = 160;
-      let travelZ = 0;
-
-      let bankAngle = 0;
-      let targetBankAngle = 0;
-      let heading = 0; // in radians
-      let pitch = 0; // pitch derived from throttle & stick
-
-      let throttle = 0.65; // 0.0 to 1.0
-      let targetThrottle = 0.65;
-      let speed = 420; // knots
-      let distanceKm = 0;
-
-      let flightTime = 0;
-
-      // Motion preference
-      let prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', (e) => {
-        prefersReducedMotion = e.matches;
-      });
-
-      // Canvas setup
-      const canvas = document.getElementById('flight-canvas');
-      const ctx = canvas.getContext('2d', { alpha: false });
-      let viewWidth = window.innerWidth;
-      let viewHeight = window.innerHeight;
-      let dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-      let focalLength = Math.max(viewWidth, viewHeight) * 0.88;
-      let horizonY = viewHeight * 0.42;
-      let horizonX = viewWidth * 0.5;
-
-      function resizeCanvas() {
-        viewWidth = window.innerWidth;
-        viewHeight = window.innerHeight;
-        dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-        canvas.width = Math.floor(viewWidth * dpr);
-        canvas.height = Math.floor(viewHeight * dpr);
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-        focalLength = Math.max(viewWidth, viewHeight) * 0.88;
-        horizonY = viewHeight * 0.42;
-        horizonX = viewWidth * 0.5;
-      }
-      window.addEventListener('resize', resizeCanvas);
-      resizeCanvas();
-
-      /* ==========================================================================
-         6. CONTROLS & INPUT SYSTEM
-         ========================================================================== */
-      let mouseNormX = 0; // -1 to +1
-      let mouseSteerActive = false;
-      const keysDown = {};
-
-      window.addEventListener('mousemove', (e) => {
-        const nx = (e.clientX - viewWidth * 0.5) / (viewWidth * 0.5);
-        mouseNormX = Math.max(-1, Math.min(1, nx));
-        mouseSteerActive = true;
-      });
-
-      // Mouse leaves window resets steer back toward center
-      window.addEventListener('mouseleave', () => {
-        mouseNormX = 0;
-      });
-
-      // Mouse wheel adjusts throttle
-      window.addEventListener('wheel', (e) => {
-        targetThrottle = Math.max(0.05, Math.min(1.0, targetThrottle - e.deltaY * 0.0008));
-      }, { passive: true });
-
-      // Touch controls
-      let touchStartX = 0;
-      let touchStartY = 0;
-      let touchActive = false;
-
-      window.addEventListener('touchstart', (e) => {
-        if (e.target.closest('.interactive')) return;
-        if (e.touches.length > 0) {
-          touchActive = true;
-          touchStartX = e.touches[0].clientX;
-          touchStartY = e.touches[0].clientY;
-        }
-      }, { passive: false });
-
-      window.addEventListener('touchmove', (e) => {
-        if (!touchActive || e.touches.length === 0) return;
-        if (e.target.closest('.interactive')) return;
-        const currentX = e.touches[0].clientX;
-        const currentY = e.touches[0].clientY;
-        const dx = currentX - touchStartX;
-        const dy = currentY - touchStartY;
-
-        // Horizontal drag steers & banks
-        mouseNormX = Math.max(-1, Math.min(1, dx / (viewWidth * 0.35)));
-
-        // Vertical drag adjusts throttle (drag up = throttle up)
-        targetThrottle = Math.max(0.05, Math.min(1.0, targetThrottle - dy * 0.0015));
-        touchStartY = currentY;
-
-        e.preventDefault();
-      }, { passive: false });
-
-      window.addEventListener('touchend', () => {
-        touchActive = false;
-        mouseNormX = 0;
-      });
-
-      // Keyboard Controls
-      window.addEventListener('keydown', (e) => {
-        keysDown[e.code] = true;
-        if (e.code === 'Space') {
-          e.preventDefault();
-          togglePause();
-        }
-      });
-
-      window.addEventListener('keyup', (e) => {
-        keysDown[e.code] = false;
-      });
-
-      function togglePause() {
-        isPaused = !isPaused;
-        const overlay = document.getElementById('pause-overlay');
-        const pauseBtn = document.getElementById('pause-toggle-btn');
-        if (isPaused) {
-          overlay.classList.add('active');
-          pauseBtn.classList.add('active');
-          pauseBtn.textContent = 'Resume';
-        } else {
-          overlay.classList.remove('active');
-          pauseBtn.classList.remove('active');
-          pauseBtn.textContent = 'Pause';
-        }
-      }
-
-      document.getElementById('resume-btn').addEventListener('click', () => {
-        if (isPaused) togglePause();
-      });
-
-      document.getElementById('pause-toggle-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        togglePause();
-      });
-
-      // Throttle Track Interactive Click & Drag
-      const throttleTrack = document.getElementById('throttle-track');
-      let isDraggingThrottle = false;
-
-      function updateThrottleFromPointer(e) {
-        const rect = throttleTrack.getBoundingClientRect();
-        const clientY = e.clientY || (e.touches && e.touches[0].clientY) || 0;
-        const ratio = 1.0 - (clientY - rect.top) / rect.height;
-        targetThrottle = Math.max(0.05, Math.min(1.0, ratio));
-      }
-
-      throttleTrack.addEventListener('mousedown', (e) => {
-        e.stopPropagation();
-        isDraggingThrottle = true;
-        updateThrottleFromPointer(e);
-      });
-
-      window.addEventListener('mousemove', (e) => {
-        if (isDraggingThrottle) updateThrottleFromPointer(e);
-      });
-
-      window.addEventListener('mouseup', () => {
-        isDraggingThrottle = false;
-      });
-
-      throttleTrack.addEventListener('touchstart', (e) => {
-        e.stopPropagation();
-        isDraggingThrottle = true;
-        updateThrottleFromPointer(e);
-      }, { passive: false });
-
-      throttleTrack.addEventListener('touchmove', (e) => {
-        if (isDraggingThrottle) {
-          e.preventDefault();
-          updateThrottleFromPointer(e);
-        }
-      }, { passive: false });
-
-      throttleTrack.addEventListener('touchend', () => {
-        isDraggingThrottle = false;
-      });
-
-      // Palette selection HUD buttons
-      const paletteBtns = document.querySelectorAll('#palette-controls .segment-btn');
-      paletteBtns.forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          paletteBtns.forEach((b) => b.classList.remove('active'));
-          btn.classList.add('active');
-          const key = btn.dataset.palette;
-          setPalette(key);
-        });
-      });
-
-      function setPalette(key) {
-        if (!PALETTES[key]) return;
-        activePaletteKey = key;
-        activePalette = PALETTES[key];
-
-        // Update CSS Custom Properties
-        const root = document.documentElement;
-        root.style.setProperty('--hud-accent', activePalette.hudAccent);
-        root.style.setProperty('--hud-glow', activePalette.hudGlow);
-        root.style.setProperty('--hud-border', activePalette.hudBorder);
-        root.style.setProperty('--horizon-sky', activePalette.horizonSky);
-        root.style.setProperty('--horizon-ground', activePalette.horizonGround);
-      }
-
-      // Shading Mode HUD buttons
-      const modeBtns = document.querySelectorAll('#mode-controls .segment-btn[data-mode]');
-      modeBtns.forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          modeBtns.forEach((b) => b.classList.remove('active'));
-          btn.classList.add('active');
-          shadingMode = btn.dataset.mode;
-        });
-      });
-
-      /* ==========================================================================
-         7. RENDER PASSES & VECTOR GRAPHICS ENGINE
-         ========================================================================== */
-
-      // Draw Sky & Stars
-      function drawSky(width, height) {
-        // Vertical sky gradient: deep top color into luminous horizon band and back to dark
-        const skyGrad = ctx.createLinearGradient(0, 0, 0, height);
-        skyGrad.addColorStop(0, activePalette.skyTop);
-        skyGrad.addColorStop(Math.max(0, (horizonY - 15) / height), activePalette.skyBottom);
-        skyGrad.addColorStop(Math.min(1, horizonY / height), activePalette.horizonGlow);
-        skyGrad.addColorStop(Math.min(1, (horizonY + 30) / height), activePalette.skyTop);
-        skyGrad.addColorStop(1, '#000000');
-
-        ctx.fillStyle = skyGrad;
-        ctx.fillRect(0, 0, width, height);
-
-        // 160 Twinkling stars in sky above horizon
-        ctx.save();
-        for (let i = 0; i < NUM_STARS; i++) {
-          const s = stars[i];
-          const sx = s.normX * width;
-          const sy = s.normY * (horizonY - 8);
-
-          const alpha = 0.25 + 0.75 * Math.abs(Math.sin(s.phase + flightTime * s.twinkleSpeed));
-          ctx.fillStyle = activePalette.starColor;
-          ctx.globalAlpha = alpha;
-
-          if (s.size > 1.8) {
-            // Draw small diamond vector star
-            ctx.beginPath();
-            ctx.moveTo(sx, sy - s.size * 1.5);
-            ctx.lineTo(sx + s.size, sy);
-            ctx.lineTo(sx, sy + s.size * 1.5);
-            ctx.lineTo(sx - s.size, sy);
-            ctx.closePath();
-            ctx.fill();
-          } else {
-            ctx.fillRect(sx, sy, s.size, s.size);
-          }
-        }
-        ctx.restore();
-      }
-
-      // Draw Classic Synthwave Sun with horizontal cuts
-      function drawSun(width, height) {
-        const sunRadius = Math.min(width, height) * 0.23;
-        const sunX = horizonX;
-        const sunY = horizonY - sunRadius * 0.25; // Sitting just above horizon
-
-        ctx.save();
-
-        // 1. Soft glowing outer rim
-        const glowRadius = sunRadius * 1.6;
-        const rimGrad = ctx.createRadialGradient(sunX, sunY, sunRadius * 0.75, sunX, sunY, glowRadius);
-        rimGrad.addColorStop(0, hexToRgba(activePalette.glowColor, 0.45));
-        rimGrad.addColorStop(0.5, hexToRgba(activePalette.glowColor, 0.15));
-        rimGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = rimGrad;
-        ctx.beginPath();
-        ctx.arc(sunX, sunY, glowRadius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 2. Main Sun Disc with Two-Tone Vertical Gradient
-        const sunGrad = ctx.createLinearGradient(sunX, sunY - sunRadius, sunX, sunY + sunRadius);
-        sunGrad.addColorStop(0, activePalette.sunTop);
-        sunGrad.addColorStop(1, activePalette.sunBottom);
-
-        ctx.beginPath();
-        ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2);
-        ctx.fillStyle = sunGrad;
-        ctx.fill();
-
-        // 3. Synthwave horizontal bands of sky color whose thickness increases toward the bottom
-        // Clipped to the sun disc
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2);
-        ctx.clip();
-
-        const numBands = 7;
-        for (let b = 0; b < numBands; b++) {
-          const t = (b + 1) / (numBands + 1); // 0.125 to 0.875
-          const bandY = sunY + sunRadius * (0.05 + t * 0.92);
-          // Band thickness increases towards the bottom
-          const bandHeight = 2.0 + Math.pow(t, 1.8) * (sunRadius * 0.11);
-
-          ctx.fillStyle = activePalette.skyBottom;
-          ctx.fillRect(sunX - sunRadius - 10, bandY, (sunRadius + 10) * 2, bandHeight);
-        }
-        ctx.restore();
-
-        ctx.restore();
-
-        // 4. Hazy Horizon Strip across the horizon line
-        const horizonGrad = ctx.createLinearGradient(0, horizonY - 35, 0, horizonY + 35);
-        horizonGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        horizonGrad.addColorStop(0.5, hexToRgba(activePalette.horizonGlow, 0.6));
-        horizonGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-        ctx.fillStyle = horizonGrad;
-        ctx.fillRect(0, horizonY - 35, width, 70);
-      }
-
-      // Draw Radial Speed Lines when Throttle exceeds ~62%
-      function drawSpeedLines(width, height) {
-        if (throttle <= 0.62) return;
-
-        const factor = (throttle - 0.62) / 0.38; // 0 to 1
-        const lineAlpha = factor * 0.75;
-        const maxDist = Math.max(width, height) * 0.9;
-
-        ctx.save();
-        ctx.strokeStyle = `rgba(255, 255, 255, ${lineAlpha.toFixed(3)})`;
-        ctx.lineWidth = 1.6;
-
-        for (let i = 0; i < NUM_SPEED_LINES; i++) {
-          const line = speedLines[i];
-          const cosA = Math.cos(line.angle);
-          const sinA = Math.sin(line.angle);
-
-          const x1 = horizonX + cosA * line.dist;
-          const y1 = horizonY + sinA * line.dist;
-          const x2 = horizonX + cosA * (line.dist + line.len * (0.8 + factor * 0.8));
-          const y2 = horizonY + sinA * (line.dist + line.len * (0.8 + factor * 0.8));
+    }
+
+    // 5. Render Terrain Mesh
+    ctx.save();
+    if (isSolid) {
+      for (let r = ROWS - 2; r >= 0; r--) {
+        for (let c = 0; c < COLS - 1; c++) {
+          const i0 = r * COLS + c;
+          const i1 = r * COLS + (c + 1);
+          const i2 = (r + 1) * COLS + (c + 1);
+          const i3 = (r + 1) * COLS + c;
+
+          const zMid = (worldZ[i0] + worldZ[i2]) * 0.5;
+          const fog = Math.max(0, 1.0 - Math.pow(zMid / farZ, 1.1));
+
+          const slope = (worldY[i1] - worldY[i0]) * 0.2 + (worldY[i3] - worldY[i0]) * 0.4;
+          const light = Math.max(0.1, Math.min(1.0, 0.4 + slope * 0.05));
+          const colAlpha = fog * light * 0.9;
 
           ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x2, y2);
-          ctx.stroke();
-        }
-        ctx.restore();
-      }
-
-      // Draw Radial Vignette
-      function drawVignette(width, height) {
-        const maxDim = Math.max(width, height);
-        const vigGrad = ctx.createRadialGradient(
-          width * 0.5, height * 0.5, maxDim * 0.32,
-          width * 0.5, height * 0.5, maxDim * 0.74
-        );
-        vigGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        vigGrad.addColorStop(1, 'rgba(0, 0, 0, 0.68)');
-
-        ctx.fillStyle = vigGrad;
-        ctx.fillRect(0, 0, width, height);
-      }
-
-      // Compute 3D Mesh Vertices & Project to Screen Space
-      function updateAndProjectMesh() {
-        const cosB = Math.cos(bankAngle);
-        const sinB = Math.sin(bankAngle);
-
-        // Sinusoidal sway for hand-held feel (disabled under prefers-reduced-motion)
-        let swayX = 0;
-        let swayY = 0;
-        if (!prefersReducedMotion) {
-          swayX = Math.sin(flightTime * 1.3) * 16 + Math.cos(flightTime * 0.8) * 9;
-          swayY = Math.sin(flightTime * 1.7) * 10;
-        }
-
-        const effCamX = cameraX + swayX;
-        const effCamY = cameraY + swayY;
-        const pitchScreenOffset = pitch * 140;
-
-        for (let r = 0; r < ROWS; r++) {
-          const z = rowZ[r];
-          const worldZ = travelZ + z;
-          // Mesh span expands with depth to fill full horizontal viewport
-          const spanX = (z * 1.7 + 520);
-
-          for (let c = 0; c < COLS; c++) {
-            const idx = r * COLS + c;
-            const normC = (c - (COLS - 1) * 0.5) / ((COLS - 1) * 0.5);
-            const worldX = effCamX + normC * spanX;
-
-            const h = sampleHeight(worldX, worldZ);
-            heights[idx] = h;
-
-            // Simple pinhole camera projection before bank angle
-            const relX = worldX - effCamX;
-            const relY = effCamY - h; // ground is below camera, so positive relY is below horizon
-
-            const rawSx = horizonX + (relX * focalLength) / z;
-            const rawSy = horizonY + (relY * focalLength) / z + pitchScreenOffset;
-
-            // Screen-space rotation around (horizonX, horizonY) by current bank angle
-            const dx = rawSx - horizonX;
-            const dy = rawSy - horizonY;
-
-            projX[idx] = horizonX + dx * cosB - dy * sinB;
-            projY[idx] = horizonY + dx * sinB + dy * cosB;
-          }
-        }
-      }
-
-      // Render Terrain Mesh: Wireframe Mode
-      function renderWireframeTerrain(width, height) {
-        const skyR = activePalette.skyBottomRgb[0];
-        const skyG = activePalette.skyBottomRgb[1];
-        const skyB = activePalette.skyBottomRgb[2];
-        const occludeColor = `rgba(${skyR}, ${skyG}, ${skyB}, 0.96)`;
-
-        // 1. Far-to-near row strips: fill strip polygon with near-opaque sky color for occlusion,
-        // then stroke the row line with fog-scaled alpha and width
-        for (let r = ROWS - 2; r >= 0; r--) {
-          const fog = rowFog[r];
-          const nextR = r + 1;
-
-          // Strip occlusion polygon: row r to row r+1
-          ctx.beginPath();
-          ctx.moveTo(projX[r * COLS], projY[r * COLS]);
-          for (let c = 1; c < COLS; c++) {
-            ctx.lineTo(projX[r * COLS + c], projY[r * COLS + c]);
-          }
-          for (let c = COLS - 1; c >= 0; c--) {
-            ctx.lineTo(projX[nextR * COLS + c], projY[nextR * COLS + c]);
-          }
+          ctx.moveTo(projX[i0], projY[i0]);
+          ctx.lineTo(projX[i1], projY[i1]);
+          ctx.lineTo(projX[i2], projY[i2]);
+          ctx.lineTo(projX[i3], projY[i3]);
           ctx.closePath();
-          ctx.fillStyle = occludeColor;
+
+          ctx.fillStyle = `rgba(${pal.line}, ${colAlpha * 0.35})`;
           ctx.fill();
-
-          // Stroke row line
-          ctx.beginPath();
-          ctx.moveTo(projX[r * COLS], projY[r * COLS]);
-          for (let c = 1; c < COLS; c++) {
-            ctx.lineTo(projX[r * COLS + c], projY[r * COLS + c]);
-          }
-
-          const strokeAlpha = Math.max(0.08, 0.12 + 0.88 * fog);
-          ctx.strokeStyle = hexToRgba(activePalette.lineColor, strokeAlpha);
-          ctx.lineWidth = Math.max(0.7, 0.6 + 1.8 * fog);
+          ctx.strokeStyle = `rgba(${pal.line}, ${fog * 0.25})`;
+          ctx.lineWidth = 1;
           ctx.stroke();
         }
-
-        // Fill bottom skirt below row 0 to prevent viewport gap
+      }
+    } else {
+      // Wireframe occlusion + row lines
+      for (let r = ROWS - 2; r >= 0; r--) {
         ctx.beginPath();
-        ctx.moveTo(projX[0], projY[0]);
+        const startIdx = r * COLS;
+        ctx.moveTo(projX[startIdx], projY[startIdx]);
         for (let c = 1; c < COLS; c++) {
-          ctx.lineTo(projX[c], projY[c]);
+          ctx.lineTo(projX[startIdx + c], projY[startIdx + c]);
         }
-        ctx.lineTo(width + 20, height + 20);
-        ctx.lineTo(-20, height + 20);
+        const nextStart = (r + 1) * COLS;
+        for (let c = COLS - 1; c >= 0; c--) {
+          ctx.lineTo(projX[nextStart + c], projY[nextStart + c]);
+        }
         ctx.closePath();
-        ctx.fillStyle = occludeColor;
+        ctx.fillStyle = pal.skyTop;
         ctx.fill();
 
-        // 2. Column lines: stroked with per-column vertical gradient that fades to transparent at horizon
-        for (let c = 0; c < COLS; c++) {
-          const farIdx = (ROWS - 1) * COLS + c;
-          const nearIdx = c;
-
-          const xFar = projX[farIdx];
-          const yFar = projY[farIdx];
-          const xNear = projX[nearIdx];
-          const yNear = projY[nearIdx];
-
-          const colGrad = ctx.createLinearGradient(xFar, yFar, xNear, yNear);
-          colGrad.addColorStop(0, hexToRgba(activePalette.lineColor, 0.0));
-          colGrad.addColorStop(0.25, hexToRgba(activePalette.lineColor, 0.2));
-          colGrad.addColorStop(1.0, hexToRgba(activePalette.lineColor, 0.85));
-
-          ctx.beginPath();
-          ctx.moveTo(xFar, yFar);
-          for (let r = ROWS - 2; r >= 0; r--) {
-            ctx.lineTo(projX[r * COLS + c], projY[r * COLS + c]);
-          }
-
-          ctx.strokeStyle = colGrad;
-          ctx.lineWidth = 1.1;
-          ctx.stroke();
-        }
-
-        // 3. Nearest row gets a glowing white stroke with shadowBlur
-        ctx.save();
+        const zRow = worldZ[startIdx];
+        const fog = Math.max(0, 1.0 - Math.pow(zRow / farZ, 1.1));
         ctx.beginPath();
-        ctx.moveTo(projX[0], projY[0]);
+        ctx.moveTo(projX[startIdx], projY[startIdx]);
         for (let c = 1; c < COLS; c++) {
-          ctx.lineTo(projX[c], projY[c]);
+          ctx.lineTo(projX[startIdx + c], projY[startIdx + c]);
         }
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.4;
-        ctx.shadowColor = activePalette.glowColor;
-        ctx.shadowBlur = 14;
+        ctx.strokeStyle = `rgba(${pal.line}, ${fog * 0.85})`;
+        ctx.lineWidth = Math.max(0.8, (1.0 - zRow / farZ) * 2.2);
         ctx.stroke();
-        ctx.restore();
       }
 
-      // Render Terrain Mesh: Solid Mode with fake lighting & fog
-      function renderSolidTerrain(width, height) {
-        const pr = activePalette.lineRgb[0];
-        const pg = activePalette.lineRgb[1];
-        const pb = activePalette.lineRgb[2];
-
-        // Draw quads far-to-near
-        for (let r = ROWS - 2; r >= 0; r--) {
-          const fog = (rowFog[r] + rowFog[r + 1]) * 0.5;
-
-          for (let c = 0; c < COLS - 1; c++) {
-            const i00 = r * COLS + c;
-            const i10 = r * COLS + c + 1;
-            const i11 = (r + 1) * COLS + c + 1;
-            const i01 = (r + 1) * COLS + c;
-
-            // Fake directional lighting from local slope and height
-            const dhX = heights[i10] - heights[i00];
-            const dhZ = heights[i01] - heights[i00];
-
-            // Approximate normal: nx = -dhX, ny = 1, nz = -dhZ
-            const nx = -dhX * 0.04;
-            const ny = 1.0;
-            const nz = -dhZ * 0.03;
-            const invLen = 1.0 / Math.hypot(nx, ny, nz);
-
-            // Light from sun in front & above: (0, 0.6, 0.8)
-            const dot = Math.max(0, (ny * 0.6 + nz * 0.8) * invLen);
-            const heightBonus = Math.min(1.0, heights[i00] / 280) * 0.3;
-            const shade = Math.min(1.0, 0.12 + dot * 0.65 + heightBonus);
-
-            const finalFactor = shade * fog;
-            const red = Math.floor(pr * finalFactor * 0.85);
-            const green = Math.floor(pg * finalFactor * 0.85);
-            const blue = Math.floor(pb * finalFactor * 0.85);
-
-            ctx.beginPath();
-            ctx.moveTo(projX[i00], projY[i00]);
-            ctx.lineTo(projX[i10], projY[i10]);
-            ctx.lineTo(projX[i11], projY[i11]);
-            ctx.lineTo(projX[i01], projY[i01]);
-            ctx.closePath();
-
-            ctx.fillStyle = `rgb(${red}, ${green}, ${blue})`;
-            ctx.fill();
-
-            // Faint edge stroke
-            ctx.strokeStyle = `rgba(${pr}, ${green}, ${pb}, ${(0.22 * fog).toFixed(3)})`;
-            ctx.lineWidth = 0.7;
-            ctx.stroke();
-          }
+      // Column lines
+      for (let c = 0; c < COLS; c++) {
+        ctx.beginPath();
+        ctx.moveTo(projX[c], projY[c]);
+        for (let r = 1; r < ROWS; r++) {
+          ctx.lineTo(projX[r * COLS + c], projY[r * COLS + c]);
         }
+        const pNearY = projY[c];
+        const pFarY = projY[(ROWS - 1) * COLS + c];
+        const colGrad = ctx.createLinearGradient(0, pNearY, 0, pFarY);
+        colGrad.addColorStop(0, `rgba(${pal.line}, 0.9)`);
+        colGrad.addColorStop(0.7, `rgba(${pal.line}, 0.35)`);
+        colGrad.addColorStop(1, `rgba(${pal.line}, 0.0)`);
+        ctx.strokeStyle = colGrad;
+        ctx.lineWidth = 1.0;
+        ctx.stroke();
       }
 
-      /* ==========================================================================
-         8. THROTTLED HUD TELEMETRY & ATTITUDE GAUGE UPDATES (~80ms)
-         ========================================================================== */
-      let lastHudUpdateTime = 0;
-      let frameCount = 0;
-      let lastFpsTime = performance.now();
-      let currentFps = 60;
+      // Near row bright pulse
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(projX[0], projY[0]);
+      for (let c = 1; c < COLS; c++) ctx.lineTo(projX[c], projY[c]);
+      ctx.strokeStyle = '#ffffff';
+      ctx.shadowColor = pal.glow;
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
 
-      const elAlt = document.getElementById('alt-val');
-      const elSpd = document.getElementById('spd-val');
-      const elHdg = document.getElementById('hdg-val');
-      const elDst = document.getElementById('dst-val');
-      const elFps = document.getElementById('sys-fps');
-      const elThrottleFill = document.getElementById('throttle-fill');
-      const elThrottleReadout = document.getElementById('throttle-readout');
-      const elHorizonCard = document.getElementById('horizon-card');
+    // 6. Horizon Glow Strip
+    const hStrip = ctx.createLinearGradient(0, horizY - 14, 0, horizY + 14);
+    hStrip.addColorStop(0, 'transparent');
+    hStrip.addColorStop(0.5, pal.skyHoriz);
+    hStrip.addColorStop(1, 'transparent');
+    ctx.fillStyle = hStrip;
+    ctx.fillRect(0, horizY - 14, width, 28);
 
-      function updateHudTelemetry(now) {
-        // Calculate FPS
-        frameCount++;
-        if (now - lastFpsTime >= 1000) {
-          currentFps = Math.round((frameCount * 1000) / (now - lastFpsTime));
-          frameCount = 0;
-          lastFpsTime = now;
-          elFps.textContent = `${currentFps} FPS`;
-        }
+    // 7. Warp speed lines
+    if (throttle > 0.62) {
+      const warpIntensity = (throttle - 0.62) / 0.38;
+      ctx.save();
+      ctx.strokeStyle = '#ffffff';
+      for (let i = 0; i < SPEED_LINES; i++) {
+        spdLen[i] += spdSpeed[i] * warpIntensity * dt * 2.5;
+        if (spdLen[i] > 1.0) spdLen[i] = 0.05;
+        const rad = spdLen[i] * Math.max(width, height) * 0.75;
+        const len = 30 + spdLen[i] * 90;
+        const a = spdAng[i] + bank * 0.5;
+        const x1 = cx + Math.cos(a) * rad;
+        const y1 = cy + Math.sin(a) * rad;
+        const x2 = cx + Math.cos(a) * (rad + len);
+        const y2 = cy + Math.sin(a) * (rad + len);
 
-        // Formatted values
-        const altDisplay = Math.max(0, Math.round(cameraY));
-        const spdDisplay = Math.round(speed);
-        let hdgDeg = Math.round((heading * 180 / Math.PI) % 360);
-        if (hdgDeg < 0) hdgDeg += 360;
-        const hdgStr = String(hdgDeg).padStart(3, '0');
-        const dstStr = distanceKm.toFixed(1);
-
-        elAlt.textContent = altDisplay;
-        elSpd.textContent = spdDisplay;
-        elHdg.textContent = hdgStr;
-        elDst.textContent = dstStr;
-
-        // Throttle Gauge
-        const thrPercent = Math.round(throttle * 100);
-        elThrottleFill.style.height = `${thrPercent}%`;
-        elThrottleReadout.textContent = `${thrPercent}%`;
-
-        // SVG Artificial Horizon Instrument:
-        // Rotates with negative bank angle and translates vertically with throttle-derived pitch
-        const rollDeg = (-bankAngle * 180 / Math.PI).toFixed(2);
-        const pitchPx = (pitch * 55).toFixed(2);
-        elHorizonCard.setAttribute('transform', `translate(60, 60) rotate(${rollDeg}) translate(0, ${pitchPx})`);
+        ctx.globalAlpha = warpIntensity * spdLen[i] * 0.65;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
       }
+      ctx.restore();
+    }
 
-      /* ==========================================================================
-         9. MAIN ANIMATION & FLIGHT SIMULATION LOOP
-         ========================================================================== */
-      let lastFrameTime = performance.now();
+    // 8. Vignette & Scanlines
+    const vig = ctx.createRadialGradient(cx, cy, height * 0.3, cx, cy, Math.max(width, height) * 0.75);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.65)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, width, height);
 
-      function animationLoop(timestamp) {
-        requestAnimationFrame(animationLoop);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+    for (let y = 0; y < height; y += 4) {
+      ctx.fillRect(0, y, width, 1.5);
+    }
 
-        const dt = Math.min(0.08, (timestamp - lastFrameTime) / 1000);
-        lastFrameTime = timestamp;
+    // HUD throttled update (~80ms)
+    if (time - lastHudUpdate > 80) {
+      lastHudUpdate = time;
+      mAlt.textContent = Math.round(camY * 10).toString().padStart(4, '0');
+      mSpd.textContent = Math.round(30 + throttle * 260).toString().padStart(3, '0');
+      let hdg = Math.round((posX * 2.5) % 360);
+      if (hdg < 0) hdg += 360;
+      mHdg.textContent = hdg.toString().padStart(3, '0');
+      mDst.textContent = distanceTraveled.toFixed(1).padStart(4, '0');
+      throttleBar.style.height = `${(throttle * 100).toFixed(0)}%`;
 
-        if (!isPaused) {
-          flightTime += dt;
+      const degBank = (-bank * 180 / Math.PI).toFixed(2);
+      const pitchY = ((throttle - 0.5) * 35).toFixed(2);
+      gyroRot.setAttribute('transform', `rotate(${degBank} 50 50) translate(0, ${pitchY})`);
+      gyroSky.setAttribute('fill', pal.skyHoriz);
+      gyroGnd.setAttribute('fill', pal.skyTop);
+    }
+  }
 
-          // Process Steering & Banking
-          let targetSteer = 0;
-          if (keysDown['ArrowLeft'] || keysDown['KeyA']) targetSteer -= 1;
-          if (keysDown['ArrowRight'] || keysDown['KeyD']) targetSteer += 1;
-
-          if (mouseSteerActive || touchActive) {
-            targetSteer += mouseNormX;
-          }
-          targetSteer = Math.max(-1, Math.min(1, targetSteer));
-
-          // Target bank angle: up to ~32 degrees (0.56 rad)
-          targetBankAngle = targetSteer * 0.56;
-
-          // Smooth bank angle with time-based easing
-          const bankDamping = 6.0;
-          bankAngle += (targetBankAngle - bankAngle) * (1 - Math.exp(-bankDamping * dt));
-
-          // Heading yaw accumulates proportionally to bank angle
-          const turnRate = 0.85;
-          heading += bankAngle * turnRate * dt;
-
-          // Camera lateral drift follows steering/bank
-          const lateralSpeed = speed * 0.42;
-          cameraX += Math.sin(bankAngle) * lateralSpeed * dt;
-
-          // Throttle keys
-          if (keysDown['ArrowUp'] || keysDown['KeyW']) targetThrottle = Math.min(1.0, targetThrottle + 0.4 * dt);
-          if (keysDown['ArrowDown'] || keysDown['KeyS']) targetThrottle = Math.max(0.05, targetThrottle - 0.4 * dt);
-
-          // Smooth throttle
-          throttle += (targetThrottle - throttle) * (1 - Math.exp(-7.0 * dt));
-
-          // Speed in knots (capped top speed under prefers-reduced-motion)
-          const minKnots = 180;
-          const maxKnots = prefersReducedMotion ? 520 : 880;
-          const targetKnots = minKnots + (maxKnots - minKnots) * throttle;
-          speed += (targetKnots - speed) * (1 - Math.exp(-4.5 * dt));
-
-          // Throttle-derived pitch (nose pitches up slightly at high throttle / climb)
-          const targetPitch = (throttle - 0.55) * 0.28;
-          pitch += (targetPitch - pitch) * (1 - Math.exp(-5.0 * dt));
-
-          // Advance forward along Z
-          const forwardAdvance = speed * 1.6 * dt;
-          travelZ += forwardAdvance;
-
-          // Distance in kilometers (1 knot = 1.852 km/h)
-          distanceKm += (speed * 1.852 / 3600) * dt;
-
-          // Camera altitude softly follows ground under it
-          const groundUnderCamera = sampleHeight(cameraX, travelZ + 50);
-          targetCameraY = groundUnderCamera + 125; // 125m cruise clearance
-          cameraY += (targetCameraY - cameraY) * (3.2 * dt);
-
-          // Advance speed lines
-          if (throttle > 0.62) {
-            const factor = (throttle - 0.62) / 0.38;
-            const maxDist = Math.max(viewWidth, viewHeight) * 0.9;
-            for (let i = 0; i < NUM_SPEED_LINES; i++) {
-              const sl = speedLines[i];
-              sl.dist += sl.speed * factor * dt;
-              if (sl.dist > maxDist) {
-                sl.dist = 20 + Math.random() * 40;
-                sl.angle = Math.random() * Math.PI * 2;
-              }
-            }
-          }
-        }
-
-        // Project Terrain Vertices
-        updateAndProjectMesh();
-
-        // 1. Sky & Twinkling Stars
-        drawSky(viewWidth, viewHeight);
-
-        // 2. Synthwave Sun & Horizon Glow
-        drawSun(viewWidth, viewHeight);
-
-        // 3. Terrain Mesh (Wireframe or Solid)
-        if (shadingMode === 'wireframe') {
-          renderWireframeTerrain(viewWidth, viewHeight);
-        } else {
-          renderSolidTerrain(viewWidth, viewHeight);
-        }
-
-        // 4. Radial Speed Lines (Throttle > ~62%)
-        drawSpeedLines(viewWidth, viewHeight);
-
-        // 5. Radial Vignette Finishing Pass
-        drawVignette(viewWidth, viewHeight);
-
-        // Throttled HUD Telemetry update (~80ms)
-        if (timestamp - lastHudUpdateTime >= 80) {
-          updateHudTelemetry(timestamp);
-          lastHudUpdateTime = timestamp;
-        }
-      }
-
-      // Start the flight engine
-      requestAnimationFrame(animationLoop);
-
-      // Helper: convert hex to rgba string
-      function hexToRgba(hex, alpha) {
-        let c = hex.replace('#', '');
-        if (c.length === 3) c = c.split('').map((x) => x + x).join('');
-        const num = parseInt(c, 16);
-        const r = (num >> 16) & 255;
-        const g = (num >> 8) & 255;
-        const b = num & 255;
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-      }
-
-    })();
-  </script>
+  requestAnimationFrame(render);
+})();
+</script>
 </body>
 </html>

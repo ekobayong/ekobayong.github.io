@@ -1,1623 +1,960 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DOTMATRIX-7 // Marquee Controller</title>
-  <style>
-    /* ==========================================================================
-       RETRO-INDUSTRIAL LED MATRIX CONTROLLER // STYLESHEET
-       Self-contained, offline, zero-dependency dark industrial aesthetic.
-       ========================================================================== */
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DOTMATRIX-7 — LED Dot-Matrix Marquee Controller</title>
+<style>
+  :root {
+    --accent: #ffb000;
+    --accent-glow: rgba(255, 176, 0, 0.4);
+    --accent-dim: rgba(255, 176, 0, 0.15);
+    --bg-base: #0c0d0f;
+    --panel-bg: #171a1e;
+    --panel-bg-alt: #1f2328;
+    --hairline: #2c3238;
+    --text-main: #c9ced4;
+    --text-dim: #6f777f;
+    --font-mono: "Courier New", Courier, ui-monospace, monospace;
+  }
 
-    :root {
-      --bg-dark: #0c0d0f;
-      --panel-from: #171a1e;
-      --panel-to: #1f2328;
-      --panel-card: #15181b;
-      --panel-recessed: #0e1012;
-      --hairline: #2c3238;
-      --hairline-light: #3a424a;
-      --text-main: #c9ced4;
-      --text-dim: #6f777f;
-      --text-muted: #4e555e;
-      
-      /* Active Phosphor Palette (Default: Amber #ffb000) */
-      --accent-color: #ffb000;
-      --accent-glow: rgba(255, 176, 0, 0.45);
-      --accent-dim: rgba(255, 176, 0, 0.15);
-      --accent-subtle: rgba(255, 176, 0, 0.08);
-      --accent-halo: rgba(255, 176, 0, 0.16);
-      
-      --font-mono: 'Courier New', Courier, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--bg-base);
+    background-image: 
+      radial-gradient(ellipse 70% 300px at 50% 0%, var(--accent-dim), transparent 70%),
+      repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.35) 0px, rgba(0, 0, 0, 0.35) 1px, transparent 1px, transparent 2px);
+    color: var(--text-main);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+  }
+
+  .app-container {
+    width: 100%;
+    max-width: 1120px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background: linear-gradient(180deg, #1d2126 0%, #15181c 100%);
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+
+  .header-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .status-led {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #39ff5a;
+    box-shadow: 0 0 8px #39ff5a, inset 0 1px 2px #fff;
+    animation: blink 1.2s infinite ease-in-out;
+  }
+
+  .header-title {
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: #e2e6eb;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  }
+
+  .header-title span {
+    color: var(--text-dim);
+  }
+
+  .header-meta {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+  }
+
+  /* Brushed Metal Bezel */
+  .bezel-outer {
+    position: relative;
+    padding: 28px 24px;
+    border-radius: 6px;
+    background: 
+      linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(0,0,0,0.3) 100%),
+      repeating-linear-gradient(90deg, #3a3e44 0px, #2f3338 1px, #34383e 3px, #2b2f34 5px);
+    box-shadow: 
+      0 12px 28px rgba(0, 0, 0, 0.75),
+      inset 0 1px 1px rgba(255,255,255,0.4),
+      inset 0 -2px 4px rgba(0,0,0,0.6);
+    border: 1px solid #1c1f23;
+  }
+
+  /* Screws */
+  .screw {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #9ba3ab 0%, #4a5058 50%, #202428 100%);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.8), inset 0 1px 1px rgba(255,255,255,0.5);
+  }
+
+  .screw::before, .screw::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 8px;
+    height: 1.5px;
+    background: #111417;
+    box-shadow: 0 0.5px 0.5px rgba(255,255,255,0.3);
+  }
+
+  .screw.tl { top: 8px; left: 8px; transform: rotate(24deg); }
+  .screw.tr { top: 8px; right: 8px; transform: rotate(115deg); }
+  .screw.bl { bottom: 8px; left: 8px; transform: rotate(70deg); }
+  .screw.br { bottom: 8px; right: 8px; transform: rotate(145deg); }
+  .screw::after { transform: translate(-50%, -50%) rotate(90deg); }
+  .screw::before { transform: translate(-50%, -50%); }
+
+  /* Glass Display Housing */
+  .display-housing {
+    position: relative;
+    background: #060708;
+    border: 2px solid #14171b;
+    border-radius: 3px;
+    overflow: hidden;
+    box-shadow: 
+      inset 0 4px 12px rgba(0,0,0,0.95),
+      inset 0 0 40px rgba(0,0,0,0.85),
+      0 1px 0 rgba(255,255,255,0.1);
+  }
+
+  .display-housing::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 35%, transparent 40%);
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+  }
+
+  /* Engraved Plate */
+  .bezel-tag {
+    margin-top: 6px;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-align: right;
+    letter-spacing: 0.2em;
+    padding-right: 4px;
+  }
+
+  /* Control Console Grid */
+  .control-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .control-card {
+    background: linear-gradient(180deg, var(--panel-bg-alt) 0%, var(--panel-bg) 100%);
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+  }
+
+  .control-card.span-two {
+    grid-column: span 2;
+  }
+
+  @media (max-width: 768px) {
+    .control-card.span-two {
+      grid-column: span 1;
     }
+  }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      user-select: none;
-      -webkit-user-select: none;
-    }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--hairline);
+    padding-bottom: 6px;
+  }
 
-    body {
-      background-color: var(--bg-dark);
-      color: var(--text-main);
-      font-family: var(--font-mono);
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 24px 16px 40px;
-      position: relative;
-      overflow-x: hidden;
-    }
+  .card-title {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-dim);
+  }
 
-    /* Scanline pattern and soft top radial glow */
-    body::before {
-      content: '';
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background:
-        radial-gradient(ellipse 95% 420px at 50% 0%, var(--accent-subtle) 0%, rgba(12, 13, 15, 0) 75%),
-        repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 2px, rgba(0, 0, 0, 0.38) 2px, rgba(0, 0, 0, 0.38) 4px);
-      pointer-events: none;
-      z-index: 999;
-      opacity: 0.95;
-      transition: background 0.4s ease;
-    }
+  .card-val {
+    font-size: 0.72rem;
+    color: var(--accent);
+  }
 
-    .main-container {
-      width: 100%;
-      max-width: 1140px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      position: relative;
-      z-index: 1;
-    }
+  /* Input Elements */
+  .input-row {
+    display: flex;
+    gap: 8px;
+    position: relative;
+  }
 
-    /* --------------------------------------------------------------------------
-       HEADER BAR
-       -------------------------------------------------------------------------- */
-    .console-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: linear-gradient(180deg, #1b1e22 0%, #131518 100%);
-      border: 1px solid var(--hairline);
-      border-top: 1px solid var(--hairline-light);
-      border-radius: 4px;
-      padding: 12px 20px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    }
+  input[type="text"] {
+    flex: 1;
+    background: #0f1114;
+    border: 1px solid var(--hairline);
+    color: var(--text-main);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    padding: 8px 10px;
+    letter-spacing: 0.12em;
+    border-radius: 2px;
+    outline: none;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
+  }
 
-    .header-branding {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
+  input[type="text"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 6px var(--accent-glow), inset 0 2px 4px rgba(0,0,0,0.6);
+  }
 
-    .status-led-wrap {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+  /* Segmented Buttons */
+  .segmented-switch {
+    display: flex;
+    background: #111316;
+    border: 1px solid var(--hairline);
+    border-radius: 2px;
+    overflow: hidden;
+  }
 
+  .mode-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.14em;
+    padding: 9px 4px;
+    cursor: pointer;
+    position: relative;
+    transition: color 0.15s, background 0.15s;
+    text-transform: uppercase;
+  }
+
+  .mode-btn:hover {
+    color: var(--text-main);
+    background: rgba(255,255,255,0.03);
+  }
+
+  .mode-btn.active {
+    color: #fff;
+    background: rgba(255,255,255,0.05);
+  }
+
+  .mode-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 10%;
+    width: 80%;
+    height: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+  }
+
+  /* Color Swatches */
+  .color-swatches {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+  }
+
+  .swatch-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 2px solid #202428;
+    background: var(--swatch-color);
+    box-shadow: 
+      inset 0 2px 4px rgba(255,255,255,0.6),
+      inset 0 -2px 4px rgba(0,0,0,0.8),
+      0 2px 6px rgba(0,0,0,0.5);
+    cursor: pointer;
+    position: relative;
+    outline: none;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+
+  .swatch-btn:hover {
+    transform: scale(1.08);
+  }
+
+  .swatch-btn.active {
+    border-color: #ffffff;
+    box-shadow: 
+      0 0 12px var(--swatch-color),
+      inset 0 2px 4px rgba(255,255,255,0.8),
+      inset 0 -2px 4px rgba(0,0,0,0.8);
+    transform: scale(1.1);
+  }
+
+  /* Sliders */
+  .slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    background: #0f1114;
+    height: 8px;
+    border-radius: 4px;
+    border: 1px solid var(--hairline);
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 22px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #626871 0%, #3a3f45 50%, #2b2f34 100%);
+    border: 1px solid #7c8590;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.4);
+    cursor: ew-resize;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 22px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #626871 0%, #3a3f45 50%, #2b2f34 100%);
+    border: 1px solid #7c8590;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.4);
+    cursor: ew-resize;
+  }
+
+  /* Pixel Telemetry Readout */
+  .telemetry-block {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    background: #0d0e11;
+    border: 1px solid var(--hairline);
+    padding: 10px;
+    border-radius: 3px;
+  }
+
+  .telemetry-item {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .telemetry-lbl {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+  }
+
+  .telemetry-val {
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: var(--accent);
+    margin-top: 2px;
+  }
+
+  /* Footer */
+  footer {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    padding: 10px 4px 0;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.15; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
     .status-led {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #39ff5a;
-      box-shadow: 0 0 10px #39ff5a, 0 0 2px #fff;
-      animation: ledPulse 1.6s infinite ease-in-out;
-      border: 1px solid #209935;
-    }
-
-    @keyframes ledPulse {
-      0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 10px #39ff5a; }
-      50% { opacity: 0.35; transform: scale(0.92); box-shadow: 0 0 3px #186625; }
-    }
-
-    .header-title {
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.22em;
-      color: #e2e7ec;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-    }
-
-    .header-specs {
-      font-size: 10px;
-      color: var(--text-dim);
-      letter-spacing: 0.16em;
-      display: flex;
-      gap: 16px;
-    }
-
-    .header-specs span {
-      display: inline-block;
-    }
-
-    .header-specs .val-accent {
-      color: var(--accent-color);
-      transition: color 0.3s ease;
-    }
-
-    /* --------------------------------------------------------------------------
-       BRUSHED-METAL BEZEL & DISPLAY HOUSING
-       -------------------------------------------------------------------------- */
-    .bezel-outer {
-      position: relative;
-      background-color: #34383e;
-      background-image:
-        linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.06) 12%, rgba(0,0,0,0.12) 55%, rgba(0,0,0,0.58) 100%),
-        repeating-linear-gradient(90deg, #3a3e44 0px, #3a3e44 1.25px, #2f3338 1.25px, #2f3338 2.5px, #34383e 2.5px, #34383e 3.75px, #2b2f34 3.75px, #2b2f34 5px);
-      border: 1px solid #484f57;
-      border-top-color: #636c78;
-      border-bottom-color: #1a1d21;
-      border-radius: 6px;
-      padding: 24px 24px 18px 24px;
-      box-shadow:
-        0 18px 40px rgba(0, 0, 0, 0.9),
-        0 4px 10px rgba(0, 0, 0, 0.65),
-        inset 0 1px 1px rgba(255, 255, 255, 0.35),
-        inset 0 -1px 2px rgba(0, 0, 0, 0.85);
-    }
-
-    /* Chromed Screws with radial gradient and crossed slots */
-    .screw {
-      position: absolute;
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: radial-gradient(circle at 35% 35%, #f4f8fc 0%, #b8c1cc 42%, #5b6470 76%, #282c33 100%);
-      box-shadow:
-        1px 1.5px 3px rgba(0, 0, 0, 0.85),
-        inset 0 1px 1px rgba(255, 255, 255, 0.85),
-        inset -1px -1px 1px rgba(0, 0, 0, 0.85);
-      pointer-events: none;
-      z-index: 10;
-    }
-
-    .screw::before,
-    .screw::after {
-      content: '';
-      position: absolute;
-      background: #111316;
-      box-shadow: 0 0.5px 0.5px rgba(255, 255, 255, 0.35);
-    }
-
-    .screw::before {
-      top: 6px;
-      left: 3px;
-      width: 8px;
-      height: 2px;
-    }
-
-    .screw::after {
-      top: 3px;
-      left: 6px;
-      width: 2px;
-      height: 8px;
-    }
-
-    .screw-tl { top: 7px; left: 7px; transform: rotate(18deg); }
-    .screw-tr { top: 7px; right: 7px; transform: rotate(73deg); }
-    .screw-bl { bottom: 7px; left: 7px; transform: rotate(115deg); }
-    .screw-br { bottom: 7px; right: 7px; transform: rotate(42deg); }
-
-    /* Inner recessed frame and dark optical glass */
-    .recessed-frame {
-      position: relative;
-      background: #0d0f12;
-      border: 2px solid #14171b;
-      border-top-color: #08090b;
-      border-bottom-color: #2b3138;
-      border-radius: 3px;
-      padding: 6px;
-      box-shadow:
-        inset 0 4px 14px rgba(0, 0, 0, 0.98),
-        inset 0 1px 2px rgba(0, 0, 0, 1),
-        0 1px 1px rgba(255, 255, 255, 0.12);
-    }
-
-    .glass-panel {
-      position: relative;
-      background: #08090b;
-      border-radius: 2px;
-      box-shadow:
-        inset 0 3px 12px rgba(0, 0, 0, 0.98),
-        inset 0 0 5px rgba(0, 0, 0, 0.9);
-      overflow: hidden;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100px;
-    }
-
-    /* Diagonal reflection sheen */
-    .glass-panel::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: linear-gradient(132deg,
-        rgba(255, 255, 255, 0.08) 0%,
-        rgba(255, 255, 255, 0.02) 26%,
-        rgba(255, 255, 255, 0) 45%,
-        rgba(255, 255, 255, 0.035) 72%,
-        rgba(255, 255, 255, 0) 100%);
-      pointer-events: none;
-      z-index: 5;
-    }
-
-    canvas {
-      display: block;
-      image-rendering: pixelated;
-    }
-
-    /* Engraved plate labels under bezels */
-    .engraved-plate-bar {
-      display: flex;
-      justify-content: center;
-      margin-top: 8px;
-      margin-bottom: 6px;
-    }
-
-    .engraved-plate {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.24em;
-      color: #79838f;
-      background: linear-gradient(180deg, #24282e 0%, #15181c 100%);
-      border: 1px solid #343b44;
-      border-top-color: #464f5c;
-      border-bottom-color: #0f1113;
-      padding: 3px 18px;
-      border-radius: 2px;
-      box-shadow:
-        0 2px 5px rgba(0, 0, 0, 0.6),
-        inset 0 1px 0 rgba(255, 255, 255, 0.09);
-      text-shadow: 0 -1px 0 #070809, 0 1px 0 rgba(255, 255, 255, 0.07);
-    }
-
-    /* --------------------------------------------------------------------------
-       CONTROL CONSOLE CARD GRID
-       Gunmetal panels (#171a1e to #1f2328 with #2c3238 hairlines)
-       -------------------------------------------------------------------------- */
-    .control-console {
-      background: linear-gradient(180deg, var(--panel-from) 0%, var(--panel-to) 100%);
-      border: 1px solid var(--hairline);
-      border-top: 1px solid var(--hairline-light);
-      border-radius: 5px;
-      padding: 20px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.07);
-    }
-
-    .console-grid {
-      display: grid;
-      grid-template-columns: 1.4fr 1fr;
-      gap: 18px;
-    }
-
-    @media (max-width: 900px) {
-      .console-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .console-card {
-      background: var(--panel-card);
-      border: 1px solid var(--hairline);
-      border-radius: 4px;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-    }
-
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid var(--hairline);
-      padding-bottom: 8px;
-    }
-
-    .card-title {
-      font-size: 11px;
-      font-weight: 700;
-      color: #9da6b0;
-      letter-spacing: 0.18em;
-    }
-
-    .card-tag {
-      font-size: 9px;
-      color: var(--text-dim);
-      background: #0d0f12;
-      padding: 2px 6px;
-      border: 1px solid #23272d;
-      border-radius: 2px;
-    }
-
-    /* Text Input & Character Counter */
-    .input-row {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-
-    .matrix-input {
-      width: 100%;
-      background: #0c0e11;
-      border: 1px solid #2b313a;
-      border-top-color: #1e2228;
-      border-radius: 3px;
-      padding: 11px 88px 11px 12px;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      color: #e2e8f0;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      outline: none;
-      box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.85);
-      transition: border-color 0.2s, box-shadow 0.2s;
-      user-select: text;
-      -webkit-user-select: text;
-    }
-
-    .matrix-input:focus {
-      border-color: var(--accent-color);
-      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.9), 0 0 6px var(--accent-dim);
-    }
-
-    .char-counter-badge {
-      position: absolute;
-      right: 10px;
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--text-dim);
-      background: #15181c;
-      border: 1px solid #282e36;
-      border-radius: 2px;
-      padding: 3px 7px;
-      pointer-events: none;
-    }
-
-    .char-counter-badge.warn {
-      color: #ff9900;
-      border-color: #ff9900;
-    }
-
-    /* Preset Buttons */
-    .preset-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .preset-btn {
-      background: linear-gradient(180deg, #22262c 0%, #17191d 100%);
-      border: 1px solid #2c333c;
-      border-top-color: #3c4450;
-      color: #929ba5;
-      font-family: var(--font-mono);
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      padding: 4px 8px;
-      border-radius: 2px;
-      cursor: pointer;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.5);
-      transition: all 0.15s ease;
-    }
-
-    .preset-btn:hover {
-      color: var(--text-main);
-      border-color: #4a5462;
-      background: #272c33;
-    }
-
-    .preset-btn:active {
-      transform: translateY(1px);
-      box-shadow: inset 0 1px 2px rgba(0,0,0,0.8);
-    }
-
-    /* Segmented Mode Switch with Accent Underline */
-    .mode-switch-wrapper {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .control-label {
-      font-size: 10px;
-      color: var(--text-dim);
-      letter-spacing: 0.16em;
-    }
-
-    .segmented-switch {
-      display: flex;
-      background: #0f1114;
-      border: 1px solid #252a31;
-      border-radius: 3px;
-      padding: 3px;
-      gap: 3px;
-      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8);
-    }
-
-    .mode-btn {
-      flex: 1;
-      background: transparent;
-      color: var(--text-dim);
-      border: none;
-      border-bottom: 3px solid transparent;
-      padding: 9px 8px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      cursor: pointer;
-      border-radius: 2px 2px 0 0;
-      transition: all 0.2s ease;
-    }
-
-    .mode-btn:hover {
-      color: var(--text-main);
-      background: rgba(255, 255, 255, 0.03);
-    }
-
-    .mode-btn.active {
-      color: var(--accent-color);
-      background: rgba(255, 255, 255, 0.05);
-      border-bottom: 3px solid var(--accent-color);
-      text-shadow: 0 0 10px var(--accent-glow);
-    }
-
-    /* Colour Swatches (Glossy Round LEDs) */
-    .swatches-card-content {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .swatches-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: #0d0f12;
-      border: 1px solid #242930;
-      border-radius: 4px;
-      padding: 12px 16px;
-      box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.75);
-    }
-
-    .swatch-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      background: none;
-      border: none;
-      cursor: pointer;
-      outline: none;
-    }
-
-    .swatch-bulb {
-      position: relative;
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: 2px solid #2d333b;
-      box-shadow:
-        0 4px 8px rgba(0, 0, 0, 0.8),
-        inset 0 1px 1px rgba(255, 255, 255, 0.5),
-        inset 0 -2px 4px rgba(0, 0, 0, 0.6);
-      transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    }
-
-    /* Glossy dome shine */
-    .swatch-bulb::before {
-      content: '';
-      position: absolute;
-      top: 3px;
-      left: 6px;
-      width: 16px;
-      height: 9px;
-      border-radius: 50% 50% 40% 40%;
-      background: linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.1) 100%);
-      pointer-events: none;
-    }
-
-    .swatch-item:hover .swatch-bulb {
-      transform: translateY(-2px) scale(1.06);
-    }
-
-    .swatch-item.active .swatch-bulb {
-      border-color: #ffffff;
-      transform: scale(1.12);
-      box-shadow:
-        0 0 16px var(--bulb-glow),
-        0 0 4px #ffffff,
-        0 4px 10px rgba(0, 0, 0, 0.9),
-        inset 0 1px 2px rgba(255, 255, 255, 0.9),
-        inset 0 -2px 4px rgba(0, 0, 0, 0.5);
-    }
-
-    .swatch-label {
-      font-size: 9px;
-      font-weight: 700;
-      color: var(--text-dim);
-      letter-spacing: 0.14em;
-      transition: color 0.2s;
-    }
-
-    .swatch-item.active .swatch-label {
-      color: var(--text-main);
-    }
-
-    /* Active spectrum indicator badge */
-    .spectrum-status-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 10px;
-      color: var(--text-dim);
-      padding: 0 4px;
-    }
-
-    .spectrum-status-bar .active-name {
-      color: var(--accent-color);
-      font-weight: 700;
-      letter-spacing: 0.18em;
-    }
-
-    /* Kinetics & Pitch Sliders (Chunky Machined Thumbs) */
-    .sliders-column {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .slider-control-group {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .slider-meta-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .slider-val-badge {
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--accent-color);
-      background: #0e1013;
-      border: 1px solid #282d34;
-      padding: 2px 7px;
-      border-radius: 2px;
-      letter-spacing: 0.14em;
-      text-shadow: 0 0 8px var(--accent-glow);
-    }
-
-    input[type="range"] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: 8px;
-      background: #0f1114;
-      border: 1px solid #262c33;
-      border-radius: 4px;
-      outline: none;
-      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.85), 0 1px 0 rgba(255, 255, 255, 0.05);
-      margin: 10px 0;
-      cursor: pointer;
-    }
-
-    /* Chunky machined metal slider thumb */
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 20px;
-      height: 32px;
-      border-radius: 3px;
-      background:
-        linear-gradient(180deg, #5c6572 0%, #343a42 50%, #1e2227 100%),
-        repeating-linear-gradient(90deg, transparent 0px, transparent 2px, rgba(0,0,0,0.5) 2px, rgba(0,0,0,0.5) 4px);
-      border: 1px solid #16191c;
-      border-top: 2px solid var(--accent-color);
-      box-shadow:
-        0 4px 8px rgba(0, 0, 0, 0.8),
-        inset 0 1px 1px rgba(255, 255, 255, 0.45),
-        inset 0 -1px 2px rgba(0, 0, 0, 0.8);
-      cursor: ew-resize;
-      transition: border-top-color 0.2s, box-shadow 0.2s;
-    }
-
-    input[type="range"]::-webkit-slider-thumb:hover {
-      box-shadow:
-        0 4px 10px rgba(0, 0, 0, 0.9),
-        0 0 8px var(--accent-glow),
-        inset 0 1px 1px rgba(255, 255, 255, 0.6);
-    }
-
-    input[type="range"]::-moz-range-thumb {
-      width: 20px;
-      height: 32px;
-      border-radius: 3px;
-      background:
-        linear-gradient(180deg, #5c6572 0%, #343a42 50%, #1e2227 100%),
-        repeating-linear-gradient(90deg, transparent 0px, transparent 2px, rgba(0,0,0,0.5) 2px, rgba(0,0,0,0.5) 4px);
-      border: 1px solid #16191c;
-      border-top: 2px solid var(--accent-color);
-      box-shadow:
-        0 4px 8px rgba(0, 0, 0, 0.8),
-        inset 0 1px 1px rgba(255, 255, 255, 0.45),
-        inset 0 -1px 2px rgba(0, 0, 0, 0.8);
-      cursor: ew-resize;
-    }
-
-    /* PIXELS Readout (Telemetry Panel) */
-    .pixels-telemetry-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-      background: #0d0f12;
-      border: 1px solid #252a32;
-      border-radius: 4px;
-      padding: 12px;
-      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.85);
-    }
-
-    .telemetry-cell {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-
-    .telemetry-label {
-      font-size: 9px;
-      color: var(--text-dim);
-      letter-spacing: 0.16em;
-    }
-
-    .telemetry-value {
-      font-size: 19px;
-      font-weight: 700;
-      color: var(--text-main);
-      text-shadow: 0 0 6px rgba(255, 255, 255, 0.12);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .telemetry-value.accented {
-      color: var(--accent-color);
-      text-shadow: 0 0 10px var(--accent-glow);
-    }
-
-    /* --------------------------------------------------------------------------
-       SECOND BEZELLED DISPLAY (DISPLAY B - LOCAL TIME)
-       -------------------------------------------------------------------------- */
-    .clock-display-section {
-      width: 100%;
-      max-width: 640px;
-      margin: 0 auto;
-    }
-
-    .bezel-compact {
-      padding: 18px 18px 14px 18px;
-    }
-
-    /* --------------------------------------------------------------------------
-       FOOTER
-       -------------------------------------------------------------------------- */
-    .console-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #111316;
-      border: 1px solid var(--hairline);
-      border-radius: 4px;
-      padding: 10px 16px;
-      font-size: 9px;
-      color: var(--text-muted);
-      letter-spacing: 0.18em;
-    }
-
-    .footer-left {
-      color: var(--text-dim);
-    }
-
-    /* --------------------------------------------------------------------------
-       PREFERS-REDUCED-MOTION CONSTRAINTS
-       - Status LED stops blinking
-       - Colons stay solid
-       - Scrolling slows to 1/3 of speed
-       -------------------------------------------------------------------------- */
-    @media (prefers-reduced-motion: reduce) {
-      .status-led {
-        animation: none !important;
-        opacity: 1 !important;
-        box-shadow: 0 0 6px #39ff5a !important;
-      }
-      * {
-        transition-duration: 0.001s !important;
-      }
-    }
-  </style>
+      animation: none !important;
+      opacity: 1 !important;
+    }
+  }
+</style>
 </head>
 <body>
 
-  <div class="main-container">
+<div class="app-container">
+  
+  <header>
+    <div class="header-title-group">
+      <div class="status-led" id="statusLed"></div>
+      <div class="header-title">DOTMATRIX-7 <span>// MARQUEE CONTROLLER</span></div>
+    </div>
+    <div class="header-meta">SYS READY · COM-PORT ONLINE</div>
+  </header>
 
-    <!-- ====================================================================
-         HEADER
-         ==================================================================== -->
-    <header class="console-header">
-      <div class="header-branding">
-        <div class="status-led-wrap" title="Transceiver Link Status">
-          <div class="status-led" id="headerStatusLed"></div>
-        </div>
-        <div class="header-title">DOTMATRIX-7 // MARQUEE CONTROLLER</div>
+  <!-- Display A: Hero Marquee Matrix -->
+  <div>
+    <div class="bezel-outer">
+      <div class="screw tl"></div>
+      <div class="screw tr"></div>
+      <div class="screw bl"></div>
+      <div class="screw br"></div>
+      <div class="display-housing">
+        <canvas id="matrixA" height="150"></canvas>
       </div>
-      <div class="header-specs">
-        <span>BUS: <strong class="val-accent">SERIAL-TTL</strong></span>
-        <span>GRID: <strong>11-ROW DOT MATRIX</strong></span>
-        <span>OP-MODE: <strong class="val-accent" id="headerModeTag">SCROLL</strong></span>
+    </div>
+    <div class="bezel-tag">DISPLAY A · MATRIX [11 ROWS]</div>
+  </div>
+
+  <!-- Control Surface -->
+  <div class="control-grid">
+    
+    <!-- Text Stream Configuration -->
+    <div class="control-card span-two">
+      <div class="card-header">
+        <span class="card-title">MESSAGE FEED DIRECT</span>
+        <span class="card-val" id="charCount">00 / 120 CH</span>
       </div>
-    </header>
-
-    <!-- ====================================================================
-         DISPLAY A: HERO MATRIX MARQUEE
-         ==================================================================== -->
-    <section class="display-section" aria-label="Display A Hero Matrix">
-      <div class="bezel-outer">
-        <!-- 4 Chromed Corner Screws -->
-        <div class="screw screw-tl"></div>
-        <div class="screw screw-tr"></div>
-        <div class="screw screw-bl"></div>
-        <div class="screw screw-br"></div>
-
-        <!-- Recessed Inner Frame & Glass -->
-        <div class="recessed-frame">
-          <div class="glass-panel" id="matrixContainer">
-            <canvas id="matrixCanvas" width="1000" height="176"></canvas>
-          </div>
-        </div>
+      <div class="input-row">
+        <input type="text" id="textInput" maxlength="120" value="DOTMATRIX-7 SYSTEM ACTIVATED // READY" spellcheck="false" autocomplete="off">
       </div>
+    </div>
 
-      <!-- Engraved Plate Label A -->
-      <div class="engraved-plate-bar">
-        <div class="engraved-plate">DISPLAY A &middot; MATRIX</div>
+    <!-- Mode Select -->
+    <div class="control-card">
+      <div class="card-header">
+        <span class="card-title">RASTER MODE</span>
+        <span class="card-val" id="activeModeLabel">SCROLL</span>
       </div>
-    </section>
-
-    <!-- ====================================================================
-         CONTROL CONSOLE (CARD GRID)
-         ==================================================================== -->
-    <section class="control-console" aria-label="Control Console">
-      <div class="console-grid">
-
-        <!-- Card 1: Message Buffer & Mode Selection -->
-        <div class="console-card">
-          <div class="card-header">
-            <span class="card-title">// MESSAGE BUFFER &amp; MODE</span>
-            <span class="card-tag">ASCII-7 / 120 MAX</span>
-          </div>
-
-          <!-- Input Row -->
-          <div class="input-row">
-            <input
-              type="text"
-              id="messageInput"
-              class="matrix-input"
-              maxlength="120"
-              spellcheck="false"
-              autocomplete="off"
-              value="WELCOME TO RETRO-INDUSTRIAL MATRIX // SYSTEM ONLINE ♥"
-            >
-            <div class="char-counter-badge" id="charCounter">54 CH</div>
-          </div>
-
-          <!-- Quick Presets -->
-          <div class="preset-row">
-            <button type="button" class="preset-btn" data-preset="SYSTEM ONLINE ♥ HAZARD LEVEL 0 // PROTOCOL ACTIVE">SYS ACTIVE</button>
-            <button type="button" class="preset-btn" data-preset="! CAUTION ! HIGH VOLTAGE BUS // DO NOT TOUCH CONTACTS">HAZARD</button>
-            <button type="button" class="preset-btn" data-preset="SECTOR 07-B >> CONVEYOR FEED NOMINAL @ 100%">SECTOR 7</button>
-            <button type="button" class="preset-btn" data-preset="ALL GLYPHS: ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789 .!?-:_">CHARSET</button>
-            <button type="button" class="preset-btn" data-preset="">CLEAR</button>
-          </div>
-
-          <!-- Mode Segmented Switch -->
-          <div class="mode-switch-wrapper">
-            <span class="control-label">// MARQUEE TRANSPORT MODE</span>
-            <div class="segmented-switch" role="tablist">
-              <button type="button" class="mode-btn active" data-mode="scroll" role="tab">SCROLL</button>
-              <button type="button" class="mode-btn" data-mode="static" role="tab">STATIC</button>
-              <button type="button" class="mode-btn" data-mode="bounce" role="tab">BOUNCE</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 2: Phosphor Spectrum (Color Swatches) -->
-        <div class="console-card">
-          <div class="card-header">
-            <span class="card-title">// PHOSPHOR SPECTRUM</span>
-            <span class="card-tag">5 EMITTERS</span>
-          </div>
-
-          <div class="swatches-card-content">
-            <div class="swatches-row" role="radiogroup" aria-label="LED Phosphor Color">
-              
-              <!-- Amber #ffb000 -->
-              <button
-                type="button"
-                class="swatch-item active"
-                data-theme="amber"
-                data-hex="#ffb000"
-                data-glow="rgba(255, 176, 0, 0.45)"
-                data-dim="rgba(255, 176, 0, 0.15)"
-                data-halo="rgba(255, 176, 0, 0.16)"
-                data-subtle="rgba(255, 176, 0, 0.08)"
-                data-name="AMBER (590 NM)"
-                role="radio"
-                aria-checked="true"
-              >
-                <div class="swatch-bulb" style="background-color: #ffb000; --bulb-glow: rgba(255, 176, 0, 0.65);"></div>
-                <span class="swatch-label">AMBER</span>
-              </button>
-
-              <!-- Red #ff2a1a -->
-              <button
-                type="button"
-                class="swatch-item"
-                data-theme="red"
-                data-hex="#ff2a1a"
-                data-glow="rgba(255, 42, 26, 0.45)"
-                data-dim="rgba(255, 42, 26, 0.15)"
-                data-halo="rgba(255, 42, 26, 0.16)"
-                data-subtle="rgba(255, 42, 26, 0.08)"
-                data-name="RUBY RED (635 NM)"
-                role="radio"
-                aria-checked="false"
-              >
-                <div class="swatch-bulb" style="background-color: #ff2a1a; --bulb-glow: rgba(255, 42, 26, 0.65);"></div>
-                <span class="swatch-label">RED</span>
-              </button>
-
-              <!-- Green #39ff5a -->
-              <button
-                type="button"
-                class="swatch-item"
-                data-theme="green"
-                data-hex="#39ff5a"
-                data-glow="rgba(57, 255, 90, 0.45)"
-                data-dim="rgba(57, 255, 90, 0.15)"
-                data-halo="rgba(57, 255, 90, 0.16)"
-                data-subtle="rgba(57, 255, 90, 0.08)"
-                data-name="EMERALD GREEN (525 NM)"
-                role="radio"
-                aria-checked="false"
-              >
-                <div class="swatch-bulb" style="background-color: #39ff5a; --bulb-glow: rgba(57, 255, 90, 0.65);"></div>
-                <span class="swatch-label">GREEN</span>
-              </button>
-
-              <!-- Cyan #29e6ff -->
-              <button
-                type="button"
-                class="swatch-item"
-                data-theme="cyan"
-                data-hex="#29e6ff"
-                data-glow="rgba(41, 230, 255, 0.45)"
-                data-dim="rgba(41, 230, 255, 0.15)"
-                data-halo="rgba(41, 230, 255, 0.16)"
-                data-subtle="rgba(41, 230, 255, 0.08)"
-                data-name="PLASMA CYAN (485 NM)"
-                role="radio"
-                aria-checked="false"
-              >
-                <div class="swatch-bulb" style="background-color: #29e6ff; --bulb-glow: rgba(41, 230, 255, 0.65);"></div>
-                <span class="swatch-label">CYAN</span>
-              </button>
-
-              <!-- White #f4f4ff -->
-              <button
-                type="button"
-                class="swatch-item"
-                data-theme="white"
-                data-hex="#f4f4ff"
-                data-glow="rgba(244, 244, 255, 0.45)"
-                data-dim="rgba(244, 244, 255, 0.15)"
-                data-halo="rgba(244, 244, 255, 0.16)"
-                data-subtle="rgba(244, 244, 255, 0.08)"
-                data-name="COOL WHITE (6500 K)"
-                role="radio"
-                aria-checked="false"
-              >
-                <div class="swatch-bulb" style="background-color: #f4f4ff; --bulb-glow: rgba(244, 244, 255, 0.65);"></div>
-                <span class="swatch-label">WHITE</span>
-              </button>
-
-            </div>
-
-            <!-- Live Phosphor readout -->
-            <div class="spectrum-status-bar">
-              <span>ACTIVE FILTER:</span>
-              <span class="active-name" id="spectrumReadout">AMBER (590 NM)</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 3: Kinetics & Pitch Sliders -->
-        <div class="console-card">
-          <div class="card-header">
-            <span class="card-title">// KINETICS &amp; PITCH</span>
-            <span class="card-tag">ANALOG-DIGITAL</span>
-          </div>
-
-          <div class="sliders-column">
-            <!-- Speed Slider -->
-            <div class="slider-control-group">
-              <div class="slider-meta-row">
-                <span class="control-label">SCROLL SPEED</span>
-                <span class="slider-val-badge" id="speedValBadge">28 COL/S</span>
-              </div>
-              <input type="range" id="speedSlider" min="5" max="120" value="28" step="1">
-            </div>
-
-            <!-- Pitch Slider -->
-            <div class="slider-control-group">
-              <div class="slider-meta-row">
-                <span class="control-label">PIXEL PITCH</span>
-                <span class="slider-val-badge" id="pitchValBadge">14 PX</span>
-              </div>
-              <input type="range" id="pitchSlider" min="7" max="26" value="14" step="1">
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 4: PIXELS Readout (Telemetry Panel) -->
-        <div class="console-card">
-          <div class="card-header">
-            <span class="card-title">// PIXELS &middot; TELEMETRY</span>
-            <span class="card-tag">REALTIME DIAG</span>
-          </div>
-
-          <div class="pixels-telemetry-grid">
-            <div class="telemetry-cell">
-              <span class="telemetry-label">LIT LEDS</span>
-              <span class="telemetry-value accented" id="readoutLit">0</span>
-            </div>
-            <div class="telemetry-cell">
-              <span class="telemetry-label">TOTAL LEDS</span>
-              <span class="telemetry-value" id="readoutTotal">0</span>
-            </div>
-            <div class="telemetry-cell">
-              <span class="telemetry-label">GRID DIMS (C &times; R)</span>
-              <span class="telemetry-value" id="readoutDims">0 &times; 11</span>
-            </div>
-            <div class="telemetry-cell">
-              <span class="telemetry-label">EMISSION LOAD</span>
-              <span class="telemetry-value accented" id="readoutDuty">0.0%</span>
-            </div>
-          </div>
-        </div>
-
+      <div class="segmented-switch">
+        <button class="mode-btn active" data-mode="scroll">SCROLL</button>
+        <button class="mode-btn" data-mode="static">STATIC</button>
+        <button class="mode-btn" data-mode="bounce">BOUNCE</button>
       </div>
-    </section>
+    </div>
 
-    <!-- ====================================================================
-         DISPLAY B: SECOND SHORTER BEZELLED DISPLAY (LOCAL TIME)
-         ==================================================================== -->
-    <section class="clock-display-section" aria-label="Display B Local Time Clock">
-      <div class="bezel-outer bezel-compact">
-        <!-- 4 Chromed Corner Screws -->
-        <div class="screw screw-tl"></div>
-        <div class="screw screw-tr"></div>
-        <div class="screw screw-bl"></div>
-        <div class="screw screw-br"></div>
+    <!-- Illumination Spectral Filter -->
+    <div class="control-card">
+      <div class="card-header">
+        <span class="card-title">EMISSION SPECTRUM</span>
+        <span class="card-val" id="colorName">AMBER</span>
+      </div>
+      <div class="color-swatches" id="swatches">
+        <button class="swatch-btn active" data-color="#ffb000" data-name="AMBER" style="--swatch-color: #ffb000;"></button>
+        <button class="swatch-btn" data-color="#ff2a1a" data-name="RED" style="--swatch-color: #ff2a1a;"></button>
+        <button class="swatch-btn" data-color="#39ff5a" data-name="GREEN" style="--swatch-color: #39ff5a;"></button>
+        <button class="swatch-btn" data-color="#29e6ff" data-name="CYAN" style="--swatch-color: #29e6ff;"></button>
+        <button class="swatch-btn" data-color="#f4f4ff" data-name="WHITE" style="--swatch-color: #f4f4ff;"></button>
+      </div>
+    </div>
 
-        <!-- Recessed Frame & Glass Panel -->
-        <div class="recessed-frame">
-          <div class="glass-panel" id="clockContainer">
-            <canvas id="clockCanvas" width="560" height="120"></canvas>
-          </div>
+    <!-- Clock / Pitch Kinematics -->
+    <div class="control-card">
+      <div class="card-header">
+        <span class="card-title">FRAME KINEMATICS</span>
+      </div>
+      <div class="slider-group">
+        <div style="display: flex; justify-content: space-between;">
+          <span style="font-size: 0.65rem; color: var(--text-dim);">VELOCITY</span>
+          <span style="font-size: 0.65rem; color: var(--accent);" id="speedVal">35 COL/S</span>
+        </div>
+        <input type="range" id="speedSlider" min="5" max="120" value="35">
+      </div>
+      <div class="slider-group" style="margin-top: 6px;">
+        <div style="display: flex; justify-content: space-between;">
+          <span style="font-size: 0.65rem; color: var(--text-dim);">DOT PITCH</span>
+          <span style="font-size: 0.65rem; color: var(--accent);" id="pitchVal">16 PX</span>
+        </div>
+        <input type="range" id="pitchSlider" min="7" max="26" value="16">
+      </div>
+    </div>
+
+    <!-- Diagnostic Readout -->
+    <div class="control-card">
+      <div class="card-header">
+        <span class="card-title">DIAGNOSTIC PIXELS</span>
+        <span class="card-val" id="fpsCounter">60 FPS</span>
+      </div>
+      <div class="telemetry-block">
+        <div class="telemetry-item">
+          <span class="telemetry-lbl">LIT LEDS</span>
+          <span class="telemetry-val" id="litCount">0</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-lbl">TOTAL GRID</span>
+          <span class="telemetry-val" id="totalCount">0</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-lbl">ARRAY DIM</span>
+          <span class="telemetry-val" id="dimCount">0 × 11</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-lbl">MSG COLUMNS</span>
+          <span class="telemetry-val" id="msgColsCount">0</span>
         </div>
       </div>
-
-      <!-- Engraved Plate Label B -->
-      <div class="engraved-plate-bar">
-        <div class="engraved-plate">DISPLAY B &middot; LOCAL TIME</div>
-      </div>
-    </section>
-
-    <!-- ====================================================================
-         FOOTER
-         ==================================================================== -->
-    <footer class="console-footer">
-      <div class="footer-left">UNIT SN: DMX-7092-B // REV 3.4 // CHASSIS MIL-SPEC 810G</div>
-      <div class="footer-right">STATUS: OPERATIONAL // INTERNAL CLOCK SYNC</div>
-    </footer>
+    </div>
 
   </div>
 
-  <!-- ====================================================================
-       OFFLINE EMBEDDED JAVASCRIPT
-       Complete 5x7 binary bitmap font, 3-pass round LED rendering engine,
-       DPR scaling, telemetry, and prefers-reduced-motion compliance.
-       ==================================================================== -->
-  <script>
-    (function () {
-      'use strict';
+  <!-- Display B: Local Synchronised Clock -->
+  <div style="margin-top: 10px;">
+    <div class="bezel-outer" style="padding: 16px 20px;">
+      <div class="screw tl"></div>
+      <div class="screw tr"></div>
+      <div class="screw bl"></div>
+      <div class="screw br"></div>
+      <div class="display-housing">
+        <canvas id="matrixB" height="90"></canvas>
+      </div>
+    </div>
+    <div class="bezel-tag">DISPLAY B · LOCAL TIME [11 ROWS]</div>
+  </div>
 
-      /* ------------------------------------------------------------------------
-         1. HAND-DEFINED 5x7 BITMAP FONT
-         Binary row literals (0bXXXXX) for 7 rows high, 5 columns wide.
-         Covers: A-Z, 0-9, space, punctuation (. , ! ? ' " - _ : ; / & + = ( ) # $ % @ * < >),
-         heart symbol ♥, and hollow box fallback for unknown characters.
-         ------------------------------------------------------------------------ */
-      const FONT = {
-        ' ': [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
-        'A': [0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
-        'B': [0b11110, 0b10001, 0b11110, 0b10001, 0b10001, 0b10001, 0b11110],
-        'C': [0b01111, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b01111],
-        'D': [0b11110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11110],
-        'E': [0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111],
-        'F': [0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000],
-        'G': [0b01111, 0b10000, 0b10000, 0b10111, 0b10001, 0b10001, 0b01111],
-        'H': [0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
-        'I': [0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b11111],
-        'J': [0b00111, 0b00010, 0b00010, 0b00010, 0b00010, 0b10010, 0b01100],
-        'K': [0b10001, 0b10001, 0b10010, 0b11100, 0b10010, 0b10001, 0b10001],
-        'L': [0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111],
-        'M': [0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001],
-        'N': [0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001, 0b10001],
-        'O': [0b01110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110],
-        'P': [0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000],
-        'Q': [0b01110, 0b10001, 0b10001, 0b10001, 0b10101, 0b10010, 0b01101],
-        'R': [0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001],
-        'S': [0b01111, 0b10000, 0b10000, 0b01110, 0b00001, 0b00001, 0b11110],
-        'T': [0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100],
-        'U': [0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110],
-        'V': [0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01010, 0b00100],
-        'W': [0b10001, 0b10001, 0b10001, 0b10101, 0b10101, 0b11011, 0b10001],
-        'X': [0b10001, 0b10001, 0b01010, 0b00100, 0b01010, 0b10001, 0b10001],
-        'Y': [0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100],
-        'Z': [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b10000, 0b11111],
-        '0': [0b01110, 0b10011, 0b10101, 0b10101, 0b11001, 0b10001, 0b01110],
-        '1': [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
-        '2': [0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b01000, 0b11111],
-        '3': [0b11111, 0b00010, 0b00100, 0b00010, 0b00001, 0b10001, 0b01110],
-        '4': [0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010],
-        '5': [0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110],
-        '6': [0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110],
-        '7': [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000],
-        '8': [0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110],
-        '9': [0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100],
-        '.': [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00110, 0b00110],
-        ',': [0b00000, 0b00000, 0b00000, 0b00000, 0b00100, 0b00100, 0b01000],
-        '!': [0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00000, 0b00100],
-        '?': [0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b00000, 0b00100],
-        '\'': [0b00100, 0b00100, 0b01000, 0b00000, 0b00000, 0b00000, 0b00000],
-        '"': [0b01010, 0b01010, 0b10100, 0b00000, 0b00000, 0b00000, 0b00000],
-        '-': [0b00000, 0b00000, 0b00000, 0b11111, 0b00000, 0b00000, 0b00000],
-        '_': [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b11111],
-        ':': [0b00000, 0b00100, 0b00100, 0b00000, 0b00100, 0b00100, 0b00000],
-        ';': [0b00000, 0b00100, 0b00100, 0b00000, 0b00100, 0b00100, 0b01000],
-        '/': [0b00001, 0b00010, 0b00100, 0b00100, 0b01000, 0b01000, 0b10000],
-        '&': [0b01100, 0b10010, 0b10100, 0b01000, 0b10101, 0b10010, 0b01101],
-        '+': [0b00000, 0b00100, 0b00100, 0b11111, 0b00100, 0b00100, 0b00000],
-        '=': [0b00000, 0b00000, 0b11111, 0b00000, 0b11111, 0b00000, 0b00000],
-        '(': [0b00010, 0b00100, 0b01000, 0b01000, 0b01000, 0b00100, 0b00010],
-        ')': [0b01000, 0b00100, 0b00010, 0b00010, 0b00010, 0b00100, 0b01000],
-        '#': [0b01010, 0b01010, 0b11111, 0b01010, 0b11111, 0b01010, 0b01010],
-        '$': [0b00100, 0b01111, 0b10100, 0b01110, 0b00101, 0b11110, 0b00100],
-        '%': [0b11001, 0b11010, 0b00010, 0b00100, 0b01000, 0b01011, 0b10011],
-        '@': [0b01110, 0b10001, 0b00101, 0b01101, 0b10101, 0b10000, 0b01111],
-        '*': [0b00000, 0b10101, 0b01110, 0b11111, 0b01110, 0b10101, 0b00000],
-        '<': [0b00010, 0b00100, 0b01000, 0b10000, 0b01000, 0b00100, 0b00010],
-        '>': [0b01000, 0b00100, 0b00010, 0b00001, 0b00010, 0b00100, 0b01000],
-        '♥': [0b01010, 0b11111, 0b11111, 0b11111, 0b01110, 0b00100, 0b00000],
-        'BOX': [0b11111, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11111]
-      };
+  <footer>
+    <div>SPEC-REV: 4.8.1 // RASTER GRAPHICS INDUSTRIAL INTERFACE</div>
+    <div>DEVICE S/N: DM7-8849-019-B</div>
+  </footer>
 
-      /* ------------------------------------------------------------------------
-         2. RASTERIZE STRING TO 7-BIT COLUMN MASKS
-         With 1 blank column between glyphs.
-         ------------------------------------------------------------------------ */
-      function rasterizeText(text) {
-        const masks = [];
-        if (!text || text.length === 0) return masks;
-        const chars = Array.from(text);
-        for (let i = 0; i < chars.length; i++) {
-          const ch = chars[i].toUpperCase();
-          const rows = FONT[ch] || FONT[chars[i]] || FONT['BOX'];
-          // Convert 5 columns
-          for (let c = 0; c < 5; c++) {
-            let mask = 0;
-            for (let r = 0; r < 7; r++) {
-              const bit = (rows[r] >> (4 - c)) & 1;
-              if (bit) mask |= (1 << r);
-            }
-            masks.push(mask);
-          }
-          // 1 blank column between glyphs
-          masks.push(0);
+</div>
+
+<script>
+(() => {
+  // 5x7 Standard Font in Row Bitmask
+  const FONT_5X7 = {
+    ' ': [0, 0, 0, 0, 0, 0, 0],
+    'A': [0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11],
+    'B': [0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E],
+    'C': [0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E],
+    'D': [0x1C, 0x12, 0x11, 0x11, 0x11, 0x12, 0x1C],
+    'E': [0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F],
+    'F': [0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10],
+    'G': [0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0F],
+    'H': [0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11],
+    'I': [0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E],
+    'J': [0x07, 0x02, 0x02, 0x02, 0x02, 0x12, 0x0C],
+    'K': [0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11],
+    'L': [0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F],
+    'M': [0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11],
+    'N': [0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11],
+    'O': [0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E],
+    'P': [0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10],
+    'Q': [0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D],
+    'R': [0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11],
+    'S': [0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E],
+    'T': [0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04],
+    'U': [0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E],
+    'V': [0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04],
+    'W': [0x11, 0x11, 0x11, 0x15, 0x15, 0x15, 0x0A],
+    'X': [0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11],
+    'Y': [0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04],
+    'Z': [0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F],
+    '0': [0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E],
+    '1': [0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E],
+    '2': [0x0E, 0x11, 0x01, 0x06, 0x08, 0x10, 0x1F],
+    '3': [0x1E, 0x01, 0x01, 0x06, 0x01, 0x01, 0x1E],
+    '4': [0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02],
+    '5': [0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E],
+    '6': [0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E],
+    '7': [0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08],
+    '8': [0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E],
+    '9': [0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C],
+    '.': [0, 0, 0, 0, 0, 0x06, 0x06],
+    ',': [0, 0, 0, 0, 0, 0x06, 0x04],
+    '!': [0x04, 0x04, 0x04, 0x04, 0x04, 0x00, 0x04],
+    '?': [0x0E, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04],
+    '\'': [0x06, 0x04, 0x02, 0, 0, 0, 0],
+    '"': [0x0B, 0x0B, 0x0A, 0, 0, 0, 0],
+    '-': [0, 0, 0, 0x1F, 0, 0, 0],
+    '_': [0, 0, 0, 0, 0, 0, 0x1F],
+    ':': [0, 0x04, 0, 0, 0x04, 0, 0],
+    ';': [0, 0x04, 0, 0, 0x04, 0x02, 0],
+    '/': [0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10],
+    '&': [0x0C, 0x12, 0x14, 0x08, 0x15, 0x12, 0x0D],
+    '+': [0, 0x04, 0x04, 0x1F, 0x04, 0x04, 0],
+    '=': [0, 0, 0x1F, 0, 0x1F, 0, 0],
+    '(': [0x02, 0x04, 0x08, 0x08, 0x08, 0x04, 0x02],
+    ')': [0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08],
+    '#': [0x0A, 0x0A, 0x1F, 0x0A, 0x1F, 0x0A, 0x0A],
+    '$': [0x04, 0x0F, 0x14, 0x0E, 0x05, 0x1E, 0x04],
+    '%': [0x19, 0x19, 0x02, 0x04, 0x08, 0x13, 0x13],
+    '@': [0x0E, 0x11, 0x17, 0x15, 0x17, 0x10, 0x0F],
+    '*': [0, 0x15, 0x0E, 0x1F, 0x0E, 0x15, 0],
+    '<': [0x02, 0x04, 0x08, 0x10, 0x08, 0x04, 0x02],
+    '>': [0x08, 0x04, 0x02, 0x01, 0x02, 0x04, 0x08],
+    '♥': [0x0A, 0x1F, 0x1F, 0x1F, 0x0E, 0x04, 0x00],
+    'DEFAULT': [0x1F, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1F]
+  };
+
+  const FONT_COLUMNS = {};
+  for (const [char, rows] of Object.entries(FONT_5X7)) {
+    const cols = [0, 0, 0, 0, 0];
+    for (let c = 0; c < 5; c++) {
+      let mask = 0;
+      for (let r = 0; r < 7; r++) {
+        if ((rows[r] >> (4 - c)) & 1) {
+          mask |= (1 << r);
         }
-        return masks;
       }
+      cols[c] = mask;
+    }
+    FONT_COLUMNS[char] = cols;
+  }
 
-      /* ------------------------------------------------------------------------
-         3. APPLICATION STATE & CONTROLS BINDING
-         ------------------------------------------------------------------------ */
-      const state = {
-        message: 'WELCOME TO RETRO-INDUSTRIAL MATRIX // SYSTEM ONLINE ♥',
-        mode: 'scroll', // 'scroll', 'static', 'bounce'
-        speed: 28, // 5 to 120 columns/sec
-        pitch: 14, // 7 to 26 px pitch
-        activeTheme: {
-          id: 'amber',
-          hex: '#ffb000',
-          glow: 'rgba(255, 176, 0, 0.45)',
-          dim: 'rgba(255, 176, 0, 0.15)',
-          halo: 'rgba(255, 176, 0, 0.16)',
-          subtle: 'rgba(255, 176, 0, 0.08)',
-          name: 'AMBER (590 NM)'
-        },
-        messageMasks: [],
-        prefersReducedMotion: false,
-        // Scroll & bounce positions
-        scrollPos: 0,
-        bouncePos: 0
-      };
-
-      state.messageMasks = rasterizeText(state.message);
-
-      // DOM Elements
-      const messageInput = document.getElementById('messageInput');
-      const charCounter = document.getElementById('charCounter');
-      const speedSlider = document.getElementById('speedSlider');
-      const speedValBadge = document.getElementById('speedValBadge');
-      const pitchSlider = document.getElementById('pitchSlider');
-      const pitchValBadge = document.getElementById('pitchValBadge');
-      const modeButtons = document.querySelectorAll('.mode-btn');
-      const swatchItems = document.querySelectorAll('.swatch-item');
-      const spectrumReadout = document.getElementById('spectrumReadout');
-      const headerModeTag = document.getElementById('headerModeTag');
-
-      // Telemetry DOM elements
-      const readoutLit = document.getElementById('readoutLit');
-      const readoutTotal = document.getElementById('readoutTotal');
-      const readoutDims = document.getElementById('readoutDims');
-      const readoutDuty = document.getElementById('readoutDuty');
-
-      // Canvases
-      const matrixCanvas = document.getElementById('matrixCanvas');
-      const matrixContainer = document.getElementById('matrixContainer');
-      const matrixCtx = matrixCanvas.getContext('2d');
-
-      const clockCanvas = document.getElementById('clockCanvas');
-      const clockContainer = document.getElementById('clockContainer');
-      const clockCtx = clockCanvas.getContext('2d');
-
-      // Motion query
-      const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-      state.prefersReducedMotion = motionQuery.matches;
-      motionQuery.addEventListener('change', (e) => {
-        state.prefersReducedMotion = e.matches;
-      });
-
-      /* ------------------------------------------------------------------------
-         4. COLOR SWATCHES & DYNAMIC UI THEME RECOLORING
-         ------------------------------------------------------------------------ */
-      function setPhosphorTheme(themeData) {
-        state.activeTheme = themeData;
-        const root = document.documentElement;
-        root.style.setProperty('--accent-color', themeData.hex);
-        root.style.setProperty('--accent-glow', themeData.glow);
-        root.style.setProperty('--accent-dim', themeData.dim);
-        root.style.setProperty('--accent-halo', themeData.halo);
-        root.style.setProperty('--accent-subtle', themeData.subtle);
-
-        spectrumReadout.textContent = themeData.name;
-
-        swatchItems.forEach(item => {
-          const isActive = item.dataset.theme === themeData.id;
-          item.classList.toggle('active', isActive);
-          item.setAttribute('aria-checked', isActive ? 'true' : 'false');
-        });
+  function rasterize(str) {
+    const cols = [];
+    const upper = str.toUpperCase();
+    for (let i = 0; i < upper.length; i++) {
+      const ch = upper[i];
+      const glyph = FONT_COLUMNS[ch] || FONT_COLUMNS['DEFAULT'];
+      for (let c = 0; c < 5; c++) {
+        cols.push(glyph[c]);
       }
+      cols.push(0); // 1 column spacing
+    }
+    return cols;
+  }
 
-      swatchItems.forEach(btn => {
-        btn.addEventListener('click', () => {
-          const themeData = {
-            id: btn.dataset.theme,
-            hex: btn.dataset.hex,
-            glow: btn.dataset.glow,
-            dim: btn.dataset.dim,
-            halo: btn.dataset.halo,
-            subtle: btn.dataset.subtle,
-            name: btn.dataset.name
-          };
-          setPhosphorTheme(themeData);
-        });
-      });
+  // Application State
+  const state = {
+    text: "DOTMATRIX-7 SYSTEM ACTIVATED // READY",
+    mode: "scroll",
+    color: "#ffb000",
+    colorName: "AMBER",
+    speed: 35,
+    pitchA: 16,
+    offsetA: 0,
+    bounceDir: -1,
+    colsA: 0,
+    rows: 11,
+    lastTime: performance.now(),
+    fpsTimer: performance.now(),
+    frameCount: 0,
+    fps: 60,
+    litCount: 0,
+    totalCount: 0,
+    cachedMsgCols: []
+  };
 
-      /* ------------------------------------------------------------------------
-         5. INPUT & PRESET HANDLERS
-         ------------------------------------------------------------------------ */
-      function updateMessageText(newText) {
-        state.message = newText;
-        messageInput.value = newText;
-        const len = newText.length;
-        charCounter.textContent = `${len} CH`;
-        charCounter.classList.toggle('warn', len >= 110);
-        state.messageMasks = rasterizeText(newText);
-        state.scrollPos = 0;
-        state.bouncePos = 0;
+  // Cache message column data
+  state.cachedMsgCols = rasterize(state.text);
+
+  // DOM Handles
+  const canvasA = document.getElementById("matrixA");
+  const ctxA = canvasA.getContext("2d");
+  const canvasB = document.getElementById("matrixB");
+  const ctxB = canvasB.getContext("2d");
+  const textInput = document.getElementById("textInput");
+  const charCount = document.getElementById("charCount");
+  const modeBtns = document.querySelectorAll(".mode-btn");
+  const activeModeLabel = document.getElementById("activeModeLabel");
+  const swatches = document.querySelectorAll(".swatch-btn");
+  const colorNameLbl = document.getElementById("colorName");
+  const speedSlider = document.getElementById("speedSlider");
+  const speedVal = document.getElementById("speedVal");
+  const pitchSlider = document.getElementById("pitchSlider");
+  const pitchVal = document.getElementById("pitchVal");
+  const litCountEl = document.getElementById("litCount");
+  const totalCountEl = document.getElementById("totalCount");
+  const dimCountEl = document.getElementById("dimCount");
+  const msgColsCountEl = document.getElementById("msgColsCount");
+  const fpsCounter = document.getElementById("fpsCounter");
+
+  function setAccentColor(hex, name) {
+    state.color = hex;
+    state.colorName = name;
+    colorNameLbl.innerText = name;
+    document.documentElement.style.setProperty('--accent', hex);
+    
+    // Parse hex to rgba for secondary glows
+    let c = hex.replace('#', '');
+    let num = parseInt(c, 16);
+    let r = (num >> 16) & 255;
+    let g = (num >> 8) & 255;
+    let b = num & 255;
+    document.documentElement.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.4)`);
+    document.documentElement.style.setProperty('--accent-dim', `rgba(${r}, ${g}, ${b}, 0.15)`);
+  }
+
+  function resizeDisplays() {
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Canvas A
+    const rectA = canvasA.getBoundingClientRect();
+    canvasA.width = Math.floor(rectA.width * dpr);
+    canvasA.height = Math.floor(state.rows * state.pitchA * dpr);
+    canvasA.style.height = `${state.rows * state.pitchA}px`;
+    state.colsA = Math.floor(rectA.width / state.pitchA);
+
+    // Canvas B
+    const pitchB = Math.max(6, Math.floor(state.pitchA * 0.75));
+    const rectB = canvasB.getBoundingClientRect();
+    canvasB.width = Math.floor(rectB.width * dpr);
+    canvasB.height = Math.floor(state.rows * pitchB * dpr);
+    canvasB.style.height = `${state.rows * pitchB}px`;
+
+    state.totalCount = state.colsA * state.rows;
+    dimCountEl.innerText = `${state.colsA} × ${state.rows}`;
+    totalCountEl.innerText = state.totalCount;
+  }
+
+  window.addEventListener('resize', resizeDisplays);
+
+  // Input Listeners
+  textInput.addEventListener("input", (e) => {
+    state.text = e.target.value;
+    charCount.innerText = `${String(state.text.length).padStart(2, '0')} / 120 CH`;
+    state.cachedMsgCols = rasterize(state.text);
+    msgColsCountEl.innerText = state.cachedMsgCols.length;
+    state.offsetA = 0;
+    state.bounceDir = -1;
+  });
+
+  modeBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      modeBtns.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.mode = btn.dataset.mode;
+      activeModeLabel.innerText = state.mode.toUpperCase();
+      state.offsetA = 0;
+      state.bounceDir = -1;
+    });
+  });
+
+  swatches.forEach(swatch => {
+    swatch.addEventListener("click", () => {
+      swatches.forEach(s => s.classList.remove("active"));
+      swatch.classList.add("active");
+      setAccentColor(swatch.dataset.color, swatch.dataset.name);
+    });
+  });
+
+  speedSlider.addEventListener("input", (e) => {
+    state.speed = parseInt(e.target.value, 10);
+    speedVal.innerText = `${state.speed} COL/S`;
+  });
+
+  pitchSlider.addEventListener("input", (e) => {
+    state.pitchA = parseInt(e.target.value, 10);
+    pitchVal.innerText = `${state.pitchA} PX`;
+    resizeDisplays();
+  });
+
+  // Render LED Routine
+  function drawLED(ctx, x, y, radius, isLit, color) {
+    if (!isLit) {
+      ctx.fillStyle = "#171a1e";
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+
+    // Pass 1: Halo
+    ctx.save();
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, radius * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Pass 2: Solid Core
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pass 3: Specular White Pin-Highlight (Upper Left)
+    ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+    ctx.beginPath();
+    ctx.arc(x - radius * 0.35, y - radius * 0.35, Math.max(1, radius * 0.28), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Animation Loop
+  function render(now) {
+    const delta = (now - state.lastTime) / 1000;
+    state.lastTime = now;
+
+    // Motion reduction check
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const effectiveSpeed = prefersReducedMotion ? state.speed / 3 : state.speed;
+
+    const dpr = window.devicePixelRatio || 1;
+    const msg = state.cachedMsgCols;
+    const msgLen = msg.length;
+    const displayColsA = state.colsA;
+
+    // Movement calculation for Display A
+    if (state.mode === 'scroll') {
+      const cycle = msgLen + 8; // 8-column repeat gap
+      if (cycle > 0) {
+        state.offsetA = (state.offsetA - delta * effectiveSpeed) % cycle;
       }
-
-      messageInput.addEventListener('input', (e) => {
-        updateMessageText(e.target.value);
-      });
-
-      document.querySelectorAll('.preset-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          updateMessageText(btn.dataset.preset);
-        });
-      });
-
-      /* ------------------------------------------------------------------------
-         6. MODE SWITCH
-         ------------------------------------------------------------------------ */
-      modeButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-          modeButtons.forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          state.mode = btn.dataset.mode;
-          headerModeTag.textContent = btn.dataset.mode.toUpperCase();
-          state.scrollPos = 0;
-          state.bouncePos = 0;
-        });
-      });
-
-      /* ------------------------------------------------------------------------
-         7. SPEED & PITCH SLIDERS
-         ------------------------------------------------------------------------ */
-      speedSlider.addEventListener('input', (e) => {
-        state.speed = parseInt(e.target.value, 10);
-        speedValBadge.textContent = `${state.speed} COL/S`;
-      });
-
-      pitchSlider.addEventListener('input', (e) => {
-        state.pitch = parseInt(e.target.value, 10);
-        pitchValBadge.textContent = `${state.pitch} PX`;
-        resizeCanvases();
-      });
-
-      /* ------------------------------------------------------------------------
-         8. DPR-AWARE CANVAS RESIZING & LAYOUT
-         11 rows tall, as many columns as fit.
-         ------------------------------------------------------------------------ */
-      let matrixCols = 80;
-      let clockCols = 50;
-
-      function resizeCanvases() {
-        const dpr = window.devicePixelRatio || 1;
-        const rows = 11;
-
-        // Display A: Hero Matrix
-        const rectA = matrixContainer.getBoundingClientRect();
-        const widthA = Math.max(200, Math.floor(rectA.width));
-        const pitchA = state.pitch;
-        const paddingX = 14;
-        matrixCols = Math.max(10, Math.floor((widthA - paddingX * 2) / pitchA));
-        
-        const canvasHeightA = rows * pitchA + 20; // 10px top/bottom margin
-        matrixCanvas.width = Math.round(widthA * dpr);
-        matrixCanvas.height = Math.round(canvasHeightA * dpr);
-        matrixCanvas.style.width = widthA + 'px';
-        matrixCanvas.style.height = canvasHeightA + 'px';
-
-        // Display B: Clock Matrix (slightly smaller pitch derived from main pitch)
-        const rectB = clockContainer.getBoundingClientRect();
-        const widthB = Math.max(160, Math.floor(rectB.width));
-        const pitchB = Math.max(6, Math.round(state.pitch * 0.72));
-        clockCols = Math.max(10, Math.floor((widthB - paddingX * 2) / pitchB));
-        
-        const canvasHeightB = rows * pitchB + 16;
-        clockCanvas.width = Math.round(widthB * dpr);
-        clockCanvas.height = Math.round(canvasHeightB * dpr);
-        clockCanvas.style.width = widthB + 'px';
-        clockCanvas.style.height = canvasHeightB + 'px';
-      }
-
-      window.addEventListener('resize', resizeCanvases);
-      resizeCanvases();
-
-      /* ------------------------------------------------------------------------
-         9. LED DRAWING ENGINE (3-PASS ROUND LEDS)
-         - Pass 0: Unlit LEDs as dark #171a1e dots
-         - Pass 1: Lit LED large 16%-alpha halo
-         - Pass 2: Lit LED solid core
-         - Pass 3: Tiny white specular pin-highlight in upper left
-         ------------------------------------------------------------------------ */
-      function renderLedGrid(ctx, canvas, cols, rows, pitch, colMaskProvider, theme) {
-        const dpr = window.devicePixelRatio || 1;
-        const cssWidth = canvas.width / dpr;
-        const cssHeight = canvas.height / dpr;
-
-        ctx.save();
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-        // Clear optical panel background
-        ctx.fillStyle = '#08090b';
-        ctx.fillRect(0, 0, cssWidth, cssHeight);
-
-        // Compute centering coordinates
-        const totalGridW = cols * pitch;
-        const totalGridH = rows * pitch;
-        const startX = Math.floor((cssWidth - totalGridW) / 2) + pitch / 2;
-        const startY = Math.floor((cssHeight - totalGridH) / 2) + pitch / 2;
-
-        const ledRadius = pitch * 0.38;
-        const haloRadius = pitch * 0.88;
-        const pinRadius = Math.max(0.75, pitch * 0.1);
-
-        // Precompute lit / unlit state and coordinates for high-performance batched drawing
-        const unlitDots = [];
-        const litDots = [];
-
-        for (let c = 0; c < cols; c++) {
-          const mask = colMaskProvider(c);
-          const cx = startX + c * pitch;
-          for (let r = 0; r < rows; r++) {
-            // Font is 7 rows high centered on 11-row display (rows 2 to 8)
-            const isLit = (r >= 2 && r <= 8) && Boolean((mask >> (r - 2)) & 1);
-            const cy = startY + r * pitch;
-            if (isLit) {
-              litDots.push(cx, cy);
-            } else {
-              unlitDots.push(cx, cy);
-            }
-          }
+    } else if (state.mode === 'bounce') {
+      const overflow = msgLen - displayColsA;
+      if (overflow <= 0) {
+        // Ping pong between display edges
+        const maxOffset = displayColsA - msgLen;
+        state.offsetA += state.bounceDir * delta * effectiveSpeed;
+        if (state.offsetA <= 0) {
+          state.offsetA = 0;
+          state.bounceDir = 1;
+        } else if (state.offsetA >= maxOffset) {
+          state.offsetA = maxOffset;
+          state.bounceDir = -1;
         }
-
-        // --- PASS 0: All unlit LEDs (dark #171a1e dots) ---
-        ctx.fillStyle = '#171a1e';
-        ctx.beginPath();
-        for (let i = 0; i < unlitDots.length; i += 2) {
-          const x = unlitDots[i];
-          const y = unlitDots[i + 1];
-          ctx.moveTo(x + ledRadius, y);
-          ctx.arc(x, y, ledRadius, 0, Math.PI * 2);
+      } else {
+        // Ping pong across overflow
+        state.offsetA += state.bounceDir * delta * effectiveSpeed;
+        if (state.offsetA <= -overflow) {
+          state.offsetA = -overflow;
+          state.bounceDir = 1;
+        } else if (state.offsetA >= 0) {
+          state.offsetA = 0;
+          state.bounceDir = -1;
         }
-        ctx.fill();
+      }
+    } else {
+      // Static: Centered
+      state.offsetA = Math.floor((displayColsA - msgLen) / 2);
+    }
 
-        if (litDots.length > 0) {
-          // --- PASS 1: Large 16%-alpha halo ---
-          ctx.fillStyle = theme.halo;
-          ctx.beginPath();
-          for (let i = 0; i < litDots.length; i += 2) {
-            const x = litDots[i];
-            const y = litDots[i + 1];
-            ctx.moveTo(x + haloRadius, y);
-            ctx.arc(x, y, haloRadius, 0, Math.PI * 2);
-          }
-          ctx.fill();
+    // --- Render Display A ---
+    ctxA.clearRect(0, 0, canvasA.width, canvasA.height);
+    const pA = state.pitchA * dpr;
+    const rA = (pA * 0.38);
+    let litLedCount = 0;
 
-          // --- PASS 2: Solid core ---
-          ctx.fillStyle = theme.hex;
-          ctx.beginPath();
-          for (let i = 0; i < litDots.length; i += 2) {
-            const x = litDots[i];
-            const y = litDots[i + 1];
-            ctx.moveTo(x + ledRadius, y);
-            ctx.arc(x, y, ledRadius, 0, Math.PI * 2);
-          }
-          ctx.fill();
-
-          // --- PASS 3: Tiny white specular pin-highlight in upper left ---
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
-          ctx.beginPath();
-          const offset = ledRadius * 0.35;
-          for (let i = 0; i < litDots.length; i += 2) {
-            const hx = litDots[i] - offset;
-            const hy = litDots[i + 1] - offset;
-            ctx.moveTo(hx + pinRadius, hy);
-            ctx.arc(hx, hy, pinRadius, 0, Math.PI * 2);
-          }
-          ctx.fill();
+    for (let c = 0; c < displayColsA; c++) {
+      let colMask = 0;
+      if (state.mode === 'scroll') {
+        const cycle = msgLen + 8;
+        let shifted = (c - Math.floor(state.offsetA)) % cycle;
+        if (shifted < 0) shifted += cycle;
+        if (shifted < msgLen) {
+          colMask = msg[shifted];
         }
-
-        ctx.restore();
-
-        return {
-          litCount: litDots.length / 2,
-          totalCount: cols * rows
-        };
+      } else {
+        const charColIdx = Math.floor(c - state.offsetA);
+        if (charColIdx >= 0 && charColIdx < msgLen) {
+          colMask = msg[charColIdx];
+        }
       }
 
-      /* ------------------------------------------------------------------------
-         10. DISPLAY A COLUMN MASK PROVIDER (SCROLL, STATIC, BOUNCE)
-         ------------------------------------------------------------------------ */
-      function getDisplayAColumnMask(colIndex) {
-        const msg = state.messageMasks;
-        const N = msg.length;
-        if (N === 0) return 0;
+      const centerX = (c + 0.5) * pA;
 
-        const mode = state.mode;
-
-        if (mode === 'scroll') {
-          // Continuous right-to-left with 8-column blank gap before repeating
-          const cycle = N + 8;
-          const offset = Math.floor(state.scrollPos) % cycle;
-          const streamIdx = (offset + colIndex) % cycle;
-          return streamIdx < N ? msg[streamIdx] : 0;
+      // 11 Rows: 7 font rows centered vertically with 2 padding rows top and bottom
+      for (let r = 0; r < state.rows; r++) {
+        const centerY = (r + 0.5) * pA;
+        let isLit = false;
+        if (r >= 2 && r < 9) {
+          const fontRow = r - 2;
+          isLit = ((colMask >> fontRow) & 1) === 1;
         }
+        if (isLit) litLedCount++;
+        drawLED(ctxA, centerX, centerY, rA, isLit, state.color);
+      }
+    }
 
-        if (mode === 'static') {
-          // Centred; if too long, shows the middle portion
-          if (N <= matrixCols) {
-            const startCol = Math.floor((matrixCols - N) / 2);
-            if (colIndex >= startCol && colIndex < startCol + N) {
-              return msg[colIndex - startCol];
-            }
-            return 0;
-          } else {
-            const msgStart = Math.floor((N - matrixCols) / 2);
-            return (msgStart + colIndex < N) ? msg[msgStart + colIndex] : 0;
-          }
-        }
+    // --- Render Display B: Synchronised Clock ---
+    const pitchB = Math.max(6, Math.floor(state.pitchA * 0.75));
+    const pB = pitchB * dpr;
+    const rB = (pB * 0.38);
+    const colsB = Math.floor(canvasB.width / pB);
 
-        if (mode === 'bounce') {
-          // Ping-pongs between the edges, or across overflow when wider than display
-          if (N <= matrixCols) {
-            const maxShift = matrixCols - N;
-            if (maxShift === 0) {
-              return colIndex < N ? msg[colIndex] : 0;
-            }
-            const cycle = 2 * maxShift;
-            const pos = state.bouncePos % cycle;
-            const shift = pos <= maxShift ? Math.floor(pos) : Math.floor(2 * maxShift - pos);
-            if (colIndex >= shift && colIndex < shift + N) {
-              return msg[colIndex - shift];
-            }
-            return 0;
-          } else {
-            const overflow = N - matrixCols;
-            const cycle = 2 * overflow;
-            const pos = state.bouncePos % cycle;
-            const msgStart = pos <= overflow ? Math.floor(pos) : Math.floor(2 * overflow - pos);
-            return (msgStart + colIndex < N) ? msg[msgStart + colIndex] : 0;
-          }
-        }
+    ctxB.clearRect(0, 0, canvasB.width, canvasB.height);
 
-        return 0;
+    const date = new Date();
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    const ss = String(date.getSeconds()).padStart(2, '0');
+    
+    // Half-second colon blink
+    const colonVisible = prefersReducedMotion || (date.getMilliseconds() < 500);
+    const colonChar = colonVisible ? ':' : ' ';
+    const timeStr = `${hh}${colonChar}${mm}${colonChar}${ss}`;
+    const timeCols = rasterize(timeStr);
+    const timeLen = timeCols.length;
+    const startColB = Math.floor((colsB - timeLen) / 2);
+
+    for (let c = 0; c < colsB; c++) {
+      const timeColIdx = c - startColB;
+      let colMask = 0;
+      if (timeColIdx >= 0 && timeColIdx < timeLen) {
+        colMask = timeCols[timeColIdx];
       }
 
-      /* ------------------------------------------------------------------------
-         11. DISPLAY B (LOCAL TIME HH:MM:SS) WITH BLINKING COLONS
-         ------------------------------------------------------------------------ */
-      let clockMasks = [];
-
-      function updateClockMasks() {
-        const now = new Date();
-        const hh = String(now.getHours()).padStart(2, '0');
-        const mm = String(now.getMinutes()).padStart(2, '0');
-        const ss = String(now.getSeconds()).padStart(2, '0');
-
-        // Colons blink off on the half second; under prefers-reduced-motion, stay solid
-        const isColonLit = state.prefersReducedMotion ? true : ((Date.now() % 1000) < 500);
-        const colon = isColonLit ? ':' : ' ';
-
-        const timeStr = `${hh}${colon}${mm}${colon}${ss}`;
-        clockMasks = rasterizeText(timeStr);
-      }
-
-      function getDisplayBColumnMask(colIndex) {
-        const N = clockMasks.length;
-        if (N === 0) return 0;
-        // Centred horizontally in Display B
-        const startCol = Math.max(0, Math.floor((clockCols - N) / 2));
-        if (colIndex >= startCol && colIndex < startCol + N) {
-          return clockMasks[colIndex - startCol];
+      const centerX = (c + 0.5) * pB;
+      for (let r = 0; r < state.rows; r++) {
+        const centerY = (r + 0.5) * pB;
+        let isLit = false;
+        if (r >= 2 && r < 9) {
+          const fontRow = r - 2;
+          isLit = ((colMask >> fontRow) & 1) === 1;
         }
-        return 0;
+        drawLED(ctxB, centerX, centerY, rB, isLit, state.color);
       }
+    }
 
-      /* ------------------------------------------------------------------------
-         12. TELEMETRY DIAGNOSTICS REFRESH (A FEW TIMES PER SECOND)
-         ------------------------------------------------------------------------ */
-      let lastLitCount = 0;
-      let lastTotalCount = 0;
+    // Diagnostics sampling
+    state.litCount = litLedCount;
+    state.frameCount++;
+    if (now - state.fpsTimer >= 400) {
+      state.fps = Math.round((state.frameCount * 1000) / (now - state.fpsTimer));
+      state.frameCount = 0;
+      state.fpsTimer = now;
+      litCountEl.innerText = state.litCount;
+      fpsCounter.innerText = `${state.fps} FPS`;
+    }
 
-      function refreshTelemetry() {
-        readoutLit.textContent = lastLitCount.toLocaleString();
-        readoutTotal.textContent = lastTotalCount.toLocaleString();
-        readoutDims.textContent = `${matrixCols} × 11`;
-        const duty = lastTotalCount > 0 ? ((lastLitCount / lastTotalCount) * 100).toFixed(1) : '0.0';
-        readoutDuty.textContent = `${duty}%`;
-      }
+    requestAnimationFrame(render);
+  }
 
-      setInterval(refreshTelemetry, 250);
-
-      /* ------------------------------------------------------------------------
-         13. MAIN ANIMATION LOOP
-         ------------------------------------------------------------------------ */
-      let lastTimestamp = performance.now();
-
-      function animationFrame(timestamp) {
-        const dt = Math.min(0.1, (timestamp - lastTimestamp) / 1000);
-        lastTimestamp = timestamp;
-
-        // Reduced motion constraint: slow to 1/3 of speed
-        const effectiveSpeed = state.prefersReducedMotion ? (state.speed / 3) : state.speed;
-
-        // Advance positions
-        const msgLen = state.messageMasks.length;
-        if (msgLen > 0) {
-          if (state.mode === 'scroll') {
-            const cycle = msgLen + 8;
-            state.scrollPos = (state.scrollPos + effectiveSpeed * dt) % cycle;
-          } else if (state.mode === 'bounce') {
-            const travel = (msgLen <= matrixCols) ? (matrixCols - msgLen) : (msgLen - matrixCols);
-            if (travel > 0) {
-              state.bouncePos = (state.bouncePos + effectiveSpeed * dt) % (2 * travel);
-            }
-          }
-        }
-
-        // Render Display A (Hero Matrix)
-        const statsA = renderLedGrid(
-          matrixCtx,
-          matrixCanvas,
-          matrixCols,
-          11,
-          state.pitch,
-          getDisplayAColumnMask,
-          state.activeTheme
-        );
-
-        lastLitCount = statsA.litCount;
-        lastTotalCount = statsA.totalCount;
-
-        // Render Display B (Local Time Clock)
-        updateClockMasks();
-        const pitchB = Math.max(6, Math.round(state.pitch * 0.72));
-        renderLedGrid(
-          clockCtx,
-          clockCanvas,
-          clockCols,
-          11,
-          pitchB,
-          getDisplayBColumnMask,
-          state.activeTheme
-        );
-
-        requestAnimationFrame(animationFrame);
-      }
-
-      requestAnimationFrame(animationFrame);
-
-      // Initial telemetry refresh
-      refreshTelemetry();
-
-    })();
-  </script>
+  // Initial Configuration
+  charCount.innerText = `${String(state.text.length).padStart(2, '0')} / 120 CH`;
+  msgColsCountEl.innerText = state.cachedMsgCols.length;
+  resizeDisplays();
+  requestAnimationFrame(render);
+})();
+</script>
 </body>
 </html>

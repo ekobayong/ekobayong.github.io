@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chladni Resonance — Sand on a Singing Plate</title>
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --bg: #0b0c0e;
+    --panel-bg: linear-gradient(145deg, #1c1f24 0%, #15171b 100%);
+    --panel-border: #2e3239;
+    --brass-light: #f0d68a;
+    --brass: #c9a24a;
+    --brass-dark: #8f6f2a;
+    --brass-gradient: linear-gradient(135deg, #f0d68a 0%, #c9a24a 50%, #8f6f2a 100%);
+    --brass-rim: linear-gradient(135deg, #8f6f2a 0%, #f0d68a 50%, #594416 100%);
+    --text-cream: #e6e1d6;
+    --sand: #f4ecd8;
+    --text-muted: #8b8778;
+    --teal: #7fd1c0;
+    --teal-glow: rgba(127, 209, 192, 0.45);
+    --brass-glow: rgba(201, 162, 74, 0.35);
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text-cream);
+    font-family: Georgia, 'Iowan Old Style', Palatino, serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+    overflow-x: hidden;
+    line-height: 1.5;
+  }
+
+  header {
+    text-align: center;
+    max-width: 960px;
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  header h1 {
+    font-size: clamp(1.8rem, 3.5vw, 2.7rem);
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    color: var(--brass-light);
+    text-transform: uppercase;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8), 0 0 15px var(--brass-glow);
+    margin-bottom: 4px;
+  }
+
+  header p.subtitle {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.85rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .main-stage {
+    display: grid;
+    grid-template-columns: minmax(320px, 600px) 340px;
+    gap: 28px;
+    width: 100%;
+    max-width: 1020px;
+    align-items: start;
+    justify-content: center;
+  }
+
+  /* Apparatus Housing */
+  .apparatus-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  .housing {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: #191b1e;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 
+      inset 0 2px 4px rgba(255,255,255,0.06),
+      inset 0 -4px 10px rgba(0,0,0,0.8),
+      0 12px 35px rgba(0,0,0,0.7),
+      0 0 0 1px #2f343b;
+    border: 3px solid #141517;
+    cursor: crosshair;
+    user-select: none;
+    touch-action: none;
+  }
+
+  /* Brass corner bolts */
+  .bolt {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #f0d68a 0%, #c9a24a 55%, #8f6f2a 100%);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.85), inset 0 1px 1px rgba(255,255,255,0.6);
+    z-index: 10;
+  }
+  .bolt::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 20%;
+    width: 60%;
+    height: 2px;
+    background: rgba(40, 25, 5, 0.7);
+    transform: translateY(-50%) rotate(42deg);
+    box-shadow: 0 1px 1px rgba(255,255,255,0.2);
+  }
+  .bolt-tl { top: 8px; left: 8px; }
+  .bolt-tr { top: 8px; right: 8px; transform: rotate(85deg); }
+  .bolt-bl { bottom: 8px; left: 8px; transform: rotate(140deg); }
+  .bolt-br { bottom: 8px; right: 8px; transform: rotate(210deg); }
+
+  .canvas-bezel {
+    width: 100%;
+    height: 100%;
+    border-radius: 4px;
+    box-shadow: 
+      inset 0 0 12px #000,
+      0 0 0 2px #0e1012,
+      0 0 0 4px #2b2e34;
+    position: relative;
+    overflow: hidden;
+    background: #1f2226;
+  }
+
+  canvas#chladniCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .plate-hint {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+  }
+
+  /* Console Panel */
+  .console {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.06);
+    position: relative;
+  }
+
+  .console::before {
+    content: "ACOUSTIC RESONATOR • NO. 1787";
+    display: block;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--text-muted);
+    border-bottom: 1px solid rgba(201, 162, 74, 0.2);
+    padding-bottom: 8px;
+    text-align: center;
+  }
+
+  /* Readout Dials */
+  .dials-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.3fr;
+    gap: 10px;
+  }
+
+  .dial-pod {
+    background: #121417;
+    border: 2px solid #282c33;
+    border-radius: 6px;
+    padding: 8px 6px;
+    text-align: center;
+    position: relative;
+    box-shadow: inset 0 2px 6px #000;
+  }
+
+  .dial-pod::before {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border: 1px solid rgba(240, 214, 138, 0.1);
+    pointer-events: none;
+    border-radius: 4px;
+  }
+
+  .dial-label {
+    display: block;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+  }
+
+  .dial-value {
+    font-family: 'Courier New', ui-monospace, monospace;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--brass-light);
+    text-shadow: 0 0 8px var(--brass-glow);
+    white-space: nowrap;
+  }
+
+  /* Oscilloscope */
+  .scope-container {
+    background: #0d1114;
+    border: 2px solid #23272e;
+    border-radius: 6px;
+    padding: 6px;
+    position: relative;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+  }
+
+  .scope-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.65rem;
+    color: var(--teal);
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+    padding: 0 2px;
+    text-transform: uppercase;
+  }
+
+  canvas#scopeCanvas {
+    display: block;
+    width: 100%;
+    height: 54px;
+    background: #090c0e;
+    border-radius: 3px;
+  }
+
+  /* Sliders */
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .control-header {
+    display: flex;
+    justify-content: space-between;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.72rem;
+    color: var(--text-cream);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .control-header span:last-child {
+    font-family: 'Courier New', ui-monospace, monospace;
+    color: var(--brass-light);
+    font-weight: 600;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: #0e1013;
+    border-radius: 3px;
+    outline: none;
+    border: 1px solid #2b2e35;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #f0d68a 0%, #c9a24a 60%, #8f6f2a 100%);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.8);
+    cursor: pointer;
+    border: 1px solid #5a4214;
+    transition: transform 0.1s ease;
+  }
+
+  input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #f0d68a 0%, #c9a24a 60%, #8f6f2a 100%);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.7);
+    cursor: pointer;
+    border: 1px solid #5a4214;
+  }
+
+  /* Pushbuttons Grid */
+  .button-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .btn {
+    appearance: none;
+    background: linear-gradient(180deg, #2a2e36 0%, #1a1d22 100%);
+    border: 1px solid #3d434d;
+    border-radius: 5px;
+    padding: 10px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-cream);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.1);
+    transition: all 0.15s ease;
+    user-select: none;
+  }
+
+  .btn:hover {
+    background: linear-gradient(180deg, #323741 0%, #20242a 100%);
+    border-color: var(--brass);
+    color: #fff;
+  }
+
+  .btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.6), inset 0 1px 3px rgba(0,0,0,0.5);
+  }
+
+  .led {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #3a2222;
+    border: 1px solid rgba(0,0,0,0.5);
+    box-shadow: inset 0 1px 1px rgba(0,0,0,0.8);
+    transition: all 0.2s ease;
+  }
+
+  .led.active-led-amber {
+    background: #ffb834;
+    box-shadow: 0 0 6px #ffb834, 0 0 10px rgba(255,184,52,0.6);
+  }
+
+  .led.active-led-teal {
+    background: var(--teal);
+    box-shadow: 0 0 6px var(--teal), 0 0 10px var(--teal-glow);
+  }
+
+  /* History Note */
+  .history-card {
+    max-width: 960px;
+    margin-top: 36px;
+    background: rgba(21, 23, 27, 0.75);
+    border-left: 3px solid var(--brass);
+    border-top: 1px solid rgba(255,255,255,0.05);
+    border-right: 1px solid rgba(255,255,255,0.03);
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    padding: 16px 20px;
+    font-size: 0.9rem;
+    color: #b8b3a7;
+    line-height: 1.6;
+    border-radius: 0 6px 6px 0;
+  }
+
+  .history-card strong {
+    color: var(--brass-light);
+    font-weight: 600;
+  }
+
+  @media (max-width: 900px) {
+    .main-stage {
+      grid-template-columns: 1fr;
+      max-width: 520px;
+    }
+    .console {
+      max-width: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+
+  <header>
+    <h1>Chladni Resonance</h1>
+    <p class="subtitle">Acoustic Sand Dispersion on a Singing Plate</p>
+  </header>
+
+  <main class="main-stage">
+    <div class="apparatus-wrapper">
+      <div class="housing" id="plateHousing">
+        <div class="bolt bolt-tl"></div>
+        <div class="bolt bolt-tr"></div>
+        <div class="bolt bolt-bl"></div>
+        <div class="bolt bolt-br"></div>
+        <div class="canvas-bezel">
+          <canvas id="chladniCanvas"></canvas>
+        </div>
+      </div>
+      <p class="plate-hint">Touch plate to scatter sand with acoustic impulse</p>
+    </div>
+
+    <aside class="console">
+      <div class="dials-row">
+        <div class="dial-pod">
+          <span class="dial-label">Mode n</span>
+          <span class="dial-value" id="valN">3</span>
+        </div>
+        <div class="dial-pod">
+          <span class="dial-label">Mode m</span>
+          <span class="dial-value" id="valM">5</span>
+        </div>
+        <div class="dial-pod">
+          <span class="dial-label">Resonance</span>
+          <span class="dial-value" id="valFreq">1390<small style="font-size:0.65em;margin-left:2px;color:var(--text-muted)">Hz</small></span>
+        </div>
+      </div>
+
+      <div class="scope-container">
+        <div class="scope-header">
+          <span>Wave Monitor</span>
+          <span id="scopeRate">1.39 kHz</span>
+        </div>
+        <canvas id="scopeCanvas"></canvas>
+      </div>
+
+      <div class="control-group">
+        <div class="control-header">
+          <span>Harmonic Mode N</span>
+          <span id="dispN">3</span>
+        </div>
+        <input type="range" id="sliderN" min="1" max="9" step="1" value="3">
+      </div>
+
+      <div class="control-group">
+        <div class="control-header">
+          <span>Harmonic Mode M</span>
+          <span id="dispM">5</span>
+        </div>
+        <input type="range" id="sliderM" min="1" max="9" step="1" value="5">
+      </div>
+
+      <div class="control-group">
+        <div class="control-header">
+          <span>Frequency Blend</span>
+          <span id="dispBlend">0.00</span>
+        </div>
+        <input type="range" id="sliderBlend" min="0" max="1" step="0.005" value="0">
+      </div>
+
+      <div class="control-group">
+        <div class="control-header">
+          <span>Grain Density</span>
+          <span id="dispGrains">14,000</span>
+        </div>
+        <input type="range" id="sliderGrains" min="2000" max="30000" step="1000" value="14000">
+      </div>
+
+      <div class="button-grid">
+        <button class="btn" id="btnSweep">
+          <span class="led" id="ledSweep"></span>
+          Sweep
+        </button>
+        <button class="btn" id="btnTone">
+          <span class="led" id="ledTone"></span>
+          Tone
+        </button>
+        <button class="btn" id="btnScatter">
+          <span class="led"></span>
+          Scatter
+        </button>
+        <button class="btn" id="btnRandom">
+          <span class="led"></span>
+          Random
+        </button>
+      </div>
+    </aside>
+  </main>
+
+  <article class="history-card">
+    <strong>The 1787 Experiment:</strong> In his seminal treatise <em>Entdeckungen über die Theorie des Klanges</em>, German physicist and musician <strong>Ernst Florens Friedrich Chladni</strong> demonstrated that drawing a violin bow across the edge of a sand-strewn brass plate produced symmetric nodal lines where the vibrating surface remained entirely at rest. Napoleon Bonaparte famously remarked, "Chladni made us see sound."
+  </article>
+
+<script>
+(() => {
+  // Motion Preference
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // DOM Elements
+  const plateCanvas = document.getElementById('chladniCanvas');
+  const ctx = plateCanvas.getContext('2d');
+  const scopeCanvas = document.getElementById('scopeCanvas');
+  const sCtx = scopeCanvas.getContext('2d');
+  const plateHousing = document.getElementById('plateHousing');
+
+  const sliderN = document.getElementById('sliderN');
+  const sliderM = document.getElementById('sliderM');
+  const sliderBlend = document.getElementById('sliderBlend');
+  const sliderGrains = document.getElementById('sliderGrains');
+
+  const valN = document.getElementById('valN');
+  const valM = document.getElementById('valM');
+  const valFreq = document.getElementById('valFreq');
+  const dispN = document.getElementById('dispN');
+  const dispM = document.getElementById('dispM');
+  const dispBlend = document.getElementById('dispBlend');
+  const dispGrains = document.getElementById('dispGrains');
+  const scopeRate = document.getElementById('scopeRate');
+
+  const btnSweep = document.getElementById('btnSweep');
+  const btnTone = document.getElementById('btnTone');
+  const btnScatter = document.getElementById('btnScatter');
+  const btnRandom = document.getElementById('btnRandom');
+  const ledSweep = document.getElementById('ledSweep');
+  const ledTone = document.getElementById('ledTone');
+
+  // Simulation State
+  let modeN = parseInt(sliderN.value, 10);
+  let modeM = parseInt(sliderM.value, 10);
+  let blend = parseFloat(sliderBlend.value);
+  let numGrains = parseInt(sliderGrains.value, 10);
+
+  let isSweeping = false;
+  let sweepDirection = 1;
+
+  let flashOpacity = 0;
+  let shimmerPhase = 0;
+  let scopePhase = 0;
+
+  // Sound Engine
+  let audioCtx = null;
+  let oscNode = null;
+  let gainNode = null;
+  let isTonePlaying = false;
+
+  // Particle Typed Arrays
+  let posX, posY, velX, velY, settled;
+
+  function initGrains(count) {
+    numGrains = count;
+    posX = new Float32Array(count);
+    posY = new Float32Array(count);
+    velX = new Float32Array(count);
+    velY = new Float32Array(count);
+    settled = new Uint8Array(count);
+
+    for (let i = 0; i < count; i++) {
+      posX[i] = Math.random();
+      posY[i] = Math.random();
+      velX[i] = (Math.random() - 0.5) * 0.002;
+      velY[i] = (Math.random() - 0.5) * 0.002;
+      settled[i] = 0;
+    }
+  }
+
+  function scatterGrains() {
+    for (let i = 0; i < numGrains; i++) {
+      velX[i] += (Math.random() - 0.5) * 0.05;
+      velY[i] += (Math.random() - 0.5) * 0.05;
+      settled[i] = 0;
+    }
+  }
+
+  function triggerImpulse(normX, normY) {
+    const radius = 0.22;
+    const radSq = radius * radius;
+    for (let i = 0; i < numGrains; i++) {
+      const dx = posX[i] - normX;
+      const dy = posY[i] - normY;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < radSq && d2 > 0.00001) {
+        const d = Math.sqrt(d2);
+        const force = (1 - d / radius) * 0.04;
+        velX[i] += (dx / d) * force + (Math.random() - 0.5) * 0.01;
+        velY[i] += (dy / d) * force + (Math.random() - 0.5) * 0.01;
+        settled[i] = 0;
+      }
+    }
+  }
+
+  function triggerModeChange() {
+    flashOpacity = 0.45;
+    scatterGrains();
+    updateTone();
+    updateUI();
+  }
+
+  function calcFreq(n, m) {
+    return Math.round(40 * (n * n + m * m) + 30);
+  }
+
+  function currentEffectiveFreq() {
+    const f1 = calcFreq(modeN, modeM);
+    const f2 = calcFreq(modeN + 1, modeM + 1);
+    return Math.round(f1 + (f2 - f1) * blend);
+  }
+
+  // Chladni amplitude calculation
+  const PI = Math.PI;
+  function getAmplitude(x, y, n, m) {
+    // Square plate free edges: z(x,y) = cos(n*pi*x)*cos(m*pi*y) - cos(m*pi*x)*cos(n*pi*y)
+    const px = PI * x;
+    const py = PI * y;
+    return Math.cos(n * px) * Math.cos(m * py) - Math.cos(m * px) * Math.cos(n * py);
+  }
+
+  function sampleField(x, y) {
+    const a1 = getAmplitude(x, y, modeN, modeM);
+    if (blend === 0) return a1;
+    const a2 = getAmplitude(x, y, modeN + 1, modeM + 1);
+    return a1 * (1 - blend) + a2 * blend;
+  }
+
+  // Pre-rendered base plate texture
+  let plateBgCanvas = null;
+
+  function renderPlateBackground(width, height) {
+    if (!plateBgCanvas) {
+      plateBgCanvas = document.createElement('canvas');
+    }
+    plateBgCanvas.width = width;
+    plateBgCanvas.height = height;
+    const bCtx = plateBgCanvas.getContext('2d');
+
+    // Base dark metal gradient
+    const grad = bCtx.createRadialGradient(
+      width * 0.5, height * 0.5, width * 0.1,
+      width * 0.5, height * 0.5, width * 0.72
+    );
+    grad.addColorStop(0, '#2e3238');
+    grad.addColorStop(0.5, '#23262b');
+    grad.addColorStop(1, '#15171a');
+    bCtx.fillStyle = grad;
+    bCtx.fillRect(0, 0, width, height);
+
+    // Fine brushed horizontal lines
+    bCtx.fillStyle = 'rgba(255, 255, 255, 0.022)';
+    for (let y = 0; y < height; y += 2) {
+      if (Math.random() > 0.3) {
+        bCtx.fillRect(0, y, width, 1);
+      }
+    }
+    bCtx.fillStyle = 'rgba(0, 0, 0, 0.035)';
+    for (let y = 1; y < height; y += 3) {
+      if (Math.random() > 0.4) {
+        bCtx.fillRect(0, y, width, 1);
+      }
+    }
+
+    // Heavy dark rim vignette
+    const vignette = bCtx.createRadialGradient(
+      width * 0.5, height * 0.5, width * 0.4,
+      width * 0.5, height * 0.5, width * 0.71
+    );
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(0.8, 'rgba(0,0,0,0.5)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.85)');
+    bCtx.fillStyle = vignette;
+    bCtx.fillRect(0, 0, width, height);
+  }
+
+  // Offscreen Antinode coarse glow canvas
+  let antinodeCanvas = null;
+  const GRID_RES = 64;
+
+  function initAntinodeBuffer() {
+    antinodeCanvas = document.createElement('canvas');
+    antinodeCanvas.width = GRID_RES;
+    antinodeCanvas.height = GRID_RES;
+  }
+
+  function updateAntinodeGlow() {
+    if (!antinodeCanvas) initAntinodeBuffer();
+    const actx = antinodeCanvas.getContext('2d');
+    const imgData = actx.createImageData(GRID_RES, GRID_RES);
+    const data = imgData.data;
+
+    let idx = 0;
+    for (let j = 0; j < GRID_RES; j++) {
+      const y = j / GRID_RES;
+      for (let i = 0; i < GRID_RES; i++) {
+        const x = i / GRID_RES;
+        const val = Math.abs(sampleField(x, y)); // 0 to 2
+        const alpha = Math.min(255, Math.floor(val * 42)); // max ~84 alpha (33%)
+
+        data[idx]     = 201; // Brass R
+        data[idx + 1] = 162; // Brass G
+        data[idx + 2] = 74;  // Brass B
+        data[idx + 3] = alpha;
+        idx += 4;
+      }
+    }
+    actx.putImageData(imgData, 0, 0);
+  }
+
+  // Resize Handlers
+  let displayWidth = 0;
+  let displayHeight = 0;
+
+  function resizeCanvases() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    // Plate Canvas
+    const rect = plateCanvas.parentElement.getBoundingClientRect();
+    displayWidth = Math.floor(rect.width);
+    displayHeight = Math.floor(rect.height);
+
+    plateCanvas.width = Math.floor(displayWidth * dpr);
+    plateCanvas.height = Math.floor(displayHeight * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    renderPlateBackground(displayWidth, displayHeight);
+    updateAntinodeGlow();
+
+    // Scope Canvas
+    const sRect = scopeCanvas.parentElement.getBoundingClientRect();
+    const sW = Math.floor(sRect.width - 12);
+    const sH = 54;
+    scopeCanvas.width = Math.floor(sW * dpr);
+    scopeCanvas.height = Math.floor(sH * dpr);
+    sCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  window.addEventListener('resize', resizeCanvases);
+
+  // Sound Engine Functions
+  function initAudio() {
+    if (!audioCtx) {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioContext();
+      oscNode = audioCtx.createOscillator();
+      gainNode = audioCtx.createGain();
+
+      oscNode.type = 'sine';
+      oscNode.frequency.setValueAtTime(currentEffectiveFreq(), audioCtx.currentTime);
+
+      gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+      oscNode.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscNode.start();
+    }
+  }
+
+  function updateTone() {
+    const f = currentEffectiveFreq();
+    if (audioCtx && oscNode) {
+      oscNode.frequency.setTargetAtTime(f, audioCtx.currentTime, 0.05);
+    }
+  }
+
+  function toggleTone() {
+    initAudio();
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+
+    isTonePlaying = !isTonePlaying;
+    if (isTonePlaying) {
+      gainNode.gain.setTargetAtTime(0.08, audioCtx.currentTime, 0.04);
+      ledTone.classList.add('active-led-teal');
+    } else {
+      gainNode.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.04);
+      ledTone.classList.remove('active-led-teal');
+    }
+  }
+
+  // UI Sync
+  function updateUI() {
+    valN.textContent = modeN;
+    valM.textContent = modeM;
+    dispN.textContent = modeN;
+    dispM.textContent = modeM;
+
+    const f = currentEffectiveFreq();
+    valFreq.innerHTML = `${f}<small style="font-size:0.65em;margin-left:2px;color:var(--text-muted)">Hz</small>`;
+    scopeRate.textContent = (f / 1000).toFixed(2) + ' kHz';
+    dispBlend.textContent = blend.toFixed(2);
+    dispGrains.textContent = numGrains.toLocaleString();
+  }
+
+  // Event Listeners
+  sliderN.addEventListener('input', (e) => {
+    modeN = parseInt(e.target.value, 10);
+    triggerModeChange();
+    updateAntinodeGlow();
+  });
+
+  sliderM.addEventListener('input', (e) => {
+    modeM = parseInt(e.target.value, 10);
+    triggerModeChange();
+    updateAntinodeGlow();
+  });
+
+  sliderBlend.addEventListener('input', (e) => {
+    blend = parseFloat(e.target.value);
+    updateTone();
+    updateUI();
+    updateAntinodeGlow();
+  });
+
+  sliderGrains.addEventListener('input', (e) => {
+    initGrains(parseInt(e.target.value, 10));
+    updateUI();
+  });
+
+  btnSweep.addEventListener('click', () => {
+    isSweeping = !isSweeping;
+    ledSweep.classList.toggle('active-led-amber', isSweeping);
+  });
+
+  btnTone.addEventListener('click', toggleTone);
+
+  btnScatter.addEventListener('click', () => {
+    scatterGrains();
+    flashOpacity = 0.2;
+  });
+
+  btnRandom.addEventListener('click', () => {
+    let newN = Math.floor(Math.random() * 9) + 1;
+    let newM = Math.floor(Math.random() * 9) + 1;
+    while (newN === modeN && newM === modeM) {
+      newN = Math.floor(Math.random() * 9) + 1;
+      newM = Math.floor(Math.random() * 9) + 1;
+    }
+    modeN = newN;
+    modeM = newM;
+    sliderN.value = modeN;
+    sliderM.value = modeM;
+    triggerModeChange();
+    updateAntinodeGlow();
+  });
+
+  // Tap Plate Interaction
+  function handlePointerTap(e) {
+    const rect = plateCanvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const x = (clientX - rect.left) / rect.width;
+    const y = (clientY - rect.top) / rect.height;
+    if (x >= 0 && x <= 1 && y >= 0 && y <= 1) {
+      triggerImpulse(x, y);
+    }
+  }
+
+  plateHousing.addEventListener('mousedown', handlePointerTap);
+  plateHousing.addEventListener('touchstart', handlePointerTap, { passive: true });
+
+  // Numerical Gradient of |Amplitude|
+  const EPS = 0.006;
+  function getGradient(x, y) {
+    const left  = Math.abs(sampleField(Math.max(0, x - EPS), y));
+    const right = Math.abs(sampleField(Math.min(1, x + EPS), y));
+    const down  = Math.abs(sampleField(x, Math.max(0, y - EPS)));
+    const up    = Math.abs(sampleField(x, Math.min(1, y + EPS)));
+
+    return {
+      gx: (right - left) / (2 * EPS),
+      gy: (up - down) / (2 * EPS)
+    };
+  }
+
+  // Particle Physics Update
+  function stepPhysics(steps) {
+    const damping = 0.84;
+    const dt = 0.0016;
+
+    for (let s = 0; s < steps; s++) {
+      for (let i = 0; i < numGrains; i++) {
+        const px = posX[i];
+        const py = posY[i];
+
+        const amp = Math.abs(sampleField(px, py));
+        const { gx, gy } = getGradient(px, py);
+
+        // Movement proportional to amplitude gradient + agitation from vibration
+        const driftForce = 0.0045;
+        const kickMag = amp * 0.0035;
+
+        velX[i] += -gx * driftForce + (Math.random() - 0.5) * kickMag;
+        velY[i] += -gy * driftForce + (Math.random() - 0.5) * kickMag;
+
+        velX[i] *= damping;
+        velY[i] *= damping;
+
+        let nx = px + velX[i];
+        let ny = py + velY[i];
+
+        // Free bouncing boundaries
+        if (nx < 0.01) { nx = 0.01; velX[i] *= -0.5; }
+        else if (nx > 0.99) { nx = 0.99; velX[i] *= -0.5; }
+        if (ny < 0.01) { ny = 0.01; velY[i] *= -0.5; }
+        else if (ny > 0.99) { ny = 0.99; velY[i] *= -0.5; }
+
+        posX[i] = nx;
+        posY[i] = ny;
+
+        // Settled state condition
+        const speedSq = velX[i] * velX[i] + velY[i] * velY[i];
+        settled[i] = (amp < 0.06 && speedSq < 0.000003) ? 1 : 0;
+      }
+    }
+  }
+
+  // Main Render Loop
+  let lastTime = performance.now();
+
+  function animate(currentTime) {
+    const dt = Math.min((currentTime - lastTime) / 1000, 0.1);
+    lastTime = currentTime;
+
+    // Sweep Mode Logic
+    if (isSweeping) {
+      blend += 0.22 * dt * sweepDirection;
+      if (blend >= 1.0) {
+        blend = 0;
+        modeN = (modeN % 8) + 1;
+        modeM = (modeM % 8) + 1;
+        sliderN.value = modeN;
+        sliderM.value = modeM;
+        triggerModeChange();
+      }
+      sliderBlend.value = blend;
+      updateTone();
+      updateUI();
+      updateAntinodeGlow();
+    }
+
+    // Physical iterations (reduce if prefers-reduced-motion)
+    const iterations = prefersReducedMotion ? 2 : 4;
+    stepPhysics(iterations);
+
+    // Render Base Brushed Metal
+    if (plateBgCanvas) {
+      ctx.drawImage(plateBgCanvas, 0, 0);
+    }
+
+    // Antinode Glow overlay
+    if (antinodeCanvas) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.drawImage(antinodeCanvas, 0, 0, displayWidth, displayHeight);
+      ctx.restore();
+    }
+
+    // Traveling Shimmer Band (disabled for reduced motion)
+    const f = currentEffectiveFreq();
+    if (!prefersReducedMotion) {
+      shimmerPhase = (shimmerPhase + (f * 0.0007 + 0.3) * dt) % 1.0;
+      const bandPos = (shimmerPhase * 2 - 0.5) * displayWidth;
+      const shimGrad = ctx.createLinearGradient(bandPos - 90, bandPos - 90, bandPos + 90, bandPos + 90);
+      shimGrad.addColorStop(0, 'rgba(255,255,255,0)');
+      shimGrad.addColorStop(0.5, 'rgba(240, 214, 138, 0.045)');
+      shimGrad.addColorStop(1, 'rgba(255,255,255,0)');
+
+      ctx.fillStyle = shimGrad;
+      ctx.fillRect(0, 0, displayWidth, displayHeight);
+    }
+
+    // Mode Change Flash
+    if (flashOpacity > 0.005) {
+      ctx.fillStyle = `rgba(240, 214, 138, ${flashOpacity})`;
+      ctx.fillRect(0, 0, displayWidth, displayHeight);
+      flashOpacity -= dt * 0.8;
+    }
+
+    // Render Grains (two passes: moving halo, crisp settled)
+    const w = displayWidth;
+    const h = displayHeight;
+
+    // Pass 1: Moving Grains (Soft 45% cream halo)
+    ctx.fillStyle = 'rgba(244, 236, 216, 0.42)';
+    ctx.beginPath();
+    for (let i = 0; i < numGrains; i++) {
+      if (settled[i] === 0) {
+        ctx.rect(posX[i] * w, posY[i] * h, 1.25, 1.25);
+      }
+    }
+    ctx.fill();
+
+    // Pass 2: Settled Grains (100% Crisp Cream)
+    ctx.fillStyle = '#f4ecd8';
+    ctx.beginPath();
+    for (let i = 0; i < numGrains; i++) {
+      if (settled[i] === 1) {
+        ctx.rect(posX[i] * w, posY[i] * h, 1.15, 1.15);
+      }
+    }
+    ctx.fill();
+
+    // Oscilloscope Render
+    renderOscilloscope(dt, f);
+
+    requestAnimationFrame(animate);
+  }
+
+  function renderOscilloscope(dt, freq) {
+    const sw = scopeCanvas.width / (window.devicePixelRatio || 1);
+    const sh = scopeCanvas.height / (window.devicePixelRatio || 1);
+
+    sCtx.fillStyle = '#080b0d';
+    sCtx.fillRect(0, 0, sw, sh);
+
+    // Subtle Reticle Lines
+    sCtx.strokeStyle = 'rgba(127, 209, 192, 0.12)';
+    sCtx.lineWidth = 1;
+    sCtx.beginPath();
+    sCtx.moveTo(0, sh / 2);
+    sCtx.lineTo(sw, sh / 2);
+    sCtx.moveTo(sw / 2, 0);
+    sCtx.lineTo(sw / 2, sh);
+    sCtx.stroke();
+
+    // Trace Sine Wave
+    if (!prefersReducedMotion) {
+      scopePhase += (freq * 0.015) * dt;
+    }
+
+    const cycles = Math.min(12, Math.max(2, (freq / 350)));
+    const amp = (sh * 0.35);
+
+    sCtx.lineWidth = 1.6;
+    sCtx.strokeStyle = '#7fd1c0';
+    sCtx.shadowColor = 'rgba(127, 209, 192, 0.6)';
+    sCtx.shadowBlur = 6;
+    sCtx.beginPath();
+
+    for (let x = 0; x <= sw; x += 2) {
+      const theta = (x / sw) * cycles * 2 * Math.PI + scopePhase;
+      const y = (sh / 2) + Math.sin(theta) * amp;
+      if (x === 0) sCtx.moveTo(x, y);
+      else sCtx.lineTo(x, y);
+    }
+    sCtx.stroke();
+    sCtx.shadowBlur = 0; // reset
+  }
+
+  // Initialization
+  initGrains(numGrains);
+  resizeCanvases();
+  updateUI();
+  requestAnimationFrame(animate);
+})();
+</script>
+</body>
+</html>

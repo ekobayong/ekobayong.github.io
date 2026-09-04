@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aurum Exchange — Market Data as Abstract Art</title>
+  <style>
+    :root {
+      --bg: #07080a;
+      --bg-footer: #0c0e12;
+      --mint: #2ee59d;
+      --mint-glow: rgba(46, 229, 157, 0.4);
+      --rose: #ff5c7a;
+      --rose-glow: rgba(255, 92, 122, 0.4);
+      --gold: #d4af37;
+      --gold-dim: rgba(212, 175, 55, 0.2);
+      --gold-glint: linear-gradient(90deg, transparent 0%, rgba(212, 175, 55, 0.4) 50%, transparent 100%);
+      --text-high: rgba(232, 230, 223, 0.95);
+      --text-med: rgba(232, 230, 223, 0.65);
+      --text-low: rgba(232, 230, 223, 0.35);
+      --font-sans: ui-sans-serif, system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+      --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Courier New', monospace;
+      --anim-speed: 48s;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      :root {
+        --anim-speed: 96s;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-high);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* Grain Overlay */
+    .grain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      background-image: radial-gradient(rgba(232, 230, 223, 0.04) 1px, transparent 0);
+      background-size: 24px 24px;
+      opacity: 0.8;
+    }
+
+    /* Background Generative Sonar */
+    #sonarCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Layout */
+    .layout-wrap {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding-bottom: 38px; /* footer offset */
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--gold-dim);
+      background: rgba(7, 8, 10, 0.7);
+      backdrop-filter: blur(12px);
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+
+    .wordmark {
+      font-size: 15px;
+      font-weight: 300;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--text-high);
+    }
+
+    .feed-meta {
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      color: var(--text-low);
+      text-transform: uppercase;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .timeframe-pill-group {
+      display: flex;
+      background: rgba(232, 230, 223, 0.03);
+      padding: 3px;
+      border-radius: 20px;
+      border: 1px solid var(--gold-dim);
+    }
+
+    .tf-pill {
+      background: transparent;
+      border: none;
+      color: var(--text-med);
+      padding: 4px 14px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .tf-pill.active {
+      color: #07080a;
+      background: var(--gold);
+      box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+      font-weight: 600;
+    }
+
+    .live-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-med);
+    }
+
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--mint);
+      box-shadow: 0 0 8px var(--mint);
+      animation: blink 1.4s ease-in-out infinite alternate;
+    }
+
+    @keyframes blink {
+      0% { opacity: 0.2; transform: scale(0.8); }
+      100% { opacity: 1; transform: scale(1.2); }
+    }
+
+    /* Panels Grid */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      padding: 16px 24px;
+      max-width: 1720px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    @media (max-width: 900px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      position: relative;
+      background: rgba(12, 14, 18, 0.45);
+      border: 1px solid var(--gold-dim);
+      border-radius: 6px;
+      backdrop-filter: blur(16px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: var(--gold-glint);
+      pointer-events: none;
+    }
+
+    .panel-heading {
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-low);
+      padding: 12px 16px 0;
+      font-weight: 500;
+    }
+
+    /* Price Panel */
+    .price-panel {
+      min-height: 540px;
+    }
+
+    .stats-row {
+      display: flex;
+      align-items: baseline;
+      gap: 28px;
+      padding: 12px 16px 16px;
+      flex-wrap: wrap;
+    }
+
+    .last-price-wrap {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .last-price {
+      font-family: var(--font-mono);
+      font-size: 34px;
+      font-weight: 300;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-high);
+      text-shadow: 0 0 12px rgba(212, 175, 55, 0.25);
+      line-height: 1;
+    }
+
+    .stat-metric {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .stat-lbl {
+      font-size: 9px;
+      letter-spacing: 0.15em;
+      color: var(--text-low);
+      text-transform: uppercase;
+    }
+
+    .stat-val {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-med);
+    }
+
+    .chart-container {
+      flex: 1;
+      position: relative;
+      width: 100%;
+      min-height: 380px;
+    }
+
+    #priceCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Right Stack */
+    .right-col {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .depth-panel {
+      height: 270px;
+    }
+
+    .depth-container {
+      flex: 1;
+      position: relative;
+    }
+
+    #depthCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Treemap Heat Panel */
+    .heat-panel {
+      height: 320px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .treemap-wrap {
+      flex: 1;
+      position: relative;
+      margin: 12px 16px 16px;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid rgba(212, 175, 55, 0.1);
+    }
+
+    .treemap-cell {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border: 0.5px solid rgba(0, 0, 0, 0.35);
+      cursor: crosshair;
+      transition: background-color 1.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s ease, border-color 0.2s ease;
+      overflow: hidden;
+      box-sizing: border-box;
+      z-index: 1;
+    }
+
+    .treemap-cell:hover {
+      transform: scale(1.025);
+      border: 1px solid var(--gold);
+      z-index: 5;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    }
+
+    .tm-name {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 500;
+    }
+
+    .tm-val {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      align-self: flex-end;
+    }
+
+    /* Footer Ticker */
+    footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 38px;
+      background: var(--bg-footer);
+      border-top: 1px solid var(--gold-dim);
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      z-index: 10;
+      mask-image: linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%);
+      -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%);
+    }
+
+    .ticker-track {
+      display: flex;
+      white-space: nowrap;
+      will-change: transform;
+      animation: tickerMarquee var(--anim-speed) linear infinite;
+    }
+
+    .ticker-track:hover {
+      animation-play-state: paused;
+    }
+
+    @keyframes tickerMarquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .ticker-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 20px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      border-right: 1px solid rgba(212, 175, 55, 0.1);
+    }
+
+    .t-sym {
+      color: var(--text-high);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .t-price {
+      color: var(--text-med);
+    }
+
+    .t-chg {
+      font-size: 10px;
+    }
+
+    .t-up { color: var(--mint); }
+    .t-down { color: var(--rose); }
+  </style>
+</head>
+<body>
+  <div class="grain"></div>
+  <canvas id="sonarCanvas"></canvas>
+
+  <div class="layout-wrap">
+    <header>
+      <div class="brand-group">
+        <h1 class="wordmark">AURUM Exchange</h1>
+        <div class="feed-meta">Synthetic Feed &middot; AUR/USD</div>
+      </div>
+      <div class="header-controls">
+        <div class="timeframe-pill-group">
+          <button class="tf-pill active" data-tf="60">1M</button>
+          <button class="tf-pill" data-tf="300">5M</button>
+          <button class="tf-pill" data-tf="3600">1H</button>
+        </div>
+        <div class="live-status">
+          <div class="pulse-dot"></div>
+          <span id="liveClock">00:00:00 UTC</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel price-panel">
+        <div class="panel-heading">Primary Instrument Index</div>
+        <div class="stats-row">
+          <div class="last-price-wrap">
+            <span class="stat-lbl">Last Price</span>
+            <span class="last-price" id="lastPriceVal">1240.00</span>
+          </div>
+          <div class="stat-metric">
+            <span class="stat-lbl">Session Drift</span>
+            <span class="stat-val" id="changeVal">+0.00%</span>
+          </div>
+          <div class="stat-metric">
+            <span class="stat-lbl">High</span>
+            <span class="stat-val" id="highVal">1240.00</span>
+          </div>
+          <div class="stat-metric">
+            <span class="stat-lbl">Low</span>
+            <span class="stat-val" id="lowVal">1240.00</span>
+          </div>
+          <div class="stat-metric">
+            <span class="stat-lbl">Vol (&sigma;)</span>
+            <span class="stat-val" id="volVal">0.00%</span>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="priceCanvas"></canvas>
+        </div>
+      </section>
+
+      <div class="right-col">
+        <section class="panel depth-panel">
+          <div class="panel-heading">Depth Equilibrium</div>
+          <div class="depth-container">
+            <canvas id="depthCanvas"></canvas>
+          </div>
+        </section>
+
+        <section class="panel heat-panel">
+          <div class="panel-heading">Synthetic Sector Dispersion</div>
+          <div class="treemap-wrap" id="treemapContainer"></div>
+        </section>
+      </div>
+    </main>
+
+    <footer>
+      <div class="ticker-track" id="tickerTrack"></div>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      // Configuration & State
+      const MEAN_PRICE = 1240.0;
+      const SIM_SEC_PER_TICK = 7.5;
+      const HISTORIC_TICKS = 32000;
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const TICK_INTERVAL = reducedMotion ? 360 : 130;
+
+      // GARCH(1,1) Parameters
+      const omega = 0.000003;
+      const alpha = 0.09;
+      const beta = 0.88;
+      let currentSigma2 = 0.00012;
+      let currentPrice = MEAN_PRICE;
+      let openPriceSession = MEAN_PRICE;
+
+      // Tick storage (Flat Float64Array for memory efficiency)
+      const ticks = new Float64Array(HISTORIC_TICKS + 50000);
+      let tickCount = 0;
+      let tickTimeCursor = Date.now() - (HISTORIC_TICKS * SIM_SEC_PER_TICK * 1000);
+
+      // Candles Aggregation Cache
+      let currentTimeframe = 60; // 60s, 300s, 3600s
+      let cachedCandles = [];
+      let cacheValid = false;
+
+      // Sonar Canvas Ripples
+      const sonarRipples = [];
+
+      // Depth of Market data
+      const DOM_LEVELS = 22;
+      const bids = new Float32Array(DOM_LEVELS);
+      const asks = new Float32Array(DOM_LEVELS);
+      for (let i = 0; i < DOM_LEVELS; i++) {
+        bids[i] = 20 + Math.random() * 80;
+        asks[i] = 20 + Math.random() * 80;
+      }
+
+      // Sectors Definition
+      const sectors = [
+        { name: 'Photonics', weight: 1.4, chg: 0.4 },
+        { name: 'Orbital Freight', weight: 1.3, chg: -0.8 },
+        { name: 'Synthetic Biology', weight: 1.2, chg: 1.2 },
+        { name: 'Desalination', weight: 1.1, chg: 0.1 },
+        { name: 'Fusion Utilities', weight: 1.0, chg: -0.3 },
+        { name: 'Quantum Fabs', weight: 0.95, chg: 1.8 },
+        { name: 'Vertical Farms', weight: 0.85, chg: -0.6 },
+        { name: 'Cartography', weight: 0.75, chg: 0.5 },
+        { name: 'Cold Storage', weight: 0.65, chg: -1.1 },
+        { name: 'Lunar Leisure', weight: 0.6, chg: 2.1 },
+        { name: 'Textiles', weight: 0.5, chg: -0.2 },
+        { name: 'Timber', weight: 0.45, chg: 0.3 }
+      ];
+
+      // Ticker symbols
+      const tickerSymbols = [
+        'AUR', 'PHTN', 'ORBF', 'SYNB', 'DSAL', 'FUSN', 'QFAB', 'VFRM',
+        'CART', 'COLD', 'LUNA', 'TXTL', 'TMBR', 'HELX', 'MIRA', 'ZEPH'
+      ];
+      const tickerData = tickerSymbols.map(sym => ({
+        sym,
+        price: sym === 'AUR' ? MEAN_PRICE : (30 + Math.random() * 400),
+        chg: (Math.random() * 2 - 1) * 1.5
+      }));
+
+      // Elements
+      const sonarCanvas = document.getElementById('sonarCanvas');
+      const sonarCtx = sonarCanvas.getContext('2d');
+      const priceCanvas = document.getElementById('priceCanvas');
+      const priceCtx = priceCanvas.getContext('2d');
+      const depthCanvas = document.getElementById('depthCanvas');
+      const depthCtx = depthCanvas.getContext('2d');
+      const liveClock = document.getElementById('liveClock');
+      const lastPriceVal = document.getElementById('lastPriceVal');
+      const changeVal = document.getElementById('changeVal');
+      const highVal = document.getElementById('highVal');
+      const lowVal = document.getElementById('lowVal');
+      const volVal = document.getElementById('volVal');
+      const treemapContainer = document.getElementById('treemapContainer');
+      const tickerTrack = document.getElementById('tickerTrack');
+
+      // Setup Sonar Particle Generator
+      function spawnSonar(up, magnitude) {
+        const x = Math.random() * window.innerWidth;
+        const y = Math.random() * window.innerHeight;
+        sonarRipples.push({
+          x, y,
+          radius: 1,
+          maxRadius: Math.min(280, 40 + magnitude * 8000),
+          color: up ? 'rgba(46, 229, 157,' : 'rgba(255, 92, 122,',
+          alpha: 0.45,
+          speed: 1.2 + Math.random() * 1.5
+        });
+      }
+
+      // Pre-generate Historic Ticks
+      function stepSim(skipSonar = false) {
+        // Standard normal variate (Box-Muller)
+        const u = 1 - Math.random();
+        const v = Math.random();
+        const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+
+        const sigma = Math.sqrt(currentSigma2);
+        let ret = z * sigma;
+
+        // Faint mean reversion toward 1240
+        const reversion = (MEAN_PRICE - currentPrice) * 0.00008;
+        ret += reversion;
+
+        const prevPrice = currentPrice;
+        currentPrice = Math.max(10, currentPrice * Math.exp(ret));
+        currentSigma2 = omega + alpha * (ret * ret) + beta * currentSigma2;
+
+        ticks[tickCount++] = currentPrice;
+        cacheValid = false;
+
+        const isUp = currentPrice >= prevPrice;
+        if (!skipSonar) {
+          spawnSonar(isUp, Math.abs(ret));
+          // Sympathy move in ticker and sector
+          const randSec = sectors[Math.floor(Math.random() * sectors.length)];
+          randSec.chg += (isUp ? 0.04 : -0.04) * (0.5 + Math.random());
+
+          const randTick = tickerData[Math.floor(Math.random() * tickerData.length)];
+          randTick.price = Math.max(1, randTick.price * (1 + ret * 0.7));
+          randTick.chg += (isUp ? 0.03 : -0.03);
+          if (randTick.sym === 'AUR') {
+            randTick.price = currentPrice;
+            randTick.chg = ((currentPrice - openPriceSession) / openPriceSession) * 100;
+          }
+        }
+      }
+
+      // Initial historic batch
+      for (let i = 0; i < HISTORIC_TICKS; i++) {
+        stepSim(true);
+      }
+      openPriceSession = ticks[Math.max(0, tickCount - Math.floor(86400 / SIM_SEC_PER_TICK))];
+
+      // Candlestick Builder
+      function getCandles(maxCount) {
+        if (cacheValid && cachedCandles.length > 0) {
+          return cachedCandles;
+        }
+        const ticksPerCandle = Math.max(1, Math.round(currentTimeframe / SIM_SEC_PER_TICK));
+        const totalPossible = Math.floor(tickCount / ticksPerCandle);
+        const candleCount = Math.min(totalPossible, maxCount);
+        const startCandleIdx = totalPossible - candleCount;
+
+        const result = [];
+        for (let c = 0; c < candleCount; c++) {
+          const tickStart = (startCandleIdx + c) * ticksPerCandle;
+          const tickEnd = Math.min(tickCount, tickStart + ticksPerCandle);
+          let o = ticks[tickStart];
+          let h = o;
+          let l = o;
+          let cl = ticks[tickEnd - 1];
+          let v = 0;
+
+          for (let t = tickStart; t < tickEnd; t++) {
+            const val = ticks[t];
+            if (val > h) h = val;
+            if (val < l) l = val;
+            v += Math.abs(val - (t > tickStart ? ticks[t - 1] : val)) + 0.1;
+          }
+          result.push({ open: o, high: h, low: l, close: cl, vol: v });
+        }
+        cachedCandles = result;
+        cacheValid = true;
+        return result;
+      }
+
+      // Treemap Geometry Calculation (3 strips layout)
+      function renderTreemap() {
+        treemapContainer.innerHTML = '';
+        const rect = treemapContainer.getBoundingClientRect();
+        const W = rect.width;
+        const H = rect.height;
+        if (!W || !H) return;
+
+        const totalWeight = sectors.reduce((acc, s) => acc + s.weight, 0);
+        // Split into 3 columns / strips
+        const strips = [[], [], []];
+        const stripTargets = [totalWeight * 0.4, totalWeight * 0.35, totalWeight * 0.25];
+        let curStrip = 0;
+        let curWeight = 0;
+
+        for (const s of sectors) {
+          strips[curStrip].push(s);
+          curWeight += s.weight;
+          if (curStrip < 2 && curWeight >= stripTargets[curStrip]) {
+            curStrip++;
+            curWeight = 0;
+          }
+        }
+
+        let leftOffset = 0;
+        strips.forEach((strip, colIdx) => {
+          const colWeight = strip.reduce((a, b) => a + b.weight, 0);
+          const colW = (colWeight / totalWeight) * W;
+          let topOffset = 0;
+
+          strip.forEach(item => {
+            const itemH = (item.weight / colWeight) * H;
+            const cell = document.createElement('div');
+            cell.className = 'treemap-cell';
+            cell.style.left = `${leftOffset}px`;
+            cell.style.top = `${topOffset}px`;
+            cell.style.width = `${colW}px`;
+            cell.style.height = `${itemH}px`;
+
+            // Color calculation based on change
+            const chg = item.chg;
+            const isUp = chg >= 0;
+            const mag = Math.min(Math.abs(chg) / 3, 1);
+            const alpha = 0.12 + mag * 0.7;
+
+            cell.style.backgroundColor = isUp
+              ? `rgba(46, 229, 157, ${alpha})`
+              : `rgba(255, 92, 122, ${alpha})`;
+
+            const isDarkText = alpha > 0.45;
+            const textColor = isDarkText ? '#07080a' : 'rgba(232, 230, 223, 0.95)';
+
+            cell.innerHTML = `
+              <span class="tm-name" style="color:${textColor};">${item.name}</span>
+              <span class="tm-val" style="color:${textColor}; font-weight:${isDarkText ? 600 : 400};">
+                ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%
+              </span>
+            `;
+            treemapContainer.appendChild(cell);
+            topOffset += itemH;
+          });
+          leftOffset += colW;
+        });
+      }
+
+      // Build & Update Marquee Ticker
+      function initTicker() {
+        tickerTrack.innerHTML = '';
+        const items = [...tickerData, ...tickerData];
+        items.forEach((item) => {
+          const el = document.createElement('div');
+          el.className = 'ticker-item';
+          el.setAttribute('data-sym', item.sym);
+          el.innerHTML = `
+            <span class="t-sym">${item.sym}</span>
+            <span class="t-price">${item.price.toFixed(2)}</span>
+            <span class="t-chg ${item.chg >= 0 ? 't-up' : 't-down'}">${item.chg >= 0 ? '▲' : '▼'} ${Math.abs(item.chg).toFixed(2)}%</span>
+          `;
+          tickerTrack.appendChild(el);
+        });
+      }
+
+      function updateTickerUI() {
+        const nodes = tickerTrack.children;
+        const count = tickerData.length;
+        for (let i = 0; i < nodes.length; i++) {
+          const data = tickerData[i % count];
+          const node = nodes[i];
+          const pEl = node.children[1];
+          const cEl = node.children[2];
+          pEl.textContent = data.price.toFixed(2);
+          cEl.className = `t-chg ${data.chg >= 0 ? 't-up' : 't-down'}`;
+          cEl.textContent = `${data.chg >= 0 ? '▲' : '▼'} ${Math.abs(data.chg).toFixed(2)}%`;
+        }
+      }
+
+      // Auto-resize Canvas helper
+      function fitCanvas(canvas) {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        const targetW = Math.floor(rect.width * dpr);
+        const targetH = Math.floor(rect.height * dpr);
+        if (canvas.width !== targetW || canvas.height !== targetH) {
+          canvas.width = targetW;
+          canvas.height = targetH;
+        }
+        return { w: canvas.width, h: canvas.height, dpr };
+      }
+
+      // Rendering: Background Sonar
+      function drawSonar() {
+        const { w, h } = fitCanvas(sonarCanvas);
+        sonarCtx.clearRect(0, 0, w, h);
+
+        for (let i = sonarRipples.length - 1; i >= 0; i--) {
+          const r = sonarRipples[i];
+          r.radius += r.speed;
+          r.alpha *= 0.985;
+
+          if (r.alpha <= 0.005 || r.radius >= r.maxRadius) {
+            sonarRipples.splice(i, 1);
+            continue;
+          }
+
+          // Main Ring
+          sonarCtx.beginPath();
+          sonarCtx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+          sonarCtx.strokeStyle = `${r.color}${r.alpha})`;
+          sonarCtx.lineWidth = 1;
+          sonarCtx.stroke();
+
+          // Echo Ring
+          if (r.radius > 8) {
+            sonarCtx.beginPath();
+            sonarCtx.arc(r.x, r.y, r.radius * 0.58, 0, Math.PI * 2);
+            sonarCtx.strokeStyle = `${r.color}${r.alpha * 0.55})`;
+            sonarCtx.lineWidth = 0.5;
+            sonarCtx.stroke();
+          }
+        }
+      }
+
+      // Rendering: Candlestick Price Chart
+      function drawPriceChart(now) {
+        const { w, h, dpr } = fitCanvas(priceCanvas);
+        priceCtx.clearRect(0, 0, w, h);
+
+        const padRight = 60 * dpr;
+        const padBottom = 26 * dpr;
+        const padTop = 14 * dpr;
+        const chartW = w - padRight;
+        const chartH = h - padBottom - padTop;
+
+        const candleSlotW = Math.max(7 * dpr, 10 * dpr);
+        const maxVisibleCandles = Math.max(10, Math.floor(chartW / candleSlotW));
+        const candles = getCandles(maxVisibleCandles);
+        if (!candles.length) return;
+
+        // Min / Max Price Bounds
+        let minP = Infinity;
+        let maxP = -Infinity;
+        let maxVol = 0;
+        for (let i = 0; i < candles.length; i++) {
+          const c = candles[i];
+          if (c.low < minP) minP = c.low;
+          if (c.high > maxP) maxP = c.high;
+          if (c.vol > maxVol) maxVol = c.vol;
+        }
+        if (minP === maxP) {
+          minP *= 0.999;
+          maxP *= 1.001;
+        }
+
+        // Add 6% headroom & footroom
+        const pRange = maxP - minP;
+        minP -= pRange * 0.06;
+        maxP += pRange * 0.06;
+
+        const getY = (val) => padTop + chartH * (1 - (val - minP) / (maxP - minP));
+
+        // Grid hairlines & Y-Axis step
+        const niceSteps = [0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100];
+        const rawStep = (maxP - minP) / 6;
+        let step = niceSteps.find(s => s >= rawStep) || 5;
+
+        priceCtx.font = `${9 * dpr}px ${getComputedStyle(document.body).getPropertyValue('--font-mono')}`;
+        priceCtx.fillStyle = 'rgba(232, 230, 223, 0.35)';
+        priceCtx.textAlign = 'right';
+        priceCtx.textBaseline = 'middle';
+
+        const startVal = Math.ceil(minP / step) * step;
+        for (let p = startVal; p <= maxP; p += step) {
+          const y = getY(p);
+          if (y < padTop || y > h - padBottom) continue;
+          priceCtx.strokeStyle = 'rgba(212, 175, 55, 0.12)';
+          priceCtx.lineWidth = 1;
+          priceCtx.beginPath();
+          priceCtx.moveTo(0, y);
+          priceCtx.lineTo(chartW, y);
+          priceCtx.stroke();
+
+          priceCtx.fillText(p.toFixed(2), w - 8 * dpr, y);
+        }
+
+        // Draw Volume & Candles
+        const bodyWidth = candleSlotW * 0.55;
+        const count = candles.length;
+        const offsetX = chartW - (count * candleSlotW);
+
+        for (let i = 0; i < count; i++) {
+          const c = candles[i];
+          const x = offsetX + i * candleSlotW + candleSlotW / 2;
+          const isUp = c.close >= c.open;
+          const color = isUp ? '#2ee59d' : '#ff5c7a';
+          const isLatest = (i === count - 1);
+
+          // Volume Bar
+          const volH = maxVol > 0 ? (c.vol / maxVol) * (chartH * 0.18) : 0;
+          priceCtx.fillStyle = isUp ? 'rgba(46, 229, 157, 0.12)' : 'rgba(255, 92, 122, 0.12)';
+          priceCtx.fillRect(x - bodyWidth * 0.5, padTop + chartH - volH, bodyWidth, volH);
+
+          // Candle Wick
+          priceCtx.strokeStyle = color;
+          priceCtx.lineWidth = 1 * dpr;
+          priceCtx.beginPath();
+          priceCtx.moveTo(x, getY(c.high));
+          priceCtx.lineTo(x, getY(c.low));
+          priceCtx.stroke();
+
+          // Candle Body
+          const yOpen = getY(c.open);
+          const yClose = getY(c.close);
+          const top = Math.min(yOpen, yClose);
+          const height = Math.max(1.5 * dpr, Math.abs(yClose - yOpen));
+
+          if (isLatest) {
+            priceCtx.shadowColor = color;
+            priceCtx.shadowBlur = 18 * dpr;
+          }
+
+          if (isUp) {
+            // Hollow body outlined in mint
+            priceCtx.fillStyle = '#07080a';
+            priceCtx.fillRect(x - bodyWidth * 0.5, top, bodyWidth, height);
+            priceCtx.strokeStyle = color;
+            priceCtx.lineWidth = 1 * dpr;
+            priceCtx.strokeRect(x - bodyWidth * 0.5, top, bodyWidth, height);
+          } else {
+            // Filled body in rose
+            priceCtx.fillStyle = color;
+            priceCtx.fillRect(x - bodyWidth * 0.5, top, bodyWidth, height);
+          }
+
+          priceCtx.shadowBlur = 0;
+
+          // Pulsing Dot on Newest Candle
+          if (isLatest) {
+            const pulse = (Math.sin(now / 180) + 1) * 0.5;
+            const dotR = (2.5 + pulse * 1.5) * dpr;
+            priceCtx.beginPath();
+            priceCtx.arc(x, yClose, dotR, 0, Math.PI * 2);
+            priceCtx.fillStyle = color;
+            priceCtx.shadowColor = color;
+            priceCtx.shadowBlur = 12 * dpr;
+            priceCtx.fill();
+            priceCtx.shadowBlur = 0;
+          }
+
+          // X-Axis Relative Time
+          if (i % 6 === 0 || isLatest) {
+            const diffMin = Math.round(((count - 1 - i) * currentTimeframe) / 60);
+            const lbl = isLatest ? 'NOW' : `-${diffMin}m`;
+            priceCtx.fillStyle = 'rgba(232, 230, 223, 0.35)';
+            priceCtx.textAlign = 'center';
+            priceCtx.fillText(lbl, x, h - 8 * dpr);
+          }
+        }
+
+        // Current Price Gold Dashed Hairline
+        const curY = getY(currentPrice);
+        if (curY >= padTop && curY <= padTop + chartH) {
+          priceCtx.save();
+          priceCtx.setLineDash([4 * dpr, 4 * dpr]);
+          priceCtx.strokeStyle = 'rgba(212, 175, 55, 0.85)';
+          priceCtx.lineWidth = 1 * dpr;
+          priceCtx.beginPath();
+          priceCtx.moveTo(0, curY);
+          priceCtx.lineTo(chartW, curY);
+          priceCtx.stroke();
+          priceCtx.restore();
+
+          // Price Tag Pill
+          const isUpTick = currentPrice >= candles[candles.length - 1].open;
+          const tagBg = isUpTick ? '#2ee59d' : '#ff5c7a';
+          const tagH = 16 * dpr;
+          const tagW = 54 * dpr;
+          priceCtx.fillStyle = tagBg;
+          priceCtx.fillRect(w - tagW - 4 * dpr, curY - tagH * 0.5, tagW, tagH);
+
+          priceCtx.fillStyle = '#07080a';
+          priceCtx.font = `600 ${9 * dpr}px ${getComputedStyle(document.body).getPropertyValue('--font-mono')}`;
+          priceCtx.textAlign = 'center';
+          priceCtx.fillText(currentPrice.toFixed(2), w - tagW * 0.5 - 4 * dpr, curY);
+        }
+      }
+
+      // Rendering: Depth of Market Mirrored Canvas
+      function drawDOM(now) {
+        const { w, h, dpr } = fitCanvas(depthCanvas);
+        depthCtx.clearRect(0, 0, w, h);
+
+        const midX = w * 0.5;
+        const rowH = h / DOM_LEVELS;
+        const breath = 1 + Math.sin(now * 0.0018) * 0.09;
+
+        // Subtle random walk on depth sizes
+        for (let i = 0; i < DOM_LEVELS; i++) {
+          bids[i] = Math.max(10, Math.min(100, bids[i] + (Math.random() - 0.5) * 4));
+          asks[i] = Math.max(10, Math.min(100, asks[i] + (Math.random() - 0.5) * 4));
+        }
+
+        depthCtx.lineWidth = 1;
+        depthCtx.font = `${8 * dpr}px ${getComputedStyle(document.body).getPropertyValue('--font-mono')}`;
+        depthCtx.textBaseline = 'middle';
+
+        for (let i = 0; i < DOM_LEVELS; i++) {
+          const y = i * rowH;
+          const bW = (bids[i] / 100) * (midX - 35 * dpr) * breath;
+          const aW = (asks[i] / 100) * (midX - 35 * dpr) * breath;
+
+          // Bids (Mint gradient extending left)
+          const gradB = depthCtx.createLinearGradient(midX, 0, midX - bW, 0);
+          gradB.addColorStop(0, 'rgba(46, 229, 157, 0.45)');
+          gradB.addColorStop(1, 'rgba(46, 229, 157, 0.03)');
+          depthCtx.fillStyle = gradB;
+          depthCtx.fillRect(midX - bW, y + 1 * dpr, bW, rowH - 2 * dpr);
+
+          // Asks (Rose gradient extending right)
+          const gradA = depthCtx.createLinearGradient(midX, 0, midX + aW, 0);
+          gradA.addColorStop(0, 'rgba(255, 92, 122, 0.45)');
+          gradA.addColorStop(1, 'rgba(255, 92, 122, 0.03)');
+          depthCtx.fillStyle = gradA;
+          depthCtx.fillRect(midX, y + 1 * dpr, aW, rowH - 2 * dpr);
+
+          // Price labels every 4th level
+          if (i % 4 === 0) {
+            const bPrice = (currentPrice - (i + 1) * 0.25).toFixed(2);
+            const aPrice = (currentPrice + (i + 1) * 0.25).toFixed(2);
+            depthCtx.fillStyle = 'rgba(232, 230, 223, 0.4)';
+            depthCtx.textAlign = 'right';
+            depthCtx.fillText(bPrice, midX - 8 * dpr, y + rowH * 0.5);
+            depthCtx.textAlign = 'left';
+            depthCtx.fillText(aPrice, midX + 8 * dpr, y + rowH * 0.5);
+          }
+        }
+
+        // Center Gold Hairline
+        depthCtx.strokeStyle = 'rgba(212, 175, 55, 0.6)';
+        depthCtx.beginPath();
+        depthCtx.moveTo(midX, 0);
+        depthCtx.lineTo(midX, h);
+        depthCtx.stroke();
+      }
+
+      // Update Header Stats UI
+      function updateStatsUI() {
+        lastPriceVal.textContent = currentPrice.toFixed(2);
+        const diff = currentPrice - openPriceSession;
+        const pct = (diff / openPriceSession) * 100;
+        const isUp = pct >= 0;
+
+        changeVal.textContent = `${isUp ? '+' : ''}${pct.toFixed(2)}%`;
+        changeVal.style.color = isUp ? 'var(--mint)' : 'var(--rose)';
+
+        // Derived hourly volatility
+        const hourlySigmaPct = Math.sqrt(currentSigma2 * (3600 / SIM_SEC_PER_TICK)) * 100;
+        volVal.textContent = `${hourlySigmaPct.toFixed(2)}%`;
+
+        // Scan high/low in active candles
+        if (cachedCandles.length) {
+          let hP = -Infinity;
+          let lP = Infinity;
+          for (let i = 0; i < cachedCandles.length; i++) {
+            if (cachedCandles[i].high > hP) hP = cachedCandles[i].high;
+            if (cachedCandles[i].low < lP) lP = cachedCandles[i].low;
+          }
+          highVal.textContent = hP.toFixed(2);
+          lowVal.textContent = lP.toFixed(2);
+        }
+      }
+
+      // Clock
+      function updateClock() {
+        const d = new Date();
+        const hh = String(d.getUTCHours()).padStart(2, '0');
+        const mm = String(d.getUTCMinutes()).padStart(2, '0');
+        const ss = String(d.getUTCSeconds()).padStart(2, '0');
+        liveClock.textContent = `${hh}:${mm}:${ss} UTC`;
+      }
+
+      // Timeframe Switcher
+      document.querySelectorAll('.tf-pill').forEach(pill => {
+        pill.addEventListener('click', (e) => {
+          document.querySelectorAll('.tf-pill').forEach(p => p.classList.remove('active'));
+          e.target.classList.add('active');
+          currentTimeframe = parseInt(e.target.getAttribute('data-tf'), 10);
+          cacheValid = false;
+        });
+      });
+
+      // Periodic Simulation Tick Runner
+      setInterval(() => {
+        stepSim(false);
+        updateStatsUI();
+        updateTickerUI();
+      }, TICK_INTERVAL);
+
+      // Treemap Periodic Update (1.2s transition ease)
+      setInterval(() => {
+        renderTreemap();
+      }, 1200);
+
+      // Animation Loop
+      function mainLoop(timestamp) {
+        drawSonar();
+        drawPriceChart(timestamp);
+        drawDOM(timestamp);
+        updateClock();
+        requestAnimationFrame(mainLoop);
+      }
+
+      // Resize event handler
+      window.addEventListener('resize', () => {
+        cacheValid = false;
+        renderTreemap();
+      });
+
+      // Init
+      initTicker();
+      renderTreemap();
+      updateStatsUI();
+      requestAnimationFrame(mainLoop);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dot Bomb — Pop-Art Halftone Studio</title>
+<style>
+  :root {
+    --bg-yellow: #ffe600;
+    --paper-white: #fffaf0;
+    --ink-black: #0a0a0a;
+    --cyan: #00b7eb;
+    --magenta: #ec008c;
+    --red: #e4002b;
+    --shadow-offset: 10px;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--bg-yellow);
+    background-image: radial-gradient(var(--ink-black) 12%, transparent 12%);
+    background-size: 14px 14px;
+    color: var(--ink-black);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+  }
+
+  header {
+    text-align: center;
+    position: relative;
+  }
+
+  .title {
+    font-family: "Arial Black", Impact, system-ui, sans-serif;
+    font-weight: 900;
+    font-size: clamp(3rem, 8vw, 5.5rem);
+    text-transform: uppercase;
+    color: var(--bg-yellow);
+    -webkit-text-stroke: 3px var(--ink-black);
+    text-shadow: 6px 6px 0px var(--ink-black);
+    transform: rotate(-2deg);
+    display: inline-block;
+    letter-spacing: 2px;
+    line-height: 0.9;
+    margin-bottom: 8px;
+  }
+
+  .subtitle {
+    font-family: "Arial Black", Impact, system-ui, sans-serif;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 1.1rem;
+    letter-spacing: 1.5px;
+    background: var(--paper-white);
+    display: inline-block;
+    padding: 4px 16px;
+    border: 3px solid var(--ink-black);
+    box-shadow: 4px 4px 0 var(--ink-black);
+  }
+
+  .main-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 32px;
+    max-width: 1200px;
+    width: 100%;
+    align-items: start;
+  }
+
+  @media (max-width: 960px) {
+    .main-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .comic-panel {
+    background: var(--paper-white);
+    border: 4px solid var(--ink-black);
+    box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--ink-black);
+    position: relative;
+    padding: 24px;
+  }
+
+  /* Canvas Stage */
+  .canvas-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    max-width: 720px;
+    margin: 0 auto;
+    background: #000;
+    border: 4px solid var(--ink-black);
+    box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--ink-black);
+    touch-action: none;
+    overflow: hidden;
+    cursor: crosshair;
+  }
+
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .sticker {
+    position: absolute;
+    background: var(--magenta);
+    color: #fff;
+    font-family: "Arial Black", Impact, sans-serif;
+    font-size: 0.8rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    border: 2px solid var(--ink-black);
+    box-shadow: 3px 3px 0 var(--ink-black);
+    z-index: 10;
+    pointer-events: none;
+    letter-spacing: 1px;
+  }
+
+  .sticker-tl {
+    top: -12px;
+    left: -10px;
+    transform: rotate(-8deg);
+    background: var(--cyan);
+    color: var(--ink-black);
+  }
+
+  .sticker-tr {
+    top: -10px;
+    right: -10px;
+    transform: rotate(6deg);
+    background: var(--red);
+  }
+
+  .sticker-bl {
+    bottom: -10px;
+    left: 14px;
+    transform: rotate(4deg);
+    background: var(--bg-yellow);
+    color: var(--ink-black);
+  }
+
+  .loading-flash {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 230, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Arial Black", Impact, sans-serif;
+    font-size: 2rem;
+    font-weight: 900;
+    color: var(--ink-black);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.05s ease;
+    z-index: 20;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  .loading-flash.active {
+    opacity: 1;
+  }
+
+  /* Controls Form */
+  .controls-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .control-label {
+    font-family: "Arial Black", Impact, sans-serif;
+    font-weight: 900;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .control-label span.val {
+    background: var(--ink-black);
+    color: #fff;
+    padding: 2px 6px;
+    font-size: 0.75rem;
+  }
+
+  /* Buttons & Segmented */
+  .button-group {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .comic-btn {
+    flex: 1 1 auto;
+    font-family: "Arial Black", Impact, sans-serif;
+    font-size: 0.8rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    background: #fff;
+    color: var(--ink-black);
+    border: 3px solid var(--ink-black);
+    padding: 8px 12px;
+    cursor: pointer;
+    box-shadow: 4px 4px 0 var(--ink-black);
+    transform: translate(0, 0);
+    transition: transform 0.1s, box-shadow 0.1s, background 0.1s, color 0.1s;
+    user-select: none;
+    text-align: center;
+  }
+
+  .comic-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 var(--ink-black);
+  }
+
+  .comic-btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 var(--ink-black);
+  }
+
+  .comic-btn.active {
+    background: var(--ink-black);
+    color: var(--bg-yellow);
+  }
+
+  .comic-input {
+    width: 100%;
+    font-family: "Arial Black", Impact, sans-serif;
+    font-weight: 900;
+    font-size: 0.95rem;
+    padding: 8px 12px;
+    border: 3px solid var(--ink-black);
+    background: #fff;
+    color: var(--ink-black);
+    box-shadow: 3px 3px 0 var(--ink-black);
+    outline: none;
+    text-transform: uppercase;
+  }
+
+  .comic-input:focus {
+    background: #ffffdc;
+  }
+
+  /* Range Sliders */
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 14px;
+    background: #fff;
+    border: 3px solid var(--ink-black);
+    box-shadow: 3px 3px 0 var(--ink-black);
+    outline: none;
+    cursor: pointer;
+    margin: 6px 0;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 26px;
+    height: 26px;
+    background: var(--cyan);
+    border: 3px solid var(--ink-black);
+    border-radius: 50%;
+    box-shadow: 2px 2px 0 var(--ink-black);
+    cursor: grab;
+    transition: background 0.1s;
+  }
+
+  input[type="range"]::-webkit-slider-thumb:active {
+    background: var(--magenta);
+    cursor: grabbing;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 26px;
+    height: 26px;
+    background: var(--cyan);
+    border: 3px solid var(--ink-black);
+    border-radius: 50%;
+    box-shadow: 2px 2px 0 var(--ink-black);
+    cursor: grab;
+  }
+
+  /* Palette Swatches */
+  .palette-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    font-size: 0.7rem;
+  }
+
+  .swatch-chips {
+    display: flex;
+    gap: 3px;
+    border: 2px solid var(--ink-black);
+    background: #fff;
+    padding: 2px;
+  }
+
+  .chip {
+    width: 12px;
+    height: 12px;
+    border: 1px solid var(--ink-black);
+  }
+
+  .btn-export {
+    background: var(--red);
+    color: #fff;
+    font-size: 1.1rem;
+    padding: 14px 20px;
+    margin-top: 10px;
+    border: 4px solid var(--ink-black);
+    box-shadow: 6px 6px 0 var(--ink-black);
+  }
+
+  .btn-export:hover {
+    background: #ff1a40;
+    color: #fff;
+  }
+
+  /* Info Strip */
+  .info-panel {
+    max-width: 1200px;
+    width: 100%;
+    background: var(--cyan);
+    border: 4px solid var(--ink-black);
+    box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--ink-black);
+    padding: 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .info-box {
+    background: var(--paper-white);
+    border: 3px solid var(--ink-black);
+    padding: 16px;
+    box-shadow: 4px 4px 0 var(--ink-black);
+  }
+
+  .info-box h3 {
+    font-family: "Arial Black", Impact, sans-serif;
+    font-weight: 900;
+    font-size: 1rem;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--ink-black);
+  }
+
+  .info-box p {
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: #222;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, .comic-btn, .title {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 class="title">DOT BOMB!</h1><br>
+  <div class="subtitle">POP-ART HALFTONE PROCESS WORKSHOP</div>
+</header>
+
+<main class="main-layout">
+  <!-- Visual Output -->
+  <div style="position: relative;">
+    <div class="sticker sticker-tl">ISSUE #01</div>
+    <div class="sticker sticker-tr">CMYK MATRIX</div>
+    <div class="sticker sticker-bl">DRAG THE BUBBLE!</div>
+
+    <div class="canvas-container" id="canvasWrap">
+      <canvas id="mainCanvas" width="720" height="720"></canvas>
+      <div class="loading-flash" id="loadingFlash">SCREENING...</div>
+    </div>
+  </div>
+
+  <!-- Studio Controls -->
+  <div class="comic-panel controls-panel">
+    <!-- Source Image -->
+    <div class="control-group">
+      <label class="control-label">SOURCE ARTWORK</label>
+      <div class="button-group">
+        <button class="comic-btn active" data-source="portrait">PORTRAIT</button>
+        <button class="comic-btn" data-source="shapes">SHAPES</button>
+        <button class="comic-btn" data-source="text">BIG TEXT</button>
+      </div>
+      <div id="textInputGroup" style="margin-top: 6px; display: none;">
+        <input type="text" id="sourceTextInput" class="comic-input" value="BOMB!" maxlength="8">
+      </div>
+    </div>
+
+    <!-- Halftone Matrix -->
+    <div class="control-group">
+      <label class="control-label">DOT SIZE (GRID LATTICE) <span class="val" id="dotSizeVal">12px</span></label>
+      <input type="range" id="dotSize" min="5" max="22" value="12" step="1">
+    </div>
+
+    <div class="control-group">
+      <label class="control-label">SCREEN BASE ANGLE <span class="val" id="angleVal">15°</span></label>
+      <input type="range" id="screenAngle" min="0" max="90" value="15" step="1">
+    </div>
+
+    <div class="control-group">
+      <label class="control-label">INK CONTRAST BOOST <span class="val" id="contrastVal">1.35x</span></label>
+      <input type="range" id="contrast" min="0.5" max="2.2" value="1.35" step="0.05">
+    </div>
+
+    <div class="control-group">
+      <label class="control-label">SOBEL OUTLINE WEIGHT <span class="val" id="outlineVal">3px</span></label>
+      <input type="range" id="outlineWeight" min="0" max="6" value="3" step="1">
+    </div>
+
+    <!-- Palette Swatches -->
+    <div class="control-group">
+      <label class="control-label">INK PROCESS PRESET</label>
+      <div class="button-group">
+        <button class="comic-btn palette-btn active" data-preset="cmyk">
+          <span>CMYK</span>
+          <div class="swatch-chips">
+            <span class="chip" style="background:#00aeef"></span>
+            <span class="chip" style="background:#ec008c"></span>
+            <span class="chip" style="background:#fff200"></span>
+            <span class="chip" style="background:#141414"></span>
+          </div>
+        </button>
+
+        <button class="comic-btn palette-btn" data-preset="neon">
+          <span>WARHOL</span>
+          <div class="swatch-chips">
+            <span class="chip" style="background:#00f0ff"></span>
+            <span class="chip" style="background:#ff2bd6"></span>
+            <span class="chip" style="background:#7b2cff"></span>
+            <span class="chip" style="background:#ffe600"></span>
+          </div>
+        </button>
+
+        <button class="comic-btn palette-btn" data-preset="newsprint">
+          <span>PULP</span>
+          <div class="swatch-chips">
+            <span class="chip" style="background:#efe6d0"></span>
+            <span class="chip" style="background:#2a2520"></span>
+          </div>
+        </button>
+
+        <button class="comic-btn palette-btn" data-preset="duotone">
+          <span>DUOTONE</span>
+          <div class="swatch-chips">
+            <span class="chip" style="background:#1c1c6e"></span>
+            <span class="chip" style="background:#ff4d00"></span>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bubble Options -->
+    <div class="control-group">
+      <label class="control-label">POP BUBBLE OVERLAY</label>
+      <div class="button-group" style="margin-bottom: 6px;">
+        <button class="comic-btn active" data-bubble="burst">BURST</button>
+        <button class="comic-btn" data-bubble="speech">BALLOON</button>
+        <button class="comic-btn" data-bubble="none">NONE</button>
+      </div>
+      <input type="text" id="bubbleTextInput" class="comic-input" value="POW!" maxlength="12">
+    </div>
+
+    <button id="downloadBtn" class="comic-btn btn-export">DOWNLOAD PNG</button>
+  </div>
+</main>
+
+<section class="info-panel">
+  <div class="info-box">
+    <h3>ROTATED HALFTONE SCREENS</h3>
+    <p>Color comic printing offsets screen lattices to suppress distracting moiré interference: Cyan at 0°, Magenta at 60°, Yellow at -15°, and Key (Black) at 30° relative to the base angle. Dot radii scale directly with ink density.</p>
+  </div>
+  <div class="info-box">
+    <h3>BEN-DAY PROCESS</h3>
+    <p>Invented in 1879 by Benjamin Henry Day Jr., this reproduction method composites primary CMYK inks over unbleached pulp paper using optical color mixing to create vibrant secondary tones.</p>
+  </div>
+  <div class="info-box">
+    <h3>SOBEL COMIC INKING</h3>
+    <p>Black graphic containment strokes are generated directly from the procedural scene luminance using a 3×3 Sobel edge-detection filter dilated with sub-pixel offsets for authentic pulp press registration.</p>
+  </div>
+</section>
+
+<script>
+(() => {
+  const CANVAS_SIZE = 720;
+  const canvas = document.getElementById('mainCanvas');
+  const ctx = canvas.getContext('2d');
+  const flash = document.getElementById('loadingFlash');
+
+  // Hidden canvas for procedural generation & pixel sampling
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width = CANVAS_SIZE;
+  srcCanvas.height = CANVAS_SIZE;
+  const sCtx = srcCanvas.getContext('2d');
+
+  // State
+  const state = {
+    source: 'portrait',
+    sourceText: 'BOMB!',
+    dotSize: 12,
+    screenAngle: 15,
+    contrast: 1.35,
+    outlineWeight: 3,
+    preset: 'cmyk',
+    bubbleType: 'burst',
+    bubbleText: 'POW!',
+    bubblePos: { x: 520, y: 190 },
+    isDraggingBubble: false,
+    dragOffset: { x: 0, y: 0 }
+  };
+
+  // Palettes
+  const PALETTES = {
+    cmyk: {
+      paper: '#fffaf0',
+      composite: 'multiply',
+      channels: [
+        { id: 'c', color: '#00aeef', angleOffset: 0 },
+        { id: 'm', color: '#ec008c', angleOffset: 60 },
+        { id: 'y', color: '#fff200', angleOffset: -15 },
+        { id: 'k', color: '#141414', angleOffset: 30 }
+      ]
+    },
+    neon: {
+      paper: '#ffe600',
+      composite: 'source-over',
+      channels: [
+        { id: 'neonCyan', color: '#00f0ff', angleOffset: 15 },
+        { id: 'neonMagenta', color: '#ff2bd6', angleOffset: 75 },
+        { id: 'neonViolet', color: '#7b2cff', angleOffset: 45 }
+      ]
+    },
+    newsprint: {
+      paper: '#efe6d0',
+      composite: 'multiply',
+      channels: [
+        { id: 'k', color: '#2a2520', angleOffset: 45 }
+      ]
+    },
+    duotone: {
+      paper: '#fff3d6',
+      composite: 'multiply',
+      channels: [
+        { id: 'shadows', color: '#1c1c6e', angleOffset: 45 },
+        { id: 'midtones', color: '#ff4d00', angleOffset: 15 }
+      ]
+    }
+  };
+
+  // High-DPI support
+  function setupDPI() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = CANVAS_SIZE * dpr;
+    canvas.height = CANVAS_SIZE * dpr;
+    ctx.scale(dpr, dpr);
+  }
+
+  // Draw procedural source images onto sCtx
+  function drawSourceImage() {
+    const w = CANVAS_SIZE;
+    const h = CANVAS_SIZE;
+    sCtx.save();
+    sCtx.clearRect(0, 0, w, h);
+
+    if (state.source === 'portrait') {
+      // 1. Striped pop background
+      sCtx.fillStyle = '#00a4ff';
+      sCtx.fillRect(0, 0, w, h);
+      sCtx.fillStyle = '#fff200';
+      sCtx.beginPath();
+      for (let i = -w; i < w * 2; i += 48) {
+        sCtx.moveTo(i, 0);
+        sCtx.lineTo(i + 24, 0);
+        sCtx.lineTo(i + 24 + h, h);
+        sCtx.lineTo(i + h, h);
+        sCtx.closePath();
+      }
+      sCtx.fill();
+
+      // Red Shoulders / outfit
+      sCtx.fillStyle = '#e4002b';
+      sCtx.beginPath();
+      sCtx.ellipse(360, 780, 290, 220, 0, 0, Math.PI * 2);
+      sCtx.fill();
+
+      // Hair - Back
+      sCtx.fillStyle = '#101018';
+      sCtx.beginPath();
+      sCtx.arc(360, 360, 220, 0, Math.PI * 2);
+      sCtx.fill();
+      sCtx.fillRect(140, 350, 440, 250);
+
+      // Neck
+      const neckGrad = sCtx.createLinearGradient(280, 460, 440, 460);
+      neckGrad.addColorStop(0, '#f9c5a2');
+      neckGrad.addColorStop(0.5, '#ffd9b8');
+      neckGrad.addColorStop(1, '#e8a984');
+      sCtx.fillStyle = neckGrad;
+      sCtx.fillRect(290, 440, 140, 170);
+
+      // Face with radial shading
+      const faceGrad = sCtx.createRadialGradient(340, 330, 40, 360, 370, 180);
+      faceGrad.addColorStop(0, '#ffe8d4');
+      faceGrad.addColorStop(0.65, '#f7cca6');
+      faceGrad.addColorStop(1, '#de986f');
+      sCtx.fillStyle = faceGrad;
+      sCtx.beginPath();
+      sCtx.ellipse(360, 370, 150, 180, 0, 0, Math.PI * 2);
+      sCtx.fill();
+
+      // Cheeks Blush
+      const blushGrad1 = sCtx.createRadialGradient(265, 400, 5, 265, 400, 40);
+      blushGrad1.addColorStop(0, 'rgba(255, 60, 110, 0.45)');
+      blushGrad1.addColorStop(1, 'rgba(255, 60, 110, 0)');
+      sCtx.fillStyle = blushGrad1;
+      sCtx.beginPath();
+      sCtx.arc(265, 400, 40, 0, Math.PI * 2);
+      sCtx.fill();
+
+      const blushGrad2 = sCtx.createRadialGradient(455, 400, 5, 455, 400, 40);
+      blushGrad2.addColorStop(0, 'rgba(255, 60, 110, 0.45)');
+      blushGrad2.addColorStop(1, 'rgba(255, 60, 110, 0)');
+      sCtx.fillStyle = blushGrad2;
+      sCtx.beginPath();
+      sCtx.arc(455, 400, 40, 0, Math.PI * 2);
+      sCtx.fill();
+
+      // Hair - Chic Bob Bangs
+      sCtx.fillStyle = '#101018';
+      sCtx.beginPath();
+      sCtx.arc(360, 310, 175, Math.PI * 0.9, Math.PI * 2.1);
+      sCtx.quadraticCurveTo(460, 340, 495, 460);
+      sCtx.quadraticCurveTo(450, 340, 360, 310);
+      sCtx.fill();
+
+      sCtx.beginPath();
+      sCtx.moveTo(225, 460);
+      sCtx.quadraticCurveTo(260, 340, 360, 310);
+      sCtx.quadraticCurveTo(250, 320, 225, 460);
+      sCtx.fill();
+
+      // Eyes
+      const drawEye = (x, y) => {
+        sCtx.fillStyle = '#ffffff';
+        sCtx.beginPath();
+        sCtx.ellipse(x, y, 28, 16, 0, 0, Math.PI * 2);
+        sCtx.fill();
+
+        sCtx.fillStyle = '#0084ff';
+        sCtx.beginPath();
+        sCtx.arc(x, y, 14, 0, Math.PI * 2);
+        sCtx.fill();
+
+        sCtx.fillStyle = '#0a0a14';
+        sCtx.beginPath();
+        sCtx.arc(x, y, 7, 0, Math.PI * 2);
+        sCtx.fill();
+
+        sCtx.fillStyle = '#ffffff';
+        sCtx.beginPath();
+        sCtx.arc(x - 5, y - 4, 3.5, 0, Math.PI * 2);
+        sCtx.fill();
+
+        // Eyelash line
+        sCtx.strokeStyle = '#0a0a0a';
+        sCtx.lineWidth = 5;
+        sCtx.beginPath();
+        sCtx.arc(x, y + 2, 28, Math.PI * 1.15, Math.PI * 1.85);
+        sCtx.stroke();
+      };
+      drawEye(300, 350);
+      drawEye(420, 350);
+
+      // Nose
+      sCtx.strokeStyle = '#c6734c';
+      sCtx.lineWidth = 4;
+      sCtx.beginPath();
+      sCtx.moveTo(360, 350);
+      sCtx.lineTo(354, 400);
+      sCtx.lineTo(370, 400);
+      sCtx.stroke();
+
+      // Lips
+      sCtx.fillStyle = '#e4002b';
+      sCtx.beginPath();
+      sCtx.moveTo(315, 450);
+      sCtx.quadraticCurveTo(360, 430, 405, 450);
+      sCtx.quadraticCurveTo(360, 495, 315, 450);
+      sCtx.fill();
+
+      // Lip shine
+      sCtx.fillStyle = '#ffffff';
+      sCtx.beginPath();
+      sCtx.ellipse(360, 465, 20, 5, 0, 0, Math.PI * 2);
+      sCtx.fill();
+
+      // Earring
+      sCtx.fillStyle = '#ffe600';
+      sCtx.beginPath();
+      sCtx.arc(205, 415, 26, 0, Math.PI * 2);
+      sCtx.fill();
+      sCtx.fillStyle = '#fff';
+      sCtx.beginPath();
+      sCtx.arc(197, 408, 6, 0, Math.PI * 2);
+      sCtx.fill();
+
+    } else if (state.source === 'shapes') {
+      // 2. Bold Shapes Pop Collage
+      const bgGrad = sCtx.createLinearGradient(0, 0, w, h);
+      bgGrad.addColorStop(0, '#00b7eb');
+      bgGrad.addColorStop(1, '#ec008c');
+      sCtx.fillStyle = bgGrad;
+      sCtx.fillRect(0, 0, w, h);
+
+      // Sharp wedge
+      sCtx.fillStyle = '#0a0a0a';
+      sCtx.beginPath();
+      sCtx.moveTo(0, 0);
+      sCtx.lineTo(w * 0.75, 0);
+      sCtx.lineTo(0, h * 0.6);
+      sCtx.closePath();
+      sCtx.fill();
+
+      // Radial 3D Sphere
+      const sphGrad = sCtx.createRadialGradient(230, 210, 20, 260, 240, 160);
+      sphGrad.addColorStop(0, '#ffffff');
+      sphGrad.addColorStop(0.2, '#ff3b94');
+      sphGrad.addColorStop(0.8, '#a80053');
+      sphGrad.addColorStop(1, '#1a000e');
+      sCtx.fillStyle = sphGrad;
+      sCtx.beginPath();
+      sCtx.arc(260, 240, 160, 0, Math.PI * 2);
+      sCtx.fill();
+
+      // Cyan triangle
+      sCtx.fillStyle = '#00f0ff';
+      sCtx.beginPath();
+      sCtx.moveTo(420, 120);
+      sCtx.lineTo(660, 200);
+      sCtx.lineTo(480, 480);
+      sCtx.closePath();
+      sCtx.fill();
+
+      // Gradient Box
+      const sqGrad = sCtx.createLinearGradient(160, 400, 440, 680);
+      sqGrad.addColorStop(0, '#ffe600');
+      sqGrad.addColorStop(1, '#ff3c00');
+      sCtx.fillStyle = sqGrad;
+      sCtx.fillRect(160, 400, 280, 280);
+
+      // Vivid red disc
+      sCtx.fillStyle = '#e4002b';
+      sCtx.beginPath();
+      sCtx.arc(520, 520, 125, 0, Math.PI * 2);
+      sCtx.fill();
+
+      // White polka dots
+      sCtx.fillStyle = '#ffffff';
+      for (let r = 0; r < 5; r++) {
+        for (let c = 0; c < 5; c++) {
+          sCtx.beginPath();
+          sCtx.arc(440 + c * 25, 330 + r * 25, 6, 0, Math.PI * 2);
+          sCtx.fill();
+        }
+      }
+
+    } else if (state.source === 'text') {
+      // 3. Typographic Poster on Radial Sunburst
+      const cx = w / 2;
+      const cy = h / 2;
+      sCtx.fillStyle = '#ff0055';
+      sCtx.fillRect(0, 0, w, h);
+
+      const rays = 24;
+      sCtx.fillStyle = '#ffe600';
+      for (let i = 0; i < rays; i++) {
+        sCtx.beginPath();
+        sCtx.moveTo(cx, cy);
+        const a1 = (i * 2 * Math.PI) / rays;
+        const a2 = ((i + 0.5) * 2 * Math.PI) / rays;
+        sCtx.arc(cx, cy, 600, a1, a2);
+        sCtx.closePath();
+        sCtx.fill();
+      }
+
+      // Center ring
+      sCtx.fillStyle = '#00d4ff';
+      sCtx.beginPath();
+      sCtx.arc(cx, cy, 210, 0, Math.PI * 2);
+      sCtx.fill();
+
+      // Big word
+      sCtx.save();
+      sCtx.translate(cx, cy);
+      sCtx.rotate(-0.16);
+
+      const text = (state.sourceText || 'BOMB!').trim().toUpperCase();
+      sCtx.font = '900 130px "Arial Black", Impact, sans-serif';
+      sCtx.textAlign = 'center';
+      sCtx.textBaseline = 'middle';
+
+      // Heavy drop outline
+      sCtx.strokeStyle = '#000000';
+      sCtx.lineWidth = 26;
+      sCtx.strokeText(text, 0, 0);
+
+      const textGrad = sCtx.createLinearGradient(0, -60, 0, 60);
+      textGrad.addColorStop(0, '#ffffff');
+      textGrad.addColorStop(0.5, '#fff000');
+      textGrad.addColorStop(1, '#ff2200');
+      sCtx.fillStyle = textGrad;
+      sCtx.fillText(text, 0, 0);
+      sCtx.restore();
+    }
+    sCtx.restore();
+  }
+
+  // Edge detection for ink outlines
+  function generateSobelEdges(imgData) {
+    const w = imgData.width;
+    const h = imgData.height;
+    const d = imgData.data;
+    const lum = new Float32Array(w * h);
+
+    for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+      lum[j] = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) / 255;
+    }
+
+    const edges = new Uint8ClampedArray(w * h);
+    for (let y = 1; y < h - 1; y++) {
+      const row = y * w;
+      for (let x = 1; x < w - 1; x++) {
+        const idx = row + x;
+        const gx =
+          -lum[idx - w - 1] + lum[idx - w + 1] +
+          -2 * lum[idx - 1] + 2 * lum[idx + 1] +
+          -lum[idx + w - 1] + lum[idx + w + 1];
+
+        const gy =
+          -lum[idx - w - 1] - 2 * lum[idx - w] - lum[idx - w + 1] +
+          lum[idx + w - 1] + 2 * lum[idx + w] + lum[idx + w + 1];
+
+        const mag = Math.hypot(gx, gy);
+        edges[idx] = mag > 0.28 ? 255 : 0;
+      }
+    }
+    return edges;
+  }
+
+  // Draw speech bubble / burst overlay
+  function drawSpeechBubble() {
+    if (state.bubbleType === 'none') return;
+
+    const { x, y } = state.bubblePos;
+    ctx.save();
+    ctx.translate(x, y);
+
+    const txt = (state.bubbleText || '').trim().toUpperCase();
+
+    if (state.bubbleType === 'burst') {
+      // 14-spike Pop Burst
+      const spikes = 14;
+      const rOuter = 100;
+      const rInner = 60;
+      const path = new Path2D();
+
+      for (let i = 0; i < spikes * 2; i++) {
+        const r = (i % 2 === 0) ? rOuter : rInner;
+        const ang = (i * Math.PI) / spikes;
+        const px = Math.cos(ang) * r;
+        const py = Math.sin(ang) * (r * 0.85);
+        if (i === 0) path.moveTo(px, py);
+        else path.lineTo(px, py);
+      }
+      path.closePath();
+
+      // Outer black stroke
+      ctx.lineWidth = 14;
+      ctx.strokeStyle = '#0a0a0a';
+      ctx.lineJoin = 'miter';
+      ctx.stroke(path);
+
+      // Yellow Fill
+      ctx.fillStyle = '#ffe600';
+      ctx.fill(path);
+
+      // Inner crisp white contour stroke
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke(path);
+
+      // Text
+      ctx.rotate(-0.08);
+      ctx.font = '900 36px "Arial Black", Impact, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#0a0a0a';
+      ctx.strokeText(txt, 0, 0);
+      ctx.fillStyle = '#e4002b';
+      ctx.fillText(txt, 0, 0);
+
+    } else if (state.bubbleType === 'speech') {
+      // Classic Oval Speech Balloon with comic tail
+      const bw = 105;
+      const bh = 65;
+
+      ctx.save();
+      const bubblePath = new Path2D();
+      bubblePath.ellipse(0, 0, bw, bh, 0, 0, Math.PI * 2);
+
+      // Tail
+      bubblePath.moveTo(-20, 50);
+      bubblePath.lineTo(-65, 105);
+      bubblePath.lineTo(10, 58);
+
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = '#0a0a0a';
+      ctx.stroke(bubblePath);
+
+      ctx.fillStyle = '#fffaf0';
+      ctx.fill(bubblePath);
+
+      ctx.font = '900 30px "Arial Black", Impact, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillText(txt, 0, 0);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // Core Render Routine
+  function renderHalftone() {
+    drawSourceImage();
+
+    const imgData = sCtx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    const data = imgData.data;
+    const w = CANVAS_SIZE;
+    const h = CANVAS_SIZE;
+
+    // Apply Contrast
+    const cFactor = state.contrast;
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = Math.min(255, Math.max(0, ((data[i] / 255 - 0.5) * cFactor + 0.5) * 255));
+      data[i + 1] = Math.min(255, Math.max(0, ((data[i + 1] / 255 - 0.5) * cFactor + 0.5) * 255));
+      data[i + 2] = Math.min(255, Math.max(0, ((data[i + 2] / 255 - 0.5) * cFactor + 0.5) * 255));
+    }
+
+    // Sobel edge pass
+    const edges = generateSobelEdges(imgData);
+
+    // Canvas Background / Paper
+    const palette = PALETTES[state.preset];
+    ctx.save();
+    ctx.fillStyle = palette.paper;
+    ctx.fillRect(0, 0, w, h);
+
+    const step = state.dotSize;
+    const baseAngleRad = (state.screenAngle * Math.PI) / 180;
+    const diag = Math.ceil(Math.hypot(w, h));
+
+    // Screen each channel on rotated lattice
+    palette.channels.forEach(ch => {
+      ctx.save();
+      ctx.globalCompositeOperation = palette.composite;
+      ctx.fillStyle = ch.color;
+
+      const totalAngle = baseAngleRad + (ch.angleOffset * Math.PI) / 180;
+      const cosA = Math.cos(totalAngle);
+      const sinA = Math.sin(totalAngle);
+      const halfDiag = diag / 2;
+
+      ctx.beginPath();
+
+      for (let gy = -halfDiag; gy <= halfDiag; gy += step) {
+        for (let gx = -halfDiag; gx <= halfDiag; gx += step) {
+          // World coordinates
+          const wx = Math.round(w / 2 + gx * cosA - gy * sinA);
+          const wy = Math.round(h / 2 + gx * sinA + gy * cosA);
+
+          if (wx < 0 || wx >= w || wy < 0 || wy >= h) continue;
+
+          const idx = (wy * w + wx) * 4;
+          const r = data[idx] / 255;
+          const g = data[idx + 1] / 255;
+          const b = data[idx + 2] / 255;
+
+          // Standard RGB to CMYK
+          const kVal = 1 - Math.max(r, g, b);
+          let inkDensity = 0;
+
+          if (ch.id === 'c') {
+            inkDensity = kVal === 1 ? 0 : (1 - r - kVal) / (1 - kVal);
+          } else if (ch.id === 'm') {
+            inkDensity = kVal === 1 ? 0 : (1 - g - kVal) / (1 - kVal);
+          } else if (ch.id === 'y') {
+            inkDensity = kVal === 1 ? 0 : (1 - b - kVal) / (1 - kVal);
+          } else if (ch.id === 'k') {
+            inkDensity = kVal;
+          } else if (ch.id === 'neonCyan') {
+            inkDensity = (r * 0.299 + g * 0.587 + b * 0.114); // luminance-mapped
+          } else if (ch.id === 'neonMagenta') {
+            inkDensity = 1 - g;
+          } else if (ch.id === 'neonViolet') {
+            inkDensity = 1 - r;
+          } else if (ch.id === 'shadows') {
+            inkDensity = Math.pow(kVal, 1.3);
+          } else if (ch.id === 'midtones') {
+            const lum = r * 0.299 + g * 0.587 + b * 0.114;
+            inkDensity = Math.sin(lum * Math.PI);
+          }
+
+          inkDensity = Math.min(1, Math.max(0, inkDensity));
+          if (inkDensity <= 0.03) continue;
+
+          // Area proportional to density: radius ~ sqrt(density)
+          const maxRadius = (step * Math.SQRT2) / 1.85;
+          const radius = Math.sqrt(inkDensity) * maxRadius;
+
+          ctx.moveTo(wx + radius, wy);
+          ctx.arc(wx, wy, radius, 0, Math.PI * 2);
+        }
+      }
+
+      ctx.fill();
+      ctx.restore();
+    });
+
+    // Draw Inked Outlines with Sub-pixel dilation
+    const strokeWeight = state.outlineWeight;
+    if (strokeWeight > 0) {
+      const edgeCanvas = document.createElement('canvas');
+      edgeCanvas.width = w;
+      edgeCanvas.height = h;
+      const eCtx = edgeCanvas.getContext('2d');
+      const edgeImgData = eCtx.createImageData(w, h);
+      const ed = edgeImgData.data;
+
+      for (let i = 0, j = 0; i < edges.length; i++, j += 4) {
+        if (edges[i] > 0) {
+          ed[j] = 10;
+          ed[j + 1] = 10;
+          ed[j + 2] = 10;
+          ed[j + 3] = 255;
+        }
+      }
+      eCtx.putImageData(edgeImgData, 0, 0);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      const rRange = strokeWeight * 0.65;
+      const offsets = [
+        [0, 0], [rRange, 0], [-rRange, 0], [0, rRange], [0, -rRange],
+        [rRange * 0.7, rRange * 0.7], [-rRange * 0.7, -rRange * 0.7],
+        [rRange * 0.7, -rRange * 0.7], [-rRange * 0.7, rRange * 0.7]
+      ];
+      for (const [ox, oy] of offsets) {
+        ctx.drawImage(edgeCanvas, ox, oy);
+      }
+      ctx.restore();
+    }
+
+    // Top overlay: draggable speech bubble
+    drawSpeechBubble();
+    ctx.restore();
+  }
+
+  // Animation frame coalesced scheduler
+  let renderQueued = false;
+  function queueRender() {
+    if (renderQueued) return;
+    renderQueued = true;
+    flash.classList.add('active');
+    requestAnimationFrame(() => {
+      renderHalftone();
+      renderQueued = false;
+      setTimeout(() => flash.classList.remove('active'), 40);
+    });
+  }
+
+  // Pointer interaction for speech bubble dragging
+  function getCanvasPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scale = CANVAS_SIZE / rect.width;
+    const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    return {
+      x: (clientX - rect.left) * scale,
+      y: (clientY - rect.top) * scale
+    };
+  }
+
+  const canvasWrap = document.getElementById('canvasWrap');
+
+  function onPointerDown(e) {
+    if (state.bubbleType === 'none') return;
+    const pos = getCanvasPos(e);
+    const dist = Math.hypot(pos.x - state.bubblePos.x, pos.y - state.bubblePos.y);
+
+    // Hit test radius
+    if (dist < 110) {
+      state.isDraggingBubble = true;
+      state.dragOffset.x = pos.x - state.bubblePos.x;
+      state.dragOffset.y = pos.y - state.bubblePos.y;
+      e.preventDefault();
+    }
+  }
+
+  function onPointerMove(e) {
+    if (!state.isDraggingBubble) return;
+    const pos = getCanvasPos(e);
+    state.bubblePos.x = Math.max(40, Math.min(CANVAS_SIZE - 40, pos.x - state.dragOffset.x));
+    state.bubblePos.y = Math.max(40, Math.min(CANVAS_SIZE - 40, pos.y - state.dragOffset.y));
+    queueRender();
+  }
+
+  function onPointerUp() {
+    state.isDraggingBubble = false;
+  }
+
+  canvasWrap.addEventListener('mousedown', onPointerDown);
+  window.addEventListener('mousemove', onPointerMove);
+  window.addEventListener('mouseup', onPointerUp);
+
+  canvasWrap.addEventListener('touchstart', onPointerDown, { passive: false });
+  window.addEventListener('touchmove', onPointerMove, { passive: false });
+  window.addEventListener('touchend', onPointerUp);
+
+  // Wire Controls
+  const sourceBtns = document.querySelectorAll('[data-source]');
+  const textInputGroup = document.getElementById('textInputGroup');
+  const sourceTextInput = document.getElementById('sourceTextInput');
+
+  sourceBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      sourceBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.source = btn.dataset.source;
+      textInputGroup.style.display = state.source === 'text' ? 'block' : 'none';
+      queueRender();
+    });
+  });
+
+  sourceTextInput.addEventListener('input', (e) => {
+    state.sourceText = e.target.value;
+    queueRender();
+  });
+
+  const dotSizeInput = document.getElementById('dotSize');
+  const dotSizeVal = document.getElementById('dotSizeVal');
+  dotSizeInput.addEventListener('input', (e) => {
+    state.dotSize = parseInt(e.target.value, 10);
+    dotSizeVal.textContent = `${state.dotSize}px`;
+    queueRender();
+  });
+
+  const screenAngleInput = document.getElementById('screenAngle');
+  const angleVal = document.getElementById('angleVal');
+  screenAngleInput.addEventListener('input', (e) => {
+    state.screenAngle = parseInt(e.target.value, 10);
+    angleVal.textContent = `${state.screenAngle}°`;
+    queueRender();
+  });
+
+  const contrastInput = document.getElementById('contrast');
+  const contrastVal = document.getElementById('contrastVal');
+  contrastInput.addEventListener('input', (e) => {
+    state.contrast = parseFloat(e.target.value);
+    contrastVal.textContent = `${state.contrast.toFixed(2)}x`;
+    queueRender();
+  });
+
+  const outlineInput = document.getElementById('outlineWeight');
+  const outlineVal = document.getElementById('outlineVal');
+  outlineInput.addEventListener('input', (e) => {
+    state.outlineWeight = parseInt(e.target.value, 10);
+    outlineVal.textContent = `${state.outlineWeight}px`;
+    queueRender();
+  });
+
+  const presetBtns = document.querySelectorAll('[data-preset]');
+  presetBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      presetBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.preset = btn.dataset.preset;
+      queueRender();
+    });
+  });
+
+  const bubbleBtns = document.querySelectorAll('[data-bubble]');
+  const bubbleTextInput = document.getElementById('bubbleTextInput');
+
+  bubbleBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      bubbleBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.bubbleType = btn.dataset.bubble;
+      bubbleTextInput.disabled = state.bubbleType === 'none';
+      queueRender();
+    });
+  });
+
+  bubbleTextInput.addEventListener('input', (e) => {
+    state.bubbleText = e.target.value;
+    queueRender();
+  });
+
+  // PNG Export
+  const downloadBtn = document.getElementById('downloadBtn');
+  downloadBtn.addEventListener('click', () => {
+    const dataURL = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.download = `dot-bomb-${state.source}-${state.preset}.png`;
+    a.href = dataURL;
+    a.click();
+  });
+
+  // Initial Setup
+  setupDPI();
+  queueRender();
+
+  window.addEventListener('resize', () => {
+    setupDPI();
+    queueRender();
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abyssal — Bioluminescent Deep-Sea Scene</title>
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  body, html {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: linear-gradient(180deg, #04102a 0%, #030b1d 50%, #020611 100%);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #c9dcf0;
+  }
+  #vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 50%, transparent 40%, rgba(0, 2, 10, 0.65) 100%);
+    z-index: 2;
+  }
+  canvas {
+    position: fixed;
+    inset: 0;
+    display: block;
+    z-index: 1;
+  }
+  header {
+    position: fixed;
+    top: 28px;
+    left: 32px;
+    z-index: 3;
+    pointer-events: none;
+  }
+  h1 {
+    font-weight: 200;
+    font-size: clamp(24px, 4vw, 38px);
+    letter-spacing: 0.62em;
+    color: #c9dcf0;
+    text-shadow: 0 0 12px rgba(79, 227, 255, 0.45), 0 0 24px rgba(106, 125, 255, 0.25);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .caption {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: rgba(201, 220, 240, 0.45);
+    text-transform: uppercase;
+  }
+  #hint {
+    position: fixed;
+    bottom: 84px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(201, 220, 240, 0.7);
+    text-align: center;
+    width: 90%;
+    max-width: 480px;
+    z-index: 3;
+    pointer-events: none;
+    transition: opacity 2.2s cubic-bezier(0.16, 1, 0.3, 1);
+    text-shadow: 0 0 8px rgba(79, 227, 255, 0.3);
+  }
+  #hint.hidden {
+    opacity: 0;
+  }
+  footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: 16px 28px;
+    z-index: 3;
+    pointer-events: none;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    color: rgba(201, 220, 240, 0.55);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .hud-left, .hud-right {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .light-bar {
+    width: 64px;
+    height: 2px;
+    background: rgba(201, 220, 240, 0.15);
+    position: relative;
+    overflow: hidden;
+  }
+  .light-bar-sweep {
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, #4fe3ff, transparent);
+    animation: sweep 3.5s infinite linear;
+  }
+  @keyframes sweep {
+    0% { transform: translateX(0%); }
+    100% { transform: translateX(200%); }
+  }
+  .spectrum {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .spectrum-dots {
+    display: flex;
+    gap: 6px;
+  }
+  .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+  }
+  .dot-c { background: #4fe3ff; box-shadow: 0 0 6px #4fe3ff; }
+  .dot-t { background: #3fd9c4; box-shadow: 0 0 6px #3fd9c4; }
+  .dot-u { background: #6a7dff; box-shadow: 0 0 6px #6a7dff; }
+  .dot-v { background: #a56bff; box-shadow: 0 0 6px #a56bff; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .light-bar-sweep {
+      animation: none;
+      left: 0;
+      background: rgba(79, 227, 255, 0.4);
+    }
+  }
+</style>
+</head>
+<body>
+  <div id="vignette"></div>
+  <canvas id="abyss"></canvas>
+
+  <header>
+    <h1>Abyssal</h1>
+    <div class="caption">Bathypelagic zone · no sunlight reaches here</div>
+  </header>
+
+  <div id="hint">Move to stir the water · click to release a jellyfish</div>
+
+  <footer>
+    <div class="hud-left">
+      <span id="hud-depth">−3 400 m</span>
+      <div class="light-bar"><div class="light-bar-sweep"></div></div>
+      <span id="hud-env">1.6°C · 34.2 MPa</span>
+      <span id="hud-counts">MEDUSAE: 3 · PLANKTON: 190</span>
+    </div>
+    <div class="hud-right">
+      <div class="spectrum">
+        <span>EMISSION SPECTRUM</span>
+        <div class="spectrum-dots">
+          <div class="dot dot-c"></div>
+          <div class="dot dot-t"></div>
+          <div class="dot dot-u"></div>
+          <div class="dot dot-v"></div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+<script>
+(() => {
+  const canvas = document.getElementById('abyss');
+  const ctx = canvas.getContext('2d');
+  const hint = document.getElementById('hint');
+  const hudDepth = document.getElementById('hud-depth');
+  const hudCounts = document.getElementById('hud-counts');
+
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let width = 0;
+  let height = 0;
+  let dpr = 1;
+
+  const PALETTE = [
+    { hue: 188, hex: '#4fe3ff', rgb: [79, 227, 255] },
+    { hue: 168, hex: '#3fd9c4', rgb: [63, 217, 196] },
+    { hue: 232, hex: '#6a7dff', rgb: [106, 125, 255] },
+    { hue: 268, hex: '#a56bff', rgb: [165, 107, 255] }
+  ];
+
+  const pointer = {
+    x: -9999,
+    y: -9999,
+    vx: 0,
+    vy: 0,
+    speed: 0,
+    lastX: 0,
+    lastY: 0,
+    lastTime: performance.now(),
+    active: false
+  };
+
+  function updatePointer(e) {
+    const x = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : pointer.x);
+    const y = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : pointer.y);
+    const now = performance.now();
+    const dt = Math.max(1, now - pointer.lastTime) / 1000;
+    
+    if (pointer.active) {
+      const dx = x - pointer.lastX;
+      const dy = y - pointer.lastY;
+      const instVx = dx / dt;
+      const instVy = dy / dt;
+      pointer.vx = pointer.vx * 0.7 + instVx * 0.3;
+      pointer.vy = pointer.vy * 0.7 + instVy * 0.3;
+      pointer.speed = Math.hypot(pointer.vx, pointer.vy);
+    } else {
+      pointer.active = true;
+    }
+
+    pointer.x = x;
+    pointer.y = y;
+    pointer.lastX = x;
+    pointer.lastY = y;
+    pointer.lastTime = now;
+  }
+
+  window.addEventListener('pointermove', updatePointer);
+  window.addEventListener('touchmove', updatePointer, { passive: true });
+
+  let hintDismissed = false;
+  function dismissHint() {
+    if (!hintDismissed) {
+      hintDismissed = true;
+      hint.classList.add('hidden');
+    }
+  }
+  setTimeout(dismissHint, 9000);
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    ctx.scale(dpr, dpr);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // PLANKTON
+  const planktonCount = reducedMotion ? 90 : 190;
+  const planktons = [];
+  for (let i = 0; i < planktonCount; i++) {
+    const pal = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+    planktons.push({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: 0,
+      vy: 0,
+      baseRadius: 0.7 + Math.random() * 1.5,
+      hue: pal.hue + (Math.random() * 16 - 8),
+      phase: Math.random() * Math.PI * 2,
+      pulseSpeed: 0.8 + Math.random() * 1.5,
+      glow: 0
+    });
+  }
+
+  // JELLYFISH
+  class Jellyfish {
+    constructor(x, y, radius, hue) {
+      this.x = x;
+      this.y = y;
+      this.vx = (Math.random() - 0.5) * 6;
+      this.vy = -(10 + Math.random() * 15);
+      this.radius = radius;
+      this.hue = hue;
+      this.phase = Math.random() * Math.PI * 2;
+      this.pulseRate = (0.75 + Math.random() * 0.45) * (reducedMotion ? 0.5 : 1);
+      
+      const numTentacles = Math.floor(7 + Math.random() * 8);
+      this.tentacles = [];
+      const segLen = this.radius * 0.22;
+      const numSegs = Math.floor(14 + Math.random() * 11);
+
+      for (let i = 0; i < numTentacles; i++) {
+        const spanOffset = (i / (numTentacles - 1) - 0.5) * (this.radius * 1.4);
+        const pts = [];
+        for (let s = 0; s < numSegs; s++) {
+          pts.push({
+            x: this.x + spanOffset,
+            y: this.y + s * segLen,
+            oldX: this.x + spanOffset,
+            oldY: this.y + s * segLen
+          });
+        }
+        this.tentacles.push({ pts, offset: spanOffset, len: segLen, isArm: false });
+      }
+
+      // 4 Oral arms
+      for (let i = 0; i < 4; i++) {
+        const spanOffset = (i / 3 - 0.5) * (this.radius * 0.65);
+        const pts = [];
+        const armSegs = Math.floor(numSegs * 1.25);
+        for (let s = 0; s < armSegs; s++) {
+          pts.push({
+            x: this.x + spanOffset,
+            y: this.y + s * (segLen * 0.95),
+            oldX: this.x + spanOffset,
+            oldY: this.y + s * (segLen * 0.95)
+          });
+        }
+        this.tentacles.push({ pts, offset: spanOffset, len: segLen * 0.95, isArm: true });
+      }
+    }
+
+    update(dt, time) {
+      this.phase += this.pulseRate * dt * Math.PI * 2;
+      const s = Math.sin(this.phase);
+      const c = Math.cos(this.phase);
+
+      // Propulsion during contraction
+      if (c > 0) {
+        this.vy -= c * 62 * dt;
+      }
+      this.vy += 8.5 * dt; // gentle sink
+      this.vx += Math.sin(time * 0.4 + this.radius) * 3.2 * dt;
+
+      // Drag
+      this.vx *= Math.pow(0.92, dt * 60);
+      this.vy *= Math.pow(0.94, dt * 60);
+
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+
+      // Pointer disturbance on bell
+      const pdx = this.x - pointer.x;
+      const pdy = this.y - pointer.y;
+      const pDist = Math.hypot(pdx, pdy);
+      if (pDist < this.radius + 70 && pDist > 0.001) {
+        const force = (1 - pDist / (this.radius + 70)) * Math.min(pointer.speed, 500) * 0.4;
+        this.vx += (pdx / pDist) * force * dt;
+        this.vy += (pdy / pDist) * force * dt;
+      }
+
+      // Screen wrapping
+      if (this.y < -this.radius * 3) {
+        this.y = height + this.radius * 2;
+        this.x = Math.random() * width;
+        this.resetVerlet();
+      }
+      if (this.x < -this.radius * 2) this.x = width + this.radius;
+      if (this.x > width + this.radius * 2) this.x = -this.radius;
+
+      // Verlet simulation for tentacles
+      const bellWidthScale = 1 + 0.13 * s;
+      const swayTime = time * 1.5;
+
+      for (const tentacle of this.tentacles) {
+        const pts = tentacle.pts;
+        // Anchor to rim
+        pts[0].x = this.x + tentacle.offset * bellWidthScale;
+        pts[0].y = this.y;
+
+        for (let i = 1; i < pts.length; i++) {
+          const pt = pts[i];
+          const vx = (pt.x - pt.oldX) * 0.985;
+          const vy = (pt.y - pt.oldY) * 0.985;
+          pt.oldX = pt.x;
+          pt.oldY = pt.y;
+
+          const sway = Math.sin(swayTime + i * 0.35 + tentacle.offset) * (tentacle.isArm ? 4.5 : 8.5);
+          pt.x += vx + sway * dt;
+          pt.y += vy + 7.5 * dt; // gravity
+
+          // Pointer push on tentacle segments
+          const tdx = pt.x - pointer.x;
+          const tdy = pt.y - pointer.y;
+          const tDist = Math.hypot(tdx, tdy);
+          if (tDist < 80 && tDist > 0.01) {
+            const push = (1 - tDist / 80) * 45 * dt;
+            pt.x += (tdx / tDist) * push;
+            pt.y += (tdy / tDist) * push;
+          }
+        }
+
+        // Constraints
+        for (let iter = 0; iter < 3; iter++) {
+          for (let i = 0; i < pts.length - 1; i++) {
+            const p1 = pts[i];
+            const p2 = pts[i + 1];
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const dist = Math.hypot(dx, dy) || 0.001;
+            const diff = (dist - tentacle.len) / dist;
+            if (i === 0) {
+              p2.x -= dx * diff;
+              p2.y -= dy * diff;
+            } else {
+              p1.x += dx * diff * 0.5;
+              p1.y += dy * diff * 0.5;
+              p2.x -= dx * diff * 0.5;
+              p2.y -= dy * diff * 0.5;
+            }
+          }
+        }
+      }
+    }
+
+    resetVerlet() {
+      for (const tentacle of this.tentacles) {
+        for (const pt of tentacle.pts) {
+          pt.x = this.x + tentacle.offset;
+          pt.y = this.y;
+          pt.oldX = pt.x;
+          pt.oldY = pt.y;
+        }
+      }
+    }
+
+    draw(ctx) {
+      const s = Math.sin(this.phase);
+      const widthScale = 1 + 0.13 * s;
+      const heightScale = 1 / widthScale;
+      const rx = this.radius * widthScale;
+      const ry = this.radius * 0.85 * heightScale;
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+
+      // Draw tentacles & arms
+      for (const tentacle of this.tentacles) {
+        const pts = tentacle.pts;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length - 1; i++) {
+          const xc = (pts[i].x + pts[i + 1].x) * 0.5;
+          const yc = (pts[i].y + pts[i + 1].y) * 0.5;
+          ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+        }
+
+        const grad = ctx.createLinearGradient(pts[0].x, pts[0].y, pts[pts.length - 1].x, pts[pts.length - 1].y);
+        if (tentacle.isArm) {
+          grad.addColorStop(0, `hsla(${this.hue}, 95%, 72%, 0.65)`);
+          grad.addColorStop(0.5, `hsla(${this.hue}, 90%, 60%, 0.35)`);
+          grad.addColorStop(1, `hsla(${this.hue}, 80%, 50%, 0)`);
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 2.4;
+        } else {
+          grad.addColorStop(0, `hsla(${this.hue}, 85%, 65%, 0.45)`);
+          grad.addColorStop(1, `hsla(${this.hue}, 70%, 50%, 0)`);
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 1.1;
+        }
+        ctx.stroke();
+      }
+
+      // Outer dim halo
+      const haloGrad = ctx.createRadialGradient(this.x, this.y - ry * 0.2, rx * 0.2, this.x, this.y - ry * 0.2, rx * 2.2);
+      haloGrad.addColorStop(0, `hsla(${this.hue}, 90%, 65%, 0.22)`);
+      haloGrad.addColorStop(0.5, `hsla(${this.hue}, 90%, 50%, 0.06)`);
+      haloGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = haloGrad;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y - ry * 0.2, rx * 2.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bell shape
+      ctx.save();
+      ctx.translate(this.x, this.y);
+
+      ctx.beginPath();
+      ctx.moveTo(-rx, 0);
+      ctx.bezierCurveTo(-rx, -ry * 1.35, rx, -ry * 1.35, rx, 0);
+      ctx.bezierCurveTo(rx * 0.5, -ry * 0.25, -rx * 0.5, -ry * 0.25, -rx, 0);
+      ctx.closePath();
+
+      const bellGrad = ctx.createRadialGradient(0, -ry * 0.4, rx * 0.1, 0, -ry * 0.1, rx);
+      bellGrad.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+      bellGrad.addColorStop(0.3, `hsla(${this.hue}, 90%, 75%, 0.55)`);
+      bellGrad.addColorStop(0.7, `hsla(${this.hue}, 85%, 50%, 0.2)`);
+      bellGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = bellGrad;
+      ctx.fill();
+
+      // Rim highlight ellipse
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rx, ry * 0.22, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = `hsla(${this.hue}, 95%, 80%, 0.6)`;
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+
+      // Inner 4 gonads / clover lights
+      for (let g = 0; g < 4; g++) {
+        const ang = (g * Math.PI) / 2 + Math.PI / 4;
+        const gx = Math.cos(ang) * (rx * 0.32);
+        const gy = -ry * 0.45 + Math.sin(ang) * (ry * 0.2);
+        const gGrad = ctx.createRadialGradient(gx, gy, 0, gx, gy, rx * 0.22);
+        gGrad.addColorStop(0, '#ffffff');
+        gGrad.addColorStop(0.4, `hsla(${this.hue + 20}, 100%, 75%, 0.75)`);
+        gGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = gGrad;
+        ctx.beginPath();
+        ctx.arc(gx, gy, rx * 0.22, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Specular highlight upper-left
+      ctx.beginPath();
+      ctx.ellipse(-rx * 0.42, -ry * 0.65, rx * 0.22, ry * 0.12, -Math.PI / 4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.fill();
+
+      ctx.restore();
+      ctx.restore();
+    }
+  }
+
+  const jellies = [];
+  function addJelly(x, y, radius, hue) {
+    if (jellies.length >= 9) {
+      jellies.shift(); // retire oldest
+    }
+    jellies.push(new Jellyfish(x, y, radius, hue));
+    hudCounts.textContent = `MEDUSAE: ${jellies.length} · PLANKTON: ${planktons.length}`;
+  }
+
+  // Seed initial 3
+  addJelly(width * 0.25, height * 0.75, 46, PALETTE[0].hue);
+  addJelly(width * 0.52, height * 0.55, 58, PALETTE[1].hue);
+  addJelly(width * 0.8, height * 0.85, 38, PALETTE[2].hue);
+
+  // CLICK / TAP HANDLER
+  function handleSpawn(e) {
+    dismissHint();
+    const x = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : width * 0.5);
+    const y = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : height * 0.5);
+
+    // Repel plankton
+    for (const p of planktons) {
+      const dx = p.x - x;
+      const dy = p.y - y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 220 && dist > 0.001) {
+        const force = (1 - dist / 220) * 480;
+        p.vx += (dx / dist) * force;
+        p.vy += (dy / dist) * force;
+        p.glow = Math.max(p.glow, (1 - dist / 220) * 2.8);
+      }
+    }
+
+    const pal = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+    const hue = pal.hue + (Math.random() * 14 - 7);
+    const rad = 32 + Math.random() * 34;
+    addJelly(x, y, rad, hue);
+  }
+  window.addEventListener('pointerdown', handleSpawn);
+
+  // LANTERN FISH SCHOOLS
+  const fishSchool = {
+    active: false,
+    fishes: [],
+    direction: 1,
+    nextTime: 7
+  };
+
+  function spawnSchool(nowSec) {
+    fishSchool.active = true;
+    fishSchool.direction = Math.random() > 0.5 ? 1 : -1;
+    fishSchool.fishes = [];
+    const count = Math.floor(10 + Math.random() * 13);
+    const speed = (60 + Math.random() * 50) * fishSchool.direction;
+    const baseY = height * (0.35 + Math.random() * 0.4);
+    const startX = fishSchool.direction === 1 ? -160 : width + 160;
+
+    for (let i = 0; i < count; i++) {
+      fishSchool.fishes.push({
+        x: startX + (Math.random() - 0.5) * 140 - (fishSchool.direction * i * 16),
+        y: baseY + (Math.random() - 0.5) * 75,
+        speed: speed * (0.9 + Math.random() * 0.2),
+        phase: Math.random() * Math.PI * 2,
+        length: 8 + Math.random() * 5
+      });
+    }
+    fishSchool.nextTime = nowSec + (18 + Math.random() * 20);
+  }
+
+  // DRAW VOLUMETRIC LIGHT SHAFTS
+  function drawLightShafts(time) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const s1 = Math.sin(time * 0.35) * 45;
+    const s2 = Math.cos(time * 0.22) * 65;
+
+    const layers = [
+      { topL: width * 0.22 + s1, topR: width * 0.38 + s1, botL: width * 0.08 + s2, botR: width * 0.55 + s2, alpha: 0.075 },
+      { topL: width * 0.45 - s2 * 0.5, topR: width * 0.62 - s2 * 0.5, botL: width * 0.28 - s1, botR: width * 0.78 - s1, alpha: 0.06 },
+      { topL: width * 0.68 + s2 * 0.3, topR: width * 0.82 + s2 * 0.3, botL: width * 0.52 + s1 * 0.8, botR: width * 0.94 + s1 * 0.8, alpha: 0.055 }
+    ];
+
+    for (const l of layers) {
+      const grad = ctx.createLinearGradient(0, -20, 0, height * 0.95);
+      grad.addColorStop(0, `rgba(80, 140, 210, ${l.alpha})`);
+      grad.addColorStop(0.65, `rgba(60, 110, 190, ${l.alpha * 0.4})`);
+      grad.addColorStop(1, 'rgba(60, 110, 190, 0)');
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(l.topL, -20);
+      ctx.lineTo(l.topR, -20);
+      ctx.lineTo(l.botR, height * 0.95);
+      ctx.lineTo(l.botL, height * 0.95);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // MAIN LOOP
+  let lastFrameTime = performance.now();
+  function animate(now) {
+    requestAnimationFrame(animate);
+    const dt = Math.min((now - lastFrameTime) / 1000, 0.1);
+    lastFrameTime = now;
+    const nowSec = now * 0.001;
+
+    // Pointer velocity decay
+    pointer.vx *= Math.pow(0.88, dt * 60);
+    pointer.vy *= Math.pow(0.88, dt * 60);
+    pointer.speed = Math.hypot(pointer.vx, pointer.vy);
+
+    // Dynamic depth HUD drift
+    const drift = Math.floor(Math.sin(nowSec * 0.4) * 5);
+    hudDepth.textContent = `−${3400 + drift} m`;
+
+    ctx.clearRect(0, 0, width, height);
+
+    // 1. Shafts
+    drawLightShafts(nowSec);
+
+    // 2. Plankton
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of planktons) {
+      // Flow field
+      const currentX = Math.sin(p.y * 0.0035 + nowSec * 0.4) * 6;
+      const currentY = Math.cos(p.x * 0.0035 + nowSec * 0.3) * 4 - 1.5;
+      p.x += (currentX + p.vx) * dt;
+      p.y += (currentY + p.vy) * dt;
+
+      // Damping of shove
+      p.vx *= Math.pow(0.92, dt * 60);
+      p.vy *= Math.pow(0.92, dt * 60);
+      p.glow *= Math.pow(0.93, dt * 60);
+
+      // Pointer interaction
+      const pdx = p.x - pointer.x;
+      const pdy = p.y - pointer.y;
+      const pDist = Math.hypot(pdx, pdy);
+      if (pDist < 140 && pDist > 0.001) {
+        const force = (1 - pDist / 140) * Math.min(pointer.speed * 0.9, 320);
+        p.vx += (pdx / pDist) * force * dt * 15;
+        p.vy += (pdy / pDist) * force * dt * 15;
+        p.glow = Math.min(3.0, p.glow + (1 - pDist / 140) * (pointer.speed > 30 ? 1.5 : 0.4));
+      }
+
+      // Wraparound
+      if (p.x < -20) p.x = width + 20;
+      if (p.x > width + 20) p.x = -20;
+      if (p.y < -20) p.y = height + 20;
+      if (p.y > height + 20) p.y = -20;
+
+      // Draw
+      p.phase += p.pulseSpeed * dt;
+      const twinkle = 0.5 + 0.5 * Math.sin(p.phase);
+      const rad = p.baseRadius * (1 + p.glow * 1.1);
+      const lightness = 65 + p.glow * 25;
+      const alpha = Math.min(1, (0.3 + twinkle * 0.4) + p.glow * 0.5);
+
+      if (p.glow > 0.15) {
+        const haloR = rad * 6;
+        const hGrad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, haloR);
+        hGrad.addColorStop(0, `hsla(${p.hue}, 95%, ${lightness}%, ${alpha * 0.7})`);
+        hGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = hGrad;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, haloR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = `hsla(${p.hue}, 95%, ${lightness}%, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, Math.max(0.6, rad), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 3. Lantern fish
+    if (!fishSchool.active && nowSec > fishSchool.nextTime) {
+      spawnSchool(nowSec);
+    }
+    if (fishSchool.active) {
+      let anyVisible = false;
+      ctx.save();
+      for (const fish of fishSchool.fishes) {
+        fish.x += fish.speed * dt;
+        fish.phase += dt * 12;
+        const wiggleY = Math.sin(fish.phase) * 2.2;
+        const waveY = Math.sin(fish.x * 0.012 + nowSec) * 16;
+        const fy = fish.y + waveY + wiggleY;
+
+        if (fish.x > -200 && fish.x < width + 200) {
+          anyVisible = true;
+        }
+
+        ctx.save();
+        ctx.translate(fish.x, fy);
+        if (fishSchool.direction === -1) {
+          ctx.scale(-1, 1);
+        }
+
+        // Body
+        ctx.beginPath();
+        ctx.moveTo(fish.length, 0);
+        ctx.quadraticCurveTo(0, -fish.length * 0.45, -fish.length, 0);
+        ctx.quadraticCurveTo(0, fish.length * 0.45, fish.length, 0);
+        ctx.fillStyle = '#061733';
+        ctx.fill();
+
+        // Photophore glow near head
+        ctx.globalCompositeOperation = 'lighter';
+        const pGrad = ctx.createRadialGradient(fish.length * 0.5, -1, 0, fish.length * 0.5, -1, 8);
+        pGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+        pGrad.addColorStop(0.35, '#4fe3ff');
+        pGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = pGrad;
+        ctx.beginPath();
+        ctx.arc(fish.length * 0.5, -1, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 3 ventral light dots
+        ctx.fillStyle = '#4fe3ff';
+        for (let v = 0; v < 3; v++) {
+          const vx = -fish.length * 0.2 + v * (fish.length * 0.35);
+          const vy = fish.length * 0.28;
+          ctx.beginPath();
+          ctx.arc(vx, vy, 0.85, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+      ctx.restore();
+
+      if (!anyVisible) {
+        fishSchool.active = false;
+      }
+    }
+
+    // 4. Jellyfish sorted by size (smaller in back)
+    jellies.sort((a, b) => a.radius - b.radius);
+    for (const jelly of jellies) {
+      jelly.update(dt, nowSec);
+      jelly.draw(ctx);
+    }
+  }
+
+  requestAnimationFrame(animate);
+})();
+</script>
+</body>
+</html>

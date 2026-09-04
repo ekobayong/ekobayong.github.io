@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Murmuration — Starlings at Dusk</title>
+<style>
+  :root {
+    --night: 0.0;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", "URW Palladio L", P052, Palatino, Georgia, serif;
+    --font-mono: "SF Mono", "Consolas", "Courier New", monospace;
+    --amber: #d9a466;
+    --amber-glow: rgba(217, 164, 102, 0.35);
+  }
+
+  * {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #05060c;
+    font-family: var(--font-serif);
+    cursor: none; /* Native cursor hidden for hawk */
+  }
+
+  /* Sky Layers */
+  .sky-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .sky-dusk {
+    background: 
+      radial-gradient(ellipse 90% 45% at 50% 100%, rgba(240, 196, 140, 0.75) 0%, rgba(227, 160, 106, 0.5) 45%, rgba(178, 106, 90, 0.2) 75%, transparent 100%),
+      linear-gradient(180deg, 
+        #2a2f4a 0%, 
+        #3e395b 22%, 
+        #5a4a6e 42%, 
+        #885462 58%, 
+        #b26a5a 72%, 
+        #d1845f 84%, 
+        #e3a06a 93%, 
+        #f0c48c 100%);
+    opacity: calc(1 - var(--night));
+    transition: opacity 0.05s linear;
+  }
+
+  .sky-night {
+    background: 
+      radial-gradient(ellipse 80% 35% at 50% 100%, rgba(106, 73, 140, 0.45) 0%, rgba(60, 42, 92, 0.25) 50%, transparent 100%),
+      linear-gradient(180deg, 
+        #05060c 0%, 
+        #0b0f1e 30%, 
+        #141629 55%, 
+        #1a1c33 75%, 
+        #2b2540 100%);
+    opacity: var(--night);
+    transition: opacity 0.05s linear;
+  }
+
+  .stars {
+    opacity: var(--night);
+    transition: opacity 0.05s linear;
+  }
+  .star {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle, #ffffff 30%, rgba(255,255,255,0.4) 60%, transparent 100%);
+  }
+
+  /* Flock Canvas */
+  canvas#flock {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    z-index: 2;
+  }
+
+  /* Landscape SVG */
+  .landscape-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 38%;
+    min-height: 200px;
+    pointer-events: none;
+    z-index: 3;
+    overflow: hidden;
+  }
+  .landscape-svg {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: bottom center;
+  }
+
+  /* Title / Poetry overlay */
+  .poetic-header {
+    position: absolute;
+    top: 36px;
+    left: 44px;
+    z-index: 10;
+    pointer-events: none;
+    max-width: 480px;
+    text-shadow: 0 2px 8px rgba(5,6,12,0.45);
+  }
+  h1.title {
+    margin: 0 0 6px 0;
+    font-size: 2.7rem;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    color: #f7f3ed;
+    line-height: 1.1;
+  }
+  h1.title span {
+    color: var(--amber);
+    font-style: italic;
+    font-size: 2.1rem;
+    letter-spacing: 0.02em;
+    margin-left: 6px;
+  }
+  p.epigraph {
+    margin: 0;
+    font-size: 0.95rem;
+    font-style: italic;
+    color: rgba(247, 243, 237, 0.75);
+    line-height: 1.45;
+  }
+
+  /* Frosted Glass Control Panel */
+  aside.panel {
+    position: absolute;
+    top: 28px;
+    right: 28px;
+    width: 320px;
+    background: rgba(13, 15, 20, 0.58);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 18px 20px;
+    z-index: 20;
+    color: #e5e3df;
+    box-shadow: 0 16px 36px rgba(0,0,0,0.42);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+    cursor: default;
+  }
+  aside.panel.hidden {
+    transform: translateX(calc(100% + 40px));
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: rgba(230, 225, 215, 0.6);
+  }
+  .fps-display {
+    color: var(--amber);
+    font-weight: 600;
+  }
+
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .control-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .control-label-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.85rem;
+  }
+  .control-label-bar label {
+    font-style: italic;
+    color: rgba(240, 236, 230, 0.88);
+  }
+  .control-val {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--amber);
+  }
+
+  /* Range sliders */
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 2px;
+    outline: none;
+    margin: 4px 0;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 6px var(--amber-glow);
+    cursor: pointer;
+    transition: transform 0.12s ease;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.35);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border: none;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 6px var(--amber-glow);
+    cursor: pointer;
+    transition: transform 0.12s ease;
+  }
+  input[type="range"]::-moz-range-thumb:hover {
+    transform: scale(1.35);
+  }
+
+  /* Button row */
+  .btn-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1.2fr;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .btn-mono {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid rgba(217, 164, 102, 0.38);
+    color: #e5ded5;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+  .btn-mono:hover {
+    background: rgba(217, 164, 102, 0.14);
+    border-color: var(--amber);
+    color: #ffffff;
+  }
+  .btn-mono:active {
+    transform: scale(0.97);
+  }
+  .btn-mono[aria-pressed="true"] {
+    background: var(--amber);
+    color: #121014;
+    font-weight: 600;
+  }
+
+  /* Toggle Panel Pill */
+  .panel-toggle-pill {
+    position: absolute;
+    bottom: 24px;
+    right: 28px;
+    z-index: 25;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 7px 15px;
+    border-radius: 20px;
+    background: rgba(13, 15, 20, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: rgba(240, 235, 225, 0.85);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .panel-toggle-pill:hover {
+    background: rgba(25, 28, 38, 0.85);
+    color: var(--amber);
+    border-color: rgba(217, 164, 102, 0.4);
+  }
+
+  /* Footer Controls Hint */
+  footer.controls-hint {
+    position: absolute;
+    bottom: 24px;
+    left: 44px;
+    z-index: 10;
+    pointer-events: none;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    color: rgba(230, 225, 215, 0.45);
+    text-transform: uppercase;
+  }
+  footer.controls-hint span.key {
+    color: var(--amber);
+    font-weight: 600;
+  }
+
+  /* Custom Predator Cursor (Hawk) */
+  #hawk-cursor {
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    pointer-events: none;
+    z-index: 999;
+    transform: translate(-50%, -50%) rotate(0deg);
+    transition: opacity 0.25s ease;
+    opacity: 0;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.35));
+  }
+  #hawk-cursor.active {
+    opacity: 0.9;
+  }
+  #hawk-cursor svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    fill: #141018;
+  }
+
+  @media (max-width: 768px) {
+    .poetic-header { top: 20px; left: 20px; right: 20px; }
+    h1.title { font-size: 2rem; }
+    h1.title span { font-size: 1.6rem; }
+    aside.panel { top: auto; bottom: 70px; right: 14px; left: 14px; width: auto; max-height: 60vh; overflow-y: auto; }
+    footer.controls-hint { display: none; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Sky Backdrops -->
+  <div class="sky-layer sky-dusk"></div>
+  <div class="sky-layer sky-night"></div>
+  <div class="sky-layer stars" id="stars-container"></div>
+
+  <!-- Flock Canvas -->
+  <canvas id="flock"></canvas>
+
+  <!-- Landscape Silhouette -->
+  <div class="landscape-container">
+    <svg class="landscape-svg" viewBox="0 0 1600 340" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="treeline-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1e1824"/>
+          <stop offset="60%" stop-color="#140f1a"/>
+          <stop offset="100%" stop-color="#08070c"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Distant Hills -->
+      <path d="M-50,340 L-50,220 Q200,160 520,210 T1150,185 Q1400,150 1650,215 L1650,340 Z" fill="#2a2333" opacity="0.88"/>
+      <path d="M-50,340 L-50,250 Q350,195 780,245 T1650,230 L1650,340 Z" fill="#1f1a26" opacity="0.75"/>
+
+      <!-- Dense Treeline polygon -->
+      <path d="M-40,340 L-40,255 
+        L5,250 L15,238 L25,252 L40,235 L55,255 L75,225 L90,250 L110,230 L125,248 L145,215 L160,250 
+        L185,228 L200,248 L225,220 L240,252 L270,232 L290,254 L320,210 L335,248 L360,235 L380,258 
+        L410,225 L430,252 L460,218 L480,255 L510,232 L535,255 L565,220 L585,250 L615,228 L640,256 
+        L675,205 L695,245 L720,230 L745,258 L780,218 L800,250 L830,225 L855,254 L890,208 L915,248 
+        L940,228 L965,255 L1000,215 L1020,250 L1055,222 L1080,252 L1115,205 L1135,245 L1165,225 
+        L1190,252 L1225,212 L1245,250 L1275,230 L1300,255 L1335,218 L1360,248 L1395,225 L1420,252 
+        L1455,208 L1480,248 L1510,222 L1535,252 L1570,212 L1595,245 L1640,225 L1650,340 Z" 
+        fill="url(#treeline-grad)"/>
+
+      <!-- Solid Ground Base -->
+      <path d="M-50,340 L-50,290 Q400,285 850,295 T1650,290 L1650,340 Z" fill="#09080e"/>
+
+      <!-- Telegraph Poles and Crossarms -->
+      <!-- Pole 1 -->
+      <path d="M260,300 L260,140 L264,140 L264,300 Z" fill="#0d0a11"/>
+      <path d="M246,155 L278,155 L278,158 L246,158 Z" fill="#0d0a11"/>
+      <path d="M250,170 L274,170 L274,172 L250,172 Z" fill="#0d0a11"/>
+
+      <!-- Pole 2 -->
+      <path d="M820,310 L820,115 L824,115 L824,310 Z" fill="#0a080d"/>
+      <path d="M802,130 L842,130 L842,133 L802,133 Z" fill="#0a080d"/>
+      <path d="M808,146 L836,146 L836,148 L808,148 Z" fill="#0a080d"/>
+
+      <!-- Pole 3 -->
+      <path d="M1360,305 L1360,132 L1364,132 L1364,305 Z" fill="#0c0910"/>
+      <path d="M1344,148 L1380,148 L1380,151 L1344,151 Z" fill="#0c0910"/>
+      <path d="M1349,163 L1375,163 L1375,165 L1349,165 Z" fill="#0c0910"/>
+
+      <!-- Sagging Wires -->
+      <!-- Wire 1 upper -->
+      <path d="M-40,165 Q110,185 248,156 Q534,200 804,131 Q1082,185 1346,149 Q1498,180 1640,165" 
+            fill="none" stroke="#08060b" stroke-width="1.3" opacity="0.9"/>
+      <!-- Wire 2 lower -->
+      <path d="M-40,180 Q110,200 252,171 Q535,218 810,147 Q1085,202 1351,164 Q1498,196 1640,182" 
+            fill="none" stroke="#08060b" stroke-width="1.1" opacity="0.8"/>
+
+      <!-- Perched Starlings -->
+      <ellipse cx="251" cy="154" rx="2" ry="3.2" fill="#060508" transform="rotate(-6 251 154)"/>
+      <ellipse cx="272" cy="154" rx="1.8" ry="3" fill="#060508" transform="rotate(8 272 154)"/>
+      <ellipse cx="510" cy="189" rx="2.2" ry="3" fill="#060508" transform="rotate(4 510 189)"/>
+      <ellipse cx="518" cy="190" rx="2" ry="2.8" fill="#060508" transform="rotate(-3 518 190)"/>
+      <ellipse cx="806" cy="129" rx="2.2" ry="3.5" fill="#060508" transform="rotate(-5 806 129)"/>
+      <ellipse cx="834" cy="129" rx="1.9" ry="3" fill="#060508" transform="rotate(10 834 129)"/>
+      <ellipse cx="1060" cy="177" rx="2" ry="3.1" fill="#060508" transform="rotate(6 1060 177)"/>
+      <ellipse cx="1373" cy="147" rx="2.1" ry="3.2" fill="#060508" transform="rotate(4 1373 147)"/>
+    </svg>
+  </div>
+
+  <!-- Poetic Title Overlay -->
+  <header class="poetic-header">
+    <h1 class="title">Murmuration<span>— Starlings at Dusk</span></h1>
+    <p class="epigraph">A pulse of ten thousand wings, folding space into living ink before the cold dark.</p>
+  </header>
+
+  <!-- Parameter Panel -->
+  <aside class="panel" id="controls-panel">
+    <div class="panel-head">
+      <span>FLOCK FLUIDITY</span>
+      <span class="fps-display" id="fps-counter">60 FPS</span>
+    </div>
+
+    <div class="control-group">
+      <div class="control-row">
+        <div class="control-label-bar">
+          <label for="slider-count">Flock size</label>
+          <span class="control-val" id="val-count">4,200</span>
+        </div>
+        <input type="range" id="slider-count" min="500" max="12000" step="100" value="4200">
+      </div>
+
+      <div class="control-row">
+        <div class="control-label-bar">
+          <label for="slider-cohesion">Cohesion</label>
+          <span class="control-val" id="val-cohesion">1.25</span>
+        </div>
+        <input type="range" id="slider-cohesion" min="0" max="3" step="0.05" value="1.25">
+      </div>
+
+      <div class="control-row">
+        <div class="control-label-bar">
+          <label for="slider-alignment">Alignment</label>
+          <span class="control-val" id="val-alignment">1.40</span>
+        </div>
+        <input type="range" id="slider-alignment" min="0" max="3" step="0.05" value="1.40">
+      </div>
+
+      <div class="control-row">
+        <div class="control-label-bar">
+          <label for="slider-separation">Separation</label>
+          <span class="control-val" id="val-separation">1.60</span>
+        </div>
+        <input type="range" id="slider-separation" min="0" max="3" step="0.05" value="1.60">
+      </div>
+
+      <div class="control-row">
+        <div class="control-label-bar">
+          <label for="slider-speed">Flight speed</label>
+          <span class="control-val" id="val-speed">3.8</span>
+        </div>
+        <input type="range" id="slider-speed" min="1" max="7" step="0.1" value="3.8">
+      </div>
+
+      <div class="control-row">
+        <div class="control-label-bar">
+          <label for="slider-radius">Perception radius</label>
+          <span class="control-val" id="val-radius">38 px</span>
+        </div>
+        <input type="range" id="slider-radius" min="15" max="80" step="1" value="38">
+      </div>
+
+      <div class="control-row">
+        <div class="control-label-bar">
+          <label for="slider-night">Dusk → night</label>
+          <span class="control-val" id="val-night">0.00</span>
+        </div>
+        <input type="range" id="slider-night" min="0" max="1" step="0.01" value="0.00">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-mono" id="btn-pause" aria-pressed="false">Pause</button>
+      <button class="btn-mono" id="btn-step">Step</button>
+      <button class="btn-mono" id="btn-scatter">Scatter</button>
+    </div>
+  </aside>
+
+  <!-- Toggle Panel Pill -->
+  <button class="panel-toggle-pill" id="btn-toggle-panel" aria-label="Toggle Controls">Hide Controls</button>
+
+  <!-- Monospace Footer Hints -->
+  <footer class="controls-hint">
+    [<span class="key">Space</span>] Pause &nbsp;•&nbsp; [<span class="key">S</span>] Scatter &nbsp;•&nbsp; [<span class="key">Click</span>] Hawk Strike
+  </footer>
+
+  <!-- Hawk Cursor Silhouette SVG -->
+  <div id="hawk-cursor">
+    <svg viewBox="0 0 100 100">
+      <!-- Hawk Silhouette flying downwards (nose at bottom center / tail at top) -->
+      <path d="M50,96 C47,84 41,74 31,64 C18,52 2,42 0,34 C-1,30 8,30 22,38 C32,44 42,52 46,57 C45,42 43,26 38,10 C43,14 47,19 50,26 C53,19 57,14 62,10 C57,26 55,42 54,57 C58,52 68,44 78,38 C92,30 101,30 100,34 C98,42 82,52 69,64 C59,74 53,84 50,96 Z"/>
+    </svg>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+
+  // --- Configuration & Simulation State ---
+  const MAX_CAPACITY = 12000;
+  let boidCount = 4200;
+  let maxSpeed = 3.8;
+  let minSpeed = maxSpeed * 0.45;
+  let perceptionRadius = 38;
+  let perceptionRadiusSq = perceptionRadius * perceptionRadius;
+  let sepRadius = perceptionRadius * 0.45;
+  let sepRadiusSq = sepRadius * sepRadius;
+
+  let weightCohesion = 1.25;
+  let weightAlignment = 1.40;
+  let weightSeparation = 1.60;
+  let nightFactor = 0.0;
+
+  let isPaused = false;
+  let singleStepRequested = false;
+
+  // Reduced motion support
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const timeStepFactor = prefersReduced ? 0.55 : 1.0;
+
+  // Typed Arrays for Boid Data
+  const posX = new Float32Array(MAX_CAPACITY);
+  const posY = new Float32Array(MAX_CAPACITY);
+  const velX = new Float32Array(MAX_CAPACITY);
+  const velY = new Float32Array(MAX_CAPACITY);
+  const densities = new Uint8Array(MAX_CAPACITY); // neighbor count for density shading
+
+  // Canvas & Environment Setup
+  const canvas = document.getElementById('flock');
+  const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
+  let width = window.innerWidth;
+  let height = window.innerHeight;
+  let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+  // Predator / Hawk Pointer Tracking
+  const hawk = {
+    x: -9999,
+    y: -9999,
+    vx: 0,
+    vy: 0,
+    lastX: -9999,
+    lastY: -9999,
+    active: false,
+    radius: 165,
+    angle: 0
+  };
+  const hawkElem = document.getElementById('hawk-cursor');
+
+  // Attractor Wandering Lissajous Path
+  let attractorTime = 0;
+  const attractor = { x: width * 0.5, y: height * 0.35 };
+
+  // Spatial Hash Grid (Linked list style for zero-allocation performance)
+  let cellSize = perceptionRadius;
+  let gridCols = 0;
+  let gridRows = 0;
+  let gridNumCells = 0;
+  let gridHead = new Int32Array(0);
+  const gridNext = new Int32Array(MAX_CAPACITY);
+
+  function resizeGrid() {
+    cellSize = Math.max(20, perceptionRadius);
+    gridCols = Math.ceil(width / cellSize) + 1;
+    gridRows = Math.ceil(height / cellSize) + 1;
+    gridNumCells = gridCols * gridRows;
+    if (gridHead.length < gridNumCells) {
+      gridHead = new Int32Array(gridNumCells);
+    }
+  }
+
+  function resizeCanvas() {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    resizeGrid();
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  // Initialize Boids in an evocative murmuration cloud shape
+  function initBoids() {
+    const cx = width * 0.5;
+    const cy = height * 0.38;
+    for (let i = 0; i < MAX_CAPACITY; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * Math.min(width, height) * 0.32;
+      posX[i] = cx + Math.cos(angle) * r;
+      posY[i] = cy + Math.sin(angle) * r * 0.65;
+      
+      const speed = minSpeed + Math.random() * (maxSpeed - minSpeed);
+      const moveAngle = angle + Math.PI * 0.5 + (Math.random() - 0.5) * 0.6;
+      velX[i] = Math.cos(moveAngle) * speed;
+      velY[i] = Math.sin(moveAngle) * speed;
+      densities[i] = 0;
+    }
+  }
+
+  // Populate Background Stars
+  function initStars() {
+    const starContainer = document.getElementById('stars-container');
+    starContainer.innerHTML = '';
+    const numStars = 16;
+    for (let i = 0; i < numStars; i++) {
+      const s = document.createElement('div');
+      s.className = 'star';
+      const size = 1.5 + Math.random() * 2.2;
+      s.style.width = size + 'px';
+      s.style.height = size + 'px';
+      s.style.top = (Math.random() * 55) + '%';
+      s.style.left = (Math.random() * 98) + '%';
+      s.style.opacity = (0.4 + Math.random() * 0.6).toFixed(2);
+      starContainer.appendChild(s);
+    }
+  }
+
+  // Scatter impulse from an epicenter (Hawk strike or click)
+  function scatter(x, y, force = 9.5) {
+    for (let i = 0; i < boidCount; i++) {
+      const dx = posX[i] - x;
+      const dy = posY[i] - y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < 320 * 320 && d2 > 0.001) {
+        const d = Math.sqrt(d2);
+        const p = (1 - d / 320) * force;
+        velX[i] += (dx / d) * p + (Math.random() - 0.5) * 2;
+        velY[i] += (dy / d) * p + (Math.random() - 0.5) * 2;
+      }
+    }
+  }
+
+  // Build Spatial Hash Grid
+  function buildSpatialGrid() {
+    gridHead.fill(-1, 0, gridNumCells);
+    for (let i = 0; i < boidCount; i++) {
+      const gx = Math.floor(posX[i] / cellSize);
+      const gy = Math.floor(posY[i] / cellSize);
+      if (gx >= 0 && gx < gridCols && gy >= 0 && gy < gridRows) {
+        const cell = gx + gy * gridCols;
+        gridNext[i] = gridHead[cell];
+        gridHead[cell] = i;
+      } else {
+        gridNext[i] = -1;
+      }
+    }
+  }
+
+  // Main Boids Physics Update
+  function updateBoids() {
+    attractorTime += 0.0035 * timeStepFactor;
+    // Lissajous curve drifting slowly through upper dusk sky
+    attractor.x = width * 0.5 + Math.sin(attractorTime * 1.3) * (width * 0.34);
+    attractor.y = height * 0.32 + Math.cos(attractorTime * 0.9) * (height * 0.18);
+
+    buildSpatialGrid();
+
+    const maxNeighbors = 24;
+    const treelineY = height * 0.70;
+    const margin = 80;
+    const hawkRadiusSq = hawk.radius * hawk.radius;
+
+    for (let i = 0; i < boidCount; i++) {
+      let px = posX[i];
+      let py = posY[i];
+      let vx = velX[i];
+      let vy = velY[i];
+
+      // Neighbor accumulators
+      let neighborCount = 0;
+      let avgVx = 0;
+      let avgVy = 0;
+      let centerX = 0;
+      let centerY = 0;
+      let sepX = 0;
+      let sepY = 0;
+
+      const gx = Math.floor(px / cellSize);
+      const gy = Math.floor(py / cellSize);
+
+      // Search 3x3 cells
+      for (let ox = -1; ox <= 1; ox++) {
+        const cx = gx + ox;
+        if (cx < 0 || cx >= gridCols) continue;
+        for (let oy = -1; oy <= 1; oy++) {
+          const cy = gy + oy;
+          if (cy < 0 || cy >= gridRows) continue;
+
+          let other = gridHead[cx + cy * gridCols];
+          while (other !== -1) {
+            if (other !== i) {
+              const dx = posX[other] - px;
+              const dy = posY[other] - py;
+              const distSq = dx * dx + dy * dy;
+
+              if (distSq < perceptionRadiusSq && distSq > 0.0001) {
+                neighborCount++;
+                centerX += posX[other];
+                centerY += posY[other];
+                avgVx += velX[other];
+                avgVy += velY[other];
+
+                // Inverse-square-like separation in close personal bubble
+                if (distSq < sepRadiusSq) {
+                  const dist = Math.sqrt(distSq);
+                  const strength = (1.0 - dist / sepRadius);
+                  sepX -= (dx / dist) * strength * strength;
+                  sepY -= (dy / dist) * strength * strength;
+                }
+
+                if (neighborCount >= maxNeighbors) break;
+              }
+            }
+            other = gridNext[other];
+          }
+          if (neighborCount >= maxNeighbors) break;
+        }
+        if (neighborCount >= maxNeighbors) break;
+      }
+
+      densities[i] = neighborCount;
+
+      let steerX = 0;
+      let steerY = 0;
+
+      if (neighborCount > 0) {
+        // Cohesion: steer to centroid
+        centerX /= neighborCount;
+        centerY /= neighborCount;
+        steerX += ((centerX - px) * 0.015) * weightCohesion;
+        steerY += ((centerY - py) * 0.015) * weightCohesion;
+
+        // Alignment: match velocity
+        avgVx /= neighborCount;
+        avgVy /= neighborCount;
+        steerX += ((avgVx - vx) * 0.1) * weightAlignment;
+        steerY += ((avgVy - vy) * 0.1) * weightAlignment;
+
+        // Separation
+        steerX += sepX * 1.8 * weightSeparation;
+        steerY += sepY * 1.8 * weightSeparation;
+      }
+
+      // Lissajous wandering attractor pull (gently binds flock in open sky)
+      const toAttractorX = attractor.x - px;
+      const toAttractorY = attractor.y - py;
+      steerX += toAttractorX * 0.00045;
+      steerY += toAttractorY * 0.00045;
+
+      // Predator (Hawk) evasion
+      if (hawk.active) {
+        const hdx = px - hawk.x;
+        const hdy = py - hawk.y;
+        const hDistSq = hdx * hdx + hdy * hdy;
+        if (hDistSq < hawkRadiusSq && hDistSq > 0.001) {
+          const hDist = Math.sqrt(hDistSq);
+          const fear = Math.pow(1 - hDist / hawk.radius, 1.8) * 8.5;
+          steerX += (hdx / hDist) * fear;
+          steerY += (hdy / hDist) * fear;
+        }
+      }
+
+      // Soft boundary repulsion (edges & landscape treeline at 70%)
+      if (px < margin) steerX += ((margin - px) / margin) * 0.7;
+      else if (px > width - margin) steerX -= ((px - (width - margin)) / margin) * 0.7;
+
+      if (py < margin * 0.6) steerY += (((margin * 0.6) - py) / (margin * 0.6)) * 0.6;
+      else if (py > treelineY) steerY -= Math.min(2.5, ((py - treelineY) / 50) * 1.2);
+
+      // Hard clamp bounds safeguard
+      if (py > height - 15) { py = height - 15; steerY -= 2.0; }
+      if (py < 10) { py = 10; steerY += 1.0; }
+      if (px > width - 10) { px = width - 10; steerX -= 1.5; }
+      if (px < 10) { px = 10; steerX += 1.5; }
+
+      // Apply acceleration with framerate scaling
+      vx += steerX * timeStepFactor;
+      vy += steerY * timeStepFactor;
+
+      // Speed clamping
+      const curSpeedSq = vx * vx + vy * vy;
+      const curSpeed = Math.sqrt(curSpeedSq);
+      if (curSpeed > 0.0001) {
+        if (curSpeed > maxSpeed) {
+          vx = (vx / curSpeed) * maxSpeed;
+          vy = (vy / curSpeed) * maxSpeed;
+        } else if (curSpeed < minSpeed) {
+          vx = (vx / curSpeed) * minSpeed;
+          vy = (vy / curSpeed) * minSpeed;
+        }
+      } else {
+        vx = maxSpeed * 0.5;
+        vy = 0;
+      }
+
+      posX[i] = px + vx * timeStepFactor;
+      posY[i] = py + vy * timeStepFactor;
+      velX[i] = vx;
+      velY[i] = vy;
+    }
+  }
+
+  // Draw Starlings as Batched Ink Paths by Density Buckets
+  function drawFlock() {
+    ctx.clearRect(0, 0, width, height);
+
+    // Dynamic bird sizing: shrinks slightly with dense count
+    const baseLength = boidCount > 8000 ? 5.0 : (boidCount > 4000 ? 5.8 : 6.8);
+    const baseWidth = baseLength * 0.42;
+
+    // Density Buckets:
+    // 0: Sparse boundary birds (light, translucent)
+    // 1: Medium outer shell
+    // 2: Core body
+    // 3: Dense pitch-black center
+    const paths = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
+
+    for (let i = 0; i < boidCount; i++) {
+      const px = posX[i];
+      const py = posY[i];
+      const vx = velX[i];
+      const vy = velY[i];
+
+      const spd = Math.hypot(vx, vy);
+      if (spd < 0.01) continue;
+
+      // Unit forward and normal vectors
+      const ux = vx / spd;
+      const uy = vy / spd;
+      const nx = -uy;
+      const ny = ux;
+
+      // Triangle points: nose ahead, two tail points behind
+      const noseX = px + ux * (baseLength * 0.65);
+      const noseY = py + uy * (baseLength * 0.65);
+
+      const tailBaseX = px - ux * (baseLength * 0.35);
+      const tailBaseY = py - uy * (baseLength * 0.35);
+
+      const leftX = tailBaseX + nx * baseWidth;
+      const leftY = tailBaseY + ny * baseWidth;
+
+      const rightX = tailBaseX - nx * baseWidth;
+      const rightY = tailBaseY - ny * baseWidth;
+
+      // Select density bucket
+      const d = densities[i];
+      const bIdx = d < 3 ? 0 : (d < 8 ? 1 : (d < 16 ? 2 : 3));
+      const p = paths[bIdx];
+
+      p.moveTo(noseX, noseY);
+      p.lineTo(leftX, leftY);
+      p.lineTo(rightX, rightY);
+      p.closePath();
+    }
+
+    // Ink tones deepen in night mode
+    // Night factor interpolates bird tones into near pitch silhouette
+    const bNight = nightFactor;
+    
+    // Bucket styles [R, G, B, Base Alpha]
+    const styles = [
+      { r: Math.round(24 * (1 - bNight * 0.6)), g: Math.round(22 * (1 - bNight * 0.7)), b: Math.round(30 * (1 - bNight * 0.6)), a: 0.45 + bNight * 0.2 },
+      { r: Math.round(18 * (1 - bNight * 0.7)), g: Math.round(16 * (1 - bNight * 0.8)), b: Math.round(24 * (1 - bNight * 0.7)), a: 0.68 + bNight * 0.2 },
+      { r: Math.round(12 * (1 - bNight * 0.8)), g: Math.round(10 * (1 - bNight * 0.8)), b: Math.round(18 * (1 - bNight * 0.8)), a: 0.86 + bNight * 0.1 },
+      { r: Math.round(5 * (1 - bNight)),        g: Math.round(4 * (1 - bNight)),        b: Math.round(8 * (1 - bNight)),        a: 0.98 }
+    ];
+
+    for (let k = 0; k < 4; k++) {
+      const s = styles[k];
+      ctx.fillStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${s.a})`;
+      ctx.fill(paths[k]);
+    }
+  }
+
+  // Animation Loop & Performance Tracker
+  let lastTime = performance.now();
+  let frameCount = 0;
+  let fpsTimer = 0;
+  const fpsElem = document.getElementById('fps-counter');
+
+  function animate(now) {
+    const delta = now - lastTime;
+    lastTime = now;
+
+    frameCount++;
+    fpsTimer += delta;
+    if (fpsTimer >= 400) {
+      const fps = Math.round((frameCount * 1000) / fpsTimer);
+      fpsElem.textContent = fps + ' FPS';
+      frameCount = 0;
+      fpsTimer = 0;
+    }
+
+    if (!isPaused || singleStepRequested) {
+      updateBoids();
+      singleStepRequested = false;
+    }
+
+    drawFlock();
+    requestAnimationFrame(animate);
+  }
+
+  // Hawk cursor position update
+  function updateHawkCursor(x, y) {
+    hawk.active = true;
+    const dx = x - hawk.x;
+    const dy = y - hawk.y;
+
+    if (Math.hypot(dx, dy) > 2) {
+      // Point nose towards velocity vector
+      hawk.angle = Math.atan2(dy, dx) + Math.PI / 2;
+    }
+    
+    hawk.x = x;
+    hawk.y = y;
+
+    hawkElem.classList.add('active');
+    hawkElem.style.transform = `translate(${x}px, ${y}px) rotate(${hawk.angle}rad)`;
+  }
+
+  window.addEventListener('pointermove', (e) => {
+    updateHawkCursor(e.clientX, e.clientY);
+  });
+
+  window.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#controls-panel') || e.target.closest('#btn-toggle-panel')) return;
+    updateHawkCursor(e.clientX, e.clientY);
+    scatter(e.clientX, e.clientY, 13.0);
+  });
+
+  window.addEventListener('pointerleave', () => {
+    hawk.active = false;
+    hawk.x = -9999;
+    hawk.y = -9999;
+    hawkElem.classList.remove('active');
+  });
+
+  // UI Element Bindings
+  const sCount = document.getElementById('slider-count');
+  const vCount = document.getElementById('val-count');
+  const sCohesion = document.getElementById('slider-cohesion');
+  const vCohesion = document.getElementById('val-cohesion');
+  const sAlignment = document.getElementById('slider-alignment');
+  const vAlignment = document.getElementById('val-alignment');
+  const sSeparation = document.getElementById('slider-separation');
+  const vSeparation = document.getElementById('val-separation');
+  const sSpeed = document.getElementById('slider-speed');
+  const vSpeed = document.getElementById('val-speed');
+  const sRadius = document.getElementById('slider-radius');
+  const vRadius = document.getElementById('val-radius');
+  const sNight = document.getElementById('slider-night');
+  const vNight = document.getElementById('val-night');
+
+  const btnPause = document.getElementById('btn-pause');
+  const btnStep = document.getElementById('btn-step');
+  const btnScatter = document.getElementById('btn-scatter');
+  const btnTogglePanel = document.getElementById('btn-toggle-panel');
+  const panel = document.getElementById('controls-panel');
+
+  sCount.addEventListener('input', () => {
+    boidCount = parseInt(sCount.value, 10);
+    vCount.textContent = boidCount.toLocaleString();
+  });
+
+  sCohesion.addEventListener('input', () => {
+    weightCohesion = parseFloat(sCohesion.value);
+    vCohesion.textContent = weightCohesion.toFixed(2);
+  });
+
+  sAlignment.addEventListener('input', () => {
+    weightAlignment = parseFloat(sAlignment.value);
+    vAlignment.textContent = weightAlignment.toFixed(2);
+  });
+
+  sSeparation.addEventListener('input', () => {
+    weightSeparation = parseFloat(sSeparation.value);
+    vSeparation.textContent = weightSeparation.toFixed(2);
+  });
+
+  sSpeed.addEventListener('input', () => {
+    maxSpeed = parseFloat(sSpeed.value);
+    minSpeed = maxSpeed * 0.45;
+    vSpeed.textContent = maxSpeed.toFixed(1);
+  });
+
+  sRadius.addEventListener('input', () => {
+    perceptionRadius = parseInt(sRadius.value, 10);
+    perceptionRadiusSq = perceptionRadius * perceptionRadius;
+    sepRadius = perceptionRadius * 0.45;
+    sepRadiusSq = sepRadius * sepRadius;
+    vRadius.textContent = perceptionRadius + ' px';
+    resizeGrid();
+  });
+
+  sNight.addEventListener('input', () => {
+    nightFactor = parseFloat(sNight.value);
+    document.documentElement.style.setProperty('--night', nightFactor.toString());
+    vNight.textContent = nightFactor.toFixed(2);
+  });
+
+  function togglePause() {
+    isPaused = !isPaused;
+    btnPause.setAttribute('aria-pressed', isPaused.toString());
+    btnPause.textContent = isPaused ? 'Resume' : 'Pause';
+  }
+
+  btnPause.addEventListener('click', togglePause);
+
+  btnStep.addEventListener('click', () => {
+    if (!isPaused) {
+      togglePause();
+    }
+    singleStepRequested = true;
+  });
+
+  function triggerExplosiveScatter() {
+    scatter(width * 0.5, height * 0.35, 14);
+  }
+
+  btnScatter.addEventListener('click', triggerExplosiveScatter);
+
+  btnTogglePanel.addEventListener('click', () => {
+    const isHidden = panel.classList.toggle('hidden');
+    btnTogglePanel.textContent = isHidden ? 'Show Controls' : 'Hide Controls';
+  });
+
+  // Keyboard Shortcuts
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space') {
+      e.preventDefault();
+      togglePause();
+    } else if (e.code === 'KeyS') {
+      e.preventDefault();
+      triggerExplosiveScatter();
+    }
+  });
+
+  // Start Simulation
+  resizeCanvas();
+  initStars();
+  initBoids();
+  requestAnimationFrame(animate);
+
+})();
+</script>
+</body>
+</html>

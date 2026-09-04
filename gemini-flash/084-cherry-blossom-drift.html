@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sakura Drift — Cherry Blossom Scene</title>
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  :root {
+    --sky-top: #cfe3f5;
+    --sky-mid: #f3dfe8;
+    --sky-horizon: #fbeee6;
+    --c-indigo: #2f2b52;
+    --c-blush: #f7c8d4;
+    --c-deeppink: #e2698c;
+    --c-gold: #e9c27a;
+    --c-mist: #b9b3d1;
+  }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--sky-top);
+    font-family: "Iowan Old Style", "Palatino Linotype", "URW Palladio L", P052, Palatino, Georgia, serif;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #viewport {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 52%, var(--sky-horizon) 100%);
+    overflow: hidden;
+  }
+  #sun {
+    position: absolute;
+    width: 240px;
+    height: 240px;
+    border-radius: 50%;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,243,214,0.65) 28%, rgba(233,194,122,0.2) 58%, rgba(233,194,122,0) 80%);
+    filter: blur(2px);
+    will-change: left, top, opacity;
+  }
+  #haze {
+    position: absolute;
+    bottom: 17%;
+    left: 0;
+    width: 100%;
+    height: 14vh;
+    background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,250,246,0.72) 70%, rgba(255,250,246,0.95) 100%);
+    pointer-events: none;
+    z-index: 2;
+  }
+  #landscape-svg {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+  #petal-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 3;
+    pointer-events: auto;
+    cursor: crosshair;
+  }
+  /* UI / Typographic Elements */
+  .haiku-container {
+    position: absolute;
+    top: 6vh;
+    right: 5vw;
+    z-index: 4;
+    display: flex;
+    flex-direction: row-reverse;
+    gap: 1.8rem;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    pointer-events: none;
+  }
+  .haiku-line {
+    font-style: italic;
+    font-size: clamp(1.05rem, 1.4vw, 1.35rem);
+    line-height: 1.9;
+    letter-spacing: 0.28em;
+    color: var(--c-indigo);
+    text-shadow: 0 1px 12px rgba(255,255,255,0.8), 0 2px 24px rgba(247,200,212,0.4);
+    opacity: 0.92;
+  }
+  .haiku-char {
+    display: inline-block;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 1.1s cubic-bezier(0.2, 0, 0.2, 1), transform 1.1s cubic-bezier(0.2, 0, 0.2, 1);
+  }
+  .haiku-char.revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .bottom-left-title {
+    position: absolute;
+    bottom: 3.5vh;
+    left: 4vw;
+    z-index: 4;
+    pointer-events: none;
+    color: var(--c-indigo);
+  }
+  .bottom-left-title h1 {
+    font-size: clamp(1.6rem, 2.3vw, 2.4rem);
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    line-height: 1.1;
+  }
+  .bottom-left-title h1 span.sakura-accent {
+    font-style: italic;
+    color: var(--c-deeppink);
+    margin-right: 0.25rem;
+  }
+  .bottom-left-title p.subtitle {
+    margin-top: 0.35rem;
+    font-size: clamp(0.65rem, 0.8vw, 0.78rem);
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    opacity: 0.68;
+  }
+  .watermark-kanji {
+    position: absolute;
+    bottom: -2vw;
+    right: 1.5vw;
+    z-index: 2;
+    font-size: clamp(13rem, 24vw, 28rem);
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Songti SC", "Source Han Serif", serif;
+    color: rgba(226, 105, 140, 0.045);
+    line-height: 1;
+    pointer-events: none;
+    transform: rotate(4deg);
+    mix-blend-mode: multiply;
+  }
+  #instruction-hint {
+    position: absolute;
+    bottom: 4vh;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 4;
+    font-size: clamp(0.75rem, 0.9vw, 0.88rem);
+    letter-spacing: 0.24em;
+    color: var(--c-indigo);
+    opacity: 0.65;
+    pointer-events: none;
+    transition: opacity 1.6s ease-out;
+    text-shadow: 0 1px 8px rgba(255,255,255,0.7);
+    white-space: nowrap;
+  }
+  #instruction-hint.fade-out {
+    opacity: 0;
+  }
+</style>
+</head>
+<body>
+<div id="viewport">
+  <div id="sun"></div>
+  <div id="haze"></div>
+
+  <!-- Distant mountain, pagoda, and foreground trees in SVG -->
+  <svg id="landscape-svg" viewBox="0 0 1000 600" preserveAspectRatio="xMinYMax slice">
+    <defs>
+      <filter id="soft-blur" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur stdDeviation="3.2" />
+      </filter>
+      <filter id="foliage-blur" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="1.8" />
+      </filter>
+
+      <!-- Blossom radial gradients -->
+      <radialGradient id="grad-blossom-1" cx="35%" cy="35%" r="65%">
+        <stop offset="0%" stop-color="#fff3f6" />
+        <stop offset="55%" stop-color="#f7c8d4" />
+        <stop offset="100%" stop-color="#e2698c" />
+      </radialGradient>
+      <radialGradient id="grad-blossom-2" cx="30%" cy="30%" r="70%">
+        <stop offset="0%" stop-color="#fbe0e8" />
+        <stop offset="60%" stop-color="#f1b3c4" />
+        <stop offset="100%" stop-color="#c9527a" />
+      </radialGradient>
+      <radialGradient id="grad-blossom-3" cx="40%" cy="40%" r="60%">
+        <stop offset="0%" stop-color="#ffffff" />
+        <stop offset="60%" stop-color="#fbd9e2" />
+        <stop offset="100%" stop-color="#e98aa6" />
+      </radialGradient>
+    </defs>
+
+    <!-- Mist-blurred hills in lavender-grey -->
+    <g filter="url(#soft-blur)" opacity="0.82">
+      <!-- Distant rolling ridgeline -->
+      <path d="M-50,440 Q160,340 380,390 T820,360 Q940,340 1060,380 L1060,530 L-50,530 Z" fill="#b9b3d1" opacity="0.65" />
+      <!-- Mid-distance hills -->
+      <path d="M220,445 Q360,370 520,415 T920,390 L1050,420 L1050,530 L220,530 Z" fill="#a8a1c4" opacity="0.75" />
+      
+      <!-- Pagoda silhouette on a hill in #8f88b3 -->
+      <g id="pagoda" transform="translate(680, 275) scale(0.68)">
+        <!-- Base hillock -->
+        <path d="M-40,165 Q30,135 100,165 L100,190 L-40,190 Z" fill="#8f88b3" />
+        <!-- Tier 1 (bottom) -->
+        <rect x="18" y="112" width="24" height="26" fill="#8f88b3" />
+        <path d="M-8,114 Q30,105 68,114 Q74,103 62,102 Q30,97 -2,102 Q-14,103 -8,114 Z" fill="#8f88b3" />
+        <!-- Tier 2 -->
+        <rect x="21" y="80" width="18" height="23" fill="#8f88b3" />
+        <path d="M-2,82 Q30,73 62,82 Q67,73 57,72 Q30,68 3,72 Q-7,73 -2,82 Z" fill="#8f88b3" />
+        <!-- Tier 3 (top) -->
+        <rect x="23" y="52" width="14" height="21" fill="#8f88b3" />
+        <path d="M4,54 Q30,46 56,54 Q60,47 52,45 Q30,42 8,45 Q0,47 4,54 Z" fill="#8f88b3" />
+        <!-- Spire / Kurin rings -->
+        <line x1="30" y1="44" x2="30" y2="12" stroke="#8f88b3" stroke-width="2.5" stroke-linecap="round" />
+        <ellipse cx="30" cy="36" rx="4.5" ry="1.4" fill="#8f88b3" />
+        <ellipse cx="30" cy="31" rx="4" ry="1.3" fill="#8f88b3" />
+        <ellipse cx="30" cy="26" rx="3.3" ry="1.2" fill="#8f88b3" />
+        <ellipse cx="30" cy="21" rx="2.5" ry="1.1" fill="#8f88b3" />
+      </g>
+    </g>
+
+    <!-- Riverbank ground knolls in foreground left & right -->
+    <path d="M-20,600 L-20,490 Q70,480 180,505 Q280,528 340,560 L340,600 Z" fill="#3b375b" opacity="0.95" />
+    <path d="M840,600 Q890,540 1020,530 L1020,600 Z" fill="#353154" opacity="0.92" />
+
+    <!-- Canopy back layer (blurred softly) -->
+    <g id="blossom-layer-back" filter="url(#foliage-blur)" opacity="0.9"></g>
+
+    <!-- Trees: indigo branches (#2f2b52) -->
+    <g id="branches" stroke="#2f2b52" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <!-- Big tree anchored on bottom-left -->
+      <path d="M -10,610 Q 50,530 110,450 Q 150,390 170,300" stroke-width="32" />
+      <path d="M 110,450 Q 180,430 250,420 Q 330,410 400,395" stroke-width="19" />
+      <path d="M 250,420 Q 290,460 360,470" stroke-width="9" />
+      <path d="M 360,470 Q 410,475 445,495" stroke-width="4.5" />
+      <path d="M 330,410 Q 380,380 460,370" stroke-width="7" />
+      <path d="M 460,370 Q 510,365 540,350" stroke-width="4" />
+      <path d="M 170,300 Q 180,240 150,170" stroke-width="16" />
+      <path d="M 150,170 Q 130,110 80,60" stroke-width="8" />
+      <path d="M 150,170 Q 220,135 280,105" stroke-width="10" />
+      <path d="M 280,105 Q 350,85 410,80" stroke-width="5" />
+      <path d="M 280,105 Q 310,145 370,165" stroke-width="5" />
+      <path d="M 170,300 Q 230,270 320,250" stroke-width="13" />
+      <path d="M 320,250 Q 390,235 460,230" stroke-width="7.5" />
+      <path d="M 460,230 Q 520,230 570,205" stroke-width="4" />
+      <path d="M 320,250 Q 350,290 420,310" stroke-width="6.5" />
+      <path d="M 420,310 Q 480,325 515,315" stroke-width="4" />
+
+      <!-- Smaller secondary tree on right bank -->
+      <path d="M 980,560 Q 940,480 910,430 Q 880,380 870,320" stroke-width="18" />
+      <path d="M 910,430 Q 850,420 780,415" stroke-width="9" />
+      <path d="M 780,415 Q 730,415 690,430" stroke-width="4.5" />
+      <path d="M 870,320 Q 840,270 810,230" stroke-width="10" />
+      <path d="M 810,230 Q 750,210 700,200" stroke-width="5" />
+      <path d="M 810,230 Q 850,185 890,150" stroke-width="5" />
+      <path d="M 870,320 Q 910,280 960,260" stroke-width="7" />
+      <path d="M 960,260 Q 1010,245 1040,240" stroke-width="4" />
+    </g>
+
+    <!-- Canopy front layer (crisp & lively) -->
+    <g id="blossom-layer-front"></g>
+  </svg>
+
+  <canvas id="petal-canvas"></canvas>
+
+  <!-- Haiku Vertical Poem -->
+  <div class="haiku-container" aria-label="Haiku poem">
+    <div class="haiku-line" id="h-line-1"></div>
+    <div class="haiku-line" id="h-line-2"></div>
+    <div class="haiku-line" id="h-line-3"></div>
+  </div>
+
+  <div class="bottom-left-title">
+    <h1><span class="sakura-accent">Sakura</span>Drift</h1>
+    <p class="subtitle">Spring Reverie · 桜の漂い</p>
+  </div>
+
+  <div class="watermark-kanji">桜</div>
+  <div id="instruction-hint">Move to stir the breeze · click for a gust</div>
+</div>
+
+<script>
+(() => {
+  // Respect prefers-reduced-motion
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Sky cycle colors
+  // Morning: top #cfe3f5, middle #f3dfe8, horizon #fbeee6
+  // Golden:  top #e9c9a8, middle #f6d9b4, horizon #fbe5c9
+  const skyMorning = { top: [207, 227, 245], mid: [243, 223, 232], hor: [251, 238, 230], sunAlpha: 0.72 };
+  const skyGolden  = { top: [233, 201, 168], mid: [246, 217, 180], hor: [251, 229, 201], sunAlpha: 0.98 };
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function lerpColor(c1, c2, t) {
+    return [
+      Math.round(lerp(c1[0], c2[0], t)),
+      Math.round(lerp(c1[1], c2[1], t)),
+      Math.round(lerp(c1[2], c2[2], t))
+    ];
+  }
+  function rgbStr(c) { return `rgb(${c[0]}, ${c[1]}, ${c[2]})`; }
+
+  // 90s full day cycle
+  const CYCLE_DURATION = 90000;
+  const sunEl = document.getElementById('sun');
+  const rootStyle = document.documentElement.style;
+
+  function updateSkyAndSun(now) {
+    // 0 -> 1 -> 0 cosine smooth transition
+    const progress = (now % CYCLE_DURATION) / CYCLE_DURATION;
+    // 0 at t=0 (morning), 1 at t=0.5 (golden afternoon), 0 at t=1 (back to morning)
+    const factor = 0.5 - 0.5 * Math.cos(progress * 2 * Math.PI);
+
+    const cTop = lerpColor(skyMorning.top, skyGolden.top, factor);
+    const cMid = lerpColor(skyMorning.mid, skyGolden.mid, factor);
+    const cHor = lerpColor(skyMorning.hor, skyGolden.hor, factor);
+
+    rootStyle.setProperty('--sky-top', rgbStr(cTop));
+    rootStyle.setProperty('--sky-mid', rgbStr(cMid));
+    rootStyle.setProperty('--sky-horizon', rgbStr(cHor));
+
+    // Sun disc travels along an arc from lower-left (20% x, 65% y) to upper-right (82% x, 18% y)
+    // In golden afternoon, it is higher and warmer
+    const sunT = factor;
+    const sunX = lerp(18, 82, sunT);
+    // parabolic elevation arc
+    const arcHeight = Math.sin(sunT * Math.PI) * 22;
+    const sunY = lerp(58, 20, sunT) - arcHeight;
+
+    sunEl.style.left = `${sunX}vw`;
+    sunEl.style.top = `${sunY}vh`;
+    const brightness = lerp(skyMorning.sunAlpha, skyGolden.sunAlpha, factor);
+    sunEl.style.opacity = brightness;
+
+    return { factor, sunXvw: sunX, sunYvh: sunY };
+  }
+
+  // Generate SVG Blossom Clusters on Branches
+  const anchorPoints = [
+    // Big tree (Left)
+    {x: 400, y: 395, count: 18, spread: 35},
+    {x: 445, y: 495, count: 16, spread: 30},
+    {x: 460, y: 370, count: 20, spread: 38},
+    {x: 540, y: 350, count: 22, spread: 36},
+    {x: 515, y: 315, count: 18, spread: 30},
+    {x: 420, y: 310, count: 16, spread: 28},
+    {x: 460, y: 230, count: 26, spread: 45},
+    {x: 570, y: 205, count: 24, spread: 42},
+    {x: 370, y: 165, count: 22, spread: 35},
+    {x: 410, y: 80,  count: 26, spread: 46},
+    {x: 280, y: 105, count: 20, spread: 34},
+    {x: 150, y: 170, count: 22, spread: 40},
+    {x: 80,  y: 60,  count: 24, spread: 42},
+    {x: 220, y: 135, count: 18, spread: 32},
+    {x: 320, y: 250, count: 20, spread: 36},
+    {x: 170, y: 300, count: 20, spread: 35},
+    {x: 250, y: 420, count: 15, spread: 30},
+    {x: 350, y: 85,  count: 18, spread: 30},
+
+    // Secondary tree (Right)
+    {x: 690, y: 430, count: 20, spread: 35},
+    {x: 780, y: 415, count: 16, spread: 28},
+    {x: 700, y: 200, count: 24, spread: 40},
+    {x: 750, y: 210, count: 18, spread: 32},
+    {x: 810, y: 230, count: 20, spread: 34},
+    {x: 890, y: 150, count: 24, spread: 38},
+    {x: 870, y: 320, count: 18, spread: 30},
+    {x: 960, y: 260, count: 20, spread: 35},
+    {x: 1040, y: 240, count: 22, spread: 36},
+    {x: 910, y: 430, count: 15, spread: 28}
+  ];
+
+  const layerBack = document.getElementById('blossom-layer-back');
+  const layerFront = document.getElementById('blossom-layer-front');
+  const svgNS = "http://www.w3.org/2000/svg";
+
+  anchorPoints.forEach(anchor => {
+    for (let i = 0; i < anchor.count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.pow(Math.random(), 0.75) * anchor.spread;
+      const cx = anchor.x + Math.cos(angle) * dist;
+      const cy = anchor.y + Math.sin(angle) * dist * 0.85;
+      const r = 2.6 + Math.random() * 3.6; // radius 2.6 - 6.2
+
+      const gradIndex = Math.floor(Math.random() * 3) + 1;
+      const fillUrl = `url(#grad-blossom-${gradIndex})`;
+      const isBackLayer = Math.random() < 0.667;
+
+      const circle = document.createElementNS(svgNS, 'circle');
+      circle.setAttribute('cx', cx.toFixed(1));
+      circle.setAttribute('cy', cy.toFixed(1));
+      circle.setAttribute('r', r.toFixed(1));
+      circle.setAttribute('fill', fillUrl);
+      circle.setAttribute('opacity', (0.75 + Math.random() * 0.25).toFixed(2));
+
+      if (isBackLayer) {
+        layerBack.appendChild(circle);
+      } else {
+        layerFront.appendChild(circle);
+        // Occasionally add a small crisp white highlight petal
+        if (Math.random() < 0.22) {
+          const petal = document.createElementNS(svgNS, 'ellipse');
+          petal.setAttribute('cx', (cx + (Math.random() - 0.5) * 4).toFixed(1));
+          petal.setAttribute('cy', (cy + (Math.random() - 0.5) * 4).toFixed(1));
+          petal.setAttribute('rx', (r * 0.65).toFixed(1));
+          petal.setAttribute('ry', (r * 0.38).toFixed(1));
+          petal.setAttribute('fill', '#ffffff');
+          petal.setAttribute('opacity', (0.8 + Math.random() * 0.2).toFixed(2));
+          petal.setAttribute('transform', `rotate(${Math.floor(Math.random() * 360)} ${cx.toFixed(1)} ${cy.toFixed(1)})`);
+          layerFront.appendChild(petal);
+        }
+      }
+    }
+  });
+
+  // Haiku Vertical Text Reveal
+  const haikuLines = [
+    "petals let go first",
+    "the branch remembers nothing",
+    "the river keeps all"
+  ];
+  const haikuElements = [
+    document.getElementById('h-line-1'),
+    document.getElementById('h-line-2'),
+    document.getElementById('h-line-3')
+  ];
+
+  let charDelayAccumulator = 600;
+  haikuLines.forEach((lineText, lineIdx) => {
+    const el = haikuElements[lineIdx];
+    const chars = Array.from(lineText);
+    chars.forEach((char) => {
+      const span = document.createElement('span');
+      span.className = 'haiku-char';
+      span.textContent = char === ' ' ? '\u00A0' : char;
+      el.appendChild(span);
+
+      if (prefersReducedMotion) {
+        span.classList.add('revealed');
+      } else {
+        setTimeout(() => {
+          span.classList.add('revealed');
+        }, charDelayAccumulator);
+        charDelayAccumulator += 115;
+      }
+    });
+    charDelayAccumulator += 380;
+  });
+
+  // Canvas Petal System & River Rendering
+  const canvas = document.getElementById('petal-canvas');
+  const ctx = canvas.getContext('2d');
+
+  let width = 0;
+  let height = 0;
+  let riverHeight = 0;
+  let dpr = 1;
+
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+    riverHeight = height * 0.17;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Pointer Interaction
+  const pointer = {
+    x: -9999,
+    y: -9999,
+    vx: 0,
+    vy: 0,
+    lastX: -9999,
+    lastY: -9999,
+    lastTime: performance.now()
+  };
+
+  const gusts = []; // gust shockwaves {x, y, power, angle, radius, life}
+  const hintEl = document.getElementById('instruction-hint');
+  let firstClickDone = false;
+
+  window.addEventListener('pointermove', (e) => {
+    const now = performance.now();
+    const dt = Math.max(now - pointer.lastTime, 16);
+    pointer.x = e.clientX;
+    pointer.y = e.clientY;
+    if (pointer.lastX !== -9999) {
+      pointer.vx = (pointer.x - pointer.lastX) / (dt / 16);
+      pointer.vy = (pointer.y - pointer.lastY) / (dt / 16);
+    }
+    pointer.lastX = pointer.x;
+    pointer.lastY = pointer.y;
+    pointer.lastTime = now;
+  });
+
+  function triggerGust(cx, cy, countToAdd = 36) {
+    if (!firstClickDone) {
+      firstClickDone = true;
+      hintEl.classList.add('fade-out');
+    }
+
+    // Gust direction away from clicked side (left click pushes right, right click pushes left)
+    const pushDirX = cx < width * 0.5 ? 1 : -1;
+    gusts.push({
+      x: cx,
+      y: cy,
+      pushDirX: pushDirX,
+      power: 9.5,
+      radius: 30,
+      maxRadius: Math.max(width, height) * 0.8,
+      decay: 0.94
+    });
+
+    // Release fresh petals from the tree canopy
+    for (let i = 0; i < countToAdd; i++) {
+      // Pick random tree anchor
+      const anchor = anchorPoints[Math.floor(Math.random() * anchorPoints.length)];
+      // Convert normalized SVG coordinate (1000x600) to viewport px
+      const sx = (anchor.x / 1000) * width + (Math.random() - 0.5) * 80;
+      const sy = (anchor.y / 600) * height + (Math.random() - 0.5) * 60;
+      petals.push(createPetal(sx, sy, true, pushDirX));
+    }
+  }
+
+  window.addEventListener('pointerdown', (e) => {
+    triggerGust(e.clientX, e.clientY, 36);
+  });
+
+  // Petal Class & Pool
+  // Target 120-170 petals
+  const PETAL_COUNT = 145;
+  const petals = [];
+
+  function createPetal(initX, initY, isSpawned = false, dirBias = 1) {
+    const z = 0.35 + Math.random() * 0.65; // depth factor (0.35 = far, 1.0 = near)
+    const baseSize = 8 + Math.random() * 7;
+    return {
+      x: initX !== undefined ? initX : Math.random() * (width + 120) - 60,
+      y: initY !== undefined ? initY : Math.random() * (height - riverHeight * 0.5),
+      z: z,
+      size: baseSize * z,
+      baseSpeedX: (0.4 + Math.random() * 0.8) * (0.8 + z * 0.5),
+      baseSpeedY: (0.55 + Math.random() * 0.95) * (0.7 + z * 0.6),
+      vx: isSpawned ? dirBias * (3.5 + Math.random() * 4.5) : 0,
+      vy: isSpawned ? -(1.5 + Math.random() * 3.5) : 0,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.038,
+      flip: Math.random() * Math.PI * 2,
+      flipSpeed: 0.02 + Math.random() * 0.045,
+      swayOffset: Math.random() * Math.PI * 2,
+      swaySpeed: 0.015 + Math.random() * 0.02,
+      swayAmp: 0.7 + Math.random() * 1.3,
+      state: 'air', // 'air' | 'water'
+      waterSineOffset: Math.random() * Math.PI * 2,
+      waterLife: 1.0,
+      // Color tint
+      deepColor: Math.random() > 0.4 ? '#e2698c' : '#f0a3b9',
+      paleColor: Math.random() > 0.5 ? '#fbe0e8' : '#f7c8d4'
+    };
+  }
+
+  for (let i = 0; i < PETAL_COUNT; i++) {
+    petals.push(createPetal());
+  }
+
+  // Teardrop bezier petal drawing helper
+  function drawTeardrop(ctx, w, h) {
+    ctx.beginPath();
+    ctx.moveTo(0, -h * 0.5);
+    ctx.bezierCurveTo(w * 0.55, -h * 0.5, w * 0.6, h * 0.1, 0, h * 0.5);
+    ctx.bezierCurveTo(-w * 0.6, h * 0.1, -w * 0.55, -h * 0.5, 0, -h * 0.5);
+    ctx.closePath();
+  }
+
+  let lastFrameTime = performance.now();
+
+  function animate(now) {
+    const dt = Math.min((now - lastFrameTime) / 1000, 0.08);
+    lastFrameTime = now;
+
+    const skyInfo = updateSkyAndSun(now);
+
+    ctx.clearRect(0, 0, width, height);
+
+    // 1. Paint River (Bottom 17%)
+    const riverY = height - riverHeight;
+    
+    // River base gradient: morning pale blue-grey to golden dusty rose -> indigo #5e628c
+    const rGrad = ctx.createLinearGradient(0, riverY, 0, height);
+    const topWaterR = Math.round(lerp(185, 230, skyInfo.factor));
+    const topWaterG = Math.round(lerp(195, 195, skyInfo.factor));
+    const topWaterB = Math.round(lerp(215, 205, skyInfo.factor));
+    rGrad.addColorStop(0, `rgba(${topWaterR}, ${topWaterG}, ${topWaterB}, 0.88)`);
+    rGrad.addColorStop(0.35, `rgba(132, 140, 180, 0.94)`);
+    rGrad.addColorStop(1, '#5e628c');
+
+    ctx.fillStyle = rGrad;
+    ctx.fillRect(0, riverY, width, riverHeight);
+
+    // Pink blossom reflection glow under large tree (left side: x 0..380)
+    const refGrad = ctx.createRadialGradient(width * 0.18, riverY + riverHeight * 0.35, 10, width * 0.18, riverY + riverHeight * 0.35, width * 0.32);
+    refGrad.addColorStop(0, 'rgba(247, 200, 212, 0.38)');
+    refGrad.addColorStop(0.5, 'rgba(226, 105, 140, 0.15)');
+    refGrad.addColorStop(1, 'rgba(226, 105, 140, 0)');
+    ctx.fillStyle = refGrad;
+    ctx.fillRect(0, riverY, width, riverHeight);
+
+    // Sun glitter dashes beneath sun's x position
+    const sunScreenX = (skyInfo.sunXvw / 100) * width;
+    ctx.fillStyle = `rgba(255, 250, 235, ${0.45 + skyInfo.factor * 0.35})`;
+    const tSec = now * 0.001;
+    for (let s = 0; s < 18; s++) {
+      const gPhase = (s * 1.35 + tSec * 2.2) % (Math.PI * 2);
+      if (Math.sin(gPhase) > 0.4) {
+        const gx = sunScreenX + Math.sin(s * 7.1 + tSec) * (50 + s * 4);
+        const gy = riverY + 12 + s * (riverHeight / 20) + Math.cos(s * 3.3) * 3;
+        const gw = 6 + Math.sin(gPhase) * 14;
+        ctx.fillRect(gx - gw / 2, gy, gw, 1.6);
+      }
+    }
+
+    // 9 Drifting sine ripple lines with decreasing opacity
+    ctx.lineWidth = 1.2;
+    for (let r = 0; r < 9; r++) {
+      const progress = r / 9;
+      const ry = riverY + progress * riverHeight + 5;
+      const rippleSpeed = 0.7 + progress * 0.6;
+      const waveOffset = tSec * rippleSpeed * 1.5 + r * 1.1;
+      const alpha = (1 - progress * 0.75) * 0.28;
+
+      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.beginPath();
+      for (let rx = 0; rx <= width; rx += 40) {
+        const dy = Math.sin(rx * 0.012 + waveOffset) * (1.8 + progress * 2.2);
+        if (rx === 0) ctx.moveTo(rx, ry + dy);
+        else ctx.lineTo(rx, ry + dy);
+      }
+      ctx.stroke();
+    }
+
+    // Decay and advance gusts
+    for (let g = gusts.length - 1; g >= 0; g--) {
+      const gust = gusts[g];
+      gust.radius += 340 * dt;
+      gust.power *= gust.decay;
+      if (gust.power < 0.08 || gust.radius > gust.maxRadius) {
+        gusts.splice(g, 1);
+      }
+    }
+
+    // 2. Update and Draw Petals
+    const pointerSpeed = Math.hypot(pointer.vx, pointer.vy);
+
+    for (let i = 0; i < petals.length; i++) {
+      const p = petals[i];
+
+      if (p.state === 'air') {
+        // Pointer proximity breeze: within 180px, push in pointer direction and slightly upward
+        const dx = p.x - pointer.x;
+        const dy = p.y - pointer.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 180 && pointerSpeed > 0.2) {
+          const force = (1 - dist / 180) * Math.min(pointerSpeed, 14) * 0.22;
+          p.vx += (pointer.vx * 0.4 + (dx / (dist || 1)) * 1.2) * force;
+          p.vy += (pointer.vy * 0.3 - 1.8) * force;
+        }
+
+        // Active gusts effect
+        for (let g = 0; g < gusts.length; g++) {
+          const gust = gusts[g];
+          const gdx = p.x - gust.x;
+          const gdy = p.y - gust.y;
+          const gDist = Math.hypot(gdx, gdy);
+          const waveDist = Math.abs(gDist - gust.radius);
+          if (waveDist < 90) {
+            const gustImpulse = (1 - waveDist / 90) * gust.power * 0.35;
+            p.vx += gust.pushDirX * gustImpulse * 2.2;
+            p.vy -= gustImpulse * 0.9;
+          }
+        }
+
+        // Drag / relaxation back toward calm drift
+        p.vx *= 0.955;
+        p.vy *= 0.955;
+
+        // Sway sine
+        const sway = Math.sin(tSec * p.swaySpeed * 60 + p.swayOffset) * p.swayAmp;
+
+        p.x += (p.baseSpeedX + p.vx + sway) * (dt * 60);
+        p.y += (p.baseSpeedY + p.vy) * (dt * 60);
+        p.rotation += p.rotSpeed;
+        p.flip += p.flipSpeed;
+
+        // Check landing on river
+        if (p.y >= riverY + 6) {
+          p.state = 'water';
+          p.waterLife = 1.0;
+          p.vy = 0;
+          p.vx = 0.8 + Math.random() * 0.8; // river drift velocity to the right
+          p.y = riverY + 4 + Math.random() * (riverHeight - 12);
+        }
+
+        // Recycle if out of screen bounds
+        if (p.x > width + 70 || p.x < -100) {
+          Object.assign(p, createPetal(-40, Math.random() * (riverY * 0.75)));
+        }
+      } else {
+        // Floating state in water
+        p.x += (p.vx + 0.6) * (dt * 60);
+        // Bob gently with a sine
+        p.waterSineOffset += 0.035;
+        const bobY = Math.sin(p.waterSineOffset) * 0.35;
+        p.rotation += p.rotSpeed * 0.2;
+        p.flip += p.flipSpeed * 0.15;
+        p.waterLife -= dt * 0.045; // Petals slowly dissolve/sink before recycling
+
+        if (p.x > width + 50 || p.waterLife <= 0) {
+          Object.assign(p, createPetal(Math.random() * (width * 0.6) - 40, -20));
+        }
+      }
+
+      // Render Petal
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation);
+
+      // Flutter edge-on scale
+      const flutterScaleX = Math.abs(Math.cos(p.flip));
+      const aspectWidth = p.size * (0.68 + flutterScaleX * 0.32);
+      const aspectHeight = p.size * 1.35;
+
+      ctx.scale(Math.max(flutterScaleX, 0.12), 1);
+
+      // Gradient fill (blush to deep pink)
+      const grad = ctx.createLinearGradient(0, -aspectHeight * 0.5, 0, aspectHeight * 0.5);
+      grad.addColorStop(0, p.paleColor);
+      grad.addColorStop(1, p.deepColor);
+
+      const alpha = (p.state === 'water' ? p.waterLife * 0.75 : (0.55 + p.z * 0.42));
+      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+      ctx.fillStyle = grad;
+
+      // Far petals soften / have slight shadow if near
+      if (p.z > 0.75 && p.state === 'air') {
+        ctx.shadowColor = 'rgba(185, 179, 209, 0.35)';
+        ctx.shadowBlur = 4;
+      }
+
+      drawTeardrop(ctx, aspectWidth, aspectHeight);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (!prefersReducedMotion) {
+      requestAnimationFrame(animate);
+    }
+  }
+
+  // If user prefers reduced motion, draw a single settled frame and skip continuous loop
+  if (prefersReducedMotion) {
+    updateSkyAndSun(CYCLE_DURATION * 0.35); // warm afternoon look
+    animate(1000);
+  } else {
+    requestAnimationFrame(animate);
+  }
+})();
+</script>
+</body>
+</html>

@@ -2,1588 +2,853 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Valley of Paper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Valley of Paper — Layered Paper-Cut Dusk</title>
   <style>
-    /* -------------------------------------------------------------
-       DESIGN SYSTEM TOKENS & COLOR PALETTES
-       ------------------------------------------------------------- */
     :root {
-      /* Dusk Palette Defaults */
+      /* Sky Gradient */
       --sky-top: #3b2a5c;
       --sky-mid: #c9698a;
       --sky-bot: #f7b26a;
 
-      --sun: #ffd28a;
-      --cloud: #f7d5c4;
+      /* Celestial & Clouds */
+      --sun-color: #ffd28a;
+      --sun-glow: rgba(255, 210, 138, 0.45);
+      --moon-color: #f4eedb;
+      --moon-glow: rgba(244, 238, 219, 0.35);
+      --cloud-color: #f7d5c4;
 
-      --sheet-1: #8b6a9c; /* Far jagged mountains */
-      --sheet-2: #6a4f83; /* Mid mountains */
-      --sheet-3: #4f3a6b; /* Rolling hills with small pines */
-      --sheet-4: #3a2a54; /* Nearer hills with swaying pines */
-      --sheet-5: #2b1f44; /* Front ridge with cabin */
-      --sheet-6: #1c1533; /* Foreground ground strip with deer */
-      --sheet-7: #130f26; /* Deepest foreground ground base */
+      /* Cut Sheets 1 (Far) to 7 (Foreground) */
+      --sheet-1: #8b6a9c;
+      --sheet-2: #6a4f83;
+      --sheet-3: #4f3a6b;
+      --sheet-4: #3a2a54;
+      --sheet-5: #2b1f44;
+      --sheet-6: #1c1533;
+      --sheet-7: #130f26;
 
-      /* Paper UI Palette */
-      --paper-bg: #f6ead6;
-      --paper-ink: #3b2a2a;
-      --paper-tape: rgba(246, 240, 226, 0.72);
+      /* Accents & UI */
+      --window-glow: rgba(255, 200, 110, 0.15);
+      --deer-color: #0e0a1d;
+      --antler-color: #2b1f44;
+      --ui-paper: #f6ead6;
+      --ui-ink: #3b2a2a;
+      --ui-tape: rgba(240, 230, 210, 0.55);
 
-      /* Dynamic Slider-driven Parameters */
-      --stars: 0;
+      /* Dynamic transforms */
       --sun-y: 0px;
       --moon-y: 0px;
-      --window-glow: rgba(255, 200, 110, 0.15);
-      --window-spill: rgba(255, 180, 80, 0.08);
-
-      /* Parallax Offsets */
+      --stars-opacity: 0;
       --mx: 0px;
       --my: 0px;
-
-      /* Font Stacks */
-      --font-rounded: ui-rounded, 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', 'Arial Rounded MT Bold', 'Segoe UI', system-ui, sans-serif;
-      --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Roboto Mono', 'Courier New', monospace;
     }
 
-    *, *::before, *::after {
+    * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
-    html, body {
+    body, html {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: var(--sky-bot);
-      font-family: var(--font-sans);
-      color: var(--paper-ink);
-      user-select: none;
-      -webkit-user-select: none;
-      touch-action: none;
+      background: #050815;
+      font-family: ui-rounded, 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', 'Arial Rounded MT Bold', 'Segoe UI', system-ui, sans-serif;
     }
 
-    /* -------------------------------------------------------------
-       VIEWPORT & BACKGROUND SKY GRADIENT
-       ------------------------------------------------------------- */
-    .viewport {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
+    #viewport {
+      position: absolute;
+      inset: 0;
       overflow: hidden;
-      background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 48%, var(--sky-bot) 100%);
+      background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 52%, var(--sky-bot) 100%);
       transition: background 0.6s ease;
     }
 
-    /* Subtle paper texture overlay across sky */
-    .viewport::after {
-      content: "";
+    svg#paper-scene {
       position: absolute;
-      inset: 0;
-      pointer-events: none;
-      opacity: 0.035;
-      background-image: radial-gradient(#fff 1px, transparent 1px), radial-gradient(#000 1px, transparent 1px);
-      background-size: 8px 8px;
-      background-position: 0 0, 4px 4px;
-      mix-blend-mode: overlay;
-    }
-
-    /* -------------------------------------------------------------
-       SCENE SVG & OVERSIZED PARALLAX SIZING
-       viewBox 0 0 1600 900, preserveAspectRatio xMidYMax slice,
-       oversized by ~6% on each side so parallax never reveals edges.
-       ------------------------------------------------------------- */
-    .scene-svg {
-      position: absolute;
-      left: -6%;
       top: -6%;
+      left: -6%;
       width: 112%;
       height: 112%;
-      overflow: visible;
       pointer-events: none;
-      shape-rendering: geometricPrecision;
     }
 
-    /* -------------------------------------------------------------
-       LAYER SHADOWS & PARALLAX TRANSFORMATIONS
-       - Distant sheets: drop-shadow(0 10px 8px rgba(20,10,40,0.35))
-       - Two nearest sheets: deeper 18px 14px shadow
-       - 0.9s ease-out transform transition for buttery glides
-       ------------------------------------------------------------- */
-    .paper-layer {
-      transform: translate(calc(var(--mx, 0px) * var(--p, 1)), calc(var(--my, 0px) * var(--p, 1)));
-      transition: transform 0.9s cubic-bezier(0.18, 0.9, 0.32, 1);
-      will-change: transform;
+    /* Paper Drop Shadows */
+    .shadow-deep {
+      filter: drop-shadow(0 18px 14px rgba(10, 5, 25, 0.55));
     }
-
-    /* Sheet fill transitions for buttery scrubbing */
-    .sheet-path,
-    .mountain-facet,
-    .pine-shape,
-    .deer-element,
-    .cabin-part,
-    .cloud-path,
-    .sun-body {
-      transition: fill 0.6s cubic-bezier(0.2, 0, 0.1, 1), stroke 0.6s cubic-bezier(0.2, 0, 0.1, 1);
+    .shadow-mid {
+      filter: drop-shadow(0 14px 10px rgba(15, 8, 30, 0.45));
     }
-
-    /* Drop-Shadow Styles per Layer */
-    .shadow-distant {
+    .shadow-far {
       filter: drop-shadow(0 10px 8px rgba(20, 10, 40, 0.35));
     }
 
-    .shadow-near {
-      filter: drop-shadow(0 18px 14px rgba(18, 8, 36, 0.48));
+    /* Layer Fills and Transitions */
+    .sheet-layer path, .sheet-layer polygon, .sheet-layer rect {
+      transition: fill 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
 
-    .shadow-foreground {
-      filter: drop-shadow(0 18px 14px rgba(12, 5, 24, 0.58));
+    /* Parallax container groups */
+    .layer-group {
+      transform: translate3d(calc(var(--mx) * var(--p)), calc(var(--my) * var(--p) * 0.6), 0);
+      transition: transform 0.9s cubic-bezier(0.1, 0.9, 0.2, 1);
+      will-change: transform;
     }
 
-    .shadow-cloud {
-      filter: drop-shadow(0 8px 7px rgba(20, 10, 40, 0.28));
+    /* Celestial Transitions */
+    #sun-node {
+      transform: translate3d(0, var(--sun-y), 0);
+      transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
-
-    .shadow-celestial {
-      filter: drop-shadow(0 8px 12px rgba(25, 12, 45, 0.3));
+    #moon-node {
+      transform: translate3d(0, var(--moon-y), 0);
+      transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
-
-    /* -------------------------------------------------------------
-       LAYER (1): TWINKLING STARS
-       Driven by --stars (fades in between 35% and 85% of the slider)
-       ------------------------------------------------------------- */
-    #stars-layer {
-      opacity: var(--stars, 0);
+    #star-field {
+      opacity: var(--stars-opacity);
       transition: opacity 0.6s ease;
     }
 
+    /* Drifting Paper Clouds */
+    @keyframes cloudLoopA {
+      0% { transform: translate3d(-350px, 0, 0); }
+      100% { transform: translate3d(1750px, 0, 0); }
+    }
+    @keyframes cloudLoopB {
+      0% { transform: translate3d(-450px, 0, 0); }
+      100% { transform: translate3d(1800px, 0, 0); }
+    }
+    @keyframes cloudLoopC {
+      0% { transform: translate3d(-300px, 0, 0); }
+      100% { transform: translate3d(1700px, 0, 0); }
+    }
+
+    .cloud-1 { animation: cloudLoopA 145s linear infinite; }
+    .cloud-2 { animation: cloudLoopB 185s linear infinite -60s; }
+    .cloud-3 { animation: cloudLoopC 165s linear infinite -110s; }
+
+    /* Wind Pine Sway */
+    @keyframes pineSway {
+      0%, 100% { transform: rotate(0deg); }
+      33% { transform: rotate(0.8deg); }
+      66% { transform: rotate(-0.7deg); }
+    }
+    .swaying-pine {
+      transform-origin: bottom center;
+      animation: pineSway 6s ease-in-out infinite;
+    }
+
+    /* Star Twinkle */
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
     .star {
-      animation: star-twinkle var(--twinkle-dur, 2.5s) ease-in-out infinite alternate;
-      animation-delay: var(--twinkle-delay, 0s);
+      animation: twinkle 3s ease-in-out infinite alternate;
+      transform-box: fill-box;
       transform-origin: center;
     }
 
-    @keyframes star-twinkle {
-      0% {
-        opacity: var(--base-op, 0.7);
-        transform: scale(0.75);
-      }
-      100% {
-        opacity: calc(var(--base-op, 0.7) * 0.15);
-        transform: scale(0.4);
-      }
+    /* UI Paper Cards */
+    @keyframes cardEntrance {
+      0% { opacity: 0; transform: translateY(20px) scale(0.97); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
     }
 
-    /* -------------------------------------------------------------
-       LAYER (2) & (3): SUN & MOON
-       --sun-y (sun descends 620px), --moon-y (moon rises 700px)
-       ------------------------------------------------------------- */
-    .sun-group {
-      transform: translate(0px, var(--sun-y, 0px));
-      transition: transform 0.6s cubic-bezier(0.2, 0, 0.1, 1);
-    }
-
-    .moon-group {
-      transform: translate(0px, var(--moon-y, 0px));
-      transition: transform 0.6s cubic-bezier(0.2, 0, 0.1, 1);
-    }
-
-    /* -------------------------------------------------------------
-       LAYER (4): THREE DRIFTING PAPER CLOUDS
-       translateX keyframes on 140–190s loops
-       ------------------------------------------------------------- */
-    .cloud-drift-1 {
-      animation: drift-cloud-1 150s linear infinite;
-    }
-
-    .cloud-drift-2 {
-      animation: drift-cloud-2 185s linear infinite;
-    }
-
-    .cloud-drift-3 {
-      animation: drift-cloud-3 165s linear infinite;
-    }
-
-    @keyframes drift-cloud-1 {
-      0% { transform: translateX(-420px); }
-      100% { transform: translateX(1850px); }
-    }
-
-    @keyframes drift-cloud-2 {
-      0% { transform: translateX(-480px); }
-      100% { transform: translateX(1920px); }
-    }
-
-    @keyframes drift-cloud-3 {
-      0% { transform: translateX(-440px); }
-      100% { transform: translateX(1880px); }
-    }
-
-    /* -------------------------------------------------------------
-       LAYER (8): NEARER HILLS SWAYING PINES
-       Sway ±0.8° on a 6s ease loop, each with a staggered delay
-       ------------------------------------------------------------- */
-    .pine-sway {
-      animation: pine-swaying 6s ease-in-out infinite alternate;
-      transform-origin: 0 0;
-    }
-
-    @keyframes pine-swaying {
-      0% {
-        transform: rotate(-0.8deg);
-      }
-      100% {
-        transform: rotate(0.8deg);
-      }
-    }
-
-    /* -------------------------------------------------------------
-       CABIN DETAILS & WINDOW GLOW
-       ------------------------------------------------------------- */
-    .window-lit {
-      fill: var(--window-glow);
-      transition: fill 0.6s ease;
-    }
-
-    .window-spill-light {
-      fill: var(--window-spill);
-      transition: fill 0.6s ease;
-    }
-
-    /* -------------------------------------------------------------
-       PAPER UI COMPONENTS
-       ------------------------------------------------------------- */
     .paper-card {
       position: absolute;
-      background: var(--paper-bg);
-      color: var(--paper-ink);
+      background: var(--ui-paper);
+      color: var(--ui-ink);
       border-radius: 6px;
-      box-shadow: 0 14px 28px rgba(15, 10, 25, 0.28), 0 4px 10px rgba(15, 10, 25, 0.16);
-      transition: background 0.6s ease, color 0.6s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.4s ease;
-      z-index: 100;
-      user-select: none;
-      -webkit-user-select: none;
+      box-shadow: 2px 10px 25px rgba(5, 3, 12, 0.4), 0 2px 5px rgba(0, 0, 0, 0.2);
       pointer-events: auto;
+      animation: cardEntrance 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      transition: background 0.6s ease, color 0.6s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.35s ease;
+      z-index: 10;
     }
 
-    /* Top-left Paper Label */
-    .title-card {
-      top: clamp(16px, 3.2vw, 36px);
-      left: clamp(16px, 3.2vw, 36px);
-      padding: clamp(16px, 2vw, 24px) clamp(20px, 2.4vw, 30px);
+    /* Title Label */
+    #title-label {
+      top: 32px;
+      left: 36px;
+      padding: 16px 28px 18px 22px;
       transform: rotate(-1.2deg);
-      cursor: default;
-      animation: ui-entrance 0.9s cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
+    }
+    #title-label:hover {
+      transform: rotate(0deg) translateY(-2px);
+      box-shadow: 4px 14px 32px rgba(5, 3, 12, 0.48), 0 4px 8px rgba(0, 0, 0, 0.25);
     }
 
-    .title-card:hover {
-      transform: translateY(-2px) rotate(0deg);
-      box-shadow: 0 18px 36px rgba(15, 10, 25, 0.32), 0 6px 14px rgba(15, 10, 25, 0.2);
-    }
-
-    /* Translucent strip of paper tape over top edge */
-    .title-card .tape-strip {
+    /* Tape strip */
+    #title-label::before {
+      content: '';
       position: absolute;
-      top: -11px;
-      left: 50%;
-      transform: translateX(-50%) rotate(0.6deg);
-      width: 82px;
-      height: 22px;
-      background: var(--paper-tape);
-      backdrop-filter: blur(2px);
-      -webkit-backdrop-filter: blur(2px);
-      border-left: 2px dashed rgba(185, 170, 150, 0.5);
-      border-right: 2px dashed rgba(185, 170, 150, 0.5);
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+      top: -9px;
+      left: 38%;
+      width: 65px;
+      height: 20px;
+      background: var(--ui-tape);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+      transform: rotate(2deg);
+      border-left: 1px dashed rgba(0, 0, 0, 0.15);
+      border-right: 1px dashed rgba(0, 0, 0, 0.15);
       pointer-events: none;
     }
 
-    .title-card h1 {
-      margin: 0;
-      font-family: var(--font-rounded);
+    .title-text {
       font-size: clamp(1.5rem, 3.4vw, 2.4rem);
       font-weight: 800;
-      letter-spacing: -0.015em;
       line-height: 1.1;
+      letter-spacing: -0.02em;
     }
-
-    .title-card p {
-      margin: 8px 0 0 0;
-      font-size: clamp(0.65rem, 1.1vw, 0.76rem);
-      font-weight: 700;
+    .subtitle-text {
+      margin-top: 6px;
+      font-size: 0.68rem;
       text-transform: uppercase;
-      letter-spacing: 0.14em;
-      opacity: 0.78;
+      letter-spacing: 0.18em;
+      opacity: 0.75;
+      font-weight: 700;
     }
 
-    /* Bottom-right Paper Panel */
-    .control-panel {
-      bottom: clamp(16px, 3.2vw, 36px);
-      right: clamp(16px, 3.2vw, 36px);
-      width: min(390px, calc(100vw - 32px));
-      padding: clamp(16px, 2vw, 22px) clamp(18px, 2.2vw, 24px);
+    /* Bottom Control Panel */
+    #control-panel {
+      bottom: 32px;
+      right: 36px;
+      width: 380px;
+      padding: 22px 24px 20px 24px;
       transform: rotate(0.8deg);
-      animation: ui-entrance 0.9s cubic-bezier(0.2, 0.9, 0.3, 1) 0.15s backwards;
     }
-
-    .control-panel:hover {
-      transform: translateY(-2px) rotate(0deg);
-      box-shadow: 0 18px 36px rgba(15, 10, 25, 0.32), 0 6px 14px rgba(15, 10, 25, 0.2);
+    #control-panel:hover {
+      transform: rotate(0deg) translateY(-2px);
+      box-shadow: 4px 14px 32px rgba(5, 3, 12, 0.48), 0 4px 8px rgba(0, 0, 0, 0.25);
     }
 
     .panel-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
+      align-items: baseline;
+      margin-bottom: 14px;
     }
-
     .panel-title {
-      font-family: var(--font-rounded);
-      font-weight: 700;
-      font-size: 0.95rem;
-      letter-spacing: -0.01em;
+      font-size: 0.82rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
     }
-
-    .clock-readout {
-      font-family: var(--font-mono);
-      font-size: 1.12rem;
+    .clock-display {
+      font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+      font-size: 1.15rem;
       font-weight: 700;
       letter-spacing: 0.04em;
-      background: rgba(0, 0, 0, 0.05);
-      padding: 3px 8px;
-      border-radius: 4px;
-      border: 1px solid rgba(0, 0, 0, 0.06);
     }
 
-    /* Slider track & thumb */
-    .slider-wrapper {
+    /* Range Slider */
+    .slider-wrap {
       position: relative;
-      margin: 8px 0 6px 0;
-    }
-
-    .time-slider {
-      -webkit-appearance: none;
-      appearance: none;
       width: 100%;
-      height: 10px;
-      border-radius: 5px;
-      outline: none;
-      background: linear-gradient(to right, #ffd28a 0%, #f7b26a 25%, #c9698a 50%, #4f3a6b 75%, #0f1c44 100%);
-      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35);
-      cursor: pointer;
+      height: 24px;
+      display: flex;
+      align-items: center;
     }
-
-    /* WebKit Thumb */
-    .time-slider::-webkit-slider-thumb {
+    input[type=range] {
       -webkit-appearance: none;
-      appearance: none;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: var(--paper-bg);
-      border: 3px solid #3b2a2a;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35);
+      width: 100%;
+      background: transparent;
+      outline: none;
+      margin: 0;
       cursor: grab;
-      transition: border-width 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
     }
-
-    .time-slider::-webkit-slider-thumb:hover {
-      border-width: 4.5px;
-      transform: scale(1.14);
-      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
-    }
-
-    .time-slider:active::-webkit-slider-thumb {
+    input[type=range]:active {
       cursor: grabbing;
-      transform: scale(1.08);
     }
 
-    /* Firefox Thumb */
-    .time-slider::-moz-range-thumb {
-      width: 22px;
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #f7b26a 0%, #c9698a 35%, #4f3a6b 70%, #0c122a 100%);
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+    input[type=range]::-moz-range-track {
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #f7b26a 0%, #c9698a 35%, #4f3a6b 70%, #0c122a 100%);
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
       height: 22px;
+      width: 22px;
       border-radius: 50%;
-      background: var(--paper-bg);
-      border: 3px solid #3b2a2a;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35);
-      cursor: grab;
-      transition: border-width 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+      background: var(--ui-paper);
+      border: 3px solid var(--ui-ink);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+      margin-top: -7px;
+      transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
+    }
+    input[type=range]:hover::-webkit-slider-thumb {
+      transform: scale(1.18);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
     }
 
-    .time-slider::-moz-range-thumb:hover {
-      border-width: 4.5px;
-      transform: scale(1.14);
-      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
+    input[type=range]::-moz-range-thumb {
+      height: 22px;
+      width: 22px;
+      border-radius: 50%;
+      background: var(--ui-paper);
+      border: 3px solid var(--ui-ink);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+      transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
+    }
+    input[type=range]:hover::-moz-range-thumb {
+      transform: scale(1.18);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
     }
 
-    .time-slider:active::-moz-range-thumb {
-      cursor: grabbing;
-      transform: scale(1.08);
-    }
-
-    .tick-labels {
+    .ticks {
       display: flex;
       justify-content: space-between;
-      font-size: 0.72rem;
-      font-weight: 600;
-      opacity: 0.75;
-      margin-top: 6px;
-    }
-
-    .hint-line {
-      margin-top: 10px;
+      margin-top: 8px;
       font-size: 0.68rem;
-      opacity: 0.6;
-      letter-spacing: 0.02em;
-      text-align: center;
-    }
-
-    /* Device-Tilt Pill Button (for iOS / coarse pointers) */
-    .tilt-pill-btn {
-      position: absolute;
-      top: clamp(16px, 3.2vw, 36px);
-      right: clamp(16px, 3.2vw, 36px);
-      background: var(--paper-bg);
-      color: var(--paper-ink);
-      border: 1px solid rgba(0, 0, 0, 0.12);
-      outline: none;
-      border-radius: 999px;
-      padding: 10px 18px;
-      font-family: var(--font-rounded);
-      font-size: 0.78rem;
       font-weight: 700;
+      opacity: 0.65;
+    }
+    .panel-hint {
+      margin-top: 10px;
+      font-size: 0.64rem;
+      opacity: 0.5;
+      text-align: center;
       letter-spacing: 0.02em;
-      box-shadow: 0 8px 18px rgba(20, 10, 35, 0.22);
+    }
+
+    /* Tilt Permission Pill */
+    #tilt-btn {
+      display: none;
+      position: absolute;
+      top: 32px;
+      right: 36px;
+      padding: 10px 18px;
+      background: var(--ui-paper);
+      color: var(--ui-ink);
+      font-weight: 700;
+      font-size: 0.75rem;
+      border: none;
+      border-radius: 20px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
       cursor: pointer;
-      transform: rotate(1deg);
-      transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
-      z-index: 105;
-      pointer-events: auto;
+      z-index: 100;
     }
 
-    .tilt-pill-btn:hover {
-      transform: translateY(-2px) rotate(0deg);
-      box-shadow: 0 12px 24px rgba(20, 10, 35, 0.3);
-    }
-
-    /* UI Cards Entrance Animation */
-    @keyframes ui-entrance {
-      from {
-        opacity: 0;
-        transform: translateY(22px) rotate(0deg);
-      }
-      to {
-        opacity: 1;
-      }
-    }
-
-    /* Responsive Under 640px */
     @media (max-width: 640px) {
-      .control-panel {
-        left: 16px;
-        right: 16px;
-        width: calc(100% - 32px);
-        transform: rotate(0deg);
-        bottom: 16px;
+      #title-label {
+        top: 20px;
+        left: 20px;
+        right: 20px;
+        transform: none;
       }
-      .control-panel:hover {
-        transform: translateY(-2px) rotate(0deg);
+      #control-panel {
+        bottom: 20px;
+        left: 20px;
+        right: 20px;
+        width: calc(100% - 40px);
+        transform: none;
       }
-      .title-card {
-        transform: rotate(0deg);
+      #control-panel:hover, #title-label:hover {
+        transform: none;
       }
-      .title-card:hover {
-        transform: translateY(-2px) rotate(0deg);
+      #tilt-btn {
+        top: auto;
+        bottom: 175px;
+        right: 20px;
       }
     }
 
-    /* -------------------------------------------------------------
-       ACCESSIBILITY & PREFERS-REDUCED-MOTION
-       Under prefers-reduced-motion, cloud drift, tree sway, star
-       twinkle, entrance animations, and the smoothing loop are
-       disabled (the slider still recolours everything).
-       ------------------------------------------------------------- */
+    /* Accessibility: Reduced Motion */
     @media (prefers-reduced-motion: reduce) {
-      .cloud-drift-1,
-      .cloud-drift-2,
-      .cloud-drift-3 {
+      .cloud-1, .cloud-2, .cloud-3, .swaying-pine, .star, .paper-card {
         animation: none !important;
       }
-
-      .pine-sway {
-        animation: none !important;
-      }
-
-      .star {
-        animation: none !important;
-      }
-
-      .title-card,
-      .control-panel {
-        animation: none !important;
-        transition: background 0.6s ease, color 0.6s ease !important;
-      }
-
-      .paper-layer {
+      .layer-group {
         transform: none !important;
-        transition: fill 0.6s ease !important;
+        transition: none !important;
       }
     }
   </style>
 </head>
 <body>
-  <main class="viewport" id="viewport">
 
-    <!-- =========================================================
-         INLINE SCENE SVG
-         viewBox 0 0 1600 900, preserveAspectRatio xMidYMax slice,
-         oversized by ~6% on each side so parallax never reveals edges.
-         ========================================================= -->
-    <svg
-      class="scene-svg"
-      viewBox="0 0 1600 900"
-      preserveAspectRatio="xMidYMax slice"
-      aria-label="Valley of Paper Landscape"
-      role="img"
-    >
-      <defs>
-        <!-- REUSABLE PINE SYMBOL -->
-        <!-- Center trunk at 0, base at 0, height 88, tiered paper silhouette -->
-        <symbol id="pine" viewBox="-26 -90 52 90">
-          <path
-            class="pine-shape"
-            d="M 0 -88
-               L 11 -64 L 6 -65
-               L 18 -42 L 12 -43
-               L 25 -17 L 5 -17
-               L 4 0 L -4 0
-               L -5 -17 L -25 -17
-               L -12 -43 L -18 -42
-               L -6 -65 L -11 -64 Z"
-            fill="currentColor"
-          />
-        </symbol>
-
-        <!-- WIDE RADIAL GLOW FOR SUN -->
-        <radialGradient id="sun-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="var(--sun)" stop-opacity="0.8"/>
-          <stop offset="30%" stop-color="var(--sun)" stop-opacity="0.4"/>
-          <stop offset="65%" stop-color="var(--sun)" stop-opacity="0.12"/>
-          <stop offset="100%" stop-color="var(--sun)" stop-opacity="0"/>
-        </radialGradient>
-
-        <!-- SOFT MOON GLOW -->
-        <radialGradient id="moon-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#fff8eb" stop-opacity="0.5"/>
-          <stop offset="45%" stop-color="#fff4d4" stop-opacity="0.18"/>
-          <stop offset="100%" stop-color="#fff4d4" stop-opacity="0"/>
-        </radialGradient>
-
-        <!-- CRESCENT PAPER MOON MASK (Disc with a masked bite) -->
-        <mask id="moon-bite-mask">
-          <!-- White reveals full disc -->
-          <circle cx="0" cy="0" r="35" fill="#ffffff" />
-          <!-- Black bite cuts away inner crescent curve -->
-          <circle cx="13" cy="-7" r="29" fill="#000000" />
-        </mask>
-
-        <!-- CABIN WINDOW GROUND SPILL GRADIENT -->
-        <radialGradient id="window-spill-grad" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#ffb854" stop-opacity="0.6"/>
-          <stop offset="60%" stop-color="#ff9030" stop-opacity="0.2"/>
-          <stop offset="100%" stop-color="#ff9030" stop-opacity="0"/>
-        </radialGradient>
-      </defs>
-
-      <!-- =======================================================
-           (1) STARS LAYER (--p: 0.10)
-           140 tiny twinkling stars generated dynamically by JS
-           ======================================================= -->
-      <g id="stars-layer" class="paper-layer" style="--p: 0.10;">
-        <g id="stars-group"></g>
+<div id="viewport">
+  <svg id="paper-scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice">
+    <defs>
+      <!-- Reusable Pine Symbol: cut paper stacked wedges -->
+      <g id="pine">
+        <path d="M 0,-115 L 24,-65 L 14,-65 L 32,-22 L 18,-22 L 38,28 L 6,28 L 6,55 L -6,55 L -6,28 L -38,28 L -18,-22 L -32,-22 L -14,-65 L -24,-65 Z" />
+      </g>
+      
+      <!-- Reusable Cloud Symbol A -->
+      <g id="cloud-blob-1">
+        <path d="M 50 120 C 20 120, 0 95, 0 70 C 0 40, 30 20, 65 25 C 80 -5, 140 -8, 175 18 C 205 -2, 260 8, 275 42 C 305 45, 325 70, 320 95 C 315 120, 290 120, 270 120 Z" />
+      </g>
+      <!-- Reusable Cloud Symbol B -->
+      <g id="cloud-blob-2">
+        <path d="M 40 90 C 15 90, 0 70, 0 50 C 0 28, 25 12, 50 18 C 65 -4, 115 -6, 145 15 C 170 -1, 215 6, 225 32 C 250 35, 265 55, 260 75 C 255 90, 235 90, 220 90 Z" />
       </g>
 
-      <!-- =======================================================
-           (2) PAPER SUN LAYER (--p: 0.16)
-           70px disc with wide radial glow that sinks 620px
-           ======================================================= -->
-      <g id="sun-layer" class="paper-layer" style="--p: 0.16;">
-        <g class="sun-group shadow-celestial">
-          <!-- Radial glow halo (320px diameter) -->
-          <circle cx="380" cy="220" r="160" fill="url(#sun-glow)" />
-          <!-- 70px paper cut disc (r=35) -->
-          <circle class="sun-body" cx="380" cy="220" r="35" fill="var(--sun)" />
-          <!-- Subtle layered paper rim -->
-          <circle cx="380" cy="220" r="34" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" />
-        </g>
+      <!-- Moon Mask for cut crescent bite -->
+      <mask id="moon-bite-mask">
+        <rect x="-100" y="-100" width="200" height="200" fill="white" />
+        <circle cx="34" cy="-18" r="48" fill="black" />
+      </mask>
+
+      <radialGradient id="sun-halo" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="var(--sun-glow)" />
+        <stop offset="100%" stop-color="var(--sun-glow)" stop-opacity="0" />
+      </radialGradient>
+
+      <radialGradient id="moon-halo" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="var(--moon-glow)" />
+        <stop offset="100%" stop-color="var(--moon-glow)" stop-opacity="0" />
+      </radialGradient>
+    </defs>
+
+    <!-- SHEET 1: Twinkling Stars (JS Generated) -->
+    <g class="layer-group" style="--p: 0.1;">
+      <g id="star-field"></g>
+    </g>
+
+    <!-- SHEET 2: Paper Sun & Glow -->
+    <g class="layer-group" style="--p: 0.16;">
+      <g id="sun-node" transform="translate(1160, 260)">
+        <circle cx="0" cy="0" r="150" fill="url(#sun-halo)" />
+        <circle cx="0" cy="0" r="48" fill="var(--sun-color)" filter="drop-shadow(0 6px 12px rgba(240,140,50,0.3))" />
       </g>
+    </g>
 
-      <!-- =======================================================
-           (3) CRESCENT PAPER MOON LAYER (--p: 0.22)
-           Disc with a masked bite that rises 700px
-           ======================================================= -->
-      <g id="moon-layer" class="paper-layer" style="--p: 0.22;">
-        <!-- Base positioned at y=840; rising 700px brings it up to y=140 -->
-        <g class="moon-group shadow-celestial" transform="translate(1220, 840)">
-          <!-- Moon soft glow halo -->
-          <circle cx="0" cy="0" r="105" fill="url(#moon-glow)" />
-          <!-- Paper crescent cut card -->
-          <circle cx="0" cy="0" r="35" fill="#fff9eb" mask="url(#moon-bite-mask)" />
-          <!-- Subtle inner crescent accent edge -->
-          <circle cx="0" cy="0" r="34" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1" mask="url(#moon-bite-mask)" />
-        </g>
+    <!-- SHEET 3: Crescent Paper Moon -->
+    <g class="layer-group" style="--p: 0.18;">
+      <g id="moon-node" transform="translate(360, 480)">
+        <circle cx="0" cy="0" r="120" fill="url(#moon-halo)" />
+        <circle cx="0" cy="0" r="46" fill="var(--moon-color)" mask="url(#moon-bite-mask)" filter="drop-shadow(0 6px 10px rgba(180,200,240,0.25))" />
       </g>
+    </g>
 
-      <!-- =======================================================
-           (4) THREE DRIFTING PAPER CLOUDS (--p: 0.28)
-           Cubic-bezier blob paths on 140–190s loops
-           ======================================================= -->
-      <g id="clouds-layer" class="paper-layer shadow-cloud" style="--p: 0.28;">
-        <!-- Cloud 1: High sky, loop 150s, negative delay for natural spread -->
-        <g class="cloud-drift-1" style="animation-delay: -52s;">
-          <path
-            class="cloud-path"
-            d="M 60 70
-               C 60 46, 88 30, 118 35
-               C 134 16, 172 14, 200 32
-               C 226 18, 266 24, 282 48
-               C 312 44, 342 62, 338 88
-               C 350 106, 338 126, 314 130
-               C 290 135, 78 135, 52 124
-               C 32 116, 28 90, 60 70 Z"
-            fill="var(--cloud)"
-            transform="translate(180, 50) scale(1.05)"
-          />
-        </g>
-
-        <!-- Cloud 2: Mid-high sky, loop 185s, negative delay -->
-        <g class="cloud-drift-2" style="animation-delay: -118s;">
-          <path
-            class="cloud-path"
-            d="M 70 80
-               C 64 50, 102 32, 134 44
-               C 156 18, 202 14, 234 36
-               C 264 22, 308 30, 326 56
-               C 362 54, 396 78, 390 110
-               C 406 130, 390 154, 358 158
-               C 326 162, 92 162, 64 150
-               C 38 138, 32 104, 70 80 Z"
-            fill="var(--cloud)"
-            transform="translate(860, 135) scale(0.92)"
-          />
-        </g>
-
-        <!-- Cloud 3: Lower sky, loop 165s, negative delay -->
-        <g class="cloud-drift-3" style="animation-delay: -28s;">
-          <path
-            class="cloud-path"
-            d="M 50 65
-               C 48 40, 78 26, 106 34
-               C 124 12, 162 10, 188 28
-               C 214 14, 250 20, 268 42
-               C 296 40, 326 58, 322 84
-               C 334 100, 324 120, 298 124
-               C 272 130, 68 130, 46 118
-               C 26 108, 22 82, 50 65 Z"
-            fill="var(--cloud)"
-            transform="translate(480, 210) scale(0.85)"
-          />
-        </g>
+    <!-- SHEET 4: Drifting Paper Clouds -->
+    <g class="layer-group sheet-layer shadow-far" style="--p: 0.25; fill: var(--cloud-color);">
+      <g class="cloud-1" transform="translate(0, 110)">
+        <use href="#cloud-blob-1" opacity="0.65" />
       </g>
-
-      <!-- =======================================================
-           (5) FAR JAGGED MOUNTAINS (Sheet 1, --p: 0.42)
-           drop-shadow(0 10px 8px rgba(20,10,40,0.35))
-           ======================================================= -->
-      <g id="sheet-1" class="paper-layer shadow-distant" style="--p: 0.42;">
-        <path
-          class="sheet-path mountain-shape"
-          d="M -100 1000
-             L -100 480
-             L 60 425
-             L 170 460
-             L 290 375
-             L 380 412
-             L 500 325
-             L 620 395
-             L 730 338
-             L 820 375
-             L 950 305
-             L 1070 388
-             L 1190 330
-             L 1300 382
-             L 1430 315
-             L 1550 405
-             L 1700 355
-             L 1700 1000 Z"
-          fill="var(--sheet-1)"
-        />
-        <!-- Paper crease light facet highlights -->
-        <polygon
-          class="mountain-facet"
-          points="290,375 380,412 335,465 240,430"
-          fill="rgba(255,255,255,0.06)"
-        />
-        <polygon
-          class="mountain-facet"
-          points="500,325 620,395 560,455 440,405"
-          fill="rgba(255,255,255,0.06)"
-        />
-        <polygon
-          class="mountain-facet"
-          points="950,305 1070,388 1010,460 885,395"
-          fill="rgba(255,255,255,0.06)"
-        />
-        <polygon
-          class="mountain-facet"
-          points="1430,315 1550,405 1490,468 1360,400"
-          fill="rgba(255,255,255,0.06)"
-        />
+      <g class="cloud-2" transform="translate(0, 180) scale(0.85)">
+        <use href="#cloud-blob-2" opacity="0.5" />
       </g>
-
-      <!-- =======================================================
-           (6) MID MOUNTAINS (Sheet 2, --p: 0.56)
-           drop-shadow(0 10px 8px rgba(20,10,40,0.35))
-           ======================================================= -->
-      <g id="sheet-2" class="paper-layer shadow-distant" style="--p: 0.56;">
-        <path
-          class="sheet-path mountain-shape"
-          d="M -100 1000
-             L -100 560
-             L 90 515
-             L 220 548
-             L 360 460
-             L 490 528
-             L 610 475
-             L 750 542
-             L 880 468
-             L 1010 532
-             L 1140 455
-             L 1280 512
-             L 1400 465
-             L 1530 528
-             L 1700 475
-             L 1700 1000 Z"
-          fill="var(--sheet-2)"
-        />
-        <!-- Paper faceted ridge cuts -->
-        <polygon
-          class="mountain-facet"
-          points="360,460 490,528 420,580 300,530"
-          fill="rgba(255,255,255,0.05)"
-        />
-        <polygon
-          class="mountain-facet"
-          points="880,468 1010,532 940,590 820,540"
-          fill="rgba(255,255,255,0.05)"
-        />
-        <polygon
-          class="mountain-facet"
-          points="1140,455 1280,512 1200,575 1080,525"
-          fill="rgba(255,255,255,0.05)"
-        />
+      <g class="cloud-3" transform="translate(0, 70) scale(1.15)">
+        <use href="#cloud-blob-1" opacity="0.6" />
       </g>
+    </g>
 
-      <!-- =======================================================
-           (7) ROLLING HILLS WITH SMALL PINES (Sheet 3, --p: 0.70)
-           Single reusable <use href="#pine"> symbol row
-           drop-shadow(0 10px 8px rgba(20,10,40,0.35))
-           ======================================================= -->
-      <g id="sheet-3" class="paper-layer shadow-distant" style="--p: 0.70;">
-        <!-- Rolling hill contour -->
-        <path
-          class="sheet-path"
-          d="M -100 1000
-             L -100 625
-             C 90 605, 230 565, 390 575
-             C 550 585, 690 635, 850 610
-             C 1020 580, 1190 625, 1350 595
-             C 1500 570, 1620 600, 1700 590
-             L 1700 1000 Z"
-          fill="var(--sheet-3)"
-        />
+    <!-- SHEET 5: Far Jagged Mountains -->
+    <g class="layer-group sheet-layer shadow-far" style="--p: 0.35; fill: var(--sheet-1);">
+      <path d="M-80 920 L-80 430 L110 320 L270 410 L480 260 L680 420 L890 280 L1080 390 L1260 270 L1460 380 L1680 250 L1680 920 Z" />
+    </g>
 
-        <!-- Row of small pines drawn from <use href="#pine"> -->
-        <g style="color: var(--sheet-3);">
-          <use href="#pine" x="40" y="612" transform="scale(0.32)" />
-          <use href="#pine" x="110" y="600" transform="scale(0.35)" />
-          <use href="#pine" x="180" y="588" transform="scale(0.30)" />
-          <use href="#pine" x="250" y="577" transform="scale(0.36)" />
-          <use href="#pine" x="320" y="571" transform="scale(0.33)" />
-          <use href="#pine" x="390" y="575" transform="scale(0.38)" />
-          <use href="#pine" x="470" y="585" transform="scale(0.32)" />
-          <use href="#pine" x="550" y="595" transform="scale(0.29)" />
-          <use href="#pine" x="650" y="620" transform="scale(0.34)" />
-          <use href="#pine" x="740" y="626" transform="scale(0.30)" />
-          <use href="#pine" x="830" y="614" transform="scale(0.37)" />
-          <use href="#pine" x="920" y="598" transform="scale(0.33)" />
-          <use href="#pine" x="1000" y="586" transform="scale(0.35)" />
-          <use href="#pine" x="1090" y="589" transform="scale(0.31)" />
-          <use href="#pine" x="1190" y="614" transform="scale(0.36)" />
-          <use href="#pine" x="1280" y="606" transform="scale(0.34)" />
-          <use href="#pine" x="1360" y="593" transform="scale(0.37)" />
-          <use href="#pine" x="1450" y="578" transform="scale(0.32)" />
-          <use href="#pine" x="1540" y="586" transform="scale(0.35)" />
-          <use href="#pine" x="1630" y="592" transform="scale(0.31)" />
-        </g>
+    <!-- SHEET 6: Mid Jagged & Angular Mountains -->
+    <g class="layer-group sheet-layer shadow-far" style="--p: 0.48; fill: var(--sheet-2);">
+      <path d="M-80 920 L-80 490 L180 370 L340 460 L540 350 L730 460 L970 330 L1190 450 L1410 340 L1680 480 L1680 920 Z" />
+    </g>
+
+    <!-- SHEET 7: Rolling Hills with Small Pine Symbol Rows -->
+    <g class="layer-group sheet-layer shadow-mid" style="--p: 0.62; fill: var(--sheet-3);">
+      <path d="M-80 920 L-80 540 Q 140 450, 420 520 T 960 510 T 1440 490 Q 1580 495, 1680 530 L1680 920 Z" />
+      <!-- Tiny pines nestled on the crest -->
+      <g>
+        <use href="#pine" x="120" y="490" transform="scale(0.35)" />
+        <use href="#pine" x="190" y="495" transform="scale(0.38)" />
+        <use href="#pine" x="250" y="490" transform="scale(0.32)" />
+        <use href="#pine" x="490" y="525" transform="scale(0.36)" />
+        <use href="#pine" x="550" y="520" transform="scale(0.4)" />
+        <use href="#pine" x="620" y="515" transform="scale(0.34)" />
+        <use href="#pine" x="840" y="510" transform="scale(0.37)" />
+        <use href="#pine" x="910" y="508" transform="scale(0.35)" />
+        <use href="#pine" x="1120" y="495" transform="scale(0.38)" />
+        <use href="#pine" x="1190" y="492" transform="scale(0.33)" />
+        <use href="#pine" x="1380" y="495" transform="scale(0.4)" />
+        <use href="#pine" x="1450" y="505" transform="scale(0.35)" />
       </g>
+    </g>
 
-      <!-- =======================================================
-           (8) NEARER HILLS WITH SWAYING PINES (Sheet 4, --p: 0.85)
-           Larger pines that sway ±0.8° on a 6s ease loop with staggered delays
-           drop-shadow(0 10px 8px rgba(20,10,40,0.35))
-           ======================================================= -->
-      <g id="sheet-4" class="paper-layer shadow-distant" style="--p: 0.85;">
-        <!-- Nearer hill contour -->
-        <path
-          class="sheet-path"
-          d="M -100 1000
-             L -100 705
-             C 120 675, 270 635, 450 655
-             C 630 675, 790 725, 970 690
-             C 1150 660, 1320 705, 1500 665
-             C 1610 645, 1670 675, 1700 670
-             L 1700 1000 Z"
-          fill="var(--sheet-4)"
-        />
-
-        <!-- Larger pines swaying ±0.8° on 6s ease loop -->
-        <g style="color: var(--sheet-4);">
-          <!-- Pine 1 -->
-          <g transform="translate(150, 672) scale(0.64)">
-            <g class="pine-sway" style="animation-delay: -0.8s;">
-              <use href="#pine" />
-            </g>
-          </g>
-          <!-- Pine 2 -->
-          <g transform="translate(260, 646) scale(0.70)">
-            <g class="pine-sway" style="animation-delay: -2.3s;">
-              <use href="#pine" />
-            </g>
-          </g>
-          <!-- Pine 3 -->
-          <g transform="translate(370, 650) scale(0.74)">
-            <g class="pine-sway" style="animation-delay: -4.5s;">
-              <use href="#pine" />
-            </g>
-          </g>
-          <!-- Pine 4 -->
-          <g transform="translate(490, 668) scale(0.62)">
-            <g class="pine-sway" style="animation-delay: -1.6s;">
-              <use href="#pine" />
-            </g>
-          </g>
-          <!-- Pine 5 -->
-          <g transform="translate(660, 694) scale(0.68)">
-            <g class="pine-sway" style="animation-delay: -3.8s;">
-              <use href="#pine" />
-            </g>
-          </g>
-          <!-- Pine 6 -->
-          <g transform="translate(790, 722) scale(0.60)">
-            <g class="pine-sway" style="animation-delay: -5.4s;">
-              <use href="#pine" />
-            </g>
-          </g>
-          <!-- Pine 7 -->
-          <g transform="translate(930, 696) scale(0.72)">
-            <g class="pine-sway" style="animation-delay: -1.1s;">
-              <use href="#pine" />
-            </g>
-          </g>
-          <!-- Pine 8 -->
-          <g transform="translate(1060, 676) scale(0.68)">
-            <g class="pine-sway" style="animation-delay: -3.0s;">
-              <use href="#pine" />
-            </g>
-          </g>
-          <!-- Pine 9 -->
-          <g transform="translate(1230, 682) scale(0.76)">
-            <g class="pine-sway" style="animation-delay: -5.1s;">
-              <use href="#pine" />
-            </g>
-          </g>
-          <!-- Pine 10 -->
-          <g transform="translate(1390, 692) scale(0.65)">
-            <g class="pine-sway" style="animation-delay: -2.0s;">
-              <use href="#pine" />
-            </g>
-          </g>
-          <!-- Pine 11 -->
-          <g transform="translate(1530, 666) scale(0.71)">
-            <g class="pine-sway" style="animation-delay: -3.5s;">
-              <use href="#pine" />
-            </g>
-          </g>
-        </g>
+    <!-- SHEET 8: Nearer Hills with Swaying Wind Pines -->
+    <g class="layer-group sheet-layer shadow-mid" style="--p: 0.78; fill: var(--sheet-4);">
+      <path d="M-80 920 L-80 620 Q 260 530, 680 610 T 1420 590 Q 1580 600, 1680 640 L1680 920 Z" />
+      <!-- Swaying Pines -->
+      <g class="swaying-pine" style="animation-delay: 0s; transform-origin: 220px 600px;">
+        <use href="#pine" x="220" y="580" transform="scale(0.68)" />
       </g>
-
-      <!-- =======================================================
-           (9) FRONT RIDGE WITH PAPER CABIN & TWO PINES (Sheet 5, --p: 1.00)
-           Deeper 18px 14px shadow (one of the two nearest)
-           Cabin: walls, gabled roof, chimney, two windows, door
-           ======================================================= -->
-      <g id="sheet-5" class="paper-layer shadow-near" style="--p: 1.00;">
-        <!-- Front ridge contour -->
-        <path
-          class="sheet-path"
-          d="M -100 1000
-             L -100 765
-             C 160 750, 340 725, 540 745
-             C 710 760, 830 740, 960 730
-             C 1070 730, 1190 735, 1320 752
-             C 1470 770, 1620 755, 1700 775
-             L 1700 1000 Z"
-          fill="var(--sheet-5)"
-        />
-
-        <!-- Two Pines on the Front Ridge -->
-        <g style="color: var(--sheet-5);">
-          <!-- Pine 1 (Left of cabin) -->
-          <use href="#pine" x="870" y="732" transform="scale(0.88)" />
-          <!-- Pine 2 (Right of cabin) -->
-          <use href="#pine" x="1195" y="736" transform="scale(0.95)" />
-        </g>
-
-        <!-- PAPER CABIN -->
-        <g id="paper-cabin" class="cabin-group" transform="translate(1015, 638)">
-          <!-- Ground spill light pool under windows (fades in as night falls) -->
-          <ellipse cx="88" cy="98" rx="60" ry="14" fill="url(#window-spill-grad)" class="window-spill-light" />
-
-          <!-- Chimney -->
-          <rect class="cabin-part" x="82" y="16" width="15" height="32" rx="1.5" fill="var(--sheet-5)" />
-          <rect class="cabin-part" x="79.5" y="13" width="20" height="4" rx="1" fill="var(--sheet-4)" />
-
-          <!-- Cabin Main Walls -->
-          <rect class="cabin-part" x="0" y="44" width="112" height="54" rx="2" fill="var(--sheet-5)" />
-
-          <!-- Door (inset paper card) -->
-          <rect class="cabin-part" x="18" y="60" width="23" height="38" rx="2" fill="var(--sheet-6)" />
-          <!-- Tiny paper door latch -->
-          <circle cx="36" cy="80" r="1.5" fill="var(--sheet-4)" />
-
-          <!-- Window 1 (Left) -->
-          <g transform="translate(52, 54)">
-            <!-- Glowing aperture -->
-            <rect class="window-lit" x="0" y="0" width="20" height="22" rx="2" />
-            <!-- Window frame & muntin divider lines -->
-            <line x1="10" y1="0" x2="10" y2="22" stroke="var(--sheet-5)" stroke-width="2" />
-            <line x1="0" y1="11" x2="20" y2="11" stroke="var(--sheet-5)" stroke-width="2" />
-            <rect x="0" y="0" width="20" height="22" rx="2" fill="none" stroke="var(--sheet-5)" stroke-width="1.8" />
-          </g>
-
-          <!-- Window 2 (Right) -->
-          <g transform="translate(80, 54)">
-            <!-- Glowing aperture -->
-            <rect class="window-lit" x="0" y="0" width="20" height="22" rx="2" />
-            <!-- Window frame & muntin divider lines -->
-            <line x1="10" y1="0" x2="10" y2="22" stroke="var(--sheet-5)" stroke-width="2" />
-            <line x1="0" y1="11" x2="20" y2="11" stroke="var(--sheet-5)" stroke-width="2" />
-            <rect x="0" y="0" width="20" height="22" rx="2" fill="none" stroke="var(--sheet-5)" stroke-width="1.8" />
-          </g>
-
-          <!-- Gabled Roof (layered paper cut overhang) -->
-          <polygon class="cabin-part" points="-10,47 56,8 122,47 115,50 56,14 -3,50" fill="var(--sheet-4)" />
-          <polygon class="cabin-part" points="-6,46 56,11 118,46" fill="var(--sheet-5)" />
-        </g>
+      <g class="swaying-pine" style="animation-delay: -1.8s; transform-origin: 340px 605px;">
+        <use href="#pine" x="340" y="585" transform="scale(0.62)" />
       </g>
-
-      <!-- =======================================================
-           (10) FOREGROUND GROUND STRIP (Sheet 6 & 7, --p: 1.15)
-           Deeper 18px 14px shadow (nearest layer)
-           Paper Deer facing left + Two Large Pines at edges
-           ======================================================= -->
-      <g id="sheet-6" class="paper-layer shadow-foreground" style="--p: 1.15;">
-        <!-- Foreground ground strip -->
-        <path
-          class="sheet-path"
-          d="M -100 1000
-             L -100 828
-             C 180 812, 370 832, 570 816
-             C 750 802, 960 838, 1190 812
-             C 1380 792, 1550 834, 1700 820
-             L 1700 1000 Z"
-          fill="var(--sheet-6)"
-        />
-
-        <!-- Deepest baseline ground strip (Sheet 7) -->
-        <path
-          class="sheet-path"
-          d="M -100 1000
-             L -100 888
-             C 250 872, 600 898, 940 878
-             C 1280 858, 1510 894, 1700 884
-             L 1700 1000 Z"
-          fill="var(--sheet-7)"
-        />
-
-        <!-- Left Edge Large Framing Pine -->
-        <g style="color: var(--sheet-6);">
-          <use href="#pine" x="40" y="896" transform="scale(2.15)" />
-        </g>
-
-        <!-- Right Edge Large Framing Pine -->
-        <g style="color: var(--sheet-6);">
-          <use href="#pine" x="1540" y="890" transform="scale(2.35)" />
-        </g>
-
-        <!-- PAPER DEER FACING LEFT -->
-        <!-- Elliptical body, curved neck, small head with ears, stroked antlers,
-             four legs — two slightly splayed — and a tail -->
-        <g id="paper-deer" class="deer-group" transform="translate(430, 724)">
-          <!-- Ground contact shadow pool -->
-          <ellipse cx="2" cy="94" rx="44" ry="5.5" fill="rgba(8, 4, 16, 0.45)" />
-
-          <!-- Four Legs: Two slightly splayed -->
-          <!-- Far Legs (behind body, slightly splayed) -->
-          <path
-            class="deer-element"
-            d="M -22 42 L -30 68 L -36 93"
-            stroke="var(--sheet-6)"
-            stroke-width="4.2"
-            stroke-linecap="round"
-            fill="none"
-            opacity="0.82"
-          />
-          <path
-            class="deer-element"
-            d="M 22 34 C 26 48 22 64 12 78 L 6 94"
-            stroke="var(--sheet-6)"
-            stroke-width="4.2"
-            stroke-linecap="round"
-            fill="none"
-            opacity="0.82"
-          />
-
-          <!-- Near Legs -->
-          <path
-            class="deer-element"
-            d="M -10 44 L -14 70 L -17 95"
-            stroke="var(--sheet-6)"
-            stroke-width="4.8"
-            stroke-linecap="round"
-            fill="none"
-          />
-          <path
-            class="deer-element"
-            d="M 34 32 C 40 48 36 64 30 78 L 27 96"
-            stroke="var(--sheet-6)"
-            stroke-width="4.8"
-            stroke-linecap="round"
-            fill="none"
-          />
-
-          <!-- Elliptical Body -->
-          <ellipse
-            class="deer-element"
-            cx="14"
-            cy="30"
-            rx="36"
-            ry="21"
-            transform="rotate(-6 14 30)"
-            fill="var(--sheet-6)"
-          />
-
-          <!-- Tail -->
-          <path
-            class="deer-element"
-            d="M 46 22 C 54 18 60 24 52 30 C 48 30 44 26 46 22 Z"
-            fill="var(--sheet-6)"
-          />
-
-          <!-- Curved Neck -->
-          <path
-            class="deer-element"
-            d="M -4 34 C -20 22 -30 5 -36 -18 C -26 -16 -16 0 -6 16 C 2 28 8 34 -4 34 Z"
-            fill="var(--sheet-6)"
-          />
-
-          <!-- Small Head with Ears -->
-          <path
-            class="deer-element"
-            d="M -34 -16 C -38 -23 -48 -27 -64 -26 C -70 -24 -70 -19 -64 -16 C -54 -10 -40 -8 -34 -16 Z"
-            fill="var(--sheet-6)"
-          />
-          <!-- Ears -->
-          <path
-            class="deer-element"
-            d="M -36 -24 C -32 -35 -26 -36 -26 -29 C -28 -24 -31 -21 -36 -24 Z"
-            fill="var(--sheet-6)"
-          />
-          <path
-            class="deer-element"
-            d="M -40 -22 C -37 -31 -33 -32 -32 -27 C -34 -24 -37 -21 -40 -22 Z"
-            fill="var(--sheet-6)"
-            opacity="0.85"
-          />
-
-          <!-- Stroked Antlers -->
-          <!-- Main Left Antler -->
-          <path
-            class="deer-element"
-            d="M -41 -26 C -48 -44 -46 -64 -30 -78"
-            stroke="var(--sheet-6)"
-            stroke-width="3.2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            fill="none"
-          />
-          <path
-            class="deer-element"
-            d="M -43 -34 C -52 -40 -58 -40"
-            stroke="var(--sheet-6)"
-            stroke-width="2.6"
-            stroke-linecap="round"
-            fill="none"
-          />
-          <path
-            class="deer-element"
-            d="M -43 -46 C -50 -54 -56 -54"
-            stroke="var(--sheet-6)"
-            stroke-width="2.6"
-            stroke-linecap="round"
-            fill="none"
-          />
-          <path
-            class="deer-element"
-            d="M -38 -62 C -39 -72 -36 -76"
-            stroke="var(--sheet-6)"
-            stroke-width="2.6"
-            stroke-linecap="round"
-            fill="none"
-          />
-          <path
-            class="deer-element"
-            d="M -30 -78 C -22 -86 -16 -84"
-            stroke="var(--sheet-6)"
-            stroke-width="2.6"
-            stroke-linecap="round"
-            fill="none"
-          />
-
-          <!-- Second Rear Antler (Perspective offset) -->
-          <path
-            class="deer-element"
-            d="M -36 -27 C -38 -42 -34 -58 -20 -72"
-            stroke="var(--sheet-6)"
-            stroke-width="2.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            fill="none"
-            opacity="0.8"
-          />
-          <path
-            class="deer-element"
-            d="M -36 -37 C -42 -44 -46 -44"
-            stroke="var(--sheet-6)"
-            stroke-width="2.4"
-            stroke-linecap="round"
-            fill="none"
-            opacity="0.8"
-          />
-          <path
-            class="deer-element"
-            d="M -28 -58 C -27 -68 -22 -72"
-            stroke="var(--sheet-6)"
-            stroke-width="2.4"
-            stroke-linecap="round"
-            fill="none"
-            opacity="0.8"
-          />
-          <path
-            class="deer-element"
-            d="M -20 -72 C -12 -80 -6 -78"
-            stroke="var(--sheet-6)"
-            stroke-width="2.4"
-            stroke-linecap="round"
-            fill="none"
-            opacity="0.8"
-          />
-        </g>
+      <g class="swaying-pine" style="animation-delay: -3.5s; transform-origin: 780px 620px;">
+        <use href="#pine" x="780" y="595" transform="scale(0.72)" />
       </g>
-    </svg>
+      <g class="swaying-pine" style="animation-delay: -0.9s; transform-origin: 910px 615px;">
+        <use href="#pine" x="910" y="590" transform="scale(0.65)" />
+      </g>
+      <g class="swaying-pine" style="animation-delay: -2.4s; transform-origin: 1250px 605px;">
+        <use href="#pine" x="1250" y="580" transform="scale(0.7)" />
+      </g>
+      <g class="swaying-pine" style="animation-delay: -4.2s; transform-origin: 1360px 610px;">
+        <use href="#pine" x="1360" y="588" transform="scale(0.64)" />
+      </g>
+    </g>
 
-    <!-- =========================================================
-         UI CARD 1: TOP-LEFT PAPER LABEL
-         Cream #f6ead6, dark ink #3b2a2a, 6px radius, soft shadow,
-         tilted -1.2°, translucent tape strip, lifts on hover
-         ========================================================= -->
-    <header id="title-card" class="paper-card title-card" aria-label="Valley of Paper Title">
-      <div class="tape-strip" aria-hidden="true"></div>
-      <h1>Valley of Paper</h1>
-      <p>A cut-paper dusk · move to look around</p>
-    </header>
+    <!-- SHEET 9: Front Ridge with Cut Cabin & Pines -->
+    <g class="layer-group sheet-layer shadow-deep" style="--p: 0.95;">
+      <!-- Ridge Base -->
+      <path d="M-80 920 L-80 720 Q 320 630, 780 710 T 1680 690 L1680 920 Z" fill="var(--sheet-5)" />
+      
+      <!-- Ridge Pines -->
+      <use href="#pine" x="420" y="660" transform="scale(0.9)" fill="var(--sheet-5)" />
+      <use href="#pine" x="700" y="690" transform="scale(0.82)" fill="var(--sheet-5)" />
 
-    <!-- =========================================================
-         UI CARD 2: BOTTOM-RIGHT CONTROL PANEL
-         Tilted +0.8°, time of day slider (0-1000), gradient track,
-         22px thumb with ring, monospace clock (18:40 to 23:59),
-         tick labels, full width under 640px
-         ========================================================= -->
-    <aside id="control-panel" class="paper-card control-panel" aria-label="Time of Day Controller">
-      <div class="panel-header">
-        <span class="panel-title">Time of day</span>
-        <span id="clock-readout" class="clock-readout" aria-live="polite">18:40</span>
-      </div>
+      <!-- Paper Cabin Group -->
+      <g transform="translate(510, 620)">
+        <!-- Chimney -->
+        <rect x="95" y="-35" width="16" height="40" fill="var(--sheet-6)" />
+        <!-- Main Cabin Walls -->
+        <polygon points="15,45 15,-5 75,-48 135,-5 135,45" fill="var(--sheet-6)" />
+        <!-- Gabled Paper Overhang Roof -->
+        <polygon points="5,-3 75,-55 145,-3 135,6 75,-38 15,6" fill="var(--sheet-7)" />
+        <!-- Door -->
+        <rect x="62" y="10" width="24" height="35" rx="2" fill="var(--sheet-7)" />
+        <!-- Left Window -->
+        <rect x="28" y="5" width="22" height="22" rx="3" fill="var(--window-glow)" />
+        <rect x="37.5" y="5" width="3" height="22" fill="var(--sheet-6)" />
+        <rect x="28" y="14.5" width="22" height="3" fill="var(--sheet-6)" />
+        <!-- Right Window -->
+        <rect x="98" y="5" width="22" height="22" rx="3" fill="var(--window-glow)" />
+        <rect x="107.5" y="5" width="3" height="22" fill="var(--sheet-6)" />
+        <rect x="98" y="14.5" width="22" height="3" fill="var(--sheet-6)" />
+      </g>
+    </g>
 
-      <div class="slider-wrapper">
-        <input
-          type="range"
-          id="time-slider"
-          class="time-slider"
-          min="0"
-          max="1000"
-          value="0"
-          step="1"
-          aria-label="Time of day transition slider"
-        />
-      </div>
+    <!-- SHEET 10: Foreground Ground Strip with Paper Deer and Framing Pines -->
+    <g class="layer-group sheet-layer shadow-deep" style="--p: 1.15;">
+      <!-- Foreground ground cut curve -->
+      <path d="M-80 920 L-80 810 Q 350 740, 840 810 T 1680 770 L1680 920 Z" fill="var(--sheet-6)" />
 
-      <div class="tick-labels" aria-hidden="true">
-        <span>Golden dusk</span>
-        <span>Twilight</span>
-        <span>Blue night</span>
-      </div>
+      <!-- Left Hero Framing Pine -->
+      <use href="#pine" x="70" y="760" transform="scale(1.4)" fill="var(--sheet-7)" />
+      
+      <!-- Right Hero Framing Pine -->
+      <use href="#pine" x="1530" y="740" transform="scale(1.5)" fill="var(--sheet-7)" />
 
-      <p class="hint-line">Drag slider to shift time · Move pointer to parallax</p>
-    </aside>
+      <!-- Elegant Paper Deer Facing Left -->
+      <g transform="translate(1080, 735)" fill="var(--deer-color)">
+        <!-- Back Left Leg -->
+        <path d="M 42 35 L 48 85 L 43 86 L 35 40 Z" opacity="0.8" />
+        <!-- Back Right Leg (Foreground) -->
+        <path d="M 48 35 L 56 86 L 50 87 L 40 40 Z" />
+        <!-- Front Left Leg -->
+        <path d="M -16 32 L -25 84 L -20 85 L -10 38 Z" opacity="0.8" />
+        <!-- Front Right Leg (Foreground, slightly splayed) -->
+        <path d="M -10 32 L -12 85 L -6 85 L -2 38 Z" />
+        <!-- Fluffy Tail -->
+        <path d="M 54 18 C 65 16, 68 25, 58 32 C 54 28, 52 22, 54 18 Z" />
+        <!-- Elliptical Torso -->
+        <ellipse cx="20" cy="28" rx="38" ry="18" transform="rotate(-6 20 28)" />
+        <!-- Curved Arching Neck -->
+        <path d="M -5 32 C -18 20, -22 -2, -28 -16 C -20 -10, -8 4, 8 16 Z" />
+        <!-- Head & Cute Snout -->
+        <path d="M -24 -14 C -28 -17, -42 -17, -46 -22 C -45 -27, -35 -27, -27 -23 C -23 -26, -18 -26, -21 -19 Z" />
+        <!-- Ears -->
+        <path d="M -19 -22 C -18 -32, -14 -32, -16 -23 Z" />
+        <path d="M -23 -21 C -24 -29, -21 -29, -20 -22 Z" opacity="0.75" />
+        <!-- Multi-Point Cut Paper Antlers -->
+        <path d="M -22 -23 C -22 -38, -30 -48, -34 -58 M -29 -45 C -22 -48, -18 -55, -20 -60 M -26 -35 C -18 -38, -14 -44, -14 -48 M -32 -52 C -38 -56, -42 -58, -44 -64"
+              stroke="var(--antler-color)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+      </g>
+    </g>
+  </svg>
+</div>
 
-  </main>
+<!-- TOP-LEFT PAPER TITLE LABEL -->
+<div id="title-label" class="paper-card">
+  <div class="title-text">Valley of Paper</div>
+  <div class="subtitle-text">A cut-paper dusk · move to look around</div>
+</div>
 
-  <!-- =========================================================
-       LOGIC SCRIPT
-       - Smoothstep hex color interpolation
-       - Custom properties management
-       - Exponential smoothing RAF loop for parallax
-       - Device tilt & touch panning fallback
-       - Seeded random stars generation
-       ========================================================= -->
-  <script>
-    (function () {
-      'use strict';
+<!-- BOTTOM-RIGHT INTERACTIVE PANEL -->
+<div id="control-panel" class="paper-card">
+  <div class="panel-header">
+    <span class="panel-title">Time of day</span>
+    <span class="clock-display" id="clock-readout">18:40</span>
+  </div>
+  <div class="slider-wrap">
+    <input type="range" id="time-slider" min="0" max="1000" value="0" aria-label="Time of day scrub slider" />
+  </div>
+  <div class="ticks">
+    <span>Golden dusk</span>
+    <span>Twilight</span>
+    <span>Blue night</span>
+  </div>
+  <div class="panel-hint">Scrub time to sink sun & light cabin window</div>
+</div>
 
-      /* -----------------------------------------------------------
-         PALETTE CONFIGURATION
-         Exact Dusk & Night hex pairs from prompt specification
-         ----------------------------------------------------------- */
-      const PALETTES = {
-        skyTop:   ['#3b2a5c', '#050a1e'],
-        skyMid:   ['#c9698a', '#0f1c44'],
-        skyBot:   ['#f7b26a', '#24356a'],
-        sun:      ['#ffd28a', '#ff9a5a'],
-        cloud:    ['#f7d5c4', '#3a4a7a'],
-        sheet1:   ['#8b6a9c', '#2b3a6b'],
-        sheet2:   ['#6a4f83', '#1f2c55'],
-        sheet3:   ['#4f3a6b', '#182243'],
-        sheet4:   ['#3a2a54', '#111935'],
-        sheet5:   ['#2b1f44', '#0c122a'],
-        sheet6:   ['#1c1533', '#080c1f'],
-        sheet7:   ['#130f26', '#050815'],
-        paperBg:  ['#f6ead6', '#dfd0be'],
-        paperInk: ['#3b2a2a', '#22161f']
-      };
+<!-- iOS Device Orientation Request Pill Button -->
+<button id="tilt-btn">Enable tilt parallax</button>
 
-      // Fast RGB parsing
-      function parseHex(hex) {
-        const n = parseInt(hex.slice(1), 16);
-        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-      }
+<script>
+  /* ------------------------------------------------------------------
+     1. Seeded Random Generator & Star Field Population
+  ------------------------------------------------------------------ */
+  let seed = 42891;
+  function seededRandom() {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  }
 
-      const PARSED = {};
-      for (const [key, [dusk, night]] of Object.entries(PALETTES)) {
-        PARSED[key] = {
-          dusk: parseHex(dusk),
-          night: parseHex(night)
-        };
-      }
+  const starField = document.getElementById('star-field');
+  const STAR_COUNT = 140;
+  const starSvgBuffer = [];
 
-      function lerpRgb(rgb1, rgb2, t) {
-        const r = Math.round(rgb1[0] + (rgb2[0] - rgb1[0]) * t);
-        const g = Math.round(rgb1[1] + (rgb2[1] - rgb1[1]) * t);
-        const b = Math.round(rgb1[2] + (rgb2[2] - rgb1[2]) * t);
-        return `rgb(${r}, ${g}, ${b})`;
-      }
+  for (let i = 0; i < STAR_COUNT; i++) {
+    const x = (seededRandom() * 1600).toFixed(1);
+    const y = (seededRandom() * 480).toFixed(1);
+    const r = (seededRandom() * 1.6 + 0.6).toFixed(1);
+    const delay = (seededRandom() * 5).toFixed(2);
+    const dur = (seededRandom() * 3 + 2).toFixed(2);
+    starSvgBuffer.push(
+      `<circle class="star" cx="${x}" cy="${y}" r="${r}" fill="#ffffff" style="animation-delay: -${delay}s; animation-duration: ${dur}s;" />`
+    );
+  }
+  starField.innerHTML = starSvgBuffer.join('');
 
-      function smoothstep(x) {
-        const t = Math.max(0, Math.min(1, x));
-        return t * t * (3 - 2 * t);
-      }
+  /* ------------------------------------------------------------------
+     2. Color Math & Palette Linear/Smoothstep Interpolation
+  ------------------------------------------------------------------ */
+  function hexToRgb(hex) {
+    const clean = hex.replace('#', '');
+    const bigint = parseInt(clean, 16);
+    return {
+      r: (bigint >> 16) & 255,
+      g: (bigint >> 8) & 255,
+      b: bigint & 255
+    };
+  }
 
-      /* -----------------------------------------------------------
-         DOM REFERENCES
-         ----------------------------------------------------------- */
-      const root = document.documentElement;
-      const slider = document.getElementById('time-slider');
-      const clockReadout = document.getElementById('clock-readout');
-      const starsGroup = document.getElementById('stars-group');
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
+  }
 
-      /* -----------------------------------------------------------
-         (1) GENERATE 140 TINY TWINKLING STARS (SEEDED RANDOM)
-         ----------------------------------------------------------- */
-      function initStars() {
-        if (!starsGroup) return;
+  function smoothstep(min, max, value) {
+    const x = Math.max(0, Math.min(1, (value - min) / (max - min)));
+    return x * x * (3 - 2 * x);
+  }
 
-        // Mulberry32-style deterministic PRNG
-        let seed = 9823415;
-        function seededRandom() {
-          seed = (seed * 1664525 + 1013904223) % 4294967296;
-          return seed / 4294967296;
-        }
+  function lerpColor(hexA, hexB, t) {
+    const cA = hexToRgb(hexA);
+    const cB = hexToRgb(hexB);
+    const r = Math.round(lerp(cA.r, cB.r, t));
+    const g = Math.round(lerp(cA.g, cB.g, t));
+    const b = Math.round(lerp(cA.b, cB.b, t));
+    return `rgb(${r}, ${g}, ${b})`;
+  }
 
-        const fragment = document.createDocumentFragment();
-        const count = 140;
+  // Dusk & Night Palette Tables
+  const PALETTES = {
+    dusk: {
+      skyTop: '#3b2a5c',
+      skyMid: '#c9698a',
+      skyBot: '#f7b26a',
+      sun: '#ffd28a',
+      clouds: '#f7d5c4',
+      s1: '#8b6a9c',
+      s2: '#6a4f83',
+      s3: '#4f3a6b',
+      s4: '#3a2a54',
+      s5: '#2b1f44',
+      s6: '#1c1533',
+      s7: '#130f26',
+      uiPaper: '#f6ead6',
+      uiInk: '#3b2a2a'
+    },
+    night: {
+      skyTop: '#050a1e',
+      skyMid: '#0f1c44',
+      skyBot: '#24356a',
+      sun: '#ff9a5a',
+      clouds: '#3a4a7a',
+      s1: '#2b3a6b',
+      s2: '#1f2c55',
+      s3: '#182243',
+      s4: '#111935',
+      s5: '#0c122a',
+      s6: '#080c1f',
+      s7: '#050815',
+      uiPaper: '#e4d3bc',
+      uiInk: '#1d171e'
+    }
+  };
 
-        for (let i = 0; i < count; i++) {
-          const cx = Math.round(20 + seededRandom() * 1560);
-          // Distribute across upper sky with natural tapering
-          const cy = Math.round(15 + Math.pow(seededRandom(), 1.3) * 410);
-          const r = (0.75 + seededRandom() * 1.5).toFixed(2);
-          const baseOp = (0.35 + seededRandom() * 0.65).toFixed(2);
-          const dur = (1.8 + seededRandom() * 2.8).toFixed(2);
-          const delay = (-seededRandom() * 4.0).toFixed(2);
+  const rootStyle = document.documentElement.style;
+  const slider = document.getElementById('time-slider');
+  const clockReadout = document.getElementById('clock-readout');
 
-          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          circle.setAttribute('cx', cx);
-          circle.setAttribute('cy', cy);
-          circle.setAttribute('r', r);
-          circle.setAttribute('fill', '#fffbf2');
-          circle.classList.add('star');
-          circle.style.setProperty('--base-op', baseOp);
-          circle.style.setProperty('--twinkle-dur', `${dur}s`);
-          circle.style.setProperty('--twinkle-delay', `${delay}s`);
+  function updateDayNight(progress) {
+    // Non-linear smooth easing for natural dusk ramp
+    const t = smoothstep(0, 1, progress);
 
-          fragment.appendChild(circle);
-        }
+    // Interpolate all color stops
+    rootStyle.setProperty('--sky-top', lerpColor(PALETTES.dusk.skyTop, PALETTES.night.skyTop, t));
+    rootStyle.setProperty('--sky-mid', lerpColor(PALETTES.dusk.skyMid, PALETTES.night.skyMid, t));
+    rootStyle.setProperty('--sky-bot', lerpColor(PALETTES.dusk.skyBot, PALETTES.night.skyBot, t));
 
-        starsGroup.appendChild(fragment);
-      }
+    rootStyle.setProperty('--sun-color', lerpColor(PALETTES.dusk.sun, PALETTES.night.sun, t));
+    rootStyle.setProperty('--cloud-color', lerpColor(PALETTES.dusk.clouds, PALETTES.night.clouds, t));
 
-      /* -----------------------------------------------------------
-         TIME OF DAY UPDATE (SLIDER 0–1000)
-         - Linearly interpolates each hex pair with a smoothstep curve
-         - Drives --stars (fades in between 35% and 85% of slider)
-         - Drives --sun-y (sun descends 620px)
-         - Drives --moon-y (moon rises 700px)
-         - Drives cabin window glow: faint rgba(255,200,110,0.15)
-           to bright rgba(255,160,70,1.0)
-         - Live monospace clock: 18:40 to 23:59
-         ----------------------------------------------------------- */
-      function setTimeOfDay(val) {
-        const t = val / 1000;
-        const s = smoothstep(t);
+    rootStyle.setProperty('--sheet-1', lerpColor(PALETTES.dusk.s1, PALETTES.night.s1, t));
+    rootStyle.setProperty('--sheet-2', lerpColor(PALETTES.dusk.s2, PALETTES.night.s2, t));
+    rootStyle.setProperty('--sheet-3', lerpColor(PALETTES.dusk.s3, PALETTES.night.s3, t));
+    rootStyle.setProperty('--sheet-4', lerpColor(PALETTES.dusk.s4, PALETTES.night.s4, t));
+    rootStyle.setProperty('--sheet-5', lerpColor(PALETTES.dusk.s5, PALETTES.night.s5, t));
+    rootStyle.setProperty('--sheet-6', lerpColor(PALETTES.dusk.s6, PALETTES.night.s6, t));
+    rootStyle.setProperty('--sheet-7', lerpColor(PALETTES.dusk.s7, PALETTES.night.s7, t));
 
-        // Interpolate colors
-        root.style.setProperty('--sky-top', lerpRgb(PARSED.skyTop.dusk, PARSED.skyTop.night, s));
-        root.style.setProperty('--sky-mid', lerpRgb(PARSED.skyMid.dusk, PARSED.skyMid.night, s));
-        root.style.setProperty('--sky-bot', lerpRgb(PARSED.skyBot.dusk, PARSED.skyBot.night, s));
-        root.style.setProperty('--sun',     lerpRgb(PARSED.sun.dusk,    PARSED.sun.night,    s));
-        root.style.setProperty('--cloud',   lerpRgb(PARSED.cloud.dusk,  PARSED.cloud.night,  s));
-        root.style.setProperty('--sheet-1', lerpRgb(PARSED.sheet1.dusk, PARSED.sheet1.night, s));
-        root.style.setProperty('--sheet-2', lerpRgb(PARSED.sheet2.dusk, PARSED.sheet2.night, s));
-        root.style.setProperty('--sheet-3', lerpRgb(PARSED.sheet3.dusk, PARSED.sheet3.night, s));
-        root.style.setProperty('--sheet-4', lerpRgb(PARSED.sheet4.dusk, PARSED.sheet4.night, s));
-        root.style.setProperty('--sheet-5', lerpRgb(PARSED.sheet5.dusk, PARSED.sheet5.night, s));
-        root.style.setProperty('--sheet-6', lerpRgb(PARSED.sheet6.dusk, PARSED.sheet6.night, s));
-        root.style.setProperty('--sheet-7', lerpRgb(PARSED.sheet7.dusk, PARSED.sheet7.night, s));
-        root.style.setProperty('--paper-bg', lerpRgb(PARSED.paperBg.dusk, PARSED.paperBg.night, s));
-        root.style.setProperty('--paper-ink', lerpRgb(PARSED.paperInk.dusk, PARSED.paperInk.night, s));
+    // Dynamic UI card paper tone darkening
+    rootStyle.setProperty('--ui-paper', lerpColor(PALETTES.dusk.uiPaper, PALETTES.night.uiPaper, t));
+    rootStyle.setProperty('--ui-ink', lerpColor(PALETTES.dusk.uiInk, PALETTES.night.uiInk, t));
 
-        // Stars: fades in between 35% and 85% of slider
-        let starsVal = 0;
-        if (t <= 0.35) {
-          starsVal = 0;
-        } else if (t >= 0.85) {
-          starsVal = 1;
-        } else {
-          const starProgress = (t - 0.35) / (0.85 - 0.35);
-          starsVal = smoothstep(starProgress);
-        }
-        root.style.setProperty('--stars', starsVal.toFixed(3));
+    // Sun descends 620px
+    const sunY = t * 620;
+    rootStyle.setProperty('--sun-y', `${sunY.toFixed(1)}px`);
 
-        // Sun descends 620px
-        const sunY = (s * 620).toFixed(1);
-        root.style.setProperty('--sun-y', `${sunY}px`);
+    // Moon ascends 700px (starts below view at 480px, ends around -220px)
+    const moonY = -t * 700;
+    rootStyle.setProperty('--moon-y', `${moonY.toFixed(1)}px`);
 
-        // Moon rises 700px
-        const moonY = (-s * 700).toFixed(1);
-        root.style.setProperty('--moon-y', `${moonY}px`);
+    // Star opacity fades in between 35% and 85%
+    const starProgress = smoothstep(0.35, 0.85, progress);
+    rootStyle.setProperty('--stars-opacity', starProgress.toFixed(3));
 
-        // Cabin window glow: faint rgba(255,200,110,0.15) to bright rgba(255,160,70,1.0)
-        const winG = Math.round(200 + (160 - 200) * s);
-        const winB = Math.round(110 + (70 - 110) * s);
-        const winA = (0.15 + (1.0 - 0.15) * s).toFixed(3);
-        root.style.setProperty('--window-glow', `rgba(255, ${winG}, ${winB}, ${winA})`);
-        root.style.setProperty('--window-spill', `rgba(255, ${winG - 20}, 60, ${(winA * 0.35).toFixed(3)})`);
+    // Cabin window warmth: faint warm glow to brilliant night beacon
+    const winR = Math.round(lerp(255, 255, t));
+    const winG = Math.round(lerp(200, 160, t));
+    const winB = Math.round(lerp(110, 70, t));
+    const winA = lerp(0.15, 1.0, t);
+    rootStyle.setProperty('--window-glow', `rgba(${winR}, ${winG}, ${winB}, ${winA.toFixed(2)})`);
 
-        // Monospace clock: runs from 18:40 to 23:59
-        // 18:40 = 1120 minutes, 23:59 = 1439 minutes
-        const totalMinutes = Math.round(1120 + t * (1439 - 1120));
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
-        clockReadout.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-      }
+    // Live clock format: 18:40 to 23:59 (Total minutes: 319)
+    const totalMinutes = Math.floor(progress * 319);
+    let h = 18 + Math.floor((40 + totalMinutes) / 60);
+    let m = (40 + totalMinutes) % 60;
+    const hh = String(h).padStart(2, '0');
+    const mm = String(m).padStart(2, '0');
+    clockReadout.textContent = `${hh}:${mm}`;
+  }
 
-      slider.addEventListener('input', (e) => {
-        setTimeOfDay(parseFloat(e.target.value));
-      });
+  slider.addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value) / 1000;
+    updateDayNight(val);
+  });
 
-      /* -----------------------------------------------------------
-         PARALLAX SYSTEM
-         Pointer position (normalised −1..1) sets target offset up to 40px;
-         smoothed each frame with exponential easing (6% per frame)
-         and written to --mx/--my; vertical movement is 60% of horizontal.
-         ----------------------------------------------------------- */
-      let targetX = 0;
-      let targetY = 0;
-      let currentX = 0;
-      let currentY = 0;
+  // Init state
+  updateDayNight(0);
 
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-      let reducedMotion = prefersReducedMotion.matches;
+  /* ------------------------------------------------------------------
+     3. Smooth Eased Parallax Interaction Loop
+  ------------------------------------------------------------------ */
+  let targetX = 0;
+  let targetY = 0;
+  let currentX = 0;
+  let currentY = 0;
+  const maxOffset = 42; // px target displacement
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-      prefersReducedMotion.addEventListener('change', (e) => {
-        reducedMotion = e.matches;
-        if (reducedMotion) {
-          targetX = 0;
-          targetY = 0;
-          currentX = 0;
-          currentY = 0;
-          root.style.setProperty('--mx', '0px');
-          root.style.setProperty('--my', '0px');
-        }
-      });
+  // Pointer / Mouse Parallax
+  window.addEventListener('pointermove', (e) => {
+    const nx = (e.clientX / window.innerWidth) * 2 - 1;   // -1 to 1
+    const ny = (e.clientY / window.innerHeight) * 2 - 1;  // -1 to 1
+    targetX = -nx * maxOffset;
+    targetY = -ny * maxOffset;
+  });
 
-      // Pointer Move (Mouse & Stylus)
-      window.addEventListener('pointermove', (e) => {
-        if (reducedMotion || e.pointerType === 'touch') return;
-        const normX = (e.clientX / window.innerWidth) * 2 - 1;
-        const normY = (e.clientY / window.innerHeight) * 2 - 1;
-        targetX = Math.max(-1, Math.min(1, normX)) * 40;
-        targetY = Math.max(-1, Math.min(1, normY)) * 24; // 60% of 40px
-      });
+  // Touch fallback drag panning
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let isTouching = false;
 
-      window.addEventListener('pointerleave', () => {
-        if (reducedMotion) return;
-        targetX = 0;
-        targetY = 0;
-      });
+  window.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1 && e.target.tagName !== 'INPUT') {
+      isTouching = true;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }
+  }, { passive: true });
 
-      /* -----------------------------------------------------------
-         DEVICE TILT PARALLAX & TOUCH-DRAG FALLBACK
-         - Centred on a 45° holding angle
-         - iOS displays "Enable tilt parallax" pill button calling
-           DeviceOrientationEvent.requestPermission()
-         - Other coarse devices attach listener directly
-         - Touch-drag pans when no tilt data is present
-         ----------------------------------------------------------- */
-      let hasTiltData = false;
+  window.addEventListener('touchmove', (e) => {
+    if (!isTouching || e.touches.length !== 1) return;
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = e.touches[0].clientY - touchStartY;
+    targetX = Math.max(-maxOffset, Math.min(maxOffset, dx * 0.4));
+    targetY = Math.max(-maxOffset, Math.min(maxOffset, dy * 0.4));
+  }, { passive: true });
 
-      function handleOrientation(e) {
-        if (reducedMotion || e.beta === null || e.gamma === null) return;
-        hasTiltData = true;
+  window.addEventListener('touchend', () => {
+    isTouching = false;
+  }, { passive: true });
 
-        // Centred on 45° holding angle for pitch (beta)
-        const deltaBeta = e.beta - 45;
-        const clampedBeta = Math.max(-30, Math.min(30, deltaBeta));
-        const clampedGamma = Math.max(-30, Math.min(30, e.gamma));
+  // Device Orientation Tilt Parallax
+  function handleOrientation(e) {
+    if (e.gamma === null || e.beta === null) return;
+    // gamma: left-to-right [-90, 90]
+    // beta: front-to-back [-180, 180], centered around comfortable 45° holding tilt
+    const gamma = Math.max(-45, Math.min(45, e.gamma));
+    const beta = Math.max(0, Math.min(90, e.beta)) - 45;
 
-        const normX = clampedGamma / 30; // -1 to 1
-        const normY = clampedBeta / 30;  // -1 to 1
+    targetX = -(gamma / 45) * maxOffset;
+    targetY = -(beta / 45) * maxOffset;
+  }
 
-        targetX = normX * 40;
-        targetY = normY * 24;
-      }
+  const tiltBtn = document.getElementById('tilt-btn');
 
-      function attachOrientationListener() {
-        window.addEventListener('deviceorientation', handleOrientation);
-      }
-
-      // Detect iOS / coarse pointer device
-      const isCoarse = window.matchMedia('(pointer: coarse)').matches;
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-      if (isIOS && typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        const tiltBtn = document.createElement('button');
-        tiltBtn.className = 'tilt-pill-btn';
-        tiltBtn.textContent = 'Enable tilt parallax';
-        tiltBtn.setAttribute('aria-label', 'Enable device tilt parallax');
-        document.body.appendChild(tiltBtn);
-
-        tiltBtn.addEventListener('click', async () => {
-          try {
-            const permissionState = await DeviceOrientationEvent.requestPermission();
-            if (permissionState === 'granted') {
-              attachOrientationListener();
-              tiltBtn.remove();
-            }
-          } catch (err) {
-            console.warn('Orientation permission error:', err);
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // iOS 13+ requires explicit tap permission
+    tiltBtn.style.display = 'block';
+    tiltBtn.addEventListener('click', () => {
+      DeviceOrientationEvent.requestPermission()
+        .then((response) => {
+          if (response === 'granted') {
+            tiltBtn.style.display = 'none';
+            window.addEventListener('deviceorientation', handleOrientation);
+          } else {
+            tiltBtn.textContent = 'Tilt denied';
+            setTimeout(() => { tiltBtn.style.display = 'none'; }, 2000);
           }
-        });
-      } else if (isCoarse && window.DeviceOrientationEvent) {
-        attachOrientationListener();
-      }
+        })
+        .catch(console.error);
+    });
+  } else if (window.DeviceOrientationEvent) {
+    // Standard modern devices
+    window.addEventListener('deviceorientation', handleOrientation);
+  }
 
-      // Touch-drag Pan Fallback (when no tilt data active)
-      let touchStartX = 0;
-      let touchStartY = 0;
-      let isTouching = false;
+  // Smooth animation frame loop with 6% exponential easing
+  function renderFrame() {
+    if (!prefersReduced) {
+      currentX += (targetX - currentX) * 0.06;
+      currentY += (targetY - currentY) * 0.06;
 
-      window.addEventListener('touchstart', (e) => {
-        if (reducedMotion || hasTiltData) return;
-        if (e.target.closest('#control-panel, #title-card, .tilt-pill-btn, input')) return;
-        const t = e.touches[0];
-        touchStartX = t.clientX;
-        touchStartY = t.clientY;
-        isTouching = true;
-      }, { passive: true });
+      rootStyle.setProperty('--mx', `${currentX.toFixed(2)}px`);
+      rootStyle.setProperty('--my', `${currentY.toFixed(2)}px`);
+    }
+    requestAnimationFrame(renderFrame);
+  }
+  requestAnimationFrame(renderFrame);
+</script>
 
-      window.addEventListener('touchmove', (e) => {
-        if (!isTouching || hasTiltData || reducedMotion) return;
-        const t = e.touches[0];
-        const dx = t.clientX - touchStartX;
-        const dy = t.clientY - touchStartY;
-        const maxRange = Math.min(window.innerWidth, window.innerHeight) * 0.45;
-        const normX = Math.max(-1, Math.min(1, dx / maxRange));
-        const normY = Math.max(-1, Math.min(1, dy / maxRange));
-        targetX = normX * 40;
-        targetY = normY * 24;
-      }, { passive: true });
-
-      window.addEventListener('touchend', () => {
-        if (!isTouching) return;
-        isTouching = false;
-        if (!hasTiltData) {
-          targetX = 0;
-          targetY = 0;
-        }
-      });
-
-      /* -----------------------------------------------------------
-         EXPONENTIAL EASING RAF LOOP (6% PER FRAME)
-         ----------------------------------------------------------- */
-      function renderParallax() {
-        if (!reducedMotion) {
-          currentX += (targetX - currentX) * 0.06;
-          currentY += (targetY - currentY) * 0.06;
-          root.style.setProperty('--mx', `${currentX.toFixed(2)}px`);
-          root.style.setProperty('--my', `${currentY.toFixed(2)}px`);
-        }
-        requestAnimationFrame(renderParallax);
-      }
-
-      /* -----------------------------------------------------------
-         INITIALIZE
-         ----------------------------------------------------------- */
-      initStars();
-      setTimeOfDay(0);
-      requestAnimationFrame(renderParallax);
-
-    })();
-  </script>
 </body>
 </html>

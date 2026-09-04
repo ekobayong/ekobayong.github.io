@@ -1,1359 +1,679 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Stardust · Cosmic Cursor Trail</title>
-  <style>
-    /* ==========================================================================
-       RESET & BASE STYLING
-       ========================================================================== */
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: #000000;
-      color: #ffffff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      touch-action: none;
-      cursor: none;
-    }
-
-    /* Primary Canvas */
-    #canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      display: block;
-      background-color: #000000;
-      z-index: 1;
-    }
-
-    /* ==========================================================================
-       CUSTOM RING CURSOR (14px difference-blended)
-       ========================================================================== */
-    #cursor-ring {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 14px;
-      height: 14px;
-      border: 1.5px solid #ffffff;
-      border-radius: 50%;
-      mix-blend-mode: difference;
-      pointer-events: none;
-      z-index: 9999;
-      transform: translate(-50%, -50%);
-      transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-                  height 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-                  border 0.25s ease,
-                  opacity 0.2s ease;
-      opacity: 0;
-      will-change: transform, width, height;
-    }
-
-    #cursor-ring.visible {
-      opacity: 1;
-    }
-
-    /* Press-and-hold vortex active state: scales up, turns dashed and spins */
-    #cursor-ring.vortex-active {
-      width: 44px;
-      height: 44px;
-      border: 1.5px dashed rgba(255, 255, 255, 0.95);
-      animation: cursor-spin 1.1s linear infinite;
-    }
-
-    @keyframes cursor-spin {
-      from {
-        transform: translate(-50%, -50%) rotate(0deg);
-      }
-      to {
-        transform: translate(-50%, -50%) rotate(360deg);
-      }
-    }
-
-    /* ==========================================================================
-       HEADER & HINT OVERLAYS
-       ========================================================================== */
-    .header {
-      position: absolute;
-      top: 28px;
-      left: 32px;
-      z-index: 10;
-      pointer-events: none;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-
-    .header-title {
-      font-family: Georgia, "Times New Roman", Times, serif;
-      font-size: 26px;
-      font-weight: 400;
-      letter-spacing: 0.03em;
-      color: rgba(255, 255, 255, 0.94);
-      text-shadow: 0 2px 14px rgba(255, 255, 255, 0.25);
-    }
-
-    .header-subtitle {
-      font-size: 9.5px;
-      font-weight: 600;
-      letter-spacing: 0.28em;
-      text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.42);
-    }
-
-    /* Top-right Hint Badge */
-    #hint-badge {
-      position: absolute;
-      top: 28px;
-      right: 32px;
-      z-index: 10;
-      pointer-events: none;
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      color: rgba(255, 255, 255, 0.52);
-      background: rgba(18, 18, 28, 0.45);
-      border: 1px solid rgba(255, 255, 255, 0.10);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      padding: 7px 14px;
-      border-radius: 9999px;
-      transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s ease;
-    }
-
-    #hint-badge.faded {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-
-    /* ==========================================================================
-       BOTTOM FROSTED TOOLBAR PILL
-       ========================================================================== */
-    #toolbar-container {
-      position: absolute;
-      bottom: 28px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 20;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .frosted-pill {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      padding: 6px 10px;
-      background: rgba(14, 14, 22, 0.72);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      border-radius: 9999px;
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65),
-                  0 0 0 1px rgba(255, 255, 255, 0.04) inset;
-    }
-
-    .btn-group {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .divider {
-      width: 1px;
-      height: 18px;
-      background: rgba(255, 255, 255, 0.14);
-      margin: 0 4px;
-    }
-
-    /* Buttons */
-    .pill-btn {
-      appearance: none;
-      border: none;
-      outline: none;
-      background: transparent;
-      color: rgba(255, 255, 255, 0.68);
-      font-family: inherit;
-      font-size: 11px;
-      font-weight: 500;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 6px 11px;
-      border-radius: 9999px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      transition: background-color 0.2s ease,
-                  color 0.2s ease,
-                  transform 0.15s ease,
-                  box-shadow 0.2s ease;
-      white-space: nowrap;
-    }
-
-    .pill-btn:hover {
-      color: #ffffff;
-      background: rgba(255, 255, 255, 0.09);
-    }
-
-    .pill-btn:active {
-      transform: scale(0.96);
-    }
-
-    /* Active button: inverts to light fill with dark text */
-    .pill-btn.active {
-      background: #ffffff;
-      color: #0e0e16;
-      font-weight: 600;
-      box-shadow: 0 2px 10px rgba(255, 255, 255, 0.25);
-    }
-
-    /* Brush color swatch dots */
-    .swatch-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      box-shadow: 0 0 6px currentColor;
-    }
-
-    .swatch-dust {
-      background-color: #9fd8ff;
-      color: #9fd8ff;
-    }
-
-    .swatch-ribbons {
-      background-color: #ff9fe5;
-      color: #ff9fe5;
-    }
-
-    .swatch-embers {
-      background-color: #ffb060;
-      color: #ffb060;
-    }
-
-    .swatch-ink {
-      background-color: #e8e8f0;
-      color: #e8e8f0;
-    }
-
-    /* Active swatch styling */
-    .pill-btn.active .swatch-dot {
-      box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
-    }
-
-    /* Icon SVGs */
-    .pill-icon {
-      width: 14px;
-      height: 14px;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 1.6;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      display: block;
-      flex-shrink: 0;
-    }
-
-    .keyboard-hint {
-      font-size: 8.5px;
-      opacity: 0.45;
-      margin-left: 1px;
-      font-weight: 600;
-    }
-
-    .pill-btn.active .keyboard-hint {
-      opacity: 0.55;
-    }
-
-    /* Toast Notification */
-    #toast {
-      position: absolute;
-      bottom: 82px;
-      left: 50%;
-      transform: translateX(-50%) translateY(10px);
-      background: rgba(18, 18, 28, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      color: #ffffff;
-      font-size: 11px;
-      letter-spacing: 0.09em;
-      text-transform: uppercase;
-      padding: 7px 16px;
-      border-radius: 9999px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-      z-index: 30;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-    }
-
-    #toast.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-
-    /* ==========================================================================
-       RESPONSIVE & MOBILE DESIGN (< 640px)
-       ========================================================================== */
-    @media (max-width: 640px) {
-      /* Hide custom ring cursor on mobile */
-      #cursor-ring {
-        display: none !important;
-      }
-
-      /* Native touch smooth */
-      html, body {
-        cursor: auto;
-      }
-
-      .header {
-        top: 20px;
-        left: 20px;
-      }
-
-      .header-title {
-        font-size: 21px;
-      }
-
-      .header-subtitle {
-        font-size: 8.5px;
-      }
-
-      #hint-badge {
-        display: none;
-      }
-
-      #toolbar-container {
-        bottom: 18px;
-        width: 95%;
-      }
-
-      .frosted-pill {
-        width: 100%;
-        justify-content: space-around;
-        padding: 5px 6px;
-        gap: 2px;
-      }
-
-      .divider {
-        margin: 0 2px;
-      }
-
-      /* Collapse button labels to icons on small screens */
-      .btn-label, .keyboard-hint {
-        display: none;
-      }
-
-      .pill-btn {
-        padding: 7px 9px;
-      }
-    }
-
-    /* ==========================================================================
-       PREFERS-REDUCED-MOTION
-       ========================================================================== */
-    @media (prefers-reduced-motion: reduce) {
-      #cursor-ring.vortex-active {
-        animation: none !important;
-        transform: translate(-50%, -50%) scale(1.6) !important;
-      }
-
-      .pill-btn, #toast, #hint-badge {
-        transition-duration: 0.05s !important;
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Stardust — Cosmic Cursor Trail</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #000; color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+  }
+  canvas {
+    display: block; width: 100%; height: 100%;
+    position: absolute; top: 0; left: 0; z-index: 1;
+  }
+  @media (pointer: fine) {
+    body { cursor: none; }
+  }
+  #custom-cursor {
+    position: fixed; top: 0; left: 0; width: 14px; height: 14px;
+    margin-left: -7px; margin-top: -7px;
+    border: 1.5px solid rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    pointer-events: none; z-index: 9999;
+    mix-blend-mode: difference;
+    transform: translate3d(-100px, -100px, 0);
+    transition: width 0.2s cubic-bezier(0.1, 0.9, 0.2, 1),
+                height 0.2s cubic-bezier(0.1, 0.9, 0.2, 1),
+                margin 0.2s cubic-bezier(0.1, 0.9, 0.2, 1),
+                border-color 0.2s;
+  }
+  #custom-cursor.vortex {
+    width: 48px; height: 48px; margin-left: -24px; margin-top: -24px;
+    border-style: dashed;
+    animation: cursorSpin 2.5s linear infinite;
+  }
+  @keyframes cursorSpin { 100% { transform: translate3d(var(--cx), var(--cy), 0) rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    #custom-cursor.vortex { animation: none; }
+  }
+  @media (max-width: 640px), (pointer: coarse) {
+    #custom-cursor { display: none !important; }
+  }
+  .ui-layer {
+    position: absolute; z-index: 10; pointer-events: none;
+  }
+  header {
+    top: 28px; left: 32px;
+  }
+  h1 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 400; font-size: 26px; letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+  }
+  h2 {
+    font-size: 9px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 3px; color: rgba(255, 255, 255, 0.45);
+    margin-top: 3px;
+  }
+  #hint {
+    top: 32px; right: 32px; text-align: right;
+    font-size: 11px; letter-spacing: 0.8px;
+    color: rgba(255, 255, 255, 0.4);
+    transition: opacity 1.2s ease-out;
+  }
+  #hint span {
+    display: inline-block; padding: 2px 6px;
+    background: rgba(255, 255, 255, 0.08); border-radius: 4px;
+    margin: 0 2px; color: rgba(255, 255, 255, 0.7);
+  }
+  .pill-container {
+    bottom: 24px; left: 50%; transform: translateX(-50%);
+    pointer-events: auto;
+  }
+  .pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 8px;
+    background: rgba(14, 14, 22, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 32px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  }
+  .group {
+    display: flex; align-items: center; gap: 4px;
+  }
+  .sep {
+    width: 1px; height: 18px; background: rgba(255, 255, 255, 0.12);
+    margin: 0 4px;
+  }
+  button {
+    background: transparent; border: none; outline: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 6px 10px; border-radius: 18px;
+    display: flex; align-items: center; gap: 6px;
+    cursor: pointer; transition: all 0.2s ease;
+  }
+  button:hover {
+    color: #fff; background: rgba(255, 255, 255, 0.08);
+  }
+  button.active {
+    background: #fff; color: #0a0a10;
+  }
+  button.active .swatch {
+    border-color: rgba(0, 0, 0, 0.3);
+  }
+  button.active svg path, button.active svg line {
+    stroke: #0a0a10;
+  }
+  .swatch {
+    width: 8px; height: 8px; border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+  }
+  svg {
+    width: 13px; height: 13px; stroke: currentColor; fill: none;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  }
+  @media (max-width: 640px) {
+    header { top: 18px; left: 20px; }
+    #hint { display: none; }
+    .pill-container { bottom: 16px; width: calc(100% - 32px); max-width: 440px; }
+    .pill { justify-content: space-around; width: 100%; padding: 4px 6px; }
+    button { padding: 8px 10px; }
+    button .label { display: none; }
+    .sep { margin: 0 1px; }
+  }
+</style>
 </head>
 <body>
+<canvas id="canvas"></canvas>
+<div id="custom-cursor"></div>
 
-  <!-- Background Rendering Canvas -->
-  <canvas id="canvas"></canvas>
+<header class="ui-layer">
+  <h1>Stardust</h1>
+  <h2>Cosmic Cursor Trail</h2>
+</header>
 
-  <!-- Difference-Blended 14px Custom Cursor -->
-  <div id="cursor-ring"></div>
+<div id="hint" class="ui-layer">
+  Move to draw &bull; Hold to vortex<br>
+  Keys <span>1-4</span> <span>C</span> <span>S</span>
+</div>
 
-  <!-- Header Title -->
-  <header class="header">
-    <h1 class="header-title">Stardust</h1>
-    <span class="header-subtitle">Cosmic Cursor Trail</span>
-  </header>
+<div class="ui-layer pill-container">
+  <nav class="pill" aria-label="Painting Controls">
+    <div class="group" id="brush-group">
+      <button class="active" data-brush="dust" title="Dust (Key 1)">
+        <span class="swatch" style="background:#9fd8ff;"></span>
+        <span class="label">Dust</span>
+      </button>
+      <button data-brush="ribbons" title="Ribbons (Key 2)">
+        <span class="swatch" style="background:#ff9fe5;"></span>
+        <span class="label">Ribbons</span>
+      </button>
+      <button data-brush="embers" title="Embers (Key 3)">
+        <span class="swatch" style="background:#ffb060;"></span>
+        <span class="label">Embers</span>
+      </button>
+      <button data-brush="ink" title="Ink (Key 4)">
+        <span class="swatch" style="background:#e8e8f0;"></span>
+        <span class="label">Ink</span>
+      </button>
+    </div>
 
-  <!-- Top-Right Hint Block -->
-  <div id="hint-badge">
-    Move to paint · Hold for vortex · Keys 1–4 brushes · C clear · S save
-  </div>
+    <div class="sep"></div>
 
-  <!-- Bottom Floating Frosted UI Pill -->
-  <div id="toolbar-container">
-    <nav class="frosted-pill" aria-label="Cosmic Painting Controls">
-      
-      <!-- Brush Swatches (Keys 1 - 4) -->
-      <div class="btn-group" role="radiogroup" aria-label="Brushes">
-        <button type="button" class="pill-btn active" data-brush="dust" id="btn-brush-dust" title="Dust (Key 1)">
-          <span class="swatch-dot swatch-dust"></span>
-          <span class="btn-label">Dust</span>
-          <span class="keyboard-hint">1</span>
-        </button>
+    <div class="group" id="fade-group">
+      <button data-fade="0.012" title="Slow Fade">
+        <svg viewBox="0 0 14 14"><line x1="2" y1="12" x2="12" y2="12" stroke-dasharray="1 3"/></svg>
+      </button>
+      <button class="active" data-fade="0.045" title="Medium Fade">
+        <svg viewBox="0 0 14 14"><line x1="2" y1="12" x2="12" y2="12" stroke-dasharray="2.5 2"/></svg>
+      </button>
+      <button data-fade="0.14" title="Fast Fade">
+        <svg viewBox="0 0 14 14"><line x1="2" y1="12" x2="12" y2="12"/></svg>
+      </button>
+    </div>
 
-        <button type="button" class="pill-btn" data-brush="ribbons" id="btn-brush-ribbons" title="Ribbons (Key 2)">
-          <span class="swatch-dot swatch-ribbons"></span>
-          <span class="btn-label">Ribbons</span>
-          <span class="keyboard-hint">2</span>
-        </button>
+    <div class="sep"></div>
 
-        <button type="button" class="pill-btn" data-brush="embers" id="btn-brush-embers" title="Embers (Key 3)">
-          <span class="swatch-dot swatch-embers"></span>
-          <span class="btn-label">Embers</span>
-          <span class="keyboard-hint">3</span>
-        </button>
+    <div class="group">
+      <button id="btn-clear" title="Clear Canvas (Key C)">
+        <svg viewBox="0 0 16 16"><path d="M3 4h10M6 4V2.5A.5.5 0 0 1 6.5 2h3a.5.5 0 0 1 .5.5V4M5 4v9.5a.5.5 0 0 0 .5.5h5a.5.5 0 0 0 .5-.5V4"/></svg>
+      </button>
+      <button id="btn-save" title="Save PNG (Key S)">
+        <svg viewBox="0 0 16 16"><path d="M2.5 10v3.5a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V10M8 2v8M5 7l3 3 3-3"/></svg>
+      </button>
+    </div>
+  </nav>
+</div>
 
-        <button type="button" class="pill-btn" data-brush="ink" id="btn-brush-ink" title="Ink (Key 4)">
-          <span class="swatch-dot swatch-ink"></span>
-          <span class="btn-label">Ink</span>
-          <span class="keyboard-hint">4</span>
-        </button>
-      </div>
+<script>
+(() => {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const cursorEl = document.getElementById('custom-cursor');
+  const hintEl = document.getElementById('hint');
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-      <div class="divider"></div>
+  let width = 0, height = 0, dpr = 1;
+  let activeBrush = 'dust';
+  let fadeSpeed = prefersReduced ? 0.08 : 0.045;
+  let globalHue = 190;
+  let hasMoved = false;
 
-      <!-- Fade Speeds (Slow 0.012 / Mid 0.045 / Fast 0.14) -->
-      <div class="btn-group" role="radiogroup" aria-label="Fade Persistence">
-        <!-- Slow: long lingering trail -->
-        <button type="button" class="pill-btn" data-fade="0.012" id="btn-fade-slow" title="Slow Fade (Long Trails)">
-          <svg class="pill-icon" viewBox="0 0 24 24">
-            <line x1="2" y1="7" x2="22" y2="7"></line>
-            <line x1="2" y1="12" x2="16" y2="12"></line>
-            <line x1="2" y1="17" x2="20" y2="17"></line>
-          </svg>
-          <span class="btn-label">Slow</span>
-        </button>
+  const pointer = {
+    x: window.innerWidth * 0.5,
+    y: window.innerHeight * 0.5,
+    px: window.innerWidth * 0.5,
+    py: window.innerHeight * 0.5,
+    vx: 0, vy: 0,
+    down: false,
+    downTime: 0,
+    active: false,
+    idleTimer: 0
+  };
 
-        <!-- Mid: default balanced trail -->
-        <button type="button" class="pill-btn active" data-fade="0.045" id="btn-fade-mid" title="Mid Fade (Default)">
-          <svg class="pill-icon" viewBox="0 0 24 24">
-            <line x1="4" y1="7" x2="18" y2="7"></line>
-            <line x1="4" y1="12" x2="14" y2="12"></line>
-            <line x1="4" y1="17" x2="16" y2="17"></line>
-          </svg>
-          <span class="btn-label">Mid</span>
-        </button>
+  const comet = {
+    x: pointer.x,
+    y: pointer.y,
+    vx: 0,
+    vy: 0,
+    trail: []
+  };
 
-        <!-- Fast: quick vanishing trail -->
-        <button type="button" class="pill-btn" data-fade="0.14" id="btn-fade-fast" title="Fast Fade (Vanishing)">
-          <svg class="pill-icon" viewBox="0 0 24 24">
-            <line x1="6" y1="7" x2="14" y2="7"></line>
-            <line x1="6" y1="12" x2="11" y2="12"></line>
-            <line x1="6" y1="17" x2="13" y2="17"></line>
-          </svg>
-          <span class="btn-label">Fast</span>
-        </button>
-      </div>
+  const particles = [];
+  const shockwaves = [];
 
-      <div class="divider"></div>
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    
+    const temp = document.createElement('canvas');
+    temp.width = canvas.width;
+    temp.height = canvas.height;
+    const tctx = temp.getContext('2d');
+    if (canvas.width > 0 && canvas.height > 0) {
+      tctx.drawImage(canvas, 0, 0);
+    }
 
-      <!-- Action Buttons: Clear & Save PNG -->
-      <div class="btn-group" aria-label="Actions">
-        <button type="button" class="pill-btn" id="btn-clear" title="Clear Canvas (Key C)">
-          <svg class="pill-icon" viewBox="0 0 24 24">
-            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-            <line x1="10" y1="11" x2="10" y2="17"></line>
-            <line x1="14" y1="11" x2="14" y2="17"></line>
-          </svg>
-          <span class="btn-label">Clear</span>
-          <span class="keyboard-hint">C</span>
-        </button>
+    width = w; height = h;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
 
-        <button type="button" class="pill-btn" id="btn-save" title="Save PNG (Key S)">
-          <svg class="pill-icon" viewBox="0 0 24 24">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          <span class="btn-label">Save</span>
-          <span class="keyboard-hint">S</span>
-        </button>
-      </div>
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, width, height);
+    if (temp.width > 0) {
+      ctx.drawImage(temp, 0, 0, temp.width, temp.height, 0, 0, width, height);
+    }
+  }
+  window.addEventListener('resize', resize);
+  resize();
 
-    </nav>
-  </div>
+  function spawnParticle(x, y, vx, vy, brush) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * (brush === 'embers' ? 3.5 : 2.5);
+    const kickX = Math.cos(angle) * speed;
+    const kickY = Math.sin(angle) * speed;
+    const jitterHue = (globalHue + (Math.random() * 36 - 18) + 360) % 360;
 
-  <!-- Toast Notification Overlay -->
-  <div id="toast" role="status" aria-live="polite"></div>
+    let p = {
+      x, y, px: x, py: y,
+      vx: vx * 0.35 + kickX,
+      vy: vy * 0.35 + kickY,
+      brush,
+      life: 1.0,
+      decay: 0.015,
+      size: 1.5,
+      seed: Math.random() * 100,
+      hue: jitterHue,
+      sat: 85,
+      light: 68
+    };
 
-  <!-- ==========================================================================
-       MAIN JAVASCRIPT ENGINE
-       ========================================================================== -->
-  <script>
-    (function () {
-      'use strict';
+    if (brush === 'dust') {
+      p.size = 0.6 + Math.random() * 1.6;
+      p.decay = 0.01 + Math.random() * 0.014;
+      p.drag = 0.94;
+    } else if (brush === 'ribbons') {
+      p.size = 1.2;
+      p.decay = 0.005 + Math.random() * 0.006;
+      p.drag = 0.96;
+      p.sat = 95;
+    } else if (brush === 'embers') {
+      p.size = 1.0 + Math.random() * 2.2;
+      p.decay = 0.02 + Math.random() * 0.03;
+      p.drag = 0.93;
+      p.hue = 8 + Math.random() * 34;
+      p.light = 60 + Math.random() * 25;
+      p.vy -= 1.2;
+    } else if (brush === 'ink') {
+      p.size = 6.0 + Math.random() * 16.0;
+      p.decay = 0.006 + Math.random() * 0.008;
+      p.drag = 0.88;
+      p.light = 86;
+      p.sat = 6;
+    }
+    particles.push(p);
+  }
 
-      // --- DOM Elements ---
-      const canvas = document.getElementById('canvas');
-      const ctx = canvas.getContext('2d', { alpha: false });
-      const cursorRing = document.getElementById('cursor-ring');
-      const hintBadge = document.getElementById('hint-badge');
-      const toastEl = document.getElementById('toast');
+  function emitSegment(x1, y1, x2, y2, vx, vy, brush) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const dist = Math.hypot(dx, dy);
+    const steps = Math.min(Math.max(1, Math.floor(dist / 3)), 40);
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      spawnParticle(x1 + dx * t, y1 + dy * t, vx, vy, brush);
+    }
+  }
 
-      // Buttons
-      const brushButtons = document.querySelectorAll('[data-brush]');
-      const fadeButtons = document.querySelectorAll('[data-fade]');
-      const clearBtn = document.getElementById('btn-clear');
-      const saveBtn = document.getElementById('btn-save');
+  window.addEventListener('pointermove', (e) => {
+    if (!hasMoved) {
+      hasMoved = true;
+      hintEl.style.opacity = '0';
+    }
+    pointer.active = true;
+    pointer.idleTimer = 0;
+    pointer.x = e.clientX;
+    pointer.y = e.clientY;
+    updateCursorPos(pointer.x, pointer.y);
+  });
 
-      // Motion Preference
-      const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  window.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.pill-container')) return;
+    pointer.down = true;
+    pointer.downTime = performance.now();
+    pointer.active = true;
+    pointer.idleTimer = 0;
+    pointer.x = e.clientX;
+    pointer.y = e.clientY;
+    updateCursorPos(pointer.x, pointer.y);
+    cursorEl.classList.add('vortex');
+  });
 
-      // --- Engine State ---
-      let dpr = Math.min(window.devicePixelRatio || 1, 2);
-      let width = window.innerWidth;
-      let height = window.innerHeight;
+  window.addEventListener('pointerup', () => {
+    if (pointer.down) {
+      const duration = Math.min((performance.now() - pointer.downTime) / 1000, 1.2);
+      releaseVortex(duration);
+    }
+    pointer.down = false;
+    cursorEl.classList.remove('vortex');
+  });
 
-      let currentBrush = 'dust'; // 'dust' | 'ribbons' | 'embers' | 'ink'
-      let fadeSpeed = 0.045;     // 0.012 slow | 0.045 mid | 0.14 fast
-      let baseHue = 210;         // slowly drifts 14 deg/sec
-      let hasUserMoved = false;
+  function updateCursorPos(x, y) {
+    cursorEl.style.setProperty('--cx', `${x}px`);
+    cursorEl.style.setProperty('--cy', `${y}px`);
+    if (!cursorEl.classList.contains('vortex')) {
+      cursorEl.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    }
+  }
 
-      // Pointer State
-      const pointer = {
-        x: width * 0.5,
-        y: height * 0.5,
-        prevX: width * 0.5,
-        prevY: height * 0.5,
-        vx: 0,
-        vy: 0,
-        isDown: false,
-        holdStartTime: 0,
-        isHovered: false,
-        lastInteractionTime: performance.now()
-      };
+  function releaseVortex(duration) {
+    const strength = 6 + duration * 14;
+    const count = Math.floor(160 + (duration / 1.2) * 260);
 
-      // Comet Physics: follows pointer via spring (stiffness 120, damping 0.82)
-      const comet = {
-        x: width * 0.5,
-        y: height * 0.5,
-        vx: 0,
-        vy: 0,
-        stiffness: 120,
-        damping: 0.82,
-        trail: [] // Stores last 28 positions
-      };
-
-      // Ghost Autonomous Cursor (Lissajous curve triggered after 2.6s idle)
-      const ghost = {
-        active: false,
-        x: width * 0.5,
-        y: height * 0.5,
-        prevX: width * 0.5,
-        prevY: height * 0.5,
-        time: 0
-      };
-
-      // Particle Pools
-      const particles = [];
-      const sparks = [];
-      const shockwaves = [];
-
-      // Toast Helper
-      let toastTimeout = null;
-      function showToast(message) {
-        toastEl.textContent = message;
-        toastEl.classList.add('show');
-        clearTimeout(toastTimeout);
-        toastTimeout = setTimeout(() => {
-          toastEl.classList.remove('show');
-        }, 1800);
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      const dx = p.x - pointer.x;
+      const dy = p.y - pointer.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 320 && dist > 1) {
+        const factor = (1 - dist / 320) * strength;
+        p.vx += (dx / dist) * factor;
+        p.vy += (dy / dist) * factor;
       }
+    }
 
-      // --- Canvas Sizing & Preservation ---
-      function resizeCanvas() {
-        const prevWidth = canvas.width;
-        const prevHeight = canvas.height;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = (2 + Math.random() * 12) * (0.4 + duration * 0.8);
+      const vx = Math.cos(angle) * speed;
+      const vy = Math.sin(angle) * speed;
+      const r = Math.random() * 20;
+      spawnParticle(pointer.x + Math.cos(angle) * r, pointer.y + Math.sin(angle) * r, vx, vy, activeBrush);
+    }
 
-        let tempCanvas = null;
-        if (prevWidth > 0 && prevHeight > 0) {
-          tempCanvas = document.createElement('canvas');
-          tempCanvas.width = prevWidth;
-          tempCanvas.height = prevHeight;
-          const tempCtx = tempCanvas.getContext('2d');
-          tempCtx.drawImage(canvas, 0, 0);
-        }
+    shockwaves.push({
+      x: pointer.x,
+      y: pointer.y,
+      radius: 8,
+      maxRadius: 180 + duration * 160,
+      alpha: 0.9,
+      hue: globalHue
+    });
+  }
 
-        dpr = Math.min(window.devicePixelRatio || 1, 2);
-        width = window.innerWidth;
-        height = window.innerHeight;
+  let lastTime = performance.now();
+  let ghostTime = 0;
 
-        canvas.width = Math.floor(width * dpr);
-        canvas.height = Math.floor(height * dpr);
-        canvas.style.width = width + 'px';
-        canvas.style.height = height + 'px';
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dt = Math.min((now - lastTime) / 1000, 0.1);
+    lastTime = now;
 
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(dpr, dpr);
+    globalHue = (globalHue + 14 * dt) % 360;
 
-        // Pre-fill pure black
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, width, height);
+    // Pointer Idle & Ghost Mode
+    pointer.idleTimer += dt;
+    if (pointer.idleTimer > 2.6) {
+      ghostTime += dt;
+      const A = width * 0.32;
+      const B = height * 0.28;
+      const cx = width * 0.5;
+      const cy = height * 0.5;
+      const gx = cx + A * Math.sin(3 * ghostTime * 0.5 + Math.PI / 2) + Math.sin(ghostTime * 2.1) * 35;
+      const gy = cy + B * Math.sin(2 * ghostTime * 0.5) + Math.cos(ghostTime * 1.7) * 25;
+      pointer.x = gx;
+      pointer.y = gy;
+      updateCursorPos(pointer.x, pointer.y);
+    }
 
-        // Restore previous painting seamlessly
-        if (tempCanvas) {
-          ctx.drawImage(tempCanvas, 0, 0, width, height);
-        }
-      }
+    pointer.vx = pointer.x - pointer.px;
+    pointer.vy = pointer.y - pointer.py;
 
-      window.addEventListener('resize', resizeCanvas);
-      resizeCanvas();
+    // Movement spawn
+    if (Math.hypot(pointer.vx, pointer.vy) > 0.1) {
+      emitSegment(pointer.px, pointer.py, pointer.x, pointer.y, pointer.vx, pointer.vy, activeBrush);
+    }
 
-      // --- Particle Class ---
-      class Particle {
-        constructor(x, y, vx, vy, brush, parentHue) {
-          this.x = x;
-          this.y = y;
-          this.prevX = x;
-          this.prevY = y;
-          this.vx = vx;
-          this.vy = vy;
-          this.brush = brush;
-          this.age = 0;
-          this.seed = Math.random() * 1000;
+    // Spring comet head (stiffness 120, damping 0.82)
+    const k = 120;
+    const d = 0.82;
+    const ax = (pointer.x - comet.x) * k;
+    const ay = (pointer.y - comet.y) * k;
+    comet.vx = (comet.vx + ax * dt) * Math.pow(d, dt * 60);
+    comet.vy = (comet.vy + ay * dt) * Math.pow(d, dt * 60);
+    comet.x += comet.vx * dt;
+    comet.y += comet.vy * dt;
 
-          // Color & Size setup per brush
-          if (this.brush === 'dust') {
-            this.radius = 0.6 + Math.random() * 1.6; // 0.6 - 2.2px
-            this.maxLife = 1.4 + Math.random() * 1.2; // 1.4 - 2.6s
-            this.hue = (parentHue + (Math.random() * 36 - 18) + 360) % 360;
-            this.wanderFreq = 3.2 + Math.random() * 3.5;
-            this.wanderAmp = 12 + Math.random() * 16;
-            this.wanderPhase = Math.random() * Math.PI * 2;
-            this.drag = 0.962;
-          } else if (this.brush === 'ribbons') {
-            this.radius = 0.8 + Math.random() * 1.0;
-            this.maxLife = 3.0 + Math.random() * 2.2; // Long life
-            this.hue = (parentHue + (Math.random() * 32 - 16) + 360) % 360;
-            this.drag = 0.984;
-          } else if (this.brush === 'embers') {
-            this.radius = 1.0 + Math.random() * 2.2;
-            this.maxLife = 0.65 + Math.random() * 0.6; // Faster decay
-            this.hue = 8 + Math.random() * 34;        // Orange hues 8-42
-            this.buoyancy = 45 + Math.random() * 65;  // Upward buoyancy
-            this.drag = 0.945;
-          } else if (this.brush === 'ink') {
-            this.radius = 6 + Math.random() * 16;     // 6 - 22px
-            this.maxLife = 2.2 + Math.random() * 1.4;
-            this.alpha = 0.025 + Math.random() * 0.025; // Very low alpha
-            this.drag = 0.92;
-          }
-        }
+    comet.trail.unshift({ x: comet.x, y: comet.y });
+    if (comet.trail.length > 28) comet.trail.pop();
 
-        update(dt) {
-          this.age += dt;
-          this.prevX = this.x;
-          this.prevY = this.y;
+    // Vortex hold logic
+    if (pointer.down) {
+      const holdTime = (now - pointer.downTime) / 1000;
+      const progress = Math.min(holdTime / 1.2, 1.0);
+      const vortexRadius = 260;
+      const pull = (120 + progress * 340) * dt;
+      const swirl = (260 + progress * 580) * dt;
 
-          if (this.brush === 'dust') {
-            // Sinusoidal wander
-            const wander = Math.sin(this.age * this.wanderFreq + this.wanderPhase) * this.wanderAmp;
-            this.x += (this.vx + wander * 0.4) * dt;
-            this.y += (this.vy + Math.cos(this.age * this.wanderFreq) * this.wanderAmp * 0.4) * dt;
-            this.vx *= Math.pow(this.drag, dt * 60);
-            this.vy *= Math.pow(this.drag, dt * 60);
-          } else if (this.brush === 'ribbons') {
-            this.x += this.vx * dt;
-            this.y += this.vy * dt;
-            this.vx *= Math.pow(this.drag, dt * 60);
-            this.vy *= Math.pow(this.drag, dt * 60);
-          } else if (this.brush === 'embers') {
-            // Upward buoyancy (negative vy)
-            this.vy -= this.buoyancy * dt;
-            this.x += this.vx * dt;
-            this.y += this.vy * dt;
-            this.vx *= Math.pow(this.drag, dt * 60);
-            this.vy *= Math.pow(this.drag, dt * 60);
-          } else if (this.brush === 'ink') {
-            this.x += this.vx * dt;
-            this.y += this.vy * dt;
-            this.vx *= Math.pow(this.drag, dt * 60);
-            this.vy *= Math.pow(this.drag, dt * 60);
-          }
-
-          return this.age < this.maxLife;
-        }
-
-        draw(ctx) {
-          const lifeRatio = 1 - (this.age / this.maxLife);
-          if (lifeRatio <= 0) return;
-
-          if (this.brush === 'dust') {
-            // Triple-radius halo
-            const a = lifeRatio * 0.9;
-            // 1. Soft outer halo
-            ctx.fillStyle = `hsla(${this.hue}, 90%, 68%, ${a * 0.08})`;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius * 3.8, 0, Math.PI * 2);
-            ctx.fill();
-
-            // 2. Mid halo
-            ctx.fillStyle = `hsla(${this.hue}, 95%, 72%, ${a * 0.28})`;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius * 2.0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // 3. Core point
-            ctx.fillStyle = `hsla(${this.hue}, 100%, 86%, ${a})`;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-            ctx.fill();
-
-          } else if (this.brush === 'ribbons') {
-            // Connected line segments from previous to current position
-            const a = lifeRatio * 0.85;
-            ctx.strokeStyle = `hsla(${this.hue}, 95%, 68%, ${a})`;
-            ctx.lineWidth = Math.max(0.6, this.radius * lifeRatio * 1.5);
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(this.prevX, this.prevY);
-            ctx.lineTo(this.x, this.y);
-            ctx.stroke();
-
-          } else if (this.brush === 'embers') {
-            // Orange hues 8-42, flicker in alpha
-            const flicker = 0.65 + 0.35 * Math.sin(this.age * 26 + this.seed);
-            const a = lifeRatio * flicker;
-
-            // Ember outer glow
-            ctx.fillStyle = `hsla(${this.hue}, 100%, 55%, ${a * 0.28})`;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius * 2.4, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Ember bright core
-            ctx.fillStyle = `hsla(${this.hue + 8}, 100%, 75%, ${a})`;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius * 0.9, 0, Math.PI * 2);
-            ctx.fill();
-
-          } else if (this.brush === 'ink') {
-            // Large pale grey blobs at very low alpha drawn with source-over
-            const a = this.alpha * lifeRatio;
-            const grad = ctx.createRadialGradient(
-              this.x, this.y, 0,
-              this.x, this.y, this.radius
-            );
-            grad.addColorStop(0, `rgba(235, 238, 248, ${a})`);
-            grad.addColorStop(0.5, `rgba(220, 224, 238, ${a * 0.5})`);
-            grad.addColorStop(1, 'rgba(215, 220, 235, 0)');
-
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-      }
-
-      // --- Explosive Spark Class (On Vortex Release) ---
-      class Spark {
-        constructor(x, y, vx, vy, hue) {
-          this.x = x;
-          this.y = y;
-          this.prevX = x;
-          this.prevY = y;
-          this.vx = vx;
-          this.vy = vy;
-          this.hue = hue;
-          this.age = 0;
-          this.maxLife = 0.45 + Math.random() * 0.55;
-          this.drag = 0.955;
-        }
-
-        update(dt) {
-          this.age += dt;
-          this.prevX = this.x;
-          this.prevY = this.y;
-          this.x += this.vx * dt;
-          this.y += this.vy * dt;
-          this.vx *= Math.pow(this.drag, dt * 60);
-          this.vy *= Math.pow(this.drag, dt * 60);
-          return this.age < this.maxLife;
-        }
-
-        draw(ctx) {
-          const lifeRatio = 1 - (this.age / this.maxLife);
-          ctx.strokeStyle = `hsla(${this.hue}, 100%, 82%, ${lifeRatio * 0.95})`;
-          ctx.lineWidth = Math.max(0.5, 1.8 * lifeRatio);
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(this.prevX, this.prevY);
-          ctx.lineTo(this.x, this.y);
-          ctx.stroke();
-        }
-      }
-
-      // --- Shockwave Ring (On Vortex Release) ---
-      class Shockwave {
-        constructor(x, y, maxRadius, hue) {
-          this.x = x;
-          this.y = y;
-          this.radius = 2;
-          this.maxRadius = maxRadius;
-          this.hue = hue;
-          this.age = 0;
-          this.duration = 0.65;
-        }
-
-        update(dt) {
-          this.age += dt;
-          const progress = Math.min(1.0, this.age / this.duration);
-          // Ease-out cubic expansion
-          const easeOut = 1 - Math.pow(1 - progress, 3);
-          this.radius = 2 + (this.maxRadius - 2) * easeOut;
-          return this.age < this.duration;
-        }
-
-        draw(ctx) {
-          const progress = this.age / this.duration;
-          const alpha = Math.max(0, (1 - progress) * 0.85);
-          ctx.save();
-          ctx.strokeStyle = `hsla(${this.hue}, 95%, 75%, ${alpha})`;
-          ctx.lineWidth = Math.max(0.6, (1 - progress) * 2.6);
-          ctx.beginPath();
-          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.restore();
-        }
-      }
-
-      // --- Spawning along movement segment ---
-      function spawnAlongSegment(x0, y0, x1, y1, vx, vy, brush, hue) {
-        const dx = x1 - x0;
-        const dy = y1 - y0;
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        const dx = pointer.x - p.x;
+        const dy = pointer.y - p.y;
         const dist = Math.hypot(dx, dy);
-
-        // One spawn every ~3px, capped at 40 steps
-        const steps = Math.min(40, Math.max(1, Math.floor(dist / 3)));
-        const velFrac = (brush === 'ink') ? 0.08 : 0.16;
-        const kickBase = (brush === 'ink') ? 22 : (brush === 'ribbons' ? 38 : 55);
-
-        for (let i = 0; i <= steps; i++) {
-          const t = i / steps;
-          const sx = x0 + dx * t;
-          const sy = y0 + dy * t;
-
-          // Radial kick
-          const angle = Math.random() * Math.PI * 2;
-          const kick = (Math.random() * kickBase);
-          const pVx = vx * velFrac + Math.cos(angle) * kick;
-          const pVy = vy * velFrac + Math.sin(angle) * kick;
-
-          particles.push(new Particle(sx, sy, pVx, pVy, brush, hue));
+        if (dist < vortexRadius && dist > 1) {
+          const norm = (1 - dist / vortexRadius);
+          const nx = dx / dist;
+          const ny = dy / dist;
+          p.vx += (nx * pull - ny * swirl) * norm;
+          p.vy += (ny * pull + nx * swirl) * norm;
         }
       }
 
-      // --- Pointer Interactions & Vortex Gathering ---
-      function updateVortex(dt, originX, originY) {
-        const holdTime = (performance.now() - pointer.holdStartTime) / 1000;
-        const vortexProgress = Math.min(1.0, holdTime / 1.2); // Grows over 1.2s
+      for (let i = 0; i < 4; i++) {
+        const rad = Math.random() * 60 + 10;
+        const ang = Math.random() * Math.PI * 2;
+        const px = pointer.x + Math.cos(ang) * rad;
+        const py = pointer.y + Math.sin(ang) * rad;
+        spawnParticle(px, py, -Math.sin(ang) * 4, Math.cos(ang) * 4, activeBrush);
+      }
+    }
 
-        const radiusThreshold = 260;
-        const inwardForce = 220 * vortexProgress;
-        const swirlForce = 440 * vortexProgress; // Stronger tangential swirl
+    // Canvas fading
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(0, 0, 0, ${fadeSpeed})`;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
 
-        for (let i = 0; i < particles.length; i++) {
-          const p = particles[i];
-          const dx = originX - p.x;
-          const dy = originY - p.y;
-          const dist = Math.hypot(dx, dy);
-
-          if (dist < radiusThreshold && dist > 3) {
-            const nx = dx / dist;
-            const ny = dy / dist;
-            // Tangential vector (perpendicular)
-            const tx = -ny;
-            const ty = nx;
-
-            const falloff = 1 - (dist / radiusThreshold);
-            p.vx += (nx * inwardForce * falloff + tx * swirlForce * falloff) * dt;
-            p.vy += (ny * inwardForce * falloff + ty * swirlForce * falloff) * dt;
-          }
-        }
-
-        // Seed fresh swirling particles near pointer
-        const seedCount = Math.floor(2 + vortexProgress * 3);
-        for (let k = 0; k < seedCount; k++) {
-          const r = 25 + Math.random() * 160 * (1 - vortexProgress * 0.4);
-          const theta = Math.random() * Math.PI * 2;
-          const px = originX + Math.cos(theta) * r;
-          const py = originY + Math.sin(theta) * r;
-
-          // Tangential orbital velocity
-          const tangSpeed = (120 + Math.random() * 180) * (0.6 + vortexProgress * 0.6);
-          const pvx = -Math.sin(theta) * tangSpeed;
-          const pvy = Math.cos(theta) * tangSpeed;
-
-          particles.push(new Particle(px, py, pvx, pvy, currentBrush, baseHue));
-        }
+    // Draw Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life -= p.decay;
+      if (p.life <= 0) {
+        particles.splice(i, 1);
+        continue;
       }
 
-      function releaseVortex(originX, originY) {
-        const holdTime = (performance.now() - pointer.holdStartTime) / 1000;
-        const holdFactor = Math.min(1.0, holdTime / 1.2);
+      p.vx *= p.drag;
+      p.vy *= p.drag;
+      p.px = p.x;
+      p.py = p.y;
+      p.x += p.vx;
+      p.y += p.vy;
 
-        // Remove active vortex cursor styling
-        cursorRing.classList.remove('vortex-active');
-
-        // Only trigger shockwave/impulse if held for at least 0.12s
-        if (holdTime < 0.12) return;
-
-        // 1. Nearby particles within 280px receive outward impulse scaled by hold duration
-        const impulseStrength = 360 * (0.4 + holdFactor * 0.8);
-        for (let i = 0; i < particles.length; i++) {
-          const p = particles[i];
-          const dx = p.x - originX;
-          const dy = p.y - originY;
-          const dist = Math.hypot(dx, dy);
-          if (dist < 280 && dist > 1) {
-            const nx = dx / dist;
-            const ny = dy / dist;
-            const falloff = 1 - (dist / 280);
-            p.vx += nx * impulseStrength * falloff;
-            p.vy += ny * impulseStrength * falloff;
-          }
-        }
-
-        // 2. 160-420 new sparks burst outward at high speed
-        const sparkCount = Math.floor(160 + holdFactor * 260);
-        for (let s = 0; s < sparkCount; s++) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = 140 + Math.random() * 640 * (0.5 + holdFactor * 0.5);
-          const sparkHue = (baseHue + (Math.random() * 60 - 30) + 360) % 360;
-          sparks.push(new Spark(
-            originX,
-            originY,
-            Math.cos(angle) * speed,
-            Math.sin(angle) * speed,
-            sparkHue
-          ));
-        }
-
-        // 3. Thin expanding shockwave ring fades out
-        const maxShockRadius = 240 + holdFactor * 180;
-        shockwaves.push(new Shockwave(originX, originY, maxShockRadius, baseHue));
-      }
-
-      // --- Autonomous Ghost Cursor (Lissajous Curve) ---
-      function updateGhostCursor(dt, now) {
-        const idleDuration = now - pointer.lastInteractionTime;
-
-        if (idleDuration > 2600 && !pointer.isDown) {
-          if (!ghost.active) {
-            ghost.active = true;
-            ghost.time = 0;
-            ghost.x = pointer.x;
-            ghost.y = pointer.y;
-            ghost.prevX = pointer.x;
-            ghost.prevY = pointer.y;
-          }
-
-          ghost.time += dt * 0.92;
-          ghost.prevX = ghost.x;
-          ghost.prevY = ghost.y;
-
-          // Lissajous curve:
-          // x = A sin(3t + π/2) + small secondary wobble
-          // y = B sin(2t) + wobble
-          const cx = width * 0.5;
-          const cy = height * 0.5;
-          const A = Math.min(cx * 0.72, 460);
-          const B = Math.min(cy * 0.68, 340);
-          const t = ghost.time;
-
-          const wobbleX = 24 * Math.sin(7 * t);
-          const wobbleY = 18 * Math.cos(5 * t);
-
-          ghost.x = cx + A * Math.sin(3 * t + Math.PI * 0.5) + wobbleX;
-          ghost.y = cy + B * Math.sin(2 * t) + wobbleY;
-
-          const gvx = (ghost.x - ghost.prevX) / Math.max(dt, 0.001);
-          const gvy = (ghost.y - ghost.prevY) / Math.max(dt, 0.001);
-
-          spawnAlongSegment(
-            ghost.prevX, ghost.prevY,
-            ghost.x, ghost.y,
-            gvx, gvy,
-            currentBrush,
-            baseHue
-          );
-        } else {
-          ghost.active = false;
-        }
-      }
-
-      // --- Comet Physics Update & Render ---
-      function updateComet(dt, targetX, targetY) {
-        // Spring physics: stiffness 120, damping 0.82
-        const fx = (targetX - comet.x) * comet.stiffness;
-        const fy = (targetY - comet.y) * comet.stiffness;
-
-        comet.vx = (comet.vx + fx * dt) * Math.pow(comet.damping, dt * 60);
-        comet.vy = (comet.vy + fy * dt) * Math.pow(comet.damping, dt * 60);
-
-        comet.x += comet.vx * dt;
-        comet.y += comet.vy * dt;
-
-        // Record last 28 positions
-        comet.trail.push({ x: comet.x, y: comet.y });
-        if (comet.trail.length > 28) {
-          comet.trail.shift();
-        }
-      }
-
-      function drawComet(ctx) {
-        if (comet.trail.length < 2) return;
-
-        // Complementary hue for comet trail
-        const compHue = (baseHue + 180) % 360;
+      if (p.brush === 'dust') {
+        p.x += Math.sin(now * 0.005 + p.seed) * 0.35;
+        p.y += Math.cos(now * 0.005 + p.seed) * 0.35;
 
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-
-        // 1. Tapering, brightening line through last 28 positions
-        const total = comet.trail.length;
-        for (let i = 1; i < total; i++) {
-          const p0 = comet.trail[i - 1];
-          const p1 = comet.trail[i];
-          const progress = i / total;
-
-          const width = 0.6 + progress * 5.2;
-          const lightness = 48 + progress * 48; // Brightening towards 96%
-          const alpha = 0.15 + progress * 0.85;
-
-          ctx.strokeStyle = `hsla(${compHue}, 100%, ${lightness}%, ${alpha})`;
-          ctx.lineWidth = width;
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(p0.x, p0.y);
-          ctx.lineTo(p1.x, p1.y);
-          ctx.stroke();
-        }
-
-        // 2. Capped with a radial-gradient white-hot head 18px in radius
-        const headX = comet.x;
-        const headY = comet.y;
-        const headRadius = 18;
-
-        const grad = ctx.createRadialGradient(headX, headY, 0, headX, headY, headRadius);
-        grad.addColorStop(0, '#ffffff');
-        grad.addColorStop(0.24, `hsla(${compHue}, 100%, 88%, 0.95)`);
-        grad.addColorStop(0.58, `hsla(${compHue}, 100%, 65%, 0.42)`);
-        grad.addColorStop(1, `hsla(${compHue}, 100%, 50%, 0)`);
-
-        ctx.fillStyle = grad;
+        const a = p.life;
+        ctx.fillStyle = `hsla(${p.hue}, ${p.sat}%, ${p.light}%, ${a * 0.85})`;
         ctx.beginPath();
-        ctx.arc(headX, headY, headRadius, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.restore();
-      }
-
-      // --- Main Animation Frame Loop ---
-      let lastTime = performance.now();
-
-      function animate(now) {
-        requestAnimationFrame(animate);
-
-        const dt = Math.min((now - lastTime) / 1000, 0.08); // Clamp dt against large tab switches
-        lastTime = now;
-
-        // Drift base hue: 14 degrees per second
-        baseHue = (baseHue + 14 * dt) % 360;
-
-        // Determine effective fade speed (Reduced motion clamps to >= 0.08)
-        let activeFade = fadeSpeed;
-        if (reducedMotionQuery.matches) {
-          activeFade = Math.max(0.08, activeFade);
-        }
-
-        // 1. Darken canvas with translucent black fillRect for trailing effect
-        ctx.save();
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.fillStyle = `rgba(0, 0, 0, ${activeFade})`;
-        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = `hsla(${p.hue}, ${p.sat}%, ${p.light}%, ${a * 0.15})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 3.2, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
 
-        // 2. Handle vortex gathering if pointer held
-        if (pointer.isDown) {
-          updateVortex(dt, pointer.x, pointer.y);
-        }
-
-        // 3. Autonomous ghost cursor when idle
-        updateGhostCursor(dt, now);
-
-        // 4. Spring Comet follow target (ghost if idle, else user pointer)
-        const targetX = ghost.active ? ghost.x : pointer.x;
-        const targetY = ghost.active ? ghost.y : pointer.y;
-        updateComet(dt, targetX, targetY);
-
-        // 5. Update and Draw Particles
-        // Separate ink (source-over) from glowing brushes (lighter)
-        const inkParticles = [];
-        const glowParticles = [];
-
-        for (let i = particles.length - 1; i >= 0; i--) {
-          const p = particles[i];
-          if (p.update(dt)) {
-            if (p.brush === 'ink') {
-              inkParticles.push(p);
-            } else {
-              glowParticles.push(p);
-            }
-          } else {
-            particles.splice(i, 1);
-          }
-        }
-
-        // Draw Ink first with source-over (milky wash accumulation)
-        if (inkParticles.length > 0) {
-          ctx.save();
-          ctx.globalCompositeOperation = 'source-over';
-          for (let i = 0; i < inkParticles.length; i++) {
-            inkParticles[i].draw(ctx);
-          }
-          ctx.restore();
-        }
-
-        // Draw Glow Particles with globalCompositeOperation 'lighter' (additive glow)
+      } else if (p.brush === 'ribbons') {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        for (let i = 0; i < glowParticles.length; i++) {
-          glowParticles[i].draw(ctx);
-        }
-
-        // Draw Burst Sparks
-        for (let i = sparks.length - 1; i >= 0; i--) {
-          const sp = sparks[i];
-          if (sp.update(dt)) {
-            sp.draw(ctx);
-          } else {
-            sparks.splice(i, 1);
-          }
-        }
-
-        // Draw Shockwaves
-        for (let i = shockwaves.length - 1; i >= 0; i--) {
-          const sw = shockwaves[i];
-          if (sw.update(dt)) {
-            sw.draw(ctx);
-          } else {
-            shockwaves.splice(i, 1);
-          }
-        }
-
+        ctx.strokeStyle = `hsla(${p.hue}, ${p.sat}%, ${p.light}%, ${p.life * 0.7})`;
+        ctx.lineWidth = p.size * p.life;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(p.px, p.py);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
         ctx.restore();
 
-        // 6. Draw Comet Head on top with complementary hue & white-hot head
-        drawComet(ctx);
-      }
+      } else if (p.brush === 'embers') {
+        p.vy -= 0.06; // Buoyancy
+        p.vx += (Math.random() - 0.5) * 0.4;
+        const flicker = (Math.sin(now * 0.02 + p.seed * 10) + 1) * 0.5;
+        const a = p.life * (0.5 + 0.5 * flicker);
 
-      requestAnimationFrame(animate);
-
-      // --- Pointer Movement & Event Handlers ---
-      function handlePointerMove(e) {
-        const px = e.clientX;
-        const py = e.clientY;
-
-        // Position custom cursor ring
-        cursorRing.style.left = px + 'px';
-        cursorRing.style.top = py + 'px';
-        if (!cursorRing.classList.contains('visible')) {
-          cursorRing.classList.add('visible');
-        }
-
-        const now = performance.now();
-        const dt = Math.max((now - pointer.lastInteractionTime) / 1000, 0.001);
-
-        pointer.vx = (px - pointer.prevX) / dt;
-        pointer.vy = (py - pointer.prevY) / dt;
-
-        // First interaction fades hint badge
-        if (!hasUserMoved) {
-          hasUserMoved = true;
-          hintBadge.classList.add('faded');
-        }
-
-        // Spawn particles along segment
-        spawnAlongSegment(
-          pointer.prevX, pointer.prevY,
-          px, py,
-          pointer.vx, pointer.vy,
-          currentBrush,
-          baseHue
-        );
-
-        pointer.prevX = px;
-        pointer.prevY = py;
-        pointer.x = px;
-        pointer.y = py;
-        pointer.lastInteractionTime = now;
-      }
-
-      window.addEventListener('pointermove', handlePointerMove, { passive: true });
-
-      window.addEventListener('pointerdown', (e) => {
-        // Ignore toolbar clicks for vortex
-        if (e.target.closest('#toolbar-container')) return;
-
-        pointer.isDown = true;
-        pointer.holdStartTime = performance.now();
-        pointer.x = e.clientX;
-        pointer.y = e.clientY;
-        pointer.prevX = e.clientX;
-        pointer.prevY = e.clientY;
-        pointer.lastInteractionTime = performance.now();
-
-        cursorRing.classList.add('vortex-active');
-
-        if (!hasUserMoved) {
-          hasUserMoved = true;
-          hintBadge.classList.add('faded');
-        }
-      });
-
-      function onPointerEnd(e) {
-        if (pointer.isDown) {
-          releaseVortex(pointer.x, pointer.y);
-          pointer.isDown = false;
-        }
-      }
-
-      window.addEventListener('pointerup', onPointerEnd);
-      window.addEventListener('pointercancel', onPointerEnd);
-
-      window.addEventListener('pointerleave', () => {
-        cursorRing.classList.remove('visible');
-        if (pointer.isDown) {
-          releaseVortex(pointer.x, pointer.y);
-          pointer.isDown = false;
-        }
-      });
-
-      // --- UI Actions & Controls ---
-      // Brush Selection
-      function setBrush(brushName) {
-        currentBrush = brushName;
-        brushButtons.forEach(btn => {
-          btn.classList.toggle('active', btn.dataset.brush === brushName);
-        });
-      }
-
-      brushButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          setBrush(btn.dataset.brush);
-        });
-      });
-
-      // Fade Speed Selection
-      function setFadeSpeed(val) {
-        fadeSpeed = parseFloat(val);
-        fadeButtons.forEach(btn => {
-          btn.classList.toggle('active', Math.abs(parseFloat(btn.dataset.fade) - fadeSpeed) < 0.001);
-        });
-      }
-
-      fadeButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          setFadeSpeed(btn.dataset.fade);
-        });
-      });
-
-      // Clear Action
-      function clearCanvas() {
         ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = `hsla(${p.hue}, 95%, ${p.light}%, ${a})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (0.6 + p.life * 0.5), 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
 
-        // Clear active entities
-        particles.length = 0;
-        sparks.length = 0;
-        shockwaves.length = 0;
-        comet.trail.length = 0;
+      } else if (p.brush === 'ink') {
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = `hsla(${p.hue}, ${p.sat}%, ${p.light}%, ${p.life * 0.035})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
 
-        showToast('Canvas Cleared');
+    // Draw Comet Head and Trail
+    if (comet.trail.length > 1) {
+      const compHue = (globalHue + 180) % 360;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = comet.trail.length - 1; i > 0; i--) {
+        const p1 = comet.trail[i];
+        const p2 = comet.trail[i - 1];
+        const prog = 1 - (i / comet.trail.length);
+        ctx.strokeStyle = `hsla(${compHue}, 90%, ${50 + prog * 45}%, ${prog * 0.6})`;
+        ctx.lineWidth = Math.max(0.6, prog * 5.5);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
       }
 
-      clearBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        clearCanvas();
-      });
+      // Hot white head
+      const hx = comet.trail[0].x;
+      const hy = comet.trail[0].y;
+      const grad = ctx.createRadialGradient(hx, hy, 0, hx, hy, 18);
+      grad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+      grad.addColorStop(0.2, `hsla(${compHue}, 90%, 80%, 0.6)`);
+      grad.addColorStop(0.6, `hsla(${compHue}, 80%, 60%, 0.15)`);
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(hx, hy, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
-      // Save PNG Action
-      function saveSnapshot() {
-        try {
-          const now = new Date();
-          const pad = (n) => String(n).padStart(2, '0');
-          const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-          const filename = `stardust-${timestamp}.png`;
-
-          const dataUrl = canvas.toDataURL('image/png');
-          const link = document.createElement('a');
-          link.download = filename;
-          link.href = dataUrl;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-
-          showToast('Snapshot Saved');
-        } catch (err) {
-          console.error('Failed to save image:', err);
-          showToast('Save Failed');
-        }
+    // Shockwaves
+    for (let i = shockwaves.length - 1; i >= 0; i--) {
+      const sw = shockwaves[i];
+      sw.radius += (sw.maxRadius - sw.radius) * 0.12 + 2.0;
+      sw.alpha *= 0.91;
+      if (sw.alpha < 0.01) {
+        shockwaves.splice(i, 1);
+        continue;
       }
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = `hsla(${sw.hue}, 80%, 75%, ${sw.alpha})`;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
 
-      saveBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        saveSnapshot();
-      });
+    pointer.px = pointer.x;
+    pointer.py = pointer.y;
+  }
+  requestAnimationFrame(loop);
 
-      // --- Keyboard Shortcuts ---
-      window.addEventListener('keydown', (e) => {
-        // Prevent shortcuts inside text inputs if any are added in future
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  // UI Handlers
+  const brushButtons = document.querySelectorAll('#brush-group button');
+  brushButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setBrush(btn.getAttribute('data-brush'));
+    });
+  });
 
-        const key = e.key.toLowerCase();
-        if (key === '1') {
-          setBrush('dust');
-        } else if (key === '2') {
-          setBrush('ribbons');
-        } else if (key === '3') {
-          setBrush('embers');
-        } else if (key === '4') {
-          setBrush('ink');
-        } else if (key === 'c') {
-          clearCanvas();
-        } else if (key === 's') {
-          saveSnapshot();
-        }
-      });
+  function setBrush(type) {
+    activeBrush = type;
+    brushButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-brush') === type));
+  }
 
-    })();
-  </script>
+  const fadeButtons = document.querySelectorAll('#fade-group button');
+  fadeButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setFade(parseFloat(btn.getAttribute('data-fade')));
+    });
+  });
+
+  function setFade(speed) {
+    fadeSpeed = prefersReduced ? Math.max(0.08, speed) : speed;
+    fadeButtons.forEach(b => b.classList.toggle('active', Math.abs(parseFloat(b.getAttribute('data-fade')) - speed) < 0.001));
+  }
+
+  document.getElementById('btn-clear').addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearCanvas();
+  });
+
+  function clearCanvas() {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    particles.length = 0;
+    shockwaves.length = 0;
+    comet.trail.length = 0;
+  }
+
+  document.getElementById('btn-save').addEventListener('click', (e) => {
+    e.stopPropagation();
+    saveCanvas();
+  });
+
+  function saveCanvas() {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const link = document.createElement('a');
+    link.download = `stardust-${timestamp}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const key = e.key.toLowerCase();
+    if (key === '1') setBrush('dust');
+    if (key === '2') setBrush('ribbons');
+    if (key === '3') setBrush('embers');
+    if (key === '4') setBrush('ink');
+    if (key === 'c') clearCanvas();
+    if (key === 's') saveCanvas();
+  });
+})();
+</script>
 </body>
 </html>

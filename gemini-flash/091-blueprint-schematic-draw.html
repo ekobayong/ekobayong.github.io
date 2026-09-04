@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pavilion 07 — Self-Drawing Blueprint</title>
+<style>
+  :root {
+    --bg-grad-start: #0b3d91;
+    --bg-grad-end: #1a4fa3;
+    --grid-fine: rgba(255, 255, 255, 0.08);
+    --grid-major: rgba(255, 255, 255, 0.16);
+    --ink-primary: #ffffff;
+    --ink-secondary: rgba(255, 255, 255, 0.72);
+    --ink-tertiary: rgba(255, 255, 255, 0.28);
+    --accent: #ffd978;
+    --room-highlight: rgba(255, 220, 120, 0.22);
+    --sheet-border: rgba(255, 255, 255, 0.85);
+    --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Courier New", monospace;
+    --font-serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --transition-theme: 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  body.print-mode {
+    --bg-grad-start: #f4f1e8;
+    --bg-grad-end: #ece7da;
+    --grid-fine: rgba(11, 61, 145, 0.07);
+    --grid-major: rgba(11, 61, 145, 0.14);
+    --ink-primary: #0b3d91;
+    --ink-secondary: rgba(11, 61, 145, 0.75);
+    --ink-tertiary: rgba(11, 61, 145, 0.32);
+    --accent: #c2410c;
+    --room-highlight: rgba(194, 65, 12, 0.15);
+    --sheet-border: #0b3d91;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    min-height: 100vh;
+    background: linear-gradient(135deg, var(--bg-grad-start), var(--bg-grad-end));
+    color: var(--ink-primary);
+    font-family: var(--font-mono);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    position: relative;
+    overflow-x: hidden;
+    transition: background var(--transition-theme), color var(--transition-theme);
+  }
+
+  .grid-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    background-image: 
+      linear-gradient(var(--grid-fine) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-fine) 1px, transparent 1px),
+      linear-gradient(var(--grid-major) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px);
+    background-size: 16px 16px, 16px 16px, 80px 80px, 80px 80px;
+    z-index: 0;
+    transition: background-image var(--transition-theme);
+  }
+
+  .noise-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    opacity: 0.15;
+    mix-blend-mode: overlay;
+    z-index: 1;
+  }
+
+  .sheet-container {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 1200px;
+    border: 1.5px solid var(--sheet-border);
+    padding: 8px;
+    margin: auto;
+    transition: border-color var(--transition-theme);
+  }
+
+  .sheet-inner-border {
+    border: 1px solid var(--ink-tertiary);
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+  }
+
+  .corner-mark {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-color: var(--ink-secondary);
+    border-style: solid;
+    pointer-events: none;
+  }
+  .cm-tl { top: 4px; left: 4px; border-width: 1px 0 0 1px; }
+  .cm-tr { top: 4px; right: 4px; border-width: 1px 1px 0 0; }
+  .cm-bl { bottom: 4px; left: 4px; border-width: 0 0 1px 1px; }
+  .cm-br { bottom: 4px; right: 4px; border-width: 0 1px 1px 0; }
+
+  header.sheet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--ink-tertiary);
+    padding-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .practice-info {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-secondary);
+  }
+
+  .project-title {
+    font-family: var(--font-serif);
+    font-size: 23px;
+    font-weight: normal;
+    letter-spacing: 0.02em;
+    color: var(--ink-primary);
+    margin-top: 4px;
+  }
+
+  .controls-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .segmented-control {
+    display: inline-flex;
+    border: 1px solid var(--ink-secondary);
+    padding: 2px;
+  }
+
+  .seg-btn {
+    background: transparent;
+    border: none;
+    color: var(--ink-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 5px 12px;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.2s ease;
+  }
+
+  .seg-btn:hover {
+    color: var(--ink-primary);
+    background: var(--ink-tertiary);
+  }
+
+  .seg-btn.active {
+    background: var(--ink-primary);
+    color: var(--bg-grad-start);
+    font-weight: bold;
+  }
+  body.print-mode .seg-btn.active {
+    background: var(--ink-primary);
+    color: #f4f1e8;
+  }
+
+  .btn-action {
+    background: transparent;
+    border: 1px solid var(--ink-secondary);
+    color: var(--ink-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 12px;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.2s ease;
+  }
+  .btn-action:hover {
+    color: var(--ink-primary);
+    border-color: var(--ink-primary);
+    background: var(--ink-tertiary);
+  }
+
+  .status-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--ink-secondary);
+    min-width: 140px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: inline-block;
+    transition: background 0.3s;
+  }
+
+  .status-dot.blinking {
+    animation: blink 0.9s infinite alternate cubic-bezier(0.5, 0.02, 0.28, 1);
+  }
+
+  @keyframes blink {
+    0% { opacity: 0.2; transform: scale(0.85); }
+    100% { opacity: 1; transform: scale(1.15); }
+  }
+
+  .drawing-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 800 / 500;
+    max-height: 64vh;
+  }
+
+  svg.blueprint-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+  }
+
+  .layer-group {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s ease;
+  }
+  .layer-group.active-sheet {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* SVG Typography & Strokes */
+  svg text {
+    font-family: var(--font-mono);
+    fill: var(--ink-primary);
+    user-select: none;
+    letter-spacing: 0.05em;
+  }
+  svg text.serif-label {
+    font-family: var(--font-serif);
+  }
+
+  .stroke-cut {
+    stroke: var(--ink-primary);
+    stroke-width: 2.2px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+  }
+  .stroke-obj {
+    stroke: var(--ink-primary);
+    stroke-width: 1.2px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+  }
+  .stroke-thin {
+    stroke: var(--ink-secondary);
+    stroke-width: 0.75px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+  }
+  .stroke-dim {
+    stroke: var(--ink-secondary);
+    stroke-width: 0.65px;
+    fill: none;
+  }
+  .stroke-dashed {
+    stroke-dasharray: 4, 3;
+  }
+
+  .hatch-pattern line {
+    stroke: var(--ink-primary);
+    stroke-width: 0.5px;
+    stroke-opacity: 0.6;
+  }
+
+  .interactive-room {
+    fill: transparent;
+    cursor: pointer;
+    transition: fill 0.3s ease;
+  }
+  .interactive-room:hover, .interactive-room.pinned {
+    fill: var(--room-highlight);
+  }
+
+  /* Tooltip */
+  .room-tooltip {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0;
+    background: rgba(11, 61, 145, 0.92);
+    border: 1px solid var(--accent);
+    padding: 6px 10px;
+    color: #fff;
+    font-size: 11px;
+    transform: translate(-50%, -120%);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 100;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    white-space: nowrap;
+  }
+  body.print-mode .room-tooltip {
+    background: #f4f1e8;
+    color: #0b3d91;
+    border-color: var(--accent);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+  }
+  .room-tooltip .tip-title {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 2px;
+    color: var(--accent);
+  }
+  .room-tooltip.visible {
+    opacity: 1;
+  }
+
+  /* Title Block & Legend */
+  footer.sheet-footer {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    border-top: 1px solid var(--ink-tertiary);
+    padding-top: 10px;
+    gap: 16px;
+    font-size: 10px;
+  }
+
+  .legend-block {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+    color: var(--ink-secondary);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend-sample {
+    width: 24px;
+    height: 0px;
+    border-top: 1px solid var(--ink-primary);
+  }
+  .legend-sample.heavy { border-top-width: 2.5px; }
+  .legend-sample.medium { border-top-width: 1.2px; }
+  .legend-sample.thin { border-top-width: 0.75px; border-color: var(--ink-secondary); }
+  .legend-sample.dashed { border-top: 1px dashed var(--ink-secondary); }
+
+  .title-block-table {
+    display: grid;
+    grid-template-columns: repeat(4, auto) 90px;
+    border: 1px solid var(--ink-secondary);
+    border-collapse: collapse;
+  }
+  .tb-cell {
+    border: 1px solid var(--ink-tertiary);
+    padding: 3px 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .tb-label {
+    font-size: 8px;
+    text-transform: uppercase;
+    color: var(--ink-secondary);
+    letter-spacing: 0.1em;
+  }
+  .tb-val {
+    font-size: 11px;
+    color: var(--ink-primary);
+    font-weight: bold;
+  }
+  .tb-sheet-num {
+    grid-row: span 2;
+    text-align: center;
+    font-size: 20px;
+    background: rgba(255,255,255,0.04);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-primary);
+    font-family: var(--font-mono);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.001s !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001s !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .sheet-inner-border { padding: 10px; }
+    .project-title { font-size: 17px; }
+    footer.sheet-footer { grid-template-columns: 1fr; }
+    .title-block-table { grid-template-columns: repeat(2, 1fr) 70px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-background"></div>
+
+<!-- SVG Paper Grain / Noise -->
+<svg class="noise-overlay" xmlns="http://www.w3.org/2000/svg">
+  <filter id="blueprint-noise">
+    <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" result="noise" />
+    <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.45 0" />
+  </filter>
+  <rect width="100%" height="100%" filter="url(#blueprint-noise)" />
+</svg>
+
+<div class="sheet-container">
+  <div class="sheet-inner-border">
+    <div class="corner-mark cm-tl"></div>
+    <div class="corner-mark cm-tr"></div>
+    <div class="corner-mark cm-bl"></div>
+    <div class="corner-mark cm-br"></div>
+
+    <!-- Header -->
+    <header class="sheet-header">
+      <div>
+        <div class="practice-info">Halden Studio · Architecture &amp; Environment</div>
+        <h1 class="project-title">Pavilion 07 — Reading Room in the Birch Grove</h1>
+      </div>
+      
+      <div class="controls-bar">
+        <div class="status-wrapper">
+          <span class="status-dot blinking" id="statusDot"></span>
+          <span id="statusLabel">Drafting...</span>
+        </div>
+
+        <div class="segmented-control" role="tablist">
+          <button class="seg-btn active" role="tab" data-sheet="A-101" title="Shortcut: 1">A-101 Plan</button>
+          <button class="seg-btn" role="tab" data-sheet="A-201" title="Shortcut: 2">A-201 Elevations</button>
+          <button class="seg-btn" role="tab" data-sheet="A-301" title="Shortcut: 3">A-301 Section</button>
+        </div>
+
+        <button class="btn-action" id="btnRedraw" title="Redraw active sheet">Redraw</button>
+        <button class="btn-action" id="btnPrint" title="Shortcut: P">Print Mode</button>
+      </div>
+    </header>
+
+    <!-- Main Drawing Stage -->
+    <div class="drawing-stage">
+      <div id="roomTooltip" class="room-tooltip">
+        <span class="tip-title" id="tipTitle">Room</span>
+        <span id="tipDim">0.0 m²</span>
+      </div>
+
+      <svg class="blueprint-svg" viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="hatch-poch" width="6" height="6" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse" class="hatch-pattern">
+            <line x1="0" y1="0" x2="0" y2="6" />
+          </pattern>
+          <pattern id="hatch-earth" width="8" height="8" patternTransform="rotate(-30 0 0)" patternUnits="userSpaceOnUse" class="hatch-pattern">
+            <line x1="0" y1="0" x2="8" y2="0" />
+            <line x1="2" y1="4" x2="6" y2="4" />
+          </pattern>
+          <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 2 L 8 5 L 0 8 z" fill="var(--ink-secondary)"/>
+          </marker>
+          <marker id="tick" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 2 8 L 8 2" stroke="var(--ink-secondary)" stroke-width="1.2"/>
+          </marker>
+        </defs>
+
+        <!-- ================= SHEET A-101: GROUND FLOOR PLAN ================= -->
+        <g id="sheet-A-101" class="layer-group active-sheet">
+          <!-- Room Interactive Hitboxes -->
+          <rect id="room-deck" class="interactive-room" x="70" y="90" width="100" height="230" data-name="Slatted Birch Deck" data-area="23.0 m² (Covered Exterior)"/>
+          <rect id="room-reading" class="interactive-room" x="170" y="90" width="220" height="150" data-name="Primary Reading Hall" data-area="33.0 m² (Double-height)"/>
+          <rect id="room-hearth" class="interactive-room" x="170" y="240" width="140" height="80" data-name="Soapstone Hearth &amp; Inglenook" data-area="11.2 m²"/>
+          <rect id="room-archive" class="interactive-room" x="310" y="240" width="80" height="80" data-name="Micro-Archive &amp; Stacks" data-area="6.4 m²"/>
+
+          <!-- 1. Heavy Cut Lines (Poché Walls) -->
+          <g class="cad-layer" data-pace="heavy">
+            <rect class="stroke-cut" x="170" y="90" width="220" height="230" />
+            <line class="stroke-cut" x1="170" y1="240" x2="390" y2="240" />
+            <line class="stroke-cut" x1="310" y1="240" x2="310" y2="320" />
+            <rect x="166" y="86" width="228" height="8" fill="url(#hatch-poch)"/>
+            <rect x="386" y="86" width="8" height="238" fill="url(#hatch-poch)"/>
+            <rect x="166" y="316" width="228" height="8" fill="url(#hatch-poch)"/>
+            <rect x="166" y="86" width="8" height="238" fill="url(#hatch-poch)"/>
+          </g>
+
+          <!-- 2. Object Lines (Terrace, Glazing, Furniture, Hearth) -->
+          <g class="cad-layer" data-pace="object">
+            <!-- Terrace Decking -->
+            <rect class="stroke-obj" x="70" y="90" width="100" height="230" />
+            <!-- Sliding Door Opening -->
+            <line class="stroke-obj" x1="170" y1="120" x2="170" y2="200" stroke-width="2.5" />
+            <line class="stroke-thin" x1="174" y1="125" x2="174" y2="165" />
+            <line class="stroke-thin" x1="172" y1="155" x2="172" y2="195" />
+            <!-- Soapstone Hearth -->
+            <rect class="stroke-obj" x="190" y="260" width="40" height="40" />
+            <circle class="stroke-thin" cx="210" cy="280" r="10" />
+            <path class="stroke-thin" d="M 205 280 L 215 280 M 210 275 L 210 285" />
+            <!-- Reading Tables & Chairs -->
+            <rect class="stroke-obj" x="225" y="140" width="110" height="50" rx="3" />
+            <circle class="stroke-thin" cx="245" cy="128" r="7" />
+            <circle class="stroke-thin" cx="280" cy="128" r="7" />
+            <circle class="stroke-thin" cx="315" cy="128" r="7" />
+            <circle class="stroke-thin" cx="245" cy="202" r="7" />
+            <circle class="stroke-thin" cx="280" cy="202" r="7" />
+            <circle class="stroke-thin" cx="315" cy="202" r="7" />
+            <!-- Library Shelving Rows -->
+            <line class="stroke-obj" x1="220" y1="98" x2="370" y2="98" />
+            <line class="stroke-obj" x1="382" y1="110" x2="382" y2="220" />
+            <line class="stroke-obj" x1="330" y1="260" x2="375" y2="260" />
+            <line class="stroke-obj" x1="330" y1="280" x2="375" y2="280" />
+            <line class="stroke-obj" x1="330" y1="300" x2="375" y2="300" />
+            <!-- Door Swing -->
+            <path class="stroke-thin stroke-dashed" d="M 310 275 A 30 30 0 0 1 340 305" />
+            <line class="stroke-obj" x1="310" y1="275" x2="310" y2="305" />
+          </g>
+
+          <!-- 3. Details (Deck Slats, Birch Trees, Axonometric Vignette) -->
+          <g class="cad-layer" data-pace="detail">
+            <!-- Deck slats -->
+            <path class="stroke-thin" d="
+              M 85 90 V 320 M 100 90 V 320 M 115 90 V 320 M 130 90 V 320 M 145 90 V 320 M 160 90 V 320
+            " />
+            <!-- Trees in grove -->
+            <circle class="stroke-thin" cx="45" cy="60" r="18" />
+            <circle class="stroke-thin stroke-dashed" cx="45" cy="60" r="28" />
+            <circle class="stroke-thin" cx="50" cy="380" r="22" />
+            <circle class="stroke-thin stroke-dashed" cx="50" cy="380" r="34" />
+            <circle class="stroke-thin" cx="430" cy="70" r="20" />
+            <circle class="stroke-thin stroke-dashed" cx="430" cy="70" r="30" />
+            <circle class="stroke-thin" cx="440" cy="350" r="25" />
+            <!-- Section Cut Reference Line A-A -->
+            <line class="stroke-thin stroke-dashed" x1="40" y1="165" x2="430" y2="165" />
+            <polygon points="430,160 445,165 430,170" fill="var(--ink-secondary)" />
+            <circle class="stroke-obj" cx="455" cy="165" r="9" />
+            <polygon points="40,160 25,165 40,170" fill="var(--ink-secondary)" />
+            <circle class="stroke-obj" cx="15" cy="165" r="9" />
+
+            <!-- North Arrow Compass -->
+            <circle class="stroke-thin" cx="440" cy="220" r="18" />
+            <polygon points="440,204 445,220 440,216 435,220" fill="var(--ink-primary)" />
+            <polygon points="440,236 445,220 440,216 435,220" fill="none" stroke="var(--ink-secondary)" stroke-width="0.8" />
+            
+            <!-- Graphic Scale Bar -->
+            <rect class="stroke-thin" x="220" y="380" width="120" height="4" />
+            <rect x="220" y="380" width="30" height="4" fill="var(--ink-primary)"/>
+            <rect x="280" y="380" width="30" height="4" fill="var(--ink-primary)"/>
+
+            <!-- Exploded Axonometric Detail (Top Right Sheet Area) -->
+            <!-- Base Slab -->
+            <polygon class="stroke-thin" points="560,370 660,320 740,360 640,410" />
+            <polygon class="stroke-thin" points="560,370 560,380 640,420 640,410" />
+            <polygon class="stroke-thin" points="640,420 740,370 740,360 640,410" />
+            <!-- Wall Frame Assembly (lifted) -->
+            <polygon class="stroke-obj" stroke-dasharray="3,3" points="560,260 660,210 740,250 640,300" />
+            <line class="stroke-thin" x1="570" y1="255" x2="570" y2="215" />
+            <line class="stroke-thin" x1="650" y1="215" x2="650" y2="175" />
+            <line class="stroke-thin" x1="730" y1="255" x2="730" y2="215" />
+            <line class="stroke-thin" x1="640" y1="295" x2="640" y2="255" />
+            <!-- Zinc / CLT Roof Plate (lifted high) -->
+            <polygon class="stroke-cut" points="550,150 660,95 750,140 640,195" />
+            <polygon class="stroke-thin" points="550,150 550,158 640,203 640,195" />
+            <polygon class="stroke-thin" points="640,203 750,148 750,140 640,195" />
+            <!-- Vertical assembly connection axes -->
+            <line class="stroke-thin stroke-dashed" x1="640" y1="195" x2="640" y2="410" />
+            <line class="stroke-thin stroke-dashed" x1="560" y1="150" x2="560" y2="370" />
+            <line class="stroke-thin stroke-dashed" x1="740" y1="140" x2="740" y2="360" />
+          </g>
+
+          <!-- 4. Dimension Lines & Extension Ticks -->
+          <g class="cad-layer" data-pace="dim">
+            <!-- Exterior Top Dims -->
+            <line class="stroke-dim" x1="70" y1="65" x2="390" y2="65" marker-start="url(#tick)" marker-end="url(#tick)" />
+            <line class="stroke-thin" x1="70" y1="85" x2="70" y2="60" />
+            <line class="stroke-thin" x1="170" y1="85" x2="170" y2="60" />
+            <line class="stroke-thin" x1="390" y1="85" x2="390" y2="60" />
+            <line class="stroke-dim" x1="70" y1="50" x2="170" y2="50" marker-start="url(#tick)" marker-end="url(#tick)" />
+            <line class="stroke-dim" x1="170" y1="50" x2="390" y2="50" marker-start="url(#tick)" marker-end="url(#tick)" />
+            <!-- Right Dims -->
+            <line class="stroke-dim" x1="410" y1="90" x2="410" y2="320" marker-start="url(#tick)" marker-end="url(#tick)" />
+            <line class="stroke-thin" x1="395" y1="90" x2="415" y2="90" />
+            <line class="stroke-thin" x1="395" y1="240" x2="415" y2="240" />
+            <line class="stroke-thin" x1="395" y1="320" x2="415" y2="320" />
+          </g>
+
+          <!-- 5. Character Text Annotations -->
+          <g class="cad-text">
+            <text class="type-text" x="100" y="210" font-size="9">DECK</text>
+            <text class="type-text serif-label" x="235" y="165" font-size="13" font-weight="bold">READING ROOM</text>
+            <text class="type-text" x="250" y="180" font-size="9">33.0 m²</text>
+            <text class="type-text" x="185" y="312" font-size="8">HEARTH</text>
+            <text class="type-text" x="325" y="312" font-size="8">ARCHIVE</text>
+            <text class="type-text" x="210" y="44" font-size="9">7 200</text>
+            <text class="type-text" x="105" y="44" font-size="9">3 200</text>
+            <text class="type-text" x="215" y="60" font-size="10">10 400</text>
+            <text class="type-text" x="415" y="210" font-size="9" transform="rotate(90 415 210)">14 400</text>
+            <text class="type-text" x="438" y="196" font-size="10" font-weight="bold">N</text>
+            <text class="type-text" x="215" y="372" font-size="8">0    1    2       4 m</text>
+            <text class="type-text" x="13" y="168" font-size="9" font-weight="bold">A</text>
+            <text class="type-text" x="453" y="168" font-size="9" font-weight="bold">A</text>
+            <!-- Axon Callouts -->
+            <text class="type-text" x="555" y="85" font-size="8.5">STANDING SEAM ZINC ROOF / CLT</text>
+            <text class="type-text" x="655" y="240" font-size="8.5">GLULAM POST &amp; BEAM PORTAL</text>
+            <text class="type-text" x="560" y="435" font-size="8.5">INSULATED CONCRETE RAFT SLAB</text>
+            <text class="type-text serif-label" x="575" y="465" font-size="11" font-style="italic">Axonometric Component Assembly</text>
+          </g>
+        </g>
+
+
+        <!-- ================= SHEET A-201: ELEVATIONS ================= -->
+        <g id="sheet-A-201" class="layer-group">
+          <!-- 1. Cut Lines (Ground Baseline) -->
+          <g class="cad-layer" data-pace="heavy">
+            <line class="stroke-cut" x1="40" y1="210" x2="380" y2="210" />
+            <line class="stroke-cut" x1="420" y1="210" x2="760" y2="210" />
+            <line class="stroke-cut" x1="40" y1="430" x2="380" y2="430" />
+            <line class="stroke-cut" x1="420" y1="430" x2="760" y2="430" />
+            <!-- Ground Poché hatch below lines -->
+            <rect x="40" y="210" width="340" height="14" fill="url(#hatch-earth)" />
+            <rect x="420" y="210" width="340" height="14" fill="url(#hatch-earth)" />
+            <rect x="40" y="430" width="340" height="14" fill="url(#hatch-earth)" />
+            <rect x="420" y="430" width="340" height="14" fill="url(#hatch-earth)" />
+          </g>
+
+          <!-- 2. Object Lines (Building Massing, Parapets & Roof Pitch) -->
+          <g class="cad-layer" data-pace="object">
+            <!-- South Elevation (Top Left) -->
+            <polygon class="stroke-obj" points="70,210 70,140 180,140 180,110 350,110 350,210" />
+            <rect class="stroke-obj" x="190" y="130" width="145" height="80" />
+            <line class="stroke-obj" x1="262" y1="130" x2="262" y2="210" />
+            <!-- East Elevation (Top Right) -->
+            <polygon class="stroke-obj" points="460,210 460,110 720,110 720,210" />
+            <rect class="stroke-obj" x="490" y="135" width="50" height="75" />
+            <rect class="stroke-obj" x="580" y="135" width="110" height="40" />
+            <!-- North Elevation (Bottom Left) -->
+            <polygon class="stroke-obj" points="70,430 70,330 240,330 240,360 350,360 350,430" />
+            <rect class="stroke-obj" x="90" y="350" width="120" height="35" />
+            <rect class="stroke-obj" x="270" y="380" width="40" height="50" />
+            <!-- West Elevation (Bottom Right) -->
+            <polygon class="stroke-obj" points="460,430 460,330 720,330 720,430" />
+            <rect class="stroke-obj" x="490" y="350" width="200" height="80" />
+            <line class="stroke-obj" x1="556" y1="350" x2="556" y2="430" />
+            <line class="stroke-obj" x1="622" y1="350" x2="622" y2="430" />
+          </g>
+
+          <!-- 3. Cladding & Details -->
+          <g class="cad-layer" data-pace="detail">
+            <!-- Vertical timber batten cladding lines (South) -->
+            <path class="stroke-thin" d="
+              M 80 140 V 210 M 95 140 V 210 M 110 140 V 210 M 125 140 V 210 M 140 140 V 210 M 155 140 V 210 M 170 140 V 210
+              M 340 110 V 210
+            " />
+            <!-- Clerestory Mullions East -->
+            <line class="stroke-thin" x1="615" y1="135" x2="615" y2="175" />
+            <line class="stroke-thin" x1="650" y1="135" x2="650" y2="175" />
+            <!-- Small Birch Tree sketches -->
+            <path class="stroke-thin" d="M 50 210 L 50 150 M 50 180 L 40 165 M 50 170 L 62 158 M 48 152 L 42 140" />
+            <path class="stroke-thin" d="M 740 210 L 740 145 M 740 175 L 752 160 M 740 168 L 730 152" />
+            <path class="stroke-thin" d="M 50 430 L 50 370 M 50 400 L 40 385 M 50 388 L 60 375" />
+            <!-- Level Peg Markers -->
+            <line class="stroke-thin stroke-dashed" x1="340" y1="110" x2="380" y2="110" />
+            <polygon points="380,110 390,107 390,113" fill="var(--ink-secondary)" />
+            <line class="stroke-thin stroke-dashed" x1="710" y1="110" x2="750" y2="110" />
+            <polygon points="750,110 760,107 760,113" fill="var(--ink-secondary)" />
+          </g>
+
+          <!-- 4. Dimension Ticks -->
+          <g class="cad-layer" data-pace="dim">
+            <line class="stroke-dim" x1="70" y1="95" x2="350" y2="95" marker-start="url(#tick)" marker-end="url(#tick)" />
+            <line class="stroke-dim" x1="460" y1="95" x2="720" y2="95" marker-start="url(#tick)" marker-end="url(#tick)" />
+            <line class="stroke-dim" x1="70" y1="315" x2="350" y2="315" marker-start="url(#tick)" marker-end="url(#tick)" />
+            <line class="stroke-dim" x1="460" y1="315" x2="720" y2="315" marker-start="url(#tick)" marker-end="url(#tick)" />
+          </g>
+
+          <!-- 5. Annotations -->
+          <g class="cad-text">
+            <text class="type-text serif-label" x="70" y="80" font-size="11" font-weight="bold">01 · SOUTH ELEVATION</text>
+            <text class="type-text serif-label" x="460" y="80" font-size="11" font-weight="bold">02 · EAST ELEVATION</text>
+            <text class="type-text serif-label" x="70" y="300" font-size="11" font-weight="bold">03 · NORTH ELEVATION</text>
+            <text class="type-text serif-label" x="460" y="300" font-size="11" font-weight="bold">04 · WEST ELEVATION</text>
+            <text class="type-text" x="180" y="90" font-size="8.5">10 400</text>
+            <text class="type-text" x="570" y="90" font-size="8.5">14 400</text>
+            <text class="type-text" x="395" y="112" font-size="8">+4.20 ROOF</text>
+            <text class="type-text" x="395" y="208" font-size="8">±0.00 GL</text>
+            <text class="type-text" x="200" y="165" font-size="8">TRIPLE GLAZING / SLIDER</text>
+            <text class="type-text" x="80" y="180" font-size="8">LARCH BATTENS</text>
+          </g>
+        </g>
+
+
+        <!-- ================= SHEET A-301: BUILDING SECTION A-A ================= -->
+        <g id="sheet-A-301" class="layer-group">
+          <!-- 1. Cut Structure Lines (Slab, Foundation, Heavy Cut Roof & Walls) -->
+          <g class="cad-layer" data-pace="heavy">
+            <!-- Earth Ground Line -->
+            <line class="stroke-cut" x1="50" y1="390" x2="750" y2="390" />
+            <rect x="50" y="390" width="700" height="25" fill="url(#hatch-earth)"/>
+            <!-- Slab Foundation Bed -->
+            <rect class="stroke-cut" x="130" y="375" width="530" height="15" fill="url(#hatch-poch)"/>
+            <!-- Left Exterior Wall (cut) -->
+            <rect class="stroke-cut" x="130" y="180" width="16" height="195" fill="url(#hatch-poch)"/>
+            <!-- Center Spine Partition Wall (cut) -->
+            <rect class="stroke-cut" x="450" y="180" width="14" height="195" fill="url(#hatch-poch)"/>
+            <!-- Right Exterior Wall (cut) -->
+            <rect class="stroke-cut" x="644" y="240" width="16" height="135" fill="url(#hatch-poch)"/>
+            <!-- Heavy Sloped Roof CLT Slab (cut) -->
+            <polygon class="stroke-cut" points="110,180 460,130 670,235 660,250 460,146 110,195" fill="url(#hatch-poch)"/>
+          </g>
+
+          <!-- 2. Object Lines (Glazing, Clerestory, Joinery, Furnishings) -->
+          <g class="cad-layer" data-pace="object">
+            <!-- Clerestory Window at high roof pitch break -->
+            <line class="stroke-obj" x1="460" y1="146" x2="460" y2="180" />
+            <line class="stroke-thin" x1="456" y1="150" x2="456" y2="178" />
+            <!-- Full Height Bookshelf Wall in background -->
+            <rect class="stroke-obj" x="180" y="220" width="90" height="155" />
+            <line class="stroke-thin" x1="180" y1="250" x2="270" y2="250" />
+            <line class="stroke-thin" x1="180" y1="280" x2="270" y2="280" />
+            <line class="stroke-thin" x1="180" y1="310" x2="270" y2="310" />
+            <line class="stroke-thin" x1="180" y1="340" x2="270" y2="340" />
+            <!-- Reading Table & Silhouette Person -->
+            <line class="stroke-obj" x1="310" y1="340" x2="380" y2="340" stroke-width="2" />
+            <line class="stroke-obj" x1="320" y1="340" x2="320" y2="375" />
+            <line class="stroke-obj" x1="370" y1="340" x2="370" y2="375" />
+            <!-- Architect Scaled Figure (Standing Reader) -->
+            <circle class="stroke-thin" cx="410" cy="308" r="5" />
+            <line class="stroke-thin" x1="410" y1="313" x2="410" y2="348" />
+            <line class="stroke-thin" x1="410" y1="323" x2="398" y2="335" />
+            <line class="stroke-thin" x1="410" y1="323" x2="422" y2="332" />
+            <line class="stroke-thin" x1="410" y1="348" x2="403" y2="375" />
+            <line class="stroke-thin" x1="410" y1="348" x2="417" y2="375" />
+            <!-- Chair Lounge silhouette -->
+            <path class="stroke-thin" d="M 285 375 L 290 350 L 305 350" />
+            <!-- Hanging Acoustic Pendant Lamp -->
+            <line class="stroke-thin" x1="345" y1="150" x2="345" y2="280" />
+            <path class="stroke-obj" d="M 335 285 Q 345 280 355 285 Z" />
+          </g>
+
+          <!-- 3. Details & Solar Radiation Rays -->
+          <g class="cad-layer" data-pace="detail">
+            <!-- Dashed Sun Angles through Clerestory (Equinox Light) -->
+            <line class="stroke-thin stroke-dashed" x1="520" y1="70" x2="460" y2="155" />
+            <line class="stroke-thin stroke-dashed" x1="460" y1="155" x2="270" y2="360" stroke-dasharray="6,4" />
+            <circle class="stroke-thin" cx="530" cy="55" r="12" stroke-dasharray="3,3" />
+            <line class="stroke-thin" x1="530" y1="36" x2="530" y2="40" />
+            <line class="stroke-thin" x1="530" y1="70" x2="530" y2="74" />
+            <line class="stroke-thin" x1="511" y1="55" x2="515" y2="55" />
+            <line class="stroke-thin" x1="545" y1="55" x2="549" y2="55" />
+            <!-- Foundation Footing Blocks -->
+            <rect class="stroke-thin" x="118" y="390" width="40" height="30" />
+            <rect class="stroke-thin" x="437" y="390" width="40" height="30" />
+            <rect class="stroke-thin" x="632" y="390" width="40" height="30" />
+            <!-- Datum Levels Markers -->
+            <!-- +4.20 -->
+            <line class="stroke-thin stroke-dashed" x1="460" y1="130" x2="710" y2="130" />
+            <path d="M 710 130 L 720 125 L 720 135 Z" fill="var(--ink-secondary)" />
+            <!-- +3.60 -->
+            <line class="stroke-thin stroke-dashed" x1="110" y1="180" x2="710" y2="180" />
+            <path d="M 710 180 L 720 175 L 720 185 Z" fill="var(--ink-secondary)" />
+            <!-- ±0.00 Slab Top -->
+            <line class="stroke-thin stroke-dashed" x1="660" y1="375" x2="710" y2="375" />
+            <path d="M 710 375 L 720 370 L 720 380 Z" fill="var(--ink-secondary)" />
+          </g>
+
+          <!-- 4. Dimension Lines -->
+          <g class="cad-layer" data-pace="dim">
+            <!-- Span Dims -->
+            <line class="stroke-dim" x1="130" y1="440" x2="450" y2="440" marker-start="url(#tick)" marker-end="url(#tick)" />
+            <line class="stroke-dim" x1="450" y1="440" x2="660" y2="440" marker-start="url(#tick)" marker-end="url(#tick)" />
+            <line class="stroke-thin" x1="130" y1="410" x2="130" y2="450" />
+            <line class="stroke-thin" x1="450" y1="410" x2="450" y2="450" />
+            <line class="stroke-thin" x1="660" y1="410" x2="660" y2="450" />
+          </g>
+
+          <!-- 5. Annotations -->
+          <g class="cad-text">
+            <text class="type-text serif-label" x="130" y="85" font-size="14" font-weight="bold">SECTION A–A: LONGITUDINAL BIOCLIMATIC CUT</text>
+            <text class="type-text" x="725" y="133" font-size="8.5">+4.20 RIDGE</text>
+            <text class="type-text" x="725" y="183" font-size="8.5">+3.60 EAVES</text>
+            <text class="type-text" x="725" y="378" font-size="8.5">±0.00 FFL</text>
+            <text class="type-text" x="260" y="455" font-size="9">6 800</text>
+            <text class="type-text" x="530" y="455" font-size="9">4 200</text>
+            <!-- Material Spec Callouts with Leaders -->
+            <text class="type-text" x="250" y="120" font-size="8">160mm CLT ROOF CASSETTE w/ WOOD-FIBER INSULATION</text>
+            <line class="stroke-thin" x1="310" y1="125" x2="330" y2="150" />
+            <text class="type-text" x="480" y="145" font-size="8">NATURAL STACK VENTILATION / CLERESTORY</text>
+            <text class="type-text" x="180" y="210" font-size="8">FULL HEIGHT BIRCH PLY STACKS</text>
+            <text class="type-text" x="470" y="360" font-size="8">HEATED HYDRONIC CONCRETE MASS</text>
+            <text class="type-text" x="355" y="275" font-size="7.5">ACOUSTIC FELT HOOD</text>
+          </g>
+        </g>
+      </svg>
+    </div>
+
+    <!-- Footer: Legend & Title Block -->
+    <footer class="sheet-footer">
+      <div class="legend-block">
+        <div class="legend-item">
+          <div class="legend-sample heavy"></div>
+          <span>Cut Element (Poché)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-sample medium"></div>
+          <span>Object / Joinery</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-sample thin"></div>
+          <span>Annotation / Sub-layer</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-sample dashed"></div>
+          <span>Projection / Sun Ray</span>
+        </div>
+      </div>
+
+      <div class="title-block-table">
+        <div class="tb-cell">
+          <span class="tb-label">Project</span>
+          <span class="tb-val">Pavilion 07</span>
+        </div>
+        <div class="tb-cell">
+          <span class="tb-label">Client</span>
+          <span class="tb-val">Birch Foundation</span>
+        </div>
+        <div class="tb-cell">
+          <span class="tb-label">Date</span>
+          <span class="tb-val">OCT 2024</span>
+        </div>
+        <div class="tb-cell">
+          <span class="tb-label">Scale</span>
+          <span class="tb-val" id="tbScale">1:50 @ A1</span>
+        </div>
+        <div class="tb-sheet-num" id="tbSheetNum">A-101</div>
+
+        <div class="tb-cell">
+          <span class="tb-label">Drawn by</span>
+          <span class="tb-val">H. S. / CAD</span>
+        </div>
+        <div class="tb-cell">
+          <span class="tb-label">Checked</span>
+          <span class="tb-val">E. V. L.</span>
+        </div>
+        <div class="tb-cell">
+          <span class="tb-label">Revision</span>
+          <span class="tb-val">REV 04</span>
+        </div>
+        <div class="tb-cell">
+          <span class="tb-label">Status</span>
+          <span class="tb-val" id="tbStatus">ISSUED / PERMIT</span>
+        </div>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<script>
+  // Architectural Drafting Animation Controller
+  const statusDot = document.getElementById('statusDot');
+  const statusLabel = document.getElementById('statusLabel');
+  const tbSheetNum = document.getElementById('tbSheetNum');
+  const tbScale = document.getElementById('tbScale');
+  const segButtons = document.querySelectorAll('.seg-btn');
+  const btnRedraw = document.getElementById('btnRedraw');
+  const btnPrint = document.getElementById('btnPrint');
+  const tooltip = document.getElementById('roomTooltip');
+  const tipTitle = document.getElementById('tipTitle');
+  const tipDim = document.getElementById('tipDim');
+  const stage = document.querySelector('.drawing-stage');
+
+  let currentSheetId = 'A-101';
+  let activeAnimationId = 0;
+  let pinnedRoom = null;
+
+  const sheetScales = {
+    'A-101': '1:50 @ A1',
+    'A-201': '1:100 @ A1',
+    'A-301': '1:50 @ A1'
+  };
+
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Cubic-bezier(0.5, 0.02, 0.28, 1) hand-drawn pen stroke ease
+  const PEN_EASE = 'cubic-bezier(0.5, 0.02, 0.28, 1)';
+
+  // Helper to retrieve all printable vector paths/shapes in a group
+  function getDrawElements(container) {
+    return Array.from(container.querySelectorAll('path, line, rect, circle, polygon, polyline'))
+      .filter(el => !el.classList.contains('interactive-room'));
+  }
+
+  // Calculate length for standard SVG primitives if getTotalLength is unavailable
+  function getGeometricLength(el) {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'line') {
+      const x1 = parseFloat(el.getAttribute('x1') || 0);
+      const y1 = parseFloat(el.getAttribute('y1') || 0);
+      const x2 = parseFloat(el.getAttribute('x2') || 0);
+      const y2 = parseFloat(el.getAttribute('y2') || 0);
+      return Math.hypot(x2 - x1, y2 - y1);
+    } else if (tag === 'rect') {
+      const w = parseFloat(el.getAttribute('width') || 0);
+      const h = parseFloat(el.getAttribute('height') || 0);
+      return (w + h) * 2;
+    } else if (tag === 'circle') {
+      const r = parseFloat(el.getAttribute('r') || 0);
+      return 2 * Math.PI * r;
+    } else if (typeof el.getTotalLength === 'function') {
+      try {
+        const len = el.getTotalLength();
+        if (len > 0) return len;
+      } catch (e) {}
+    }
+    return 200;
+  }
+
+  function resetLayer(sheetGroup) {
+    // Reset linework
+    const shapes = getDrawElements(sheetGroup);
+    shapes.forEach(el => {
+      const len = getGeometricLength(el);
+      el.style.transition = 'none';
+      el.style.strokeDasharray = `${len} ${len}`;
+      el.style.strokeDashoffset = `${len}`;
+      el.style.opacity = '0';
+    });
+
+    // Reset character text
+    const textEls = sheetGroup.querySelectorAll('.type-text');
+    textEls.forEach(t => {
+      if (!t.dataset.origText) {
+        t.dataset.origText = t.textContent;
+      }
+      t.textContent = '';
+      t.style.opacity = '0';
+    });
+  }
+
+  function drawSheet(sheetId) {
+    const animToken = ++activeAnimationId;
+    const sheetGroup = document.getElementById(`sheet-${sheetId}`);
+    if (!sheetGroup) return;
+
+    // Set drafting status
+    statusDot.className = 'status-dot blinking';
+    statusLabel.textContent = 'Drafting...';
+
+    resetLayer(sheetGroup);
+
+    if (prefersReduced) {
+      // Instant display for reduced-motion preference
+      const shapes = getDrawElements(sheetGroup);
+      shapes.forEach(el => {
+        el.style.strokeDashoffset = '0';
+        el.style.opacity = '1';
+      });
+      const texts = sheetGroup.querySelectorAll('.type-text');
+      texts.forEach(t => {
+        t.textContent = t.dataset.origText || t.textContent;
+        t.style.opacity = '1';
+      });
+      statusDot.className = 'status-dot';
+      statusLabel.textContent = 'Sheet complete';
+      return;
+    }
+
+    // Prioritised Pacing Queue:
+    // 1. Heavy cut lines
+    // 2. Object lines
+    // 3. Thin detail lines
+    // 4. Dimension lines
+    const paces = ['heavy', 'object', 'detail', 'dim'];
+    let currentTimeline = 30; // Start delay in ms
+
+    paces.forEach(pace => {
+      const layerG = sheetGroup.querySelector(`.cad-layer[data-pace="${pace}"]`);
+      if (!layerG) return;
+      const elements = getDrawElements(layerG);
+
+      elements.forEach(el => {
+        const len = getGeometricLength(el);
+        // Duration scales with path length, clamped with a hand-drawn pace
+        const duration = Math.min(850, Math.max(160, len * 1.5));
+        // Overlap successive strokes slightly so the pen doesn't stall
+        const overlap = Math.min(duration * 0.45, 120);
+
+        setTimeout(() => {
+          if (animToken !== activeAnimationId) return;
+          el.style.opacity = '1';
+          el.style.transition = `stroke-dashoffset ${duration}ms ${PEN_EASE}`;
+          el.style.strokeDashoffset = '0';
+        }, currentTimeline);
+
+        currentTimeline += (duration - overlap);
+      });
+    });
+
+    // Pacing finished: Type text character-by-character
+    setTimeout(() => {
+      if (animToken !== activeAnimationId) return;
+      typeWriterTexts(sheetGroup, animToken);
+    }, currentTimeline + 60);
+  }
+
+  function typeWriterTexts(sheetGroup, token) {
+    const textEls = Array.from(sheetGroup.querySelectorAll('.type-text'));
+    if (textEls.length === 0) {
+      finishDrafting(token);
+      return;
+    }
+
+    let textSeqDelay = 0;
+    textEls.forEach((t, i) => {
+      const fullText = t.dataset.origText || '';
+      t.textContent = '';
+      t.style.opacity = '1';
+
+      setTimeout(() => {
+        if (token !== activeAnimationId) return;
+        let charIndex = 0;
+        const charInterval = Math.max(12, 280 / (fullText.length || 1));
+        const timer = setInterval(() => {
+          if (token !== activeAnimationId) {
+            clearInterval(timer);
+            return;
+          }
+          charIndex++;
+          t.textContent = fullText.slice(0, charIndex);
+          if (charIndex >= fullText.length) {
+            clearInterval(timer);
+            if (i === textEls.length - 1) {
+              finishDrafting(token);
+            }
+          }
+        }, charInterval);
+      }, textSeqDelay);
+
+      textSeqDelay += Math.min(fullText.length * 15 + 40, 320);
+    });
+  }
+
+  function finishDrafting(token) {
+    if (token !== activeAnimationId) return;
+    statusDot.className = 'status-dot';
+    statusLabel.textContent = 'Sheet complete';
+  }
+
+  function switchSheet(newSheetId) {
+    if (!sheetScales[newSheetId]) return;
+    currentSheetId = newSheetId;
+
+    // Update buttons
+    segButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-sheet') === newSheetId);
+    });
+
+    // Update Title Block
+    tbSheetNum.textContent = newSheetId;
+    tbScale.textContent = sheetScales[newSheetId];
+
+    // Hide tooltip / unpin
+    if (pinnedRoom) {
+      pinnedRoom.classList.remove('pinned');
+      pinnedRoom = null;
+    }
+    tooltip.classList.remove('visible');
+
+    // Switch visible SVG sheet
+    document.querySelectorAll('.layer-group').forEach(lg => {
+      lg.classList.remove('active-sheet');
+    });
+    const target = document.getElementById(`sheet-${newSheetId}`);
+    if (target) {
+      target.classList.add('active-sheet');
+    }
+
+    drawSheet(newSheetId);
+  }
+
+  // Segmented control click handlers
+  segButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const sheet = btn.getAttribute('data-sheet');
+      if (sheet) switchSheet(sheet);
+    });
+  });
+
+  btnRedraw.addEventListener('click', () => {
+    drawSheet(currentSheetId);
+  });
+
+  // Print Mode Toggle
+  btnPrint.addEventListener('click', () => {
+    togglePrintMode();
+  });
+
+  function togglePrintMode() {
+    const isPrint = document.body.classList.toggle('print-mode');
+    btnPrint.textContent = isPrint ? 'Blueprint Mode' : 'Print Mode';
+  }
+
+  // Interactive Room Highlights & Floating Tooltip (Plan sheet)
+  const roomRects = document.querySelectorAll('.interactive-room');
+  roomRects.forEach(room => {
+    room.addEventListener('mouseenter', (e) => {
+      showTooltipForRoom(room);
+    });
+    room.addEventListener('mousemove', (e) => {
+      positionTooltip(e);
+    });
+    room.addEventListener('mouseleave', () => {
+      if (!pinnedRoom) {
+        tooltip.classList.remove('visible');
+      }
+    });
+    room.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (pinnedRoom === room) {
+        pinnedRoom.classList.remove('pinned');
+        pinnedRoom = null;
+        tooltip.classList.remove('visible');
+      } else {
+        if (pinnedRoom) pinnedRoom.classList.remove('pinned');
+        pinnedRoom = room;
+        pinnedRoom.classList.add('pinned');
+        showTooltipForRoom(room);
+        positionTooltip(e);
+      }
+    });
+  });
+
+  stage.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('interactive-room') && pinnedRoom) {
+      pinnedRoom.classList.remove('pinned');
+      pinnedRoom = null;
+      tooltip.classList.remove('visible');
+    }
+  });
+
+  function showTooltipForRoom(room) {
+    tipTitle.textContent = room.getAttribute('data-name');
+    tipDim.textContent = room.getAttribute('data-area');
+    tooltip.classList.add('visible');
+  }
+
+  function positionTooltip(e) {
+    const stageRect = stage.getBoundingClientRect();
+    const x = e.clientX - stageRect.left;
+    const y = e.clientY - stageRect.top;
+    tooltip.style.left = `${Math.min(stageRect.width - 90, Math.max(80, x))}px`;
+    tooltip.style.top = `${Math.max(25, y)}px`;
+  }
+
+  // Keyboard Shortcuts: 1/2/3 for Sheets, P for Print
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const key = e.key.toUpperCase();
+    if (key === '1') switchSheet('A-101');
+    else if (key === '2') switchSheet('A-201');
+    else if (key === '3') switchSheet('A-301');
+    else if (key === 'P') togglePrintMode();
+  });
+
+  // Initial Auto-Draw on Page Load
+  window.addEventListener('DOMContentLoaded', () => {
+    drawSheet('A-101');
+  });
+</script>
+</body>
+</html>

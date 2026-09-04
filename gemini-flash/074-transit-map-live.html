@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vellmar Metro — Live Network Map</title>
+<style>
+  :root {
+    --bg-page: #f5f2ea;
+    --bg-panel: #ebe7dc;
+    --bg-card: #f9f7f2;
+    --text-ink: #1b1e24;
+    --text-sec: #5a5f6b;
+    --border-rule: #d5d0c4;
+    --river-fill: #cfe3ec;
+    --disc-fill: #ffffff;
+    --disc-stroke: #1b1e24;
+    --halo-fill: #ebe7dc;
+    --shadow-soft: 0 4px 20px rgba(0,0,0,0.06);
+
+    /* Transit lines */
+    --line-crimson: #d9363e;
+    --line-cobalt: #1f6fd6;
+    --line-emerald: #1e9e5a;
+    --line-amber: #f0a020;
+    --line-violet: #7b4fbf;
+    --line-slate: #3a8c96;
+
+    --status-good: #1e9e5a;
+    --status-delay: #f0a020;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg-page: #0f1318;
+      --bg-panel: #151a21;
+      --bg-card: #1b212a;
+      --text-ink: #e9ecf1;
+      --text-sec: #9aa3b2;
+      --border-rule: #252c36;
+      --river-fill: #17232e;
+      --disc-fill: #1b212a;
+      --disc-stroke: #e9ecf1;
+      --halo-fill: #151a21;
+      --shadow-soft: 0 4px 24px rgba(0,0,0,0.4);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg-page: #0f1318;
+    --bg-panel: #151a21;
+    --bg-card: #1b212a;
+    --text-ink: #e9ecf1;
+    --text-sec: #9aa3b2;
+    --border-rule: #252c36;
+    --river-fill: #17232e;
+    --disc-fill: #1b212a;
+    --disc-stroke: #e9ecf1;
+    --halo-fill: #151a21;
+    --shadow-soft: 0 4px 24px rgba(0,0,0,0.4);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background-color: var(--bg-page);
+    color: var(--text-ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-weight: 500;
+    line-height: 1.4;
+    transition: background-color 0.5s ease, color 0.5s ease;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 24px 28px;
+  }
+
+  /* Header Bar */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border-rule);
+    margin-bottom: 18px;
+    transition: border-color 0.5s ease;
+  }
+
+  .brand-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .brand-roundel {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 5px solid var(--line-crimson);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .brand-roundel::after {
+    content: "";
+    position: absolute;
+    width: 36px;
+    height: 6px;
+    background: var(--line-cobalt);
+    border-radius: 2px;
+  }
+  .brand-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .brand-subtitle {
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--text-sec);
+    margin-top: 1px;
+  }
+
+  .legend-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .legend-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-rule);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+  }
+  .legend-pill:hover, .legend-pill.active {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  }
+  .legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+  }
+
+  .theme-toggle-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border-rule);
+    color: var(--text-ink);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background-color 0.2s, color 0.2s;
+  }
+  .theme-toggle-btn:hover {
+    background: var(--bg-panel);
+  }
+
+  /* Main Workspace */
+  main {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 22px;
+    align-items: start;
+    flex: 1;
+  }
+
+  @media (max-width: 990px) {
+    main {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Map Canvas Container */
+  .map-container {
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border-rule);
+    border-radius: 12px;
+    box-shadow: var(--shadow-soft);
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 1000 / 740;
+    transition: background-color 0.5s ease, border-color 0.5s ease;
+    width: 100%;
+  }
+
+  svg#metro-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* SVG Typography & Styles */
+  .grid-pattern { stroke: var(--border-rule); stroke-opacity: 0.35; stroke-width: 0.8; }
+  .river-path { fill: var(--river-fill); transition: fill 0.5s ease; }
+  .river-label {
+    fill: var(--text-sec);
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    font-weight: 500;
+    opacity: 0.55;
+    text-transform: uppercase;
+    user-select: none;
+  }
+  .metro-line-base {
+    fill: none;
+    stroke-width: 9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: opacity 0.3s ease, stroke-width 0.25s ease;
+  }
+  .metro-line-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 26;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    cursor: pointer;
+  }
+  .station-tick {
+    stroke-width: 2.8;
+    stroke-linecap: round;
+    transition: opacity 0.3s ease, stroke 0.5s ease;
+  }
+  .station-node {
+    cursor: pointer;
+    transition: opacity 0.3s ease;
+  }
+  .station-node:focus { outline: none; }
+  .station-interchange-disc {
+    fill: var(--disc-fill);
+    stroke: var(--disc-stroke);
+    stroke-width: 3.5;
+    transition: fill 0.5s ease, stroke 0.5s ease;
+  }
+  .station-terminus-disc {
+    fill: var(--disc-fill);
+    stroke: var(--disc-stroke);
+    stroke-width: 2.5;
+    transition: fill 0.5s ease, stroke 0.5s ease;
+  }
+  .station-label {
+    font-size: 11.5px;
+    font-weight: 500;
+    fill: var(--text-ink);
+    stroke: var(--halo-fill);
+    stroke-width: 4.5px;
+    paint-order: stroke fill;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    user-select: none;
+    transition: fill 0.5s ease, stroke 0.5s ease, opacity 0.3s ease;
+  }
+  .station-selected .station-interchange-disc,
+  .station-selected .station-terminus-disc {
+    stroke: var(--line-amber) !important;
+    stroke-width: 4.5px !important;
+  }
+  .station-selected .station-label {
+    font-weight: 700 !important;
+    fill: var(--line-crimson) !important;
+  }
+  .station-ring-focus {
+    fill: none;
+    stroke: var(--line-amber);
+    stroke-width: 2.5;
+    stroke-dasharray: 3 3;
+    animation: rotateRing 8s linear infinite;
+  }
+  @keyframes rotateRing {
+    to { stroke-dashoffset: -24; }
+  }
+
+  .train-marker {
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+  .train-halo {
+    opacity: 0.42;
+    animation: trainPulse 2s ease-in-out infinite alternate;
+  }
+  @keyframes trainPulse {
+    0% { r: 6.5; opacity: 0.3; }
+    100% { r: 9.5; opacity: 0.65; }
+  }
+
+  /* Overlay HUD elements on Map */
+  .map-caption {
+    position: absolute;
+    bottom: 14px;
+    left: 18px;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-sec);
+    pointer-events: none;
+    background: var(--bg-panel);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-rule);
+    opacity: 0.85;
+  }
+  .map-clock-widget {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-rule);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-ink);
+    box-shadow: var(--shadow-soft);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .map-clock-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--status-good);
+    animation: blinker 1.4s ease infinite;
+  }
+  @keyframes blinker { 50% { opacity: 0.2; } }
+
+  /* Right Sidebar Panels */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .panel-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-rule);
+    border-radius: 10px;
+    padding: 18px;
+    box-shadow: var(--shadow-soft);
+    transition: background-color 0.5s ease, border-color 0.5s ease;
+  }
+  .panel-header {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--text-sec);
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* Status List */
+  .status-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .status-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .status-item:hover, .status-item.active {
+    background: var(--bg-panel);
+  }
+  .status-line-meta {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 13px;
+  }
+  .line-badge {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .status-pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .status-good-badge {
+    background: rgba(30, 158, 90, 0.15);
+    color: var(--status-good);
+  }
+  .status-delay-badge {
+    background: rgba(240, 160, 32, 0.2);
+    color: var(--status-delay);
+    animation: pulseDelay 2s infinite;
+  }
+  @keyframes pulseDelay {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+
+  /* Arrivals Widget */
+  .station-view-header {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--border-rule);
+  }
+  .station-view-title {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .calling-pips {
+    display: flex;
+    gap: 4px;
+  }
+  .calling-pip {
+    width: 14px;
+    height: 5px;
+    border-radius: 2px;
+  }
+  .station-view-type {
+    font-size: 11px;
+    color: var(--text-sec);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .arrivals-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .arrival-row {
+    display: grid;
+    grid-template-columns: 20px 1fr auto;
+    align-items: center;
+    gap: 9px;
+    font-size: 12.5px;
+    padding: 6px 4px;
+    border-radius: 4px;
+  }
+  .arrival-row:nth-child(even) {
+    background: rgba(0,0,0,0.02);
+  }
+  :root[data-theme="dark"] .arrival-row:nth-child(even) {
+    background: rgba(255,255,255,0.02);
+  }
+  .arrival-dest {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+  }
+  .arrival-sub {
+    font-size: 10px;
+    color: var(--text-sec);
+    display: block;
+  }
+  .arrival-time {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+  }
+  .time-due {
+    color: var(--status-good);
+  }
+  .time-delayed {
+    color: var(--status-delay);
+  }
+
+  /* Dimming Dim-State when hovering lines */
+  .dimmed {
+    opacity: 0.13 !important;
+  }
+  .highlighted-line {
+    stroke-width: 12.5 !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .train-halo, .map-clock-dot, .status-delay-badge, .station-ring-focus {
+      animation: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand-group">
+    <div class="brand-roundel" aria-hidden="true"></div>
+    <div>
+      <div class="brand-title">Vellmar Metro</div>
+      <div class="brand-subtitle">Metropolitan Transit Authority · Live Network Map</div>
+    </div>
+  </div>
+
+  <div class="legend-bar" id="legendBar" role="navigation" aria-label="Line highlight filters">
+    <!-- Populated by JS -->
+  </div>
+
+  <button class="theme-toggle-btn" id="themeToggle" aria-label="Toggle night mode">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+    </svg>
+    <span id="themeLabel">Night Mode</span>
+  </button>
+</header>
+
+<main>
+  <div class="map-container" id="mapContainer" role="region" aria-label="Interactive Metro Map">
+    <svg id="metro-svg" viewBox="0 0 1000 740" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
+          <path d="M 100 0 L 0 0 0 100" fill="none" class="grid-pattern" />
+        </pattern>
+        <!-- Gradients or filters can be added if needed -->
+      </defs>
+
+      <!-- Background Grid -->
+      <rect width="1000" height="740" fill="url(#grid)" />
+
+      <!-- River Vell -->
+      <path class="river-path" d="M -20,490 
+               C 180,480 250,560 410,555 
+               C 560,550 630,460 760,450 
+               C 870,440 940,485 1020,480 
+               L 1020,550 
+               C 920,555 860,510 750,520 
+               C 620,530 550,620 400,625 
+               C 240,630 170,550 -20,560 Z" />
+      <text x="890" y="472" class="river-label">River Vell</text>
+      <text x="140" y="525" class="river-label">River Vell</text>
+
+      <!-- SVG Map Layers -->
+      <g id="layer-lines"></g>
+      <g id="layer-lines-hit"></g>
+      <g id="layer-ticks"></g>
+      <g id="layer-stations"></g>
+      <g id="layer-trains"></g>
+      <g id="layer-labels"></g>
+    </svg>
+
+    <div class="map-clock-widget" id="clockWidget" aria-live="off">
+      <span class="map-clock-dot"></span>
+      <span id="liveClock">14:32:08</span>
+    </div>
+    <div class="map-caption">Vellmar Metro · Network Diagram · 2026</div>
+  </div>
+
+  <aside class="sidebar">
+    <!-- Next Arrivals Panel -->
+    <section class="panel-card" aria-labelledby="arrivals-heading">
+      <div class="panel-header" id="arrivals-heading">
+        <span>Next Arrivals</span>
+        <span id="platformCount">SELECT STATION</span>
+      </div>
+      <div class="station-view-header">
+        <div class="station-view-title">
+          <span id="selectedStationName">Central Vellmar</span>
+          <div class="calling-pips" id="selectedStationPips"></div>
+        </div>
+        <div class="station-view-type" id="selectedStationSub">Major Interchange · Lines 1, 2, 4</div>
+      </div>
+      <ul class="arrivals-list" id="arrivalsList">
+        <!-- Generated by JS -->
+      </ul>
+    </section>
+
+    <!-- Service Status Panel -->
+    <section class="panel-card" aria-labelledby="status-heading">
+      <div class="panel-header" id="status-heading">
+        <span>Service Status</span>
+        <span style="letter-spacing:0.1em; color:var(--status-good);">Live</span>
+      </div>
+      <ul class="status-list" id="statusList">
+        <!-- Generated by JS -->
+      </ul>
+    </section>
+  </aside>
+</main>
+
+<script>
+/**
+ * VELLMAR METRO DATA MODEL
+ * Pure schematic Beck-style layout (Horizontal, Vertical, 45-degree angles)
+ */
+const LINES = {
+  crimson: {
+    id: 'crimson',
+    name: 'Crimson Line',
+    color: 'var(--line-crimson)',
+    hex: '#d9363e',
+    status: 'Good service',
+    delayed: false,
+    pathD: "M 80,180 L 280,180 L 420,320 L 580,320 L 720,460 L 890,460",
+    stations: [
+      { id: 'westgate', name: 'Westgate Quay', d: 0, x: 80, y: 180, isTerminus: true, labelPos: 'top' },
+      { id: 'harbor_m', name: 'Harbor Mills', d: 110, x: 190, y: 180, labelPos: 'top' },
+      { id: 'kingsrow', name: 'Kingsrow', d: 200, x: 280, y: 180, isInterchange: true, labelPos: 'top-right' },
+      { id: 'bell_sq', name: 'Bell Tower', d: 290, x: 345, y: 245, labelPos: 'bottom-left' },
+      { id: 'central', name: 'Central Vellmar', d: 395, x: 420, y: 320, isInterchange: true, labelPos: 'top-left' },
+      { id: 'lantern', name: 'Lantern Court', d: 495, x: 520, y: 320, isInterchange: true, labelPos: 'top' },
+      { id: 'botanic', name: 'Botanic Gardens', d: 555, x: 580, y: 320, isInterchange: true, labelPos: 'bottom-right' },
+      { id: 'st_jude', name: "St. Jude's Hill", d: 650, x: 650, y: 390, labelPos: 'bottom-left' },
+      { id: 'priory', name: 'Priory Gate', d: 750, x: 720, y: 460, isInterchange: true, labelPos: 'top-right' },
+      { id: 'amberley', name: 'Amberley Reach', d: 830, x: 800, y: 460, labelPos: 'bottom' },
+      { id: 'eastmoor', name: 'Eastmoor Terminal', d: 920, x: 890, y: 460, isTerminus: true, labelPos: 'bottom' }
+    ]
+  },
+  cobalt: {
+    id: 'cobalt',
+    name: 'Cobalt Line',
+    color: 'var(--line-cobalt)',
+    hex: '#1f6fd6',
+    status: 'Good service',
+    delayed: false,
+    pathD: "M 500,70 L 500,240 L 420,320 L 420,530 L 510,620 L 780,620",
+    stations: [
+      { id: 'highbury', name: 'Highbury Fields', d: 0, x: 500, y: 70, isTerminus: true, labelPos: 'right' },
+      { id: 'north_pl', name: 'Northgate Plaza', d: 90, x: 500, y: 160, labelPos: 'right' },
+      { id: 'aurora', name: 'Aurora Park', d: 170, x: 500, y: 240, isInterchange: true, labelPos: 'right' },
+      { id: 'central', name: 'Central Vellmar', d: 283, x: 420, y: 320, isInterchange: true, labelPos: 'top-left' },
+      { id: 'guild', name: 'Guildhall', d: 375, x: 420, y: 410, labelPos: 'left' },
+      { id: 'riverside', name: 'Riverside', d: 465, x: 420, y: 500, isInterchange: true, labelPos: 'left' },
+      { id: 'dock_b', name: 'Basin Yard', d: 560, x: 470, y: 580, labelPos: 'left' },
+      { id: 'saltmarsh', name: 'Saltmarsh', d: 630, x: 540, y: 620, isInterchange: true, labelPos: 'bottom' },
+      { id: 'reach', name: 'Customs Wharf', d: 740, x: 650, y: 620, labelPos: 'bottom' },
+      { id: 'pelican', name: 'Pelican Point', d: 870, x: 780, y: 620, isTerminus: true, labelPos: 'right' }
+    ]
+  },
+  emerald: {
+    id: 'emerald',
+    name: 'Emerald Line',
+    color: 'var(--line-emerald)',
+    hex: '#1e9e5a',
+    status: 'Good service',
+    delayed: false,
+    pathD: "M 130,560 L 280,410 L 280,180 L 430,90 L 750,90",
+    stations: [
+      { id: 'ferry_l', name: 'Ferry Landing', d: 0, x: 130, y: 560, isTerminus: true, labelPos: 'left' },
+      { id: 'foundry', name: 'Foundry Square', d: 110, x: 210, y: 480, isInterchange: true, labelPos: 'top-left' },
+      { id: 'weavers', name: "Weaver's Row", d: 212, x: 280, y: 410, labelPos: 'right' },
+      { id: 'tannery', name: 'Tannery Steps', d: 325, x: 280, y: 300, labelPos: 'left' },
+      { id: 'kingsrow', name: 'Kingsrow', d: 445, x: 280, y: 180, isInterchange: true, labelPos: 'top-right' },
+      { id: 'univ', name: 'University Hill', d: 570, x: 380, y: 120, labelPos: 'top-left' },
+      { id: 'crest', name: 'Crestline', d: 660, x: 470, y: 90, labelPos: 'top' },
+      { id: 'parliament', name: 'Parliament Heights', d: 780, x: 590, y: 90, labelPos: 'top' },
+      { id: 'ashbourne', name: 'Ashbourne Chase', d: 940, x: 750, y: 90, isTerminus: true, labelPos: 'right' }
+    ]
+  },
+  amber: {
+    id: 'amber',
+    name: 'Amber Line',
+    color: 'var(--line-amber)',
+    hex: '#f0a020',
+    status: 'Good service',
+    delayed: false,
+    pathD: "M 150,680 L 280,680 L 420,540 L 520,540 L 720,340 L 720,130",
+    stations: [
+      { id: 'south_harb', name: 'Old Haven South', d: 0, x: 150, y: 680, isTerminus: true, labelPos: 'bottom' },
+      { id: 'mariner', name: "Mariner's Walk", d: 80, x: 230, y: 680, labelPos: 'bottom' },
+      { id: 'old_docks', name: 'Old Docks', d: 130, x: 280, y: 680, isInterchange: true, labelPos: 'bottom' },
+      { id: 'chandler', name: 'Chandler Cross', d: 240, x: 360, y: 600, labelPos: 'left' },
+      { id: 'riverside', name: 'Riverside', d: 330, x: 420, y: 540, isInterchange: true, labelPos: 'bottom-left' },
+      { id: 'mill_cr', name: 'Mill Creek', d: 400, x: 490, y: 540, labelPos: 'bottom' },
+      { id: 'canal', name: 'Grand Canal', d: 490, x: 580, y: 480, labelPos: 'bottom-right' },
+      { id: 'priory', name: 'Priory Gate', d: 630, x: 670, y: 390, isInterchange: true, labelPos: 'right' },
+      { id: 'beacon', name: 'Beacon Terrace', d: 740, x: 720, y: 300, labelPos: 'right' },
+      { id: 'windsor', name: 'Windsor Vale', d: 820, x: 720, y: 220, labelPos: 'right' },
+      { id: 'friars', name: 'Friars Heath', d: 910, x: 720, y: 130, isTerminus: true, labelPos: 'top' }
+    ]
+  },
+  violet: {
+    id: 'violet',
+    name: 'Violet Line',
+    color: 'var(--line-violet)',
+    hex: '#7b4fbf',
+    status: 'Good service',
+    delayed: false,
+    pathD: "M 220,90 L 500,240 L 520,320 L 580,320 L 840,580 L 920,580",
+    stations: [
+      { id: 'crown_hill', name: 'Crown Hill', d: 0, x: 220, y: 90, isTerminus: true, labelPos: 'top' },
+      { id: 'olympic', name: 'St. Leopold', d: 120, x: 330, y: 150, labelPos: 'top-left' },
+      { id: 'aurora', name: 'Aurora Park', d: 270, x: 500, y: 240, isInterchange: true, labelPos: 'top-left' },
+      { id: 'lantern', name: 'Lantern Court', d: 370, x: 520, y: 320, isInterchange: true, labelPos: 'bottom-left' },
+      { id: 'botanic', name: 'Botanic Gardens', d: 430, x: 580, y: 320, isInterchange: true, labelPos: 'top' },
+      { id: 'coopers', name: "Cooper's End", d: 535, x: 655, y: 395, labelPos: 'right' },
+      { id: 'saltmarsh', name: 'Saltmarsh', d: 685, x: 760, y: 500, isInterchange: true, labelPos: 'bottom-right' },
+      { id: 'marsh_end', name: 'Marshgate Pier', d: 800, x: 840, y: 580, labelPos: 'bottom' },
+      { id: 'lighthouse', name: 'Vellmar Light', d: 880, x: 920, y: 580, isTerminus: true, labelPos: 'right' }
+    ]
+  },
+  slate: {
+    id: 'slate',
+    name: 'Slate Line',
+    color: 'var(--line-slate)',
+    hex: '#3a8c96',
+    status: 'Good service',
+    delayed: false,
+    pathD: "M 110,380 L 210,480 L 280,680 L 420,680 L 580,520 L 580,320 L 670,230 L 880,230",
+    stations: [
+      { id: 'museum', name: 'Museum Quarter', d: 0, x: 110, y: 380, isTerminus: true, labelPos: 'left' },
+      { id: 'foundry', name: 'Foundry Square', d: 140, x: 210, y: 480, isInterchange: true, labelPos: 'left' },
+      { id: 'old_docks', name: 'Old Docks', d: 350, x: 280, y: 680, isInterchange: true, labelPos: 'top-left' },
+      { id: 'ironworks', name: 'Ironworks Way', d: 430, x: 360, y: 680, labelPos: 'top' },
+      { id: 'drydock', name: 'Grand Basin Drydock', d: 530, x: 460, y: 640, labelPos: 'right' },
+      { id: 'mercers', name: "Mercer's Bridge", d: 640, x: 580, y: 520, labelPos: 'right' },
+      { id: 'botanic', name: 'Botanic Gardens', d: 840, x: 580, y: 320, isInterchange: true, labelPos: 'left' },
+      { id: 'elm', name: 'Elm Grove', d: 940, x: 670, y: 230, labelPos: 'top' },
+      { id: 'broad', name: 'Broadmeadow', d: 1040, x: 770, y: 230, labelPos: 'top' },
+      { id: 'east_gate', name: 'Eastgate Viaduct', d: 1150, x: 880, y: 230, isTerminus: true, labelPos: 'right' }
+    ]
+  }
+};
+
+// State
+let activeLineFilter = null;
+let selectedStationId = 'central';
+let trainList = [];
+let stationCatalog = {};
+let pathElements = {};
+
+// Normal motion base speed ~62 px/s
+const BASE_SPEED = 62;
+
+/**
+ * Initialize station catalog and pre-calculate station distances along SVG paths
+ */
+function initDataModel() {
+  const svgLinesLayer = document.getElementById('layer-lines');
+  const svgLinesHitLayer = document.getElementById('layer-lines-hit');
+
+  // Build SVG Path elements first to get accurate lengths
+  Object.values(LINES).forEach(line => {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', line.pathD);
+    path.setAttribute('class', 'metro-line-base');
+    path.setAttribute('stroke', line.hex);
+    path.setAttribute('id', `line-path-${line.id}`);
+    svgLinesLayer.appendChild(path);
+    pathElements[line.id] = path;
+
+    // Hit test path
+    const hitPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    hitPath.setAttribute('d', line.pathD);
+    hitPath.setAttribute('class', 'metro-line-hit');
+    hitPath.dataset.lineId = line.id;
+    svgLinesHitLayer.appendChild(hitPath);
+
+    // Event handlers for line hover
+    hitPath.addEventListener('mouseenter', () => highlightLine(line.id));
+    hitPath.addEventListener('mouseleave', () => highlightLine(null));
+
+    const totalLen = path.getTotalLength();
+    line.totalLength = totalLen;
+
+    // Calculate station exact distances along path using nearest-point search
+    line.stations.forEach(st => {
+      // Find nearest point on SVG path for precise length
+      let bestDist = 0;
+      let minDiff = Infinity;
+      const samples = 200;
+      for (let i = 0; i <= samples; i++) {
+        const testDist = (i / samples) * totalLen;
+        const pt = path.getPointAtLength(testDist);
+        const distSq = (pt.x - st.x)**2 + (pt.y - st.y)**2;
+        if (distSq < minDiff) {
+          minDiff = distSq;
+          bestDist = testDist;
+        }
+      }
+      st.computedDist = bestDist;
+
+      // Register station globally
+      if (!stationCatalog[st.id]) {
+        stationCatalog[st.id] = {
+          id: st.id,
+          name: st.name,
+          x: st.x,
+          y: st.y,
+          isInterchange: !!st.isInterchange,
+          isTerminus: !!st.isTerminus,
+          labelPos: st.labelPos || 'top',
+          lines: []
+        };
+      }
+      if (!stationCatalog[st.id].lines.includes(line.id)) {
+        stationCatalog[st.id].lines.push(line.id);
+      }
+      if (st.isInterchange) stationCatalog[st.id].isInterchange = true;
+    });
+
+    // Create 4 trains for this line (2 forward, 2 reverse)
+    // Stagger initial progress cleanly
+    const trainConfigs = [
+      { dir: 1, initProg: 0.12 },
+      { dir: 1, initProg: 0.62 },
+      { dir: -1, initProg: 0.38 },
+      { dir: -1, initProg: 0.88 }
+    ];
+
+    trainConfigs.forEach((cfg, idx) => {
+      trainList.push({
+        id: `${line.id}-train-${idx}`,
+        lineId: line.id,
+        direction: cfg.dir, // 1: forward, -1: backward
+        currentDist: cfg.initProg * totalLen,
+        dwellTimer: 0,
+        dwellDuration: 0,
+        isDwelling: false,
+        lastPassedStationIndex: -1,
+        element: null
+      });
+    });
+  });
+}
+
+/**
+ * Render Map Graphic Elements: Stations, Interchange Discs, Labels, Ticks
+ */
+function renderMapElements() {
+  const tickLayer = document.getElementById('layer-ticks');
+  const stationLayer = document.getElementById('layer-stations');
+  const labelLayer = document.getElementById('layer-labels');
+  const trainLayer = document.getElementById('layer-trains');
+
+  // Render Ticks for non-interchange stations
+  Object.values(LINES).forEach(line => {
+    line.stations.forEach(st => {
+      if (!st.isInterchange && !st.isTerminus) {
+        const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        // Tick orientation based on label position
+        let dx = 0, dy = -7;
+        if (st.labelPos.includes('bottom')) dy = 7;
+        if (st.labelPos === 'right') { dx = 7; dy = 0; }
+        if (st.labelPos === 'left') { dx = -7; dy = 0; }
+
+        tick.setAttribute('x1', st.x);
+        tick.setAttribute('y1', st.y);
+        tick.setAttribute('x2', st.x + dx);
+        tick.setAttribute('y2', st.y + dy);
+        tick.setAttribute('stroke', line.hex);
+        tick.setAttribute('class', `station-tick tick-${line.id}`);
+        tickLayer.appendChild(tick);
+      }
+    });
+  });
+
+  // Render Station Nodes
+  Object.values(stationCatalog).forEach(st => {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', `station-node node-${st.id}`);
+    g.setAttribute('id', `station-${st.id}`);
+    g.setAttribute('role', 'button');
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('aria-label', `${st.name} station`);
+
+    if (st.isInterchange) {
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', st.x);
+      circle.setAttribute('cy', st.y);
+      circle.setAttribute('r', 7.5);
+      circle.setAttribute('class', 'station-interchange-disc');
+      g.appendChild(circle);
+    } else if (st.isTerminus) {
+      // Terminus cross bar
+      const bar = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      bar.setAttribute('x1', st.x - 7);
+      bar.setAttribute('y1', st.y - 7);
+      bar.setAttribute('x2', st.x + 7);
+      bar.setAttribute('y2', st.y + 7);
+      bar.setAttribute('stroke', 'var(--text-ink)');
+      bar.setAttribute('stroke-width', '3');
+      g.appendChild(bar);
+
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', st.x);
+      circle.setAttribute('cy', st.y);
+      circle.setAttribute('r', 4.5);
+      circle.setAttribute('class', 'station-terminus-disc');
+      g.appendChild(circle);
+    } else {
+      // Ordinary station hit target
+      const hit = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      hit.setAttribute('cx', st.x);
+      hit.setAttribute('cy', st.y);
+      hit.setAttribute('r', 9);
+      hit.setAttribute('fill', 'transparent');
+      g.appendChild(hit);
+    }
+
+    // Click & Keyboard navigation
+    g.addEventListener('click', () => selectStation(st.id));
+    g.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        selectStation(st.id);
+      }
+    });
+
+    stationLayer.appendChild(g);
+
+    // Label
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('class', `station-label label-${st.id}`);
+    text.setAttribute('id', `label-${st.id}`);
+    text.textContent = st.name;
+
+    // Offset label cleanly away from strokes
+    let lx = st.x;
+    let ly = st.y;
+    let anchor = 'start';
+
+    switch (st.labelPos) {
+      case 'top':
+        ly -= 12;
+        anchor = 'middle';
+        break;
+      case 'top-right':
+        lx += 11;
+        ly -= 10;
+        anchor = 'start';
+        break;
+      case 'top-left':
+        lx -= 11;
+        ly -= 10;
+        anchor = 'end';
+        break;
+      case 'bottom':
+        ly += 21;
+        anchor = 'middle';
+        break;
+      case 'bottom-right':
+        lx += 11;
+        ly += 18;
+        anchor = 'start';
+        break;
+      case 'bottom-left':
+        lx -= 11;
+        ly += 18;
+        anchor = 'end';
+        break;
+      case 'left':
+        lx -= 13;
+        ly += 4.5;
+        anchor = 'end';
+        break;
+      case 'right':
+      default:
+        lx += 13;
+        ly += 4.5;
+        anchor = 'start';
+        break;
+    }
+
+    text.setAttribute('x', lx);
+    text.setAttribute('y', ly);
+    text.setAttribute('text-anchor', anchor);
+    text.addEventListener('click', () => selectStation(st.id));
+    labelLayer.appendChild(text);
+  });
+
+  // Train SVG Markers
+  trainList.forEach(tr => {
+    const line = LINES[tr.lineId];
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', `train-marker train-${tr.lineId}`);
+
+    const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    halo.setAttribute('r', 8);
+    halo.setAttribute('fill', line.hex);
+    halo.setAttribute('class', 'train-halo');
+
+    const core = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    core.setAttribute('r', 4.2);
+    core.setAttribute('fill', line.hex);
+    core.setAttribute('stroke', '#ffffff');
+    core.setAttribute('stroke-width', 1.8);
+
+    g.appendChild(halo);
+    g.appendChild(core);
+    trainLayer.appendChild(g);
+    tr.element = g;
+  });
+}
+
+/**
+ * Render Header Legend & Sidebar Status Cards
+ */
+function renderUIControls() {
+  const legendBar = document.getElementById('legendBar');
+  const statusList = document.getElementById('statusList');
+
+  Object.values(LINES).forEach(line => {
+    // Legend Pill
+    const pill = document.createElement('button');
+    pill.className = 'legend-pill';
+    pill.dataset.lineId = line.id;
+    pill.innerHTML = `<span class="legend-dot" style="background:${line.hex}"></span><span>${line.name.replace(' Line', '')}</span>`;
+    pill.addEventListener('mouseenter', () => highlightLine(line.id));
+    pill.addEventListener('mouseleave', () => highlightLine(null));
+    pill.addEventListener('click', () => {
+      if (activeLineFilter === line.id) {
+        highlightLine(null);
+      } else {
+        highlightLine(line.id);
+      }
+    });
+    legendBar.appendChild(pill);
+
+    // Sidebar Status Row
+    const li = document.createElement('li');
+    li.className = 'status-item';
+    li.id = `status-row-${line.id}`;
+    li.innerHTML = `
+      <div class="status-line-meta">
+        <span class="line-badge" style="background:${line.hex}"></span>
+        <span>${line.name}</span>
+      </div>
+      <span class="status-pill status-good-badge" id="badge-${line.id}">Good service</span>
+    `;
+    li.addEventListener('mouseenter', () => highlightLine(line.id));
+    li.addEventListener('mouseleave', () => highlightLine(null));
+    statusList.appendChild(li);
+  });
+}
+
+/**
+ * Line Highlighting and Dimming
+ */
+function highlightLine(lineId) {
+  activeLineFilter = lineId;
+
+  // Update Legend buttons
+  document.querySelectorAll('.legend-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.lineId === lineId);
+  });
+  document.querySelectorAll('.status-item').forEach(btn => {
+    btn.classList.toggle('active', btn.id === `status-row-${lineId}`);
+  });
+
+  const isAnyActive = !!lineId;
+
+  // Lines
+  Object.values(LINES).forEach(line => {
+    const el = pathElements[line.id];
+    const isTarget = line.id === lineId;
+    el.classList.toggle('highlighted-line', isTarget);
+    el.classList.toggle('dimmed', isAnyActive && !isTarget);
+  });
+
+  // Trains
+  trainList.forEach(tr => {
+    const isTarget = tr.lineId === lineId;
+    tr.element.classList.toggle('dimmed', isAnyActive && !isTarget);
+  });
+
+  // Stations & Ticks
+  Object.values(stationCatalog).forEach(st => {
+    const belongs = !isAnyActive || st.lines.includes(lineId);
+    const node = document.getElementById(`station-${st.id}`);
+    const lbl = document.getElementById(`label-${st.id}`);
+    if (node) node.classList.toggle('dimmed', !belongs);
+    if (lbl) lbl.classList.toggle('dimmed', !belongs);
+  });
+
+  document.querySelectorAll('.station-tick').forEach(tick => {
+    if (!isAnyActive) {
+      tick.classList.remove('dimmed');
+    } else {
+      tick.classList.toggle('dimmed', !tick.classList.contains(`tick-${lineId}`));
+    }
+  });
+}
+
+/**
+ * Station Selection and Focus Ring
+ */
+function selectStation(stId) {
+  if (!stationCatalog[stId]) return;
+  selectedStationId = stId;
+  const st = stationCatalog[stId];
+
+  // Remove previous selection styling
+  document.querySelectorAll('.station-selected').forEach(el => el.classList.remove('station-selected'));
+  const prevRing = document.getElementById('station-focus-ring');
+  if (prevRing) prevRing.remove();
+
+  // Add selection styling
+  const node = document.getElementById(`station-${stId}`);
+  if (node) {
+    node.classList.add('station-selected');
+    const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    ring.setAttribute('id', 'station-focus-ring');
+    ring.setAttribute('cx', st.x);
+    ring.setAttribute('cy', st.y);
+    ring.setAttribute('r', st.isInterchange ? 14 : 11);
+    ring.setAttribute('class', 'station-ring-focus');
+    node.appendChild(ring);
+  }
+
+  // Update Arrivals Card
+  document.getElementById('selectedStationName').textContent = st.name;
+  const lineNames = st.lines.map(lid => LINES[lid].name.replace(' Line', '')).join(', ');
+  const subtitle = st.isInterchange
+    ? `Interchange · ${lineNames} Lines`
+    : (st.isTerminus ? `Terminus · ${lineNames} Line` : `Standard Station · ${lineNames} Line`);
+  document.getElementById('selectedStationSub').textContent = subtitle;
+  document.getElementById('platformCount').textContent = `${st.lines.length} LINE${st.lines.length > 1 ? 'S' : ''}`;
+
+  // Colored pips
+  const pipsContainer = document.getElementById('selectedStationPips');
+  pipsContainer.innerHTML = '';
+  st.lines.forEach(lid => {
+    const pip = document.createElement('span');
+    pip.className = 'calling-pip';
+    pip.style.background = LINES[lid].hex;
+    pipsContainer.appendChild(pip);
+  });
+
+  updateArrivalsList();
+}
+
+/**
+ * Accurate ETA calculation from train physics along route
+ */
+function calculateETA(train, station) {
+  const line = LINES[train.lineId];
+  const stationDist = station.computedDist;
+  const totalL = line.totalLength;
+  const speed = line.delayed ? (BASE_SPEED * 0.45) : BASE_SPEED;
+  const currentDist = train.currentDist;
+  const dir = train.direction;
+
+  let distToStation = 0;
+  let intermediateStationCount = 0;
+
+  if (dir === 1) { // moving towards end of path
+    if (stationDist >= currentDist) {
+      distToStation = stationDist - currentDist;
+      intermediateStationCount = line.stations.filter(s => s.computedDist > currentDist && s.computedDist < stationDist).length;
+    } else {
+      // train must reach end, turn around, and return to station
+      const distToEnd = totalL - currentDist;
+      const distFromEndToStation = totalL - stationDist;
+      distToStation = distToEnd + distFromEndToStation;
+      const stAfter = line.stations.filter(s => s.computedDist > currentDist).length;
+      const stOnWayBack = line.stations.filter(s => s.computedDist > stationDist).length;
+      intermediateStationCount = stAfter + stOnWayBack + 1; // plus terminus turnaround
+    }
+  } else { // moving towards start of path (0)
+    if (stationDist <= currentDist) {
+      distToStation = currentDist - stationDist;
+      intermediateStationCount = line.stations.filter(s => s.computedDist < currentDist && s.computedDist > stationDist).length;
+    } else {
+      // train must reach 0, turn around, and travel to station
+      const distToStart = currentDist;
+      const distFromStartToStation = stationDist;
+      distToStation = distToStart + distFromStartToStation;
+      const stBefore = line.stations.filter(s => s.computedDist < currentDist).length;
+      const stOnWayUp = line.stations.filter(s => s.computedDist < stationDist).length;
+      intermediateStationCount = stBefore + stOnWayUp + 1;
+    }
+  }
+
+  const travelSeconds = distToStation / speed;
+  const dwellDelay = intermediateStationCount * (line.delayed ? 3.2 : 1.6);
+  const remainingDwell = train.isDwelling ? train.dwellTimer : 0;
+
+  const totalETASeconds = Math.max(1, Math.round(travelSeconds + dwellDelay + remainingDwell));
+
+  // Determine Destination Station Name
+  let destinationName = "";
+  if (dir === 1) {
+    destinationName = line.stations[line.stations.length - 1].name;
+    if (stationDist === line.stations[line.stations.length - 1].computedDist) {
+      destinationName = "Terminates here";
+    }
+  } else {
+    destinationName = line.stations[0].name;
+    if (stationDist === line.stations[0].computedDist) {
+      destinationName = "Terminates here";
+    }
+  }
+
+  return {
+    etaSeconds: totalETASeconds,
+    dest: destinationName,
+    line: line
+  };
+}
+
+/**
+ * Format ETA countdown cleanly
+ */
+function formatTime(secs) {
+  if (secs <= 3) return { text: 'Due', isDue: true };
+  if (secs < 60) return { text: `${secs}s`, isDue: false };
+  const m = Math.floor(secs / 60);
+  const s = String(secs % 60).padStart(2, '0');
+  return { text: `${m}:${s}`, isDue: false };
+}
+
+/**
+ * Refresh Arrivals Panel UI
+ */
+function updateArrivalsList() {
+  const container = document.getElementById('arrivalsList');
+  if (!selectedStationId || !stationCatalog[selectedStationId]) return;
+
+  const targetStation = stationCatalog[selectedStationId];
+  const callingLines = targetStation.lines;
+
+  // Gather predictions from relevant trains
+  const arrivals = [];
+  trainList.forEach(tr => {
+    if (callingLines.includes(tr.lineId)) {
+      const lineStationObj = LINES[tr.lineId].stations.find(s => s.id === targetStation.id);
+      if (lineStationObj) {
+        const prediction = calculateETA(tr, lineStationObj);
+        arrivals.push({
+          line: prediction.line,
+          dest: prediction.dest,
+          secs: prediction.etaSeconds,
+          delayed: prediction.line.delayed
+        });
+      }
+    }
+  });
+
+  arrivals.sort((a, b) => a.secs - b.secs);
+  const topArrivals = arrivals.slice(0, 6);
+
+  container.innerHTML = '';
+  if (topArrivals.length === 0) {
+    container.innerHTML = '<li style="padding:12px;color:var(--text-sec);font-size:12px;">No trains scheduled</li>';
+    return;
+  }
+
+  topArrivals.forEach(arr => {
+    const li = document.createElement('li');
+    li.className = 'arrival-row';
+    const timeInfo = formatTime(arr.secs);
+
+    let timeClass = '';
+    if (timeInfo.isDue) timeClass = 'time-due';
+    else if (arr.delayed) timeClass = 'time-delayed';
+
+    const destPrefix = arr.dest === "Terminates here" ? "" : "towards ";
+
+    li.innerHTML = `
+      <span class="line-badge" style="background:${arr.line.hex};"></span>
+      <div class="arrival-dest">
+        <span>${destPrefix}<strong>${arr.dest}</strong></span>
+        <span class="arrival-sub">${arr.line.name}${arr.delayed ? ' · minor delays' : ''}</span>
+      </div>
+      <div class="arrival-time ${timeClass}">${timeInfo.text}</div>
+    `;
+    container.appendChild(li);
+  });
+}
+
+/**
+ * Service Status Simulation Engine
+ * Randomly toggles minor delays on lines with clean badge updates
+ */
+function initStatusEngine() {
+  function triggerRandomEvent() {
+    const lineKeys = Object.keys(LINES);
+    const targetKey = lineKeys[Math.floor(Math.random() * lineKeys.length)];
+    const line = LINES[targetKey];
+
+    // Introduce delay if normal
+    if (!line.delayed) {
+      line.delayed = true;
+      line.status = 'Minor delays';
+
+      const badge = document.getElementById(`badge-${line.id}`);
+      if (badge) {
+        badge.className = 'status-pill status-delay-badge';
+        badge.textContent = 'Minor delays';
+      }
+
+      // Schedule clearance after 14-30s
+      const clearDuration = (14 + Math.random() * 16) * 1000;
+      setTimeout(() => {
+        line.delayed = false;
+        line.status = 'Good service';
+        if (badge) {
+          badge.className = 'status-pill status-good-badge';
+          badge.textContent = 'Good service';
+        }
+      }, clearDuration);
+    }
+
+    // Schedule next delay incident in 18-40s
+    const nextInterval = (18 + Math.random() * 22) * 1000;
+    setTimeout(triggerRandomEvent, nextInterval);
+  }
+
+  // Initial event kick-off
+  setTimeout(triggerRandomEvent, 12000);
+}
+
+/**
+ * Real-time Animation Loop (60 FPS Trains & Timers)
+ */
+let lastTimestamp = null;
+let arrivalTickTimer = 0;
+
+function animationFrame(timestamp) {
+  if (!lastTimestamp) lastTimestamp = timestamp;
+  const dt = Math.min((timestamp - lastTimestamp) / 1000, 0.1); // clamp frame delta
+  lastTimestamp = timestamp;
+
+  // Move each train
+  trainList.forEach(tr => {
+    const line = LINES[tr.lineId];
+    const path = pathElements[tr.lineId];
+    const totalLen = line.totalLength;
+    const speed = (line.delayed ? (BASE_SPEED * 0.45) : BASE_SPEED);
+
+    if (tr.isDwelling) {
+      tr.dwellTimer -= dt;
+      if (tr.dwellTimer <= 0) {
+        tr.isDwelling = false;
+      }
+    } else {
+      const prevDist = tr.currentDist;
+      tr.currentDist += tr.direction * speed * dt;
+
+      // Check Termini Reversals
+      if (tr.currentDist >= totalLen) {
+        tr.currentDist = totalLen;
+        tr.direction = -1;
+        tr.isDwelling = true;
+        tr.dwellDuration = line.delayed ? 6.0 : 3.2; // Double dwell at terminus
+        tr.dwellTimer = tr.dwellDuration;
+      } else if (tr.currentDist <= 0) {
+        tr.currentDist = 0;
+        tr.direction = 1;
+        tr.isDwelling = true;
+        tr.dwellDuration = line.delayed ? 6.0 : 3.2;
+        tr.dwellTimer = tr.dwellDuration;
+      } else {
+        // Check if crossed any intermediate station
+        line.stations.forEach(st => {
+          const crossed = (tr.direction === 1 && prevDist < st.computedDist && tr.currentDist >= st.computedDist) ||
+                          (tr.direction === -1 && prevDist > st.computedDist && tr.currentDist <= st.computedDist);
+          if (crossed) {
+            tr.currentDist = st.computedDist; // snap
+            tr.isDwelling = true;
+            tr.dwellDuration = line.delayed ? 3.2 : 1.6;
+            tr.dwellTimer = tr.dwellDuration;
+          }
+        });
+      }
+    }
+
+    // Update SVG Position
+    const clampedDist = Math.max(0, Math.min(totalLen, tr.currentDist));
+    const pt = path.getPointAtLength(clampedDist);
+    tr.element.setAttribute('transform', `translate(${pt.x}, ${pt.y})`);
+  });
+
+  // Re-calculate arrival ETAs 4 times per second (every 0.25s)
+  arrivalTickTimer += dt;
+  if (arrivalTickTimer >= 0.25) {
+    arrivalTickTimer = 0;
+    updateArrivalsList();
+  }
+
+  requestAnimationFrame(animationFrame);
+}
+
+/**
+ * Digital HUD Clock
+ */
+function updateClock() {
+  const clockEl = document.getElementById('liveClock');
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  clockEl.textContent = `${hh}:${mm}:${ss}`;
+}
+
+/**
+ * Dark/Light Mode Switcher
+ */
+function initTheme() {
+  const toggleBtn = document.getElementById('themeToggle');
+  const label = document.getElementById('themeLabel');
+
+  function updateLabel() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+      (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    label.textContent = isDark ? 'Day Mode' : 'Night Mode';
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    let nextTheme = 'dark';
+    if (currentTheme === 'dark') {
+      nextTheme = 'light';
+    } else if (currentTheme === 'light') {
+      nextTheme = 'dark';
+    } else {
+      // OS default
+      nextTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+    }
+    document.documentElement.setAttribute('data-theme', nextTheme);
+    updateLabel();
+  });
+
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateLabel);
+  updateLabel();
+}
+
+/**
+ * Bootstrap Application
+ */
+window.addEventListener('DOMContentLoaded', () => {
+  initDataModel();
+  renderMapElements();
+  renderUIControls();
+  selectStation('central');
+  initStatusEngine();
+  initTheme();
+
+  // Clock
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // Animation Loop
+  requestAnimationFrame(animationFrame);
+});
+</script>
+</body>
+</html>

@@ -1,1783 +1,1155 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Signal Loss — Generative Glitch Portrait</title>
-  <style>
-    /* ==========================================================================
-       SIGNAL LOSS — MUSEUM-GRADE GENERATIVE GLITCH PORTRAIT
-       Museum of Unstable Media · Gallery 4
-       ========================================================================== */
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signal Loss — Generative Glitch Portrait</title>
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-    :root {
-      --bg-void: #07070a;
-      --bg-panel: #0d0d12;
-      --bg-matte: #0a0a0f;
-      --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-cyan-dashed: rgba(61, 233, 255, 0.28);
-      --acid-green: #c8ff3d;
-      --glitch-magenta: #ff3d9a;
-      --glitch-cyan: #3de9ff;
-      --text-main: #f0f0f5;
-      --text-dim: #9494a6;
-      --text-muted: #5c5c6e;
-      --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
-      --font-serif: Georgia, "Iowan Old Style", Palatino, "Times New Roman", serif;
-    }
+  :root {
+    --bg: #07070a;
+    --panel-bg: #0d0d12;
+    --border: #1d1d28;
+    --acid: #c8ff3d;
+    --magenta: #ff3d9a;
+    --cyan: #3de9ff;
+    --text-main: #d0d0dc;
+    --text-dim: #68687a;
+    --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Courier New', monospace;
+    --font-serif: 'Iowan Old Style', Palatino, 'Palatino Linotype', Georgia, serif;
+  }
 
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+  body {
+    background-color: var(--bg);
+    color: var(--text-main);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    position: relative;
+    user-select: none;
+    -webkit-user-select: none;
+  }
 
-    html, body {
-      width: 100%;
-      min-height: 100vh;
-      background-color: var(--bg-void);
-      color: var(--text-main);
-      font-family: var(--font-mono);
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      overflow-x: hidden;
-      display: flex;
-      flex-direction: column;
-    }
+  /* Scanline persistent overlay */
+  body::after {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 2px,
+      rgba(0, 0, 0, 0.35) 3px
+    );
+    mix-blend-mode: overlay;
+    z-index: 999;
+  }
 
-    /* Fixed 3px repeating scanline overlay with overlay blend mode */
-    .scanline-overlay {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 900;
-      background: repeating-linear-gradient(
-        0deg,
-        rgba(0, 0, 0, 0.38) 0px,
-        rgba(0, 0, 0, 0.38) 1px,
-        transparent 1px,
-        transparent 3px
-      );
-      mix-blend-mode: overlay;
-      opacity: 0.85;
-    }
+  /* Top Bar */
+  header {
+    height: 46px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    background: var(--panel-bg);
+    z-index: 10;
+  }
 
-    /* Vignette ambient overlay */
-    .vignette-ambient {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 890;
-      background: radial-gradient(circle at 50% 50%, transparent 60%, rgba(3, 3, 5, 0.85) 100%);
-    }
+  .status-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
 
-    /* ==========================================================================
-       TOP BAR
-       ========================================================================== */
-    .top-bar {
-      position: sticky;
-      top: 0;
-      width: 100%;
-      height: 46px;
-      background-color: rgba(13, 13, 18, 0.88);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-subtle);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 24px;
-      z-index: 800;
-      user-select: none;
-    }
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--acid);
+    box-shadow: 0 0 8px var(--acid);
+    animation: blink 1.2s infinite;
+  }
 
-    .top-left {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
+  .status-dot.frozen {
+    background: var(--magenta);
+    box-shadow: 0 0 8px var(--magenta);
+    animation: none;
+  }
 
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background-color: var(--acid-green);
-      box-shadow: 0 0 10px var(--acid-green), 0 0 2px var(--acid-green);
-      animation: pulse-dot 1.4s infinite ease-in-out;
-      transition: background-color 0.25s ease, box-shadow 0.25s ease;
-    }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+  }
 
-    .status-dot.frozen {
-      background-color: var(--glitch-magenta);
-      box-shadow: 0 0 10px var(--glitch-magenta), 0 0 2px var(--glitch-magenta);
-      animation: none;
-    }
+  .readouts {
+    display: flex;
+    gap: 20px;
+    color: var(--text-dim);
+  }
 
-    @keyframes pulse-dot {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.3; transform: scale(0.85); }
-    }
+  .readouts span {
+    color: var(--cyan);
+  }
 
-    .app-title {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      font-weight: 500;
-      color: var(--text-main);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+  /* Layout */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(360px, 1fr) minmax(360px, 420px);
+    gap: 40px;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 36px 32px;
+    align-items: start;
+    justify-content: center;
+    z-index: 5;
+  }
 
-    .app-title .dim {
-      color: var(--text-muted);
-    }
+  /* Portrait Stage */
+  .stage-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
 
-    .top-right {
-      display: flex;
-      align-items: center;
-      gap: 24px;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--text-dim);
-    }
+  .frame-matte {
+    background: var(--panel-bg);
+    padding: 12px;
+    border: 1px solid var(--border);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85);
+    position: relative;
+    max-width: 580px;
+    width: 100%;
+  }
 
-    .telemetry-tag {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-    }
+  .canvas-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    background: #000;
+  }
 
-    .telemetry-tag .label {
-      color: var(--text-muted);
-    }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 
-    .telemetry-tag .val {
-      color: var(--glitch-cyan);
-      font-weight: 600;
-      min-width: 58px;
-    }
+  /* Corner Brackets */
+  .corner {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--acid);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .tl { top: 6px; left: 6px; border-right: none; border-bottom: none; }
+  .tr { top: 6px; right: 6px; border-left: none; border-bottom: none; }
+  .bl { bottom: 6px; left: 6px; border-right: none; border-top: none; }
+  .br { bottom: 6px; right: 6px; border-left: none; border-top: none; }
 
-    /* ==========================================================================
-       MAIN EXHIBIT LAYOUT
-       ========================================================================== */
-    .exhibit-container {
-      flex: 1;
-      width: 100%;
-      max-width: 1240px;
-      margin: 0 auto;
-      padding: 44px 28px 48px;
-      display: grid;
-      grid-template-columns: minmax(360px, 560px) minmax(340px, 1fr);
-      gap: 48px;
-      align-items: start;
-      justify-content: center;
-      position: relative;
-      z-index: 100;
-    }
+  .rec-tag {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(7, 7, 10, 0.75);
+    backdrop-filter: blur(4px);
+    padding: 3px 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-main);
+  }
 
-    /* ==========================================================================
-       PORTRAIT FRAME (3:4 ASPECT RATIO)
-       ========================================================================== */
-    .frame-column {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      width: 100%;
-    }
+  .rec-icon {
+    display: inline-block;
+    color: #ff3333;
+  }
 
-    .portrait-matte {
-      width: 100%;
-      max-width: 540px;
-      aspect-ratio: 3 / 4;
-      background: var(--bg-panel);
-      padding: 12px;
-      border: 1px solid var(--border-subtle);
-      box-shadow:
-        0 24px 70px rgba(0, 0, 0, 0.85),
-        0 0 45px rgba(200, 255, 61, 0.035);
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      user-select: none;
-    }
+  /* Plaque & Controls */
+  .plaque-column {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
 
-    /* Corner brackets (Acid Green) */
-    .corner-bracket {
-      position: absolute;
-      width: 16px;
-      height: 16px;
-      border-color: var(--acid-green);
-      pointer-events: none;
-      z-index: 10;
-      transition: border-color 0.25s ease;
-    }
-    .portrait-matte.frozen .corner-bracket {
-      border-color: var(--glitch-magenta);
-    }
-    .corner-tl { top: 6px; left: 6px; border-top: 2px solid; border-left: 2px solid; }
-    .corner-tr { top: 6px; right: 6px; border-top: 2px solid; border-right: 2px solid; }
-    .corner-bl { bottom: 6px; left: 6px; border-bottom: 2px solid; border-left: 2px solid; }
-    .corner-br { bottom: 6px; right: 6px; border-bottom: 2px solid; border-right: 2px solid; }
+  .plaque-header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+  }
 
-    /* REC / HOLD Tag */
-    .rec-tag-container {
-      position: absolute;
-      top: 18px;
-      left: 20px;
-      z-index: 12;
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      font-size: 11px;
-      letter-spacing: 0.16em;
-      font-weight: 600;
-      color: var(--text-main);
-      background: rgba(7, 7, 10, 0.75);
-      padding: 3px 8px;
-      border: 1px solid rgba(255, 255, 255, 0.07);
-      backdrop-filter: blur(4px);
-    }
+  .plaque-title {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-size: clamp(30px, 3.5vw, 42px);
+    line-height: 1.15;
+    color: #f0f0f4;
+    letter-spacing: -0.01em;
+  }
 
-    .rec-indicator {
-      display: inline-block;
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--acid-green);
-      box-shadow: 0 0 6px var(--acid-green);
-      animation: blink-rec 1s infinite steps(2, start);
-    }
+  .plaque-title em {
+    display: block;
+    font-style: italic;
+    font-size: 0.42em;
+    font-family: var(--font-mono);
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    margin-top: 8px;
+  }
 
-    .portrait-matte.frozen .rec-indicator {
-      width: 7px;
-      height: 7px;
-      border-radius: 0;
-      background: var(--glitch-magenta);
-      box-shadow: 0 0 6px var(--glitch-magenta);
-      animation: none;
-    }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 8px 12px;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    margin-top: 18px;
+    line-height: 1.5;
+  }
 
-    @keyframes blink-rec {
-      to { visibility: hidden; }
-    }
+  .meta-label {
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
 
-    /* Inner canvas presentation */
-    .canvas-viewport {
-      width: 100%;
-      height: 100%;
-      position: relative;
-      background: #000000;
-      overflow: hidden;
-      border: 1px solid rgba(0, 0, 0, 0.6);
-    }
+  .meta-val {
+    color: var(--text-main);
+  }
 
-    canvas#viewCanvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      object-fit: contain;
-      image-rendering: auto;
-    }
+  .statement {
+    font-family: var(--font-serif);
+    font-size: 14px;
+    line-height: 1.6;
+    color: #a6a6b5;
+    font-style: italic;
+    border-left: 2px solid var(--border);
+    padding-left: 14px;
+    margin-top: 4px;
+  }
 
-    .canvas-noise-sheen {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.7);
-    }
+  /* Control Panels */
+  .controls-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
 
-    /* ==========================================================================
-       RIGHT COLUMN: MUSEUM PLAQUE & CONTROLS
-       ========================================================================== */
-    .plaque-column {
-      display: flex;
-      flex-direction: column;
-      gap: 28px;
-    }
+  .slider-block {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
 
-    .museum-plaque {
-      background: var(--bg-panel);
-      border: 1px solid var(--border-subtle);
-      padding: 32px 36px;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
-      position: relative;
-    }
+  .slider-label-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
 
-    .museum-kicker {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.18em;
-      color: var(--text-muted);
-      margin-bottom: 12px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+  .slider-label-row span:last-child {
+    color: var(--cyan);
+  }
 
-    .museum-kicker::before {
-      content: "";
-      display: inline-block;
-      width: 18px;
-      height: 1px;
-      background-color: var(--acid-green);
-    }
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(90deg, var(--acid) 0%, var(--magenta) 100%);
+    outline: none;
+    border-radius: 0;
+  }
 
-    .plaque-title {
-      font-family: var(--font-serif);
-      font-size: clamp(30px, 3.4vw, 42px);
-      line-height: 1.15;
-      font-weight: 400;
-      color: #f7f7fa;
-      letter-spacing: -0.015em;
-      margin-bottom: 14px;
-    }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 8px;
+    height: 20px;
+    background: #fff;
+    border: 1px solid #000;
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(0,0,0,0.8);
+  }
 
-    .plaque-title .subject-suffix {
-      display: inline-block;
-      font-style: italic;
-      font-size: 0.68em;
-      color: var(--text-dim);
-      margin-left: 8px;
-      font-weight: 300;
-    }
+  input[type=range]::-moz-range-thumb {
+    width: 8px;
+    height: 20px;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 0;
+    cursor: pointer;
+  }
 
-    /* Plaque Two-Column Metadata */
-    .plaque-meta {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px 24px;
-      padding: 18px 0;
-      margin: 18px 0 20px;
-      border-top: 1px solid var(--border-subtle);
-      border-bottom: 1px solid var(--border-subtle);
-    }
+  .btn-row {
+    display: flex;
+    gap: 12px;
+  }
 
-    .meta-item {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
+  .btn {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 12px 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: border-color 0.15s, color 0.15s;
+  }
 
-    .meta-item .meta-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--text-muted);
-    }
+  .btn:hover {
+    border-color: #38384d;
+    color: #fff;
+  }
 
-    .meta-item .meta-value {
-      font-size: 12px;
-      color: var(--text-main);
-      letter-spacing: 0.04em;
-    }
+  .btn-dot {
+    width: 5px;
+    height: 5px;
+    background: var(--text-dim);
+    transition: background 0.15s, box-shadow 0.15s;
+  }
 
-    .meta-item .meta-value.seed-val {
-      color: var(--glitch-cyan);
-      font-weight: 600;
-    }
+  .btn:hover .btn-dot {
+    background: var(--acid);
+    box-shadow: 0 0 6px var(--acid);
+  }
 
-    /* Plaque Statement */
-    .plaque-statement {
-      font-family: var(--font-serif);
-      font-size: 14.5px;
-      line-height: 1.68;
-      color: #bbbbc8;
-      font-style: normal;
-    }
+  .btn[aria-pressed="true"] {
+    border-color: var(--magenta);
+    color: var(--magenta);
+  }
 
-    /* ==========================================================================
-       CONTROLS PANEL
-       ========================================================================== */
-    .controls-panel {
-      background: var(--bg-panel);
-      border: 1px solid var(--border-subtle);
-      padding: 26px 32px;
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
-    }
+  .btn[aria-pressed="true"] .btn-dot {
+    background: var(--magenta);
+    box-shadow: 0 0 6px var(--magenta);
+  }
 
-    /* Slider Group */
-    .slider-group {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
+  /* Telemetry Grid */
+  .telemetry-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border: 1px dashed var(--border);
+  }
 
-    .slider-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-    }
+  .tele-cell {
+    padding: 8px 10px;
+    border-right: 1px dashed var(--border);
+    border-bottom: 1px dashed var(--border);
+  }
 
-    .slider-label {
-      color: var(--text-dim);
-    }
+  .tele-cell:nth-child(3n) {
+    border-right: none;
+  }
 
-    .slider-val-readout {
-      color: var(--acid-green);
-      font-weight: 600;
-      letter-spacing: 0.08em;
-    }
+  .tele-cell:nth-child(n+4) {
+    border-bottom: none;
+  }
 
-    .slider-track-wrap {
-      position: relative;
-      height: 24px;
-      display: flex;
-      align-items: center;
-    }
+  .tele-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 3px;
+  }
 
-    /* Custom range input */
-    input[type="range"]#intensitySlider {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: 24px;
-      background: transparent;
-      outline: none;
-      margin: 0;
-      cursor: ew-resize;
-    }
+  .tele-val {
+    font-size: 11px;
+    color: var(--cyan);
+    letter-spacing: 0.05em;
+  }
 
-    /* Track: 1px acid-to-magenta gradient track */
-    input[type="range"]#intensitySlider::-webkit-slider-runnable-track {
-      width: 100%;
-      height: 1px;
-      background: linear-gradient(90deg, var(--acid-green) 0%, var(--glitch-cyan) 50%, var(--glitch-magenta) 100%);
-      border: none;
-    }
-    input[type="range"]#intensitySlider::-moz-range-track {
-      width: 100%;
-      height: 1px;
-      background: linear-gradient(90deg, var(--acid-green) 0%, var(--glitch-cyan) 50%, var(--glitch-magenta) 100%);
-      border: none;
-    }
+  /* Footer Bar */
+  footer {
+    height: 38px;
+    border-top: 1px solid var(--border);
+    background: var(--panel-bg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    z-index: 10;
+  }
 
-    /* Thumb: 6x18px rectangular thumb */
-    input[type="range"]#intensitySlider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 6px;
-      height: 18px;
-      background: #ffffff;
-      border: 1px solid #07070a;
-      border-radius: 0;
-      margin-top: -8.5px;
-      box-shadow: 0 0 10px rgba(200, 255, 61, 0.7);
-      transition: transform 0.1s ease, background 0.15s ease;
+  /* Responsive Stacking */
+  @media (max-width: 860px) {
+    main {
+      grid-template-columns: 1fr;
+      padding: 20px 16px;
+      gap: 30px;
     }
-    input[type="range"]#intensitySlider::-moz-range-thumb {
-      width: 6px;
-      height: 18px;
-      background: #ffffff;
-      border: 1px solid #07070a;
-      border-radius: 0;
-      box-shadow: 0 0 10px rgba(200, 255, 61, 0.7);
-      transition: transform 0.1s ease, background 0.15s ease;
-    }
-    input[type="range"]#intensitySlider:focus-visible::-webkit-slider-thumb {
-      outline: 2px solid var(--glitch-cyan);
-      outline-offset: 2px;
-    }
-
-    /* Buttons row */
-    .buttons-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-
-    .btn-action {
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: var(--text-main);
-      font-family: var(--font-mono);
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      padding: 13px 16px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      transition: all 0.2s ease;
-      outline: none;
-      user-select: none;
-    }
-
-    .btn-action:hover {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(255, 255, 255, 0.35);
-    }
-
-    .btn-action:focus-visible {
-      border-color: var(--glitch-cyan);
-      box-shadow: 0 0 8px rgba(61, 233, 255, 0.4);
-    }
-
-    /* Square indicator dot that glows acid green on hover */
-    .btn-sq-dot {
-      display: inline-block;
-      width: 6px;
-      height: 6px;
-      background-color: transparent;
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      transition: all 0.2s ease;
-    }
-
-    .btn-action:hover .btn-sq-dot {
-      background-color: var(--acid-green);
-      border-color: var(--acid-green);
-      box-shadow: 0 0 8px var(--acid-green);
-    }
-
-    /* Freeze frame active / aria-pressed toggle (turns magenta, relabels Resume signal) */
-    .btn-freeze[aria-pressed="true"] {
-      border-color: var(--glitch-magenta);
-      color: var(--glitch-magenta);
-      background: rgba(255, 61, 154, 0.08);
-      box-shadow: 0 0 14px rgba(255, 61, 154, 0.25);
-    }
-
-    .btn-freeze[aria-pressed="true"] .btn-sq-dot {
-      background-color: var(--glitch-magenta);
-      border-color: var(--glitch-magenta);
-      box-shadow: 0 0 8px var(--glitch-magenta);
-    }
-
-    /* Readout Grid: six cells with dashed separators showing cyan hex values */
-    .readout-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      border: 1px dashed var(--border-cyan-dashed);
-      background: rgba(7, 7, 10, 0.65);
-    }
-
-    .readout-cell {
-      padding: 12px 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      border-right: 1px dashed var(--border-cyan-dashed);
-      border-bottom: 1px dashed var(--border-cyan-dashed);
-    }
-
-    /* Remove right border on 3rd column, bottom border on 2nd row */
-    .readout-cell:nth-child(3n) {
-      border-right: none;
-    }
-    .readout-cell:nth-child(n+4) {
-      border-bottom: none;
-    }
-
-    .cell-label {
+    header, footer {
+      padding: 0 16px;
       font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: var(--text-muted);
     }
-
-    .cell-val {
-      font-size: 12.5px;
-      font-weight: 600;
-      color: var(--glitch-cyan);
-      letter-spacing: 0.05em;
-      font-family: var(--font-mono);
+    .readouts {
+      display: none;
     }
-
-    .hotkey-hint {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--text-muted);
-      text-align: center;
-      padding-top: 2px;
-    }
-
-    .hotkey-hint kbd {
-      color: var(--text-dim);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      padding: 1px 4px;
-      font-family: var(--font-mono);
-      font-size: 9px;
-    }
-
-    /* ==========================================================================
-       FOOTER BAR
-       ========================================================================== */
-    .footer-bar {
-      width: 100%;
-      height: 42px;
-      background-color: var(--bg-panel);
-      border-top: 1px solid var(--border-subtle);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 24px;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--text-muted);
-      user-select: none;
-      z-index: 800;
-    }
-
-    .footer-bar .accent-loc {
-      color: var(--text-dim);
-    }
-
-    /* ==========================================================================
-       RESPONSIVE DESIGN
-       Stack the plaque under the frame below 860px
-       ========================================================================== */
-    @media (max-width: 860px) {
-      .exhibit-container {
-        grid-template-columns: 1fr;
-        gap: 36px;
-        padding: 24px 18px 40px;
-      }
-
-      .portrait-matte {
-        max-width: 460px;
-      }
-
-      .top-bar {
-        padding: 0 16px;
-      }
-
-      .top-right {
-        gap: 14px;
-      }
-
-      .footer-bar {
-        padding: 0 16px;
-        flex-direction: column;
-        justify-content: center;
-        gap: 4px;
-        height: auto;
-        padding-top: 10px;
-        padding-bottom: 10px;
-        text-align: center;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .status-dot {
-        animation: none !important;
-      }
-      .rec-indicator {
-        animation: none !important;
-      }
-    }
-  </style>
+  }
+</style>
 </head>
 <body>
 
-  <!-- Fixed 3px repeating scanline overlay (overlay blend mode) -->
-  <div class="scanline-overlay" aria-hidden="true"></div>
-  <div class="vignette-ambient" aria-hidden="true"></div>
+<header>
+  <div class="status-group">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Signal Loss · live corruption</span>
+  </div>
+  <div class="readouts">
+    <div>SUBJ: <span id="hdrSubj">0x0000</span></div>
+    <div>FRAME: <span id="hdrFrame">0x000000</span></div>
+  </div>
+</header>
 
-  <!-- Top Bar -->
-  <header class="top-bar">
-    <div class="top-left">
-      <span class="status-dot" id="statusDot" aria-hidden="true"></span>
-      <h1 class="app-title">
-        Signal Loss <span class="dim">·</span> live corruption
-      </h1>
+<main>
+  <!-- Interactive Viewport -->
+  <div class="stage-container">
+    <div class="frame-matte">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="canvas-wrapper">
+        <canvas id="viewCanvas"></canvas>
+        <div class="rec-tag" id="recBadge">
+          <span class="rec-icon" id="recIcon">●</span>
+          <span id="recStatus">REC</span>
+        </div>
+      </div>
     </div>
-    <div class="top-right">
-      <div class="telemetry-tag">
-        <span class="label">SUBJECT</span>
-        <span class="val" id="topSubjectHex">0x0000</span>
-      </div>
-      <div class="telemetry-tag">
-        <span class="label">FRAME</span>
-        <span class="val" id="topFrameCount">0x000000</span>
+  </div>
+
+  <!-- Documentation & Controls -->
+  <div class="plaque-column">
+    <div class="plaque-header">
+      <h1 class="plaque-title" id="artTitle">Woman in Static <em id="artSubj">(subject 0000)</em></h1>
+      <div class="meta-grid">
+        <span class="meta-label">Medium</span>
+        <span class="meta-val">Procedural pigment on unstable signal</span>
+        <span class="meta-label">Year</span>
+        <span class="meta-val">2026</span>
+        <span class="meta-label">Dimensions</span>
+        <span class="meta-val">600 × 800 px (Device Native)</span>
+        <span class="meta-label">Edition</span>
+        <span class="meta-val" id="metaEdition">1/1 (seed 0x00000000)</span>
       </div>
     </div>
-  </header>
 
-  <!-- Main Exhibit Layout -->
-  <main class="exhibit-container">
+    <p class="statement">
+      "The digital likeness exists merely as an arrangement of voltages—fleeting, ungrounded, permanently decaying into electromagnetic drift."
+    </p>
 
-    <!-- Center / Portrait Frame (3:4 aspect ratio) -->
-    <section class="frame-column" aria-label="Generative portrait display">
-      <div class="portrait-matte" id="portraitMatte">
-        <!-- Corner Brackets -->
-        <div class="corner-bracket corner-tl" aria-hidden="true"></div>
-        <div class="corner-bracket corner-tr" aria-hidden="true"></div>
-        <div class="corner-bracket corner-bl" aria-hidden="true"></div>
-        <div class="corner-bracket corner-br" aria-hidden="true"></div>
-
-        <!-- Small REC ● tag (HOLD ■ when frozen) -->
-        <div class="rec-tag-container" id="recBadge" aria-live="polite">
-          <span class="rec-label" id="recBadgeText">REC</span>
-          <span class="rec-indicator" id="recIndicator" aria-hidden="true"></span>
+    <div class="controls-panel">
+      <div class="slider-block">
+        <div class="slider-label-row">
+          <span>Corruption Intensity</span>
+          <span id="intensityVal">0.65</span>
         </div>
+        <input type="range" id="intensitySlider" min="0" max="1" step="0.01" value="0.65" aria-label="Corruption Intensity">
+      </div>
 
-        <!-- Visible Canvas Viewport -->
-        <div class="canvas-viewport">
-          <canvas id="viewCanvas" width="600" height="800" role="img" aria-label="Live corrupted procedural portrait of an unstable face"></canvas>
-          <div class="canvas-noise-sheen" aria-hidden="true"></div>
+      <div class="btn-row">
+        <button class="btn" id="btnFreeze" aria-pressed="false">
+          <div class="btn-dot"></div>
+          <span id="freezeLabel">Freeze Frame</span>
+        </button>
+        <button class="btn" id="btnNew">
+          <div class="btn-dot"></div>
+          <span>New Subject</span>
+        </button>
+      </div>
+
+      <div class="telemetry-grid">
+        <div class="tele-cell">
+          <span class="tele-label">Split</span>
+          <div class="tele-val" id="telSplit">0x00</div>
+        </div>
+        <div class="tele-cell">
+          <span class="tele-label">Slice</span>
+          <div class="tele-val" id="telSlice">0x00</div>
+        </div>
+        <div class="tele-cell">
+          <span class="tele-label">Blocks</span>
+          <div class="tele-val" id="telBlocks">0x00</div>
+        </div>
+        <div class="tele-cell">
+          <span class="tele-label">Smear</span>
+          <div class="tele-val" id="telSmear">0x00</div>
+        </div>
+        <div class="tele-cell">
+          <span class="tele-label">Palette</span>
+          <div class="tele-val" id="telPal">#000000</div>
+        </div>
+        <div class="tele-cell">
+          <span class="tele-label">Burst</span>
+          <div class="tele-val" id="telBurst">0.00</div>
         </div>
       </div>
-    </section>
+    </div>
+  </div>
+</main>
 
-    <!-- Right / Museum Plaque & Controls -->
-    <aside class="plaque-column" aria-label="Museum plaque and signal controls">
+<footer>
+  <span>Rendered entirely in-browser · no images · no network</span>
+  <span>Museum of Unstable Media · Gallery 4</span>
+</footer>
 
-      <!-- Museum Plaque -->
-      <article class="museum-plaque">
-        <div class="museum-kicker">ARCHIVAL ENTRY · UNSTABLE SIGNAL</div>
-        <h2 class="plaque-title" id="artworkTitle">
-          Woman in Static <span class="subject-suffix" id="titleSubjectSuffix">(subject 4F2A)</span>
-        </h2>
+<script>
+(() => {
+  // Mulberry32 PRNG
+  let seed = (Math.random() * 0xFFFFFFF) >>> 0;
+  function mulberry32() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+  let R = mulberry32;
 
-        <!-- Two-column meta list -->
-        <div class="plaque-meta">
-          <div class="meta-item">
-            <span class="meta-label">MEDIUM</span>
-            <span class="meta-value">Procedural pigment on unstable signal</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">YEAR</span>
-            <span class="meta-value">2026</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">DIMENSIONS</span>
-            <span class="meta-value">Variable (600 × 800 native)</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">EDITION</span>
-            <span class="meta-value seed-val" id="editionMeta">1/1 (seed: 0x4F2A)</span>
-          </div>
-        </div>
+  // Title variations
+  const TITLES = [
+    "Woman in Static", "The Last Keyframe", "Portrait of Carrier Drift",
+    "Cathode Dissolve", "Memory Fault 0x4E", "Unstable Specimen",
+    "Phosphor Remanence", "Transmission Entity", "Artifact of Self"
+  ];
 
-        <!-- Short serif statement -->
-        <p class="plaque-statement" id="curatorialStatement">
-          A synthetic consciousness reconstructed from degraded memory buffers. As the carrier frequency dissolves, facial contours oscillate between photographic clarity and irreversible entropy — an ephemeral study in digital impermanence.
-        </p>
-      </article>
+  // System State
+  const WIDTH = 600;
+  const HEIGHT = 800;
+  let isFrozen = false;
+  let frameCount = 0;
+  let corruptionSlider = 0.65;
+  let burstEnvelope = 0.0;
+  let burstTarget = 0.0;
+  let nextBurstTime = 0;
+  let lastTime = performance.now();
 
-      <!-- Controls Panel -->
-      <section class="controls-panel" aria-label="Signal corruption controls">
+  // DOM Elements
+  const canvas = document.getElementById('viewCanvas');
+  const ctx = canvas.getContext('2d');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const hdrSubj = document.getElementById('hdrSubj');
+  const hdrFrame = document.getElementById('hdrFrame');
+  const recBadge = document.getElementById('recBadge');
+  const recIcon = document.getElementById('recIcon');
+  const recStatus = document.getElementById('recStatus');
+  const artTitle = document.getElementById('artTitle');
+  const artSubj = document.getElementById('artSubj');
+  const metaEdition = document.getElementById('metaEdition');
+  const intensitySlider = document.getElementById('intensitySlider');
+  const intensityVal = document.getElementById('intensityVal');
+  const btnFreeze = document.getElementById('btnFreeze');
+  const freezeLabel = document.getElementById('freezeLabel');
+  const btnNew = document.getElementById('btnNew');
 
-        <!-- Corruption intensity range slider 0-1 -->
-        <div class="slider-group">
-          <div class="slider-header">
-            <label for="intensitySlider" class="slider-label">Corruption intensity</label>
-            <span class="slider-val-readout" id="intensityValueReadout">0.55</span>
-          </div>
-          <div class="slider-track-wrap">
-            <input type="range" id="intensitySlider" min="0" max="1" step="0.01" value="0.55" aria-label="Corruption intensity" />
-          </div>
-        </div>
+  const telSplit = document.getElementById('telSplit');
+  const telSlice = document.getElementById('telSlice');
+  const telBlocks = document.getElementById('telBlocks');
+  const telSmear = document.getElementById('telSmear');
+  const telPal = document.getElementById('telPal');
+  const telBurst = document.getElementById('telBurst');
 
-        <!-- Buttons row: Freeze frame and New subject -->
-        <div class="buttons-row">
-          <button type="button" class="btn-action btn-freeze" id="freezeBtn" aria-pressed="false" aria-label="Freeze frame">
-            <span class="btn-sq-dot" aria-hidden="true"></span>
-            <span id="freezeBtnText">Freeze frame</span>
-          </button>
-          <button type="button" class="btn-action btn-new" id="newSubjectBtn" aria-label="Generate new subject">
-            <span class="btn-sq-dot" aria-hidden="true"></span>
-            <span>New subject</span>
-          </button>
-        </div>
+  // Canvases for composition
+  const baseCanvas = document.createElement('canvas');
+  baseCanvas.width = WIDTH; baseCanvas.height = HEIGHT;
+  const baseCtx = baseCanvas.getContext('2d');
 
-        <!-- Six-cell readout grid with dashed separators showing cyan hex values -->
-        <div class="readout-grid" aria-label="Signal telemetry grid">
-          <div class="readout-cell">
-            <span class="cell-label">SLICE</span>
-            <span class="cell-val" id="cellSlice">0x00</span>
-          </div>
-          <div class="readout-cell">
-            <span class="cell-label">SPLIT</span>
-            <span class="cell-val" id="cellSplit">0x00</span>
-          </div>
-          <div class="readout-cell">
-            <span class="cell-label">BLOCKS</span>
-            <span class="cell-val" id="cellBlocks">0x00</span>
-          </div>
-          <div class="readout-cell">
-            <span class="cell-label">SMEAR</span>
-            <span class="cell-val" id="cellSmear">0x00</span>
-          </div>
-          <div class="readout-cell">
-            <span class="cell-label">PALETTE</span>
-            <span class="cell-val" id="cellPalette">#000000</span>
-          </div>
-          <div class="readout-cell">
-            <span class="cell-label">BURST</span>
-            <span class="cell-val" id="cellBurst">0x00</span>
-          </div>
-        </div>
+  const redCanvas = document.createElement('canvas');
+  redCanvas.width = WIDTH; redCanvas.height = HEIGHT;
+  const redCtx = redCanvas.getContext('2d');
 
-        <div class="hotkey-hint">
-          Shortcuts: <kbd>SPACE</kbd> Freeze / Resume · <kbd>N</kbd> New Subject
-        </div>
+  const grnCanvas = document.createElement('canvas');
+  grnCanvas.width = WIDTH; grnCanvas.height = HEIGHT;
+  const grnCtx = grnCanvas.getContext('2d');
 
-      </section>
+  const bluCanvas = document.createElement('canvas');
+  bluCanvas.width = WIDTH; bluCanvas.height = HEIGHT;
+  const bluCtx = bluCanvas.getContext('2d');
 
-    </aside>
+  const workCanvas = document.createElement('canvas');
+  workCanvas.width = WIDTH; workCanvas.height = HEIGHT;
+  const workCtx = workCanvas.getContext('2d');
 
-  </main>
+  const prevCanvas = document.createElement('canvas');
+  prevCanvas.width = WIDTH; prevCanvas.height = HEIGHT;
+  const prevCtx = prevCanvas.getContext('2d');
 
-  <!-- Footer Bar -->
-  <footer class="footer-bar">
-    <span>Rendered entirely in-browser · no images · no network</span>
-    <span class="accent-loc">Museum of Unstable Media · Gallery 4</span>
-  </footer>
+  let currentPalette = { skinCss: '#f0c0a0', hairCss: '#111111' };
 
-  <!-- ==========================================================================
-       JAVASCRIPT: PROCEDURAL PORTRAIT GENERATION & LIVE GLITCH PIPELINE
-       ========================================================================== -->
-  <script>
-    (function () {
-      'use strict';
+  // Generate Procedural Base Portrait
+  function generatePortrait(newSeed) {
+    seed = (newSeed !== undefined ? newSeed : (Math.random() * 0xFFFFFFF)) >>> 0;
+    const currentSeed = seed;
+    R = mulberry32;
 
-      /* --- Museum Titles & Curatorial Statements Pool --- */
-      const ARTWORK_TITLES = [
-        "Woman in Static",
-        "The Last Keyframe",
-        "Ghost in the Phosphor",
-        "Transmission Loss",
-        "Memory of an Unknown Face",
-        "Artifact No. 404",
-        "Desynchronized Visage",
-        "Cathode Apparition",
-        "Entropy of Form",
-        "Spectral Resonance",
-        "Decayed Signal #88",
-        "Subcarrier Shadow",
-        "Phosphor Remanence",
-        "Null Vector Portrait",
-        "Fading Carrier Wave",
-        "Echo in the Drift"
-      ];
+    const baseHue = Math.floor(R() * 360);
+    const bgL = 6 + R() * 6;
+    const bgS = 25 + R() * 20;
 
-      const CURATORIAL_STATEMENTS = [
-        "A synthetic consciousness reconstructed from degraded memory buffers. As the carrier frequency dissolves, facial contours oscillate between photographic clarity and irreversible entropy — an ephemeral study in digital impermanence.",
-        "Captured during late-stage carrier collapse. The procedural geometry attempts to sustain structural coherence against persistent packet loss, yielding an intimate dialogue between human likeness and machinic decay.",
-        "Synthesized without photograph or camera, this visage exists solely within the phosphor refresh interval. The subject resists stillness; every frame is an unrepeatable aberration of algorithmic memory.",
-        "An inquiry into digital mortality. Rendered from mathematical seeds into an unstable transmission matrix, the portrait decomposes before the viewer's gaze, embodying the fragile threshold between form and void.",
-        "Traced from residual electromagnetic drift in an abandoned relay. The subject emerges from harmonic interference, hovering momentarily in sharp resolution before fracturing into discrete chroma bands."
-      ];
+    const skinH = 18 + R() * 22;
+    const skinS = 30 + R() * 20;
+    const skinL = 45 + R() * 30;
 
-      /* --- DOM Elements --- */
-      const viewCanvas = document.getElementById('viewCanvas');
-      const viewCtx = viewCanvas.getContext('2d');
-      const portraitMatte = document.getElementById('portraitMatte');
-      const statusDot = document.getElementById('statusDot');
-      const topSubjectHex = document.getElementById('topSubjectHex');
-      const topFrameCount = document.getElementById('topFrameCount');
-      const recBadgeText = document.getElementById('recBadgeText');
-      const recIndicator = document.getElementById('recIndicator');
-      const artworkTitle = document.getElementById('artworkTitle');
-      const titleSubjectSuffix = document.getElementById('titleSubjectSuffix');
-      const editionMeta = document.getElementById('editionMeta');
-      const curatorialStatement = document.getElementById('curatorialStatement');
-      const intensitySlider = document.getElementById('intensitySlider');
-      const intensityValueReadout = document.getElementById('intensityValueReadout');
-      const freezeBtn = document.getElementById('freezeBtn');
-      const freezeBtnText = document.getElementById('freezeBtnText');
-      const newSubjectBtn = document.getElementById('newSubjectBtn');
+    const skinCss = `hsl(${skinH}, ${skinS}%, ${skinL}%)`;
+    const skinDark = `hsl(${skinH - 3}, ${skinS + 8}%, ${Math.max(12, skinL - 25)}%)`;
+    const skinLight = `hsl(${skinH + 2}, ${skinS - 5}%, ${Math.min(95, skinL + 18)}%)`;
+    const lipCss = `hsl(${skinH - 4}, ${skinS - 10}%, ${Math.max(20, skinL - 18)}%)`;
 
-      const cellSlice = document.getElementById('cellSlice');
-      const cellSplit = document.getElementById('cellSplit');
-      const cellBlocks = document.getElementById('cellBlocks');
-      const cellSmear = document.getElementById('cellSmear');
-      const cellPalette = document.getElementById('cellPalette');
-      const cellBurst = document.getElementById('cellBurst');
+    const hairH = (baseHue + 180) % 360;
+    const hairL = 6 + R() * 14;
+    const hairCss = `hsl(${hairH}, 25%, ${hairL}%)`;
 
-      /* --- Offscreen Canvases (Native 600x800) --- */
-      const PORTRAIT_WIDTH = 600;
-      const PORTRAIT_HEIGHT = 800;
+    const eyeH = (baseHue + 120 + R() * 80) % 360;
+    const rimH = (baseHue + 40) % 360;
 
-      const portraitCanvas = document.createElement('canvas');
-      portraitCanvas.width = PORTRAIT_WIDTH;
-      portraitCanvas.height = PORTRAIT_HEIGHT;
-      const portraitCtx = portraitCanvas.getContext('2d');
+    currentPalette = { skinCss, hairCss };
 
-      const workCanvas = document.createElement('canvas');
-      workCanvas.width = PORTRAIT_WIDTH;
-      workCanvas.height = PORTRAIT_HEIGHT;
-      const workCtx = workCanvas.getContext('2d');
+    baseCtx.save();
+    baseCtx.fillStyle = '#000';
+    baseCtx.fillRect(0, 0, WIDTH, HEIGHT);
 
-      const prevFrameCanvas = document.createElement('canvas');
-      prevFrameCanvas.width = PORTRAIT_WIDTH;
-      prevFrameCanvas.height = PORTRAIT_HEIGHT;
-      const prevCtx = prevFrameCanvas.getContext('2d');
+    // 1. Background
+    const bgGrad = baseCtx.createLinearGradient(0, 0, 0, HEIGHT);
+    bgGrad.addColorStop(0, `hsl(${baseHue}, ${bgS}%, ${bgL}%)`);
+    bgGrad.addColorStop(1, '#020204');
+    baseCtx.fillStyle = bgGrad;
+    baseCtx.fillRect(0, 0, WIDTH, HEIGHT);
 
-      // Slice scratch canvas
-      const sliceCanvas = document.createElement('canvas');
-      sliceCanvas.width = PORTRAIT_WIDTH;
-      sliceCanvas.height = 120;
-      const sliceCtx = sliceCanvas.getContext('2d');
+    // Radial accent rim behind head
+    const rimGrad = baseCtx.createRadialGradient(WIDTH * 0.7, HEIGHT * 0.35, 10, WIDTH * 0.7, HEIGHT * 0.35, 340);
+    rimGrad.addColorStop(0, `hsla(${rimH}, 90%, 50%, 0.22)`);
+    rimGrad.addColorStop(1, 'transparent');
+    baseCtx.fillStyle = rimGrad;
+    baseCtx.fillRect(0, 0, WIDTH, HEIGHT);
 
-      // Static noise scratch canvas
-      const staticCanvas = document.createElement('canvas');
-      staticCanvas.width = PORTRAIT_WIDTH;
-      staticCanvas.height = 100;
-      const staticCtx = staticCanvas.getContext('2d');
+    // 2. Torso half-ellipse
+    baseCtx.fillStyle = '#060608';
+    baseCtx.beginPath();
+    baseCtx.ellipse(WIDTH / 2, HEIGHT + 40, 240, 220, 0, 0, Math.PI * 2);
+    baseCtx.fill();
 
-      // Three channel-isolated canvases
-      const channelCanvases = {
-        r: document.createElement('canvas'),
-        g: document.createElement('canvas'),
-        b: document.createElement('canvas')
-      };
-      for (const key of ['r', 'g', 'b']) {
-        channelCanvases[key].width = PORTRAIT_WIDTH;
-        channelCanvases[key].height = PORTRAIT_HEIGHT;
+    // 3. Neck
+    const neckGrad = baseCtx.createLinearGradient(WIDTH/2 - 50, 0, WIDTH/2 + 50, 0);
+    neckGrad.addColorStop(0, skinDark);
+    neckGrad.addColorStop(0.5, skinCss);
+    neckGrad.addColorStop(1, skinDark);
+    baseCtx.fillStyle = neckGrad;
+    baseCtx.beginPath();
+    baseCtx.moveTo(WIDTH/2 - 48, HEIGHT * 0.52);
+    baseCtx.lineTo(WIDTH/2 + 48, HEIGHT * 0.52);
+    baseCtx.lineTo(WIDTH/2 + 65, HEIGHT * 0.85);
+    baseCtx.lineTo(WIDTH/2 - 65, HEIGHT * 0.85);
+    baseCtx.closePath();
+    baseCtx.fill();
+
+    // 4. Head Ellipse with Shading & Tilt
+    const tilt = (R() - 0.5) * 0.09;
+    const headW = 150 + R() * 40;
+    const headH = 200 + R() * 40;
+    const headX = WIDTH / 2 + (R() - 0.5) * 16;
+    const headY = HEIGHT * 0.44 + (R() - 0.5) * 16;
+
+    baseCtx.save();
+    baseCtx.translate(headX, headY);
+    baseCtx.rotate(tilt);
+
+    // Back hair silhouette (for long hair)
+    const hairStyle = Math.floor(R() * 3); // 0: Bob, 1: Long, 2: Cropped
+    if (hairStyle === 1) {
+      baseCtx.fillStyle = hairCss;
+      baseCtx.beginPath();
+      baseCtx.ellipse(0, 40, headW * 0.85, headH * 0.8, 0, 0, Math.PI * 2);
+      baseCtx.fill();
+    }
+
+    // Jaw shadow under chin
+    const jawShadow = baseCtx.createRadialGradient(0, headH * 0.4, 20, 0, headH * 0.5, headW * 0.6);
+    jawShadow.addColorStop(0, 'rgba(0,0,0,0.5)');
+    jawShadow.addColorStop(1, 'transparent');
+    baseCtx.fillStyle = jawShadow;
+    baseCtx.beginPath();
+    baseCtx.arc(0, headH * 0.45, headW * 0.6, 0, Math.PI);
+    baseCtx.fill();
+
+    // Base head
+    const headGrad = baseCtx.createRadialGradient(-headW * 0.2, -headH * 0.15, 20, 0, 0, headW);
+    headGrad.addColorStop(0, skinLight);
+    headGrad.addColorStop(0.65, skinCss);
+    headGrad.addColorStop(1, skinDark);
+    baseCtx.fillStyle = headGrad;
+    baseCtx.beginPath();
+    baseCtx.ellipse(0, 0, headW / 2, headH / 2, 0, 0, Math.PI * 2);
+    baseCtx.fill();
+
+    // Cheek Warmth
+    const cheekGradL = baseCtx.createRadialGradient(-headW * 0.28, headH * 0.08, 2, -headW * 0.28, headH * 0.08, headW * 0.24);
+    cheekGradL.addColorStop(0, `hsla(${skinH - 8}, 70%, 55%, 0.22)`);
+    cheekGradL.addColorStop(1, 'transparent');
+    baseCtx.fillStyle = cheekGradL;
+    baseCtx.beginPath();
+    baseCtx.arc(-headW * 0.28, headH * 0.08, headW * 0.24, 0, Math.PI * 2);
+    baseCtx.fill();
+
+    const cheekGradR = baseCtx.createRadialGradient(headW * 0.28, headH * 0.08, 2, headW * 0.28, headH * 0.08, headW * 0.24);
+    cheekGradR.addColorStop(0, `hsla(${skinH - 8}, 70%, 55%, 0.22)`);
+    cheekGradR.addColorStop(1, 'transparent');
+    baseCtx.fillStyle = cheekGradR;
+    baseCtx.beginPath();
+    baseCtx.arc(headW * 0.28, headH * 0.08, headW * 0.24, 0, Math.PI * 2);
+    baseCtx.fill();
+
+    // Eyes
+    const eyeSpacing = headW * 0.25;
+    const eyeY = -headH * 0.05;
+    const eyeW = headW * 0.14;
+    const eyeH_dim = headH * 0.055;
+
+    function drawEye(ex, ey, flip) {
+      baseCtx.save();
+      baseCtx.translate(ex, ey);
+
+      // Sclera
+      baseCtx.beginPath();
+      baseCtx.ellipse(0, 0, eyeW, eyeH_dim, 0, 0, Math.PI * 2);
+      baseCtx.fillStyle = '#e5e3dc';
+      baseCtx.fill();
+
+      // Iris
+      const irisGrad = baseCtx.createRadialGradient(0, 0, 1, 0, 0, eyeH_dim);
+      irisGrad.addColorStop(0, '#0a0a0c');
+      irisGrad.addColorStop(0.4, `hsl(${eyeH}, 65%, 40%)`);
+      irisGrad.addColorStop(1, '#050508');
+      baseCtx.fillStyle = irisGrad;
+      baseCtx.beginPath();
+      baseCtx.arc(0, 0, eyeH_dim * 0.95, 0, Math.PI * 2);
+      baseCtx.fill();
+
+      // Pupil & Catchlight
+      baseCtx.fillStyle = '#000';
+      baseCtx.beginPath();
+      baseCtx.arc(0, 0, eyeH_dim * 0.45, 0, Math.PI * 2);
+      baseCtx.fill();
+
+      baseCtx.fillStyle = '#ffffff';
+      baseCtx.beginPath();
+      baseCtx.arc(-eyeH_dim * 0.25, -eyeH_dim * 0.25, 1.8, 0, Math.PI * 2);
+      baseCtx.fill();
+
+      // Eyelid line
+      baseCtx.strokeStyle = skinDark;
+      baseCtx.lineWidth = 2.4;
+      baseCtx.beginPath();
+      baseCtx.ellipse(0, -1, eyeW, eyeH_dim * 1.05, 0, Math.PI * 0.9, Math.PI * 2.1);
+      baseCtx.stroke();
+
+      // Eyebrow
+      baseCtx.strokeStyle = hairCss;
+      baseCtx.lineWidth = 4.2;
+      baseCtx.lineCap = 'round';
+      baseCtx.beginPath();
+      baseCtx.moveTo(-eyeW * 1.15, -eyeH_dim * 1.7);
+      baseCtx.quadraticCurveTo(0, -eyeH_dim * 2.5, eyeW * 1.15, -eyeH_dim * 1.4 * (flip ? 1.05 : 0.95));
+      baseCtx.stroke();
+
+      baseCtx.restore();
+    }
+
+    drawEye(-eyeSpacing, eyeY, false);
+    drawEye(eyeSpacing, eyeY, true);
+
+    // Nose plane
+    const noseY = headH * 0.12;
+    const noseGrad = baseCtx.createLinearGradient(-15, noseY, 15, noseY + 28);
+    noseGrad.addColorStop(0, 'transparent');
+    noseGrad.addColorStop(0.5, skinLight);
+    noseGrad.addColorStop(1, skinDark);
+    baseCtx.fillStyle = noseGrad;
+    baseCtx.beginPath();
+    baseCtx.moveTo(-3, eyeY + 12);
+    baseCtx.lineTo(6, noseY + 22);
+    baseCtx.lineTo(-12, noseY + 24);
+    baseCtx.closePath();
+    baseCtx.fill();
+
+    // Nostril shadows
+    baseCtx.fillStyle = 'rgba(20, 10, 8, 0.45)';
+    baseCtx.beginPath();
+    baseCtx.ellipse(-8, noseY + 25, 4, 2, -0.2, 0, Math.PI*2);
+    baseCtx.ellipse(7, noseY + 25, 4, 2, 0.2, 0, Math.PI*2);
+    baseCtx.fill();
+
+    // Lips
+    const lipY = headH * 0.28;
+    const lipW = headW * 0.24;
+    const lipH_dim = headH * 0.08;
+
+    baseCtx.fillStyle = lipCss;
+    // Upper lip
+    baseCtx.beginPath();
+    baseCtx.moveTo(-lipW, lipY);
+    baseCtx.quadraticCurveTo(-lipW * 0.4, lipY - lipH_dim * 0.65, 0, lipY - lipH_dim * 0.35);
+    baseCtx.quadraticCurveTo(lipW * 0.4, lipY - lipH_dim * 0.65, lipW, lipY);
+    baseCtx.quadraticCurveTo(0, lipY + lipH_dim * 0.2, -lipW, lipY);
+    baseCtx.fill();
+
+    // Lower lip
+    baseCtx.beginPath();
+    baseCtx.moveTo(-lipW * 0.9, lipY + 1);
+    baseCtx.quadraticCurveTo(0, lipY + lipH_dim * 0.9, lipW * 0.9, lipY + 1);
+    baseCtx.quadraticCurveTo(0, lipY + 1, -lipW * 0.9, lipY + 1);
+    baseCtx.fill();
+
+    // Dark seam
+    baseCtx.strokeStyle = 'rgba(25, 10, 10, 0.7)';
+    baseCtx.lineWidth = 1.6;
+    baseCtx.beginPath();
+    baseCtx.moveTo(-lipW * 0.95, lipY);
+    baseCtx.quadraticCurveTo(0, lipY + 2, lipW * 0.95, lipY);
+    baseCtx.stroke();
+
+    // Hair Foreground Silhouettes & Sheen
+    baseCtx.fillStyle = hairCss;
+    baseCtx.strokeStyle = hairCss;
+    if (hairStyle === 0) { // Bob
+      baseCtx.beginPath();
+      baseCtx.ellipse(0, -headH * 0.1, headW * 0.6, headH * 0.56, 0, Math.PI, Math.PI * 2);
+      baseCtx.lineTo(headW * 0.62, headH * 0.3);
+      baseCtx.lineTo(headW * 0.48, headH * 0.36);
+      baseCtx.lineTo(headW * 0.35, -headH * 0.1);
+      baseCtx.lineTo(-headW * 0.35, -headH * 0.1);
+      baseCtx.lineTo(-headW * 0.48, headH * 0.36);
+      baseCtx.lineTo(-headW * 0.62, headH * 0.3);
+      baseCtx.closePath();
+      baseCtx.fill();
+    } else if (hairStyle === 1) { // Long
+      baseCtx.beginPath();
+      baseCtx.ellipse(0, -headH * 0.15, headW * 0.58, headH * 0.5, 0, Math.PI, Math.PI * 2);
+      baseCtx.lineTo(headW * 0.65, headH * 0.7);
+      baseCtx.lineTo(headW * 0.4, headH * 0.75);
+      baseCtx.lineTo(headW * 0.45, -headH * 0.05);
+      baseCtx.lineTo(-headW * 0.45, -headH * 0.05);
+      baseCtx.lineTo(-headW * 0.4, headH * 0.75);
+      baseCtx.lineTo(-headW * 0.65, headH * 0.7);
+      baseCtx.closePath();
+      baseCtx.fill();
+    } else { // Cropped
+      baseCtx.beginPath();
+      baseCtx.arc(0, -headH * 0.15, headW * 0.58, Math.PI * 0.8, Math.PI * 2.2);
+      baseCtx.lineTo(headW * 0.52, -headH * 0.05);
+      baseCtx.lineTo(-headW * 0.52, -headH * 0.05);
+      baseCtx.closePath();
+      baseCtx.fill();
+    }
+
+    // Hair Arced Sheen
+    baseCtx.save();
+    baseCtx.strokeStyle = `hsla(${hairH}, 20%, 65%, 0.18)`;
+    baseCtx.lineWidth = 6;
+    baseCtx.beginPath();
+    baseCtx.arc(0, -headH * 0.22, headW * 0.46, Math.PI * 1.15, Math.PI * 1.85);
+    baseCtx.stroke();
+    baseCtx.restore();
+
+    baseCtx.restore(); // end head tilt
+
+    // 5. Per-pixel Film Grain Pass (±11 levels)
+    const imgData = baseCtx.getImageData(0, 0, WIDTH, HEIGHT);
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const g = (R() - 0.5) * 22;
+      d[i] = Math.min(255, Math.max(0, d[i] + g));
+      d[i+1] = Math.min(255, Math.max(0, d[i+1] + g));
+      d[i+2] = Math.min(255, Math.max(0, d[i+2] + g));
+    }
+    baseCtx.putImageData(imgData, 0, 0);
+    baseCtx.restore();
+
+    // 6. Build Channel-Isolated Canvases (Red, Green, Blue)
+    function buildChannel(tCtx, color) {
+      tCtx.fillStyle = '#000';
+      tCtx.fillRect(0, 0, WIDTH, HEIGHT);
+      tCtx.drawImage(baseCanvas, 0, 0);
+      tCtx.globalCompositeOperation = 'multiply';
+      tCtx.fillStyle = color;
+      tCtx.fillRect(0, 0, WIDTH, HEIGHT);
+      tCtx.globalCompositeOperation = 'source-over';
+    }
+
+    buildChannel(redCtx, '#ff0000');
+    buildChannel(grnCtx, '#00ff00');
+    buildChannel(bluCtx, '#0000ff');
+
+    // Initial fill of prevCanvas buffer
+    prevCtx.drawImage(baseCanvas, 0, 0);
+
+    // Update UI Metadata
+    const hexSeed = (currentSeed >>> 0).toString(16).padStart(8, '0').toUpperCase();
+    const shortHex = hexSeed.substring(0, 4);
+    const titleIdx = Math.floor(R() * TITLES.length);
+    artTitle.childNodes[0].nodeValue = TITLES[titleIdx] + " ";
+    artSubj.textContent = `(subject ${shortHex})`;
+    hdrSubj.textContent = `0x${shortHex}`;
+    metaEdition.textContent = `1/1 (seed 0x${hexSeed})`;
+    telPal.textContent = skinCss;
+  }
+
+  // Live Glitch Pipeline Execution
+  function renderFrame(time) {
+    requestAnimationFrame(renderFrame);
+
+    // Timing & Burst Envelope
+    const dt = Math.min(0.1, (time - lastTime) / 1000);
+    lastTime = time;
+
+    if (!isFrozen) {
+      frameCount++;
+      hdrFrame.textContent = `0x${(frameCount & 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase()}`;
+
+      // Burst attacks
+      if (time > nextBurstTime) {
+        burstTarget = Math.random() < 0.65 ? (0.4 + Math.random() * 0.6) : 0.1;
+        nextBurstTime = time + 400 + Math.random() * 2600;
       }
+      burstEnvelope += (burstTarget - burstEnvelope) * Math.min(1.0, dt * 8.0);
+      burstEnvelope *= Math.pow(0.9, dt); // continuous decay
+    }
 
-      /* --- State Variables --- */
-      let currentSeed = 0;
-      let subjectHex = "0000";
-      let sliderIntensity = 0.55;
-      let isFrozen = false;
-      let frameCounter = 0;
+    let k = corruptionSlider * (0.35 + burstEnvelope);
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      k *= 0.35;
+    }
+    k = Math.max(0, Math.min(1.8, k));
 
-      // Burst envelope
-      let burst = 0.0;
-      let attackCountdown = 1.2; // seconds until next burst attack
-      let lastTimestamp = 0;
+    if (isFrozen) {
+      return; // Stop pipeline updates when frozen, maintaining displayed frame
+    }
 
-      // Active subject palette info
-      let subjectPalette = {
-        baseHue: 200,
-        skinHex: "#E2A87A",
-        skinHue: 28,
-        skinSat: 40,
-        skinLight: 60,
-        hairHex: "#1A1A24"
-      };
+    // Setup working canvas
+    workCtx.globalCompositeOperation = 'source-over';
+    workCtx.fillStyle = '#000';
+    workCtx.fillRect(0, 0, WIDTH, HEIGHT);
 
-      /* --- Mulberry32 Seeded PRNG --- */
-      function mulberry32(a) {
-        return function () {
-          let t = a += 0x6D2B79F5;
-          t = Math.imul(t ^ (t >>> 15), t | 1);
-          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-        };
+    // 1. RGB Channel Split
+    const splitAmp = k * 18 * (Math.random() < 0.1 ? 2.2 : 1.0);
+    const rShiftX = (Math.random() - 0.5) * splitAmp * 2;
+    const rShiftY = (Math.random() - 0.5) * (splitAmp * 0.25);
+    const gShiftX = (Math.random() - 0.5) * splitAmp * 0.5;
+    const bShiftX = (Math.random() - 0.5) * splitAmp * 2;
+    const bShiftY = (Math.random() - 0.5) * (splitAmp * 0.25);
+
+    workCtx.globalCompositeOperation = 'lighter';
+    workCtx.drawImage(redCtx, rShiftX, rShiftY);
+    workCtx.drawImage(grnCanvas, gShiftX, 0);
+    workCtx.drawImage(bluCanvas, bShiftX, bShiftY);
+    workCtx.globalCompositeOperation = 'source-over';
+
+    // 2. Datamosh Smearing (from prevCanvas)
+    const smearBands = Math.floor(k * 7);
+    for (let i = 0; i < smearBands; i++) {
+      const sy = Math.random() * (HEIGHT - 40);
+      const sh = 4 + Math.random() * 50;
+      const dx = (Math.random() - 0.5) * (k * 40);
+      workCtx.save();
+      workCtx.globalAlpha = 0.55 + Math.random() * 0.4;
+      workCtx.drawImage(prevCanvas, 0, sy, WIDTH, sh, dx, sy, WIDTH, sh);
+      workCtx.restore();
+    }
+
+    // 3. Horizontal Slice Displacement
+    const sliceCount = Math.floor(k * 14);
+    for (let i = 0; i < sliceCount; i++) {
+      const sy = Math.random() * (HEIGHT - 60);
+      const sh = 2 + Math.random() * 58;
+      const shift = (Math.random() - 0.5) * (k * 220);
+      workCtx.drawImage(workCanvas, 0, sy, WIDTH, sh, shift, sy, WIDTH, sh);
+
+      // Tear line
+      if (Math.random() < 0.35 * k) {
+        workCtx.fillStyle = Math.random() > 0.5 ? '#3de9ff' : '#ff3d9a';
+        workCtx.fillRect(0, sy + sh, WIDTH, 1.5);
       }
+    }
 
-      /* --- Color Utility: HSL to Hex --- */
-      function hslToHex(h, s, l) {
-        h = (h % 360 + 360) % 360;
-        s /= 100;
-        l /= 100;
-        const a = s * Math.min(l, 1 - l);
-        const f = n => {
-          const k = (n + h / 30) % 12;
-          const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-          return Math.round(255 * color).toString(16).padStart(2, '0');
-        };
-        return `#${f(0)}${f(8)}${f(4)}`.toUpperCase();
+    // 4. Macroblock Corruption
+    const blockCount = Math.floor(k * 18);
+    const blockSize = 16;
+    for (let i = 0; i < blockCount; i++) {
+      const bx = Math.floor(Math.random() * (WIDTH / blockSize)) * blockSize;
+      const by = Math.floor(Math.random() * (HEIGHT / blockSize)) * blockSize;
+      const bType = Math.random();
+
+      if (bType < 0.45) {
+        // Displaced block copy
+        const sx = Math.floor(Math.random() * (WIDTH / blockSize)) * blockSize;
+        const sy = Math.floor(Math.random() * (HEIGHT / blockSize)) * blockSize;
+        workCtx.drawImage(workCanvas, sx, sy, blockSize, blockSize, bx, by, blockSize, blockSize);
+      } else if (bType < 0.7) {
+        // Acid green
+        workCtx.fillStyle = '#c8ff3d';
+        workCtx.fillRect(bx, by, blockSize, blockSize);
+      } else if (bType < 0.85) {
+        // Skin color
+        workCtx.fillStyle = currentPalette.skinCss;
+        workCtx.fillRect(bx, by, blockSize, blockSize);
+      } else {
+        // Hair color
+        workCtx.fillStyle = currentPalette.hairCss;
+        workCtx.fillRect(bx, by, blockSize, blockSize);
       }
+    }
 
-      /* ==========================================================================
-         PROCEDURAL FACE PAINTING (600x800 CANVAS)
-         ========================================================================== */
-      function generateProceduralPortrait(seed) {
-        const prng = mulberry32(seed);
+    // 5. Scanline Noise & Static
+    const lineCount = Math.floor(15 + k * 45);
+    workCtx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+    for (let i = 0; i < lineCount; i++) {
+      const ly = Math.floor(Math.random() * HEIGHT);
+      workCtx.fillRect(0, ly, WIDTH, 1);
+    }
 
-        // Derive palette
-        const baseHue = Math.floor(prng() * 360);
-        const bgHue = baseHue;
-        const bgSat = 25 + prng() * 20; // 25–45%
-        const bgLight = 6 + prng() * 6; // 6–12%
-
-        // Skin hsl(18–40, 30–50%, 45–75%)
-        const skinHue = 18 + prng() * 22; // 18–40
-        const skinSat = 30 + prng() * 20; // 30–50%
-        const skinLight = 45 + prng() * 30; // 45–75%
-
-        // Darker shade and lighter highlight variants
-        const skinShadeLight = Math.max(14, skinLight - 22);
-        const skinShadeSat = Math.min(65, skinSat + 8);
-        const skinShadeHue = Math.max(14, skinHue - 2);
-
-        const skinHighlightLight = Math.min(94, skinLight + 16);
-        const skinHighlightSat = Math.max(12, skinSat - 8);
-        const skinHighlightHue = Math.min(42, skinHue + 2);
-
-        // Hair from complementary hue at 6–20% lightness
-        const hairHue = (baseHue + 180) % 360;
-        const hairLight = 6 + prng() * 14; // 6–20%
-        const hairSat = 16 + prng() * 28;
-
-        // Iris hue offset by 120–200°
-        const irisOffset = 120 + prng() * 80;
-        const irisHue = (baseHue + irisOffset) % 360;
-        const irisSat = 60 + prng() * 25;
-        const irisLight = 38 + prng() * 18;
-
-        // Lip: desaturated darker skin tone
-        const lipHue = Math.max(10, skinHue - 6);
-        const lipSat = Math.max(16, skinSat - 12);
-        const lipLight = Math.max(25, skinLight - 16);
-
-        // Accent rim light at hue+40 with 90% saturation
-        const rimHue = (baseHue + 40) % 360;
-        const rimSat = 90;
-        const rimLight = 60;
-
-        // Store palette for telemetry
-        subjectPalette.baseHue = baseHue;
-        subjectPalette.skinHue = skinHue;
-        subjectPalette.skinSat = skinSat;
-        subjectPalette.skinLight = skinLight;
-        subjectPalette.skinHex = hslToHex(skinHue, skinSat, skinLight);
-        subjectPalette.hairHex = hslToHex(hairHue, hairSat, hairLight);
-
-        // Clear canvas
-        portraitCtx.clearRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
-
-        // 1. Gradient background with a radial accent rim
-        const bgGrad = portraitCtx.createLinearGradient(0, 0, 0, PORTRAIT_HEIGHT);
-        bgGrad.addColorStop(0, `hsl(${bgHue}, ${bgSat}%, ${bgLight}%)`);
-        bgGrad.addColorStop(0.7, `hsl(${bgHue}, ${bgSat * 0.7}%, ${bgLight * 0.4}%)`);
-        bgGrad.addColorStop(1, `hsl(${bgHue}, 18%, 2%)`);
-        portraitCtx.fillStyle = bgGrad;
-        portraitCtx.fillRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
-
-        const rimSide = prng() < 0.5 ? -1 : 1; // Left or Right key rim
-        const rimGlow = portraitCtx.createRadialGradient(
-          300 + rimSide * 180, 260, 30,
-          300 + rimSide * 180, 260, 420
-        );
-        rimGlow.addColorStop(0, `hsla(${rimHue}, ${rimSat}%, ${rimLight}%, 0.35)`);
-        rimGlow.addColorStop(0.5, `hsla(${rimHue}, ${rimSat}%, ${rimLight}%, 0.12)`);
-        rimGlow.addColorStop(1, `hsla(${rimHue}, ${rimSat}%, ${rimLight}%, 0)`);
-        portraitCtx.fillStyle = rimGlow;
-        portraitCtx.fillRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
-
-        // 2. Dark torso half-ellipse
-        portraitCtx.save();
-        portraitCtx.beginPath();
-        portraitCtx.ellipse(300, 780, 290, 200, 0, 0, Math.PI * 2);
-        const torsoGrad = portraitCtx.createLinearGradient(0, 580, 0, 800);
-        torsoGrad.addColorStop(0, `hsl(${(hairHue + 15) % 360}, 14%, 8%)`);
-        torsoGrad.addColorStop(1, `hsl(${bgHue}, 16%, 3%)`);
-        portraitCtx.fillStyle = torsoGrad;
-        portraitCtx.fill();
-
-        // Subtle illuminated shoulder rim stroke
-        portraitCtx.strokeStyle = `hsla(${rimHue}, ${rimSat}%, 70%, 0.22)`;
-        portraitCtx.lineWidth = 4;
-        portraitCtx.beginPath();
-        portraitCtx.arc(300 + rimSide * 140, 750, 150, Math.PI * 1.05, Math.PI * 1.5, rimSide > 0);
-        portraitCtx.stroke();
-        portraitCtx.restore();
-
-        // 3. Gradient neck
-        const headW = 150 + prng() * 40; // width 150–190
-        const headH = 200 + prng() * 40; // height 200–240
-        const headTilt = (prng() - 0.5) * 0.08; // slight random tilt
-        const headCX = 300 + (prng() - 0.5) * 14;
-        const headCY = 390 + (prng() - 0.5) * 16;
-
-        portraitCtx.save();
-        portraitCtx.beginPath();
-        const neckTopW = headW * 0.44;
-        const neckBotW = headW * 0.72;
-        portraitCtx.moveTo(headCX - neckTopW * 0.5, headCY + headH * 0.32);
-        portraitCtx.lineTo(headCX - neckBotW * 0.5, 630);
-        portraitCtx.lineTo(headCX + neckBotW * 0.5, 630);
-        portraitCtx.lineTo(headCX + neckTopW * 0.5, headCY + headH * 0.32);
-        portraitCtx.closePath();
-
-        const neckGrad = portraitCtx.createLinearGradient(
-          headCX - rimSide * 50, headCY + 50,
-          headCX + rimSide * 50, 630
-        );
-        neckGrad.addColorStop(0, `hsl(${skinShadeHue}, ${skinShadeSat}%, ${skinShadeLight}%)`); // chin drop shadow
-        neckGrad.addColorStop(0.35, `hsl(${skinHue}, ${skinSat}%, ${skinLight}%)`);
-        neckGrad.addColorStop(1, `hsl(${skinShadeHue}, ${skinShadeSat}%, ${Math.max(10, skinShadeLight - 10)}%)`);
-        portraitCtx.fillStyle = neckGrad;
-        portraitCtx.fill();
-
-        // Ambient shadow on neck under jaw
-        portraitCtx.beginPath();
-        portraitCtx.ellipse(headCX, headCY + headH * 0.44, neckTopW * 0.65, 24, 0, 0, Math.PI);
-        portraitCtx.fillStyle = `hsla(${skinShadeHue}, 35%, 10%, 0.48)`;
-        portraitCtx.fill();
-        portraitCtx.restore();
-
-        // 4. Ears (behind head ellipse)
-        for (const side of [-1, 1]) {
-          portraitCtx.save();
-          portraitCtx.translate(headCX, headCY);
-          portraitCtx.rotate(headTilt);
-          const earX = side * (headW * 0.51);
-          const earY = headH * 0.02;
-          portraitCtx.beginPath();
-          portraitCtx.ellipse(earX, earY, 13, 26, side * 0.08, 0, Math.PI * 2);
-          const earGrad = portraitCtx.createLinearGradient(earX - side * 10, earY, earX + side * 10, earY);
-          earGrad.addColorStop(0, `hsl(${skinShadeHue}, ${skinShadeSat}%, ${skinShadeLight}%)`);
-          earGrad.addColorStop(1, `hsl(${skinHue}, ${skinSat}%, ${skinLight}%)`);
-          portraitCtx.fillStyle = earGrad;
-          portraitCtx.fill();
-          portraitCtx.restore();
-        }
-
-        // 5. Head ellipse shaded by radial gradient from highlight to shade plus jaw shadow gradient
-        portraitCtx.save();
-        portraitCtx.translate(headCX, headCY);
-        portraitCtx.rotate(headTilt);
-
-        portraitCtx.beginPath();
-        portraitCtx.ellipse(0, 0, headW * 0.5, headH * 0.5, 0, 0, Math.PI * 2);
-        const headGrad = portraitCtx.createRadialGradient(
-          -rimSide * headW * 0.18, -headH * 0.15, 8,
-          0, 0, headH * 0.54
-        );
-        headGrad.addColorStop(0, `hsl(${skinHighlightHue}, ${skinHighlightSat}%, ${skinHighlightLight}%)`);
-        headGrad.addColorStop(0.55, `hsl(${skinHue}, ${skinSat}%, ${skinLight}%)`);
-        headGrad.addColorStop(0.85, `hsl(${skinShadeHue}, ${skinShadeSat}%, ${skinShadeLight}%)`);
-        headGrad.addColorStop(1, `hsl(${skinShadeHue}, ${skinShadeSat + 6}%, ${Math.max(10, skinShadeLight - 10)}%)`);
-        portraitCtx.fillStyle = headGrad;
-        portraitCtx.fill();
-
-        // Jaw shadow gradient defining chin and jaw contour
-        portraitCtx.beginPath();
-        portraitCtx.arc(0, headH * 0.28, headW * 0.36, 0.12 * Math.PI, 0.88 * Math.PI, false);
-        portraitCtx.strokeStyle = `hsla(${skinShadeHue}, ${skinShadeSat + 10}%, ${Math.max(8, skinShadeLight - 12)}%, 0.45)`;
-        portraitCtx.lineWidth = 15;
-        portraitCtx.stroke();
-
-        // Soft chin highlight bulb
-        const chinGrad = portraitCtx.createRadialGradient(0, headH * 0.38, 2, 0, headH * 0.38, 22);
-        chinGrad.addColorStop(0, `hsla(${skinHighlightHue}, ${skinHighlightSat}%, ${skinHighlightLight}%, 0.45)`);
-        chinGrad.addColorStop(1, `hsla(${skinHue}, ${skinSat}%, ${skinLight}%, 0)`);
-        portraitCtx.fillStyle = chinGrad;
-        portraitCtx.beginPath();
-        portraitCtx.arc(0, headH * 0.38, 22, 0, Math.PI * 2);
-        portraitCtx.fill();
-
-        // 6. Warm radial cheek glows
-        const cheekOffsetX = headW * 0.27;
-        const cheekOffsetY = headH * 0.08;
-        const cheekRadius = headW * 0.22;
-        for (const cSide of [-1, 1]) {
-          const cGrad = portraitCtx.createRadialGradient(
-            cSide * cheekOffsetX, cheekOffsetY, 4,
-            cSide * cheekOffsetX, cheekOffsetY, cheekRadius
-          );
-          cGrad.addColorStop(0, `hsla(14, 62%, 54%, 0.22)`);
-          cGrad.addColorStop(0.55, `hsla(14, 58%, 52%, 0.08)`);
-          cGrad.addColorStop(1, `hsla(14, 58%, 52%, 0)`);
-          portraitCtx.fillStyle = cGrad;
-          portraitCtx.beginPath();
-          portraitCtx.arc(cSide * cheekOffsetX, cheekOffsetY, cheekRadius, 0, Math.PI * 2);
-          portraitCtx.fill();
-        }
-
-        // 7. Two almond eyes with radial iris/pupil gradients, catchlights, lid strokes and thick round-capped brows
-        const eyeSpacing = headW * 0.24;
-        const eyeY = -headH * 0.05;
-        const eyeHalfW = 16;
-        const eyeHalfH = 8;
-
-        for (const eSide of [-1, 1]) {
-          const eyeCX = eSide * eyeSpacing;
-
-          // Almond eye shape (sclera)
-          portraitCtx.save();
-          portraitCtx.beginPath();
-          portraitCtx.moveTo(eyeCX - eyeHalfW, eyeY);
-          portraitCtx.bezierCurveTo(eyeCX - eyeHalfW * 0.35, eyeY - eyeHalfH * 1.1, eyeCX + eyeHalfW * 0.35, eyeY - eyeHalfH * 1.1, eyeCX + eyeHalfW, eyeY);
-          portraitCtx.bezierCurveTo(eyeCX + eyeHalfW * 0.35, eyeY + eyeHalfH * 0.9, eyeCX - eyeHalfW * 0.35, eyeY + eyeHalfH * 0.9, eyeCX - eyeHalfW, eyeY);
-          portraitCtx.fillStyle = `hsl(${skinHue}, 12%, 90%)`;
-          portraitCtx.fill();
-
-          // Soft upper shadow on sclera
-          portraitCtx.fillStyle = `hsla(${skinShadeHue}, 20%, 30%, 0.22)`;
-          portraitCtx.fill();
-
-          // Clip for Iris
-          portraitCtx.clip();
-
-          // Radial Iris & Pupil
-          const irisRadius = 9;
-          const irisGrad = portraitCtx.createRadialGradient(
-            eyeCX, eyeY, 1,
-            eyeCX, eyeY, irisRadius
-          );
-          irisGrad.addColorStop(0, '#0a0a0f'); // Pupil
-          irisGrad.addColorStop(0.38, '#0a0a0f');
-          irisGrad.addColorStop(0.42, `hsl(${irisHue}, ${irisSat}%, ${irisLight}%)`);
-          irisGrad.addColorStop(0.85, `hsl(${irisHue}, ${irisSat - 10}%, ${irisLight - 8}%)`);
-          irisGrad.addColorStop(1, `hsl(${irisHue}, 35%, 15%)`); // Limbal ring
-          portraitCtx.fillStyle = irisGrad;
-          portraitCtx.beginPath();
-          portraitCtx.arc(eyeCX, eyeY, irisRadius, 0, Math.PI * 2);
-          portraitCtx.fill();
-          portraitCtx.restore();
-
-          // Crisp catchlights
-          portraitCtx.fillStyle = '#ffffff';
-          portraitCtx.beginPath();
-          portraitCtx.arc(eyeCX - rimSide * 2.5, eyeY - 2.5, 1.8, 0, Math.PI * 2);
-          portraitCtx.fill();
-
-          portraitCtx.fillStyle = 'rgba(255, 255, 255, 0.65)';
-          portraitCtx.beginPath();
-          portraitCtx.arc(eyeCX + rimSide * 2, eyeY + 2, 0.8, 0, Math.PI * 2);
-          portraitCtx.fill();
-
-          // Upper eyelid stroke
-          portraitCtx.beginPath();
-          portraitCtx.moveTo(eyeCX - eyeHalfW - 1, eyeY + 0.5);
-          portraitCtx.bezierCurveTo(eyeCX - eyeHalfW * 0.35, eyeY - eyeHalfH * 1.15, eyeCX + eyeHalfW * 0.35, eyeY - eyeHalfH * 1.15, eyeCX + eyeHalfW + 1, eyeY + (eSide > 0 ? -1 : 1));
-          portraitCtx.strokeStyle = `hsl(${hairHue}, 25%, 14%)`;
-          portraitCtx.lineWidth = 2.4;
-          portraitCtx.stroke();
-
-          // Upper lid crease
-          portraitCtx.beginPath();
-          portraitCtx.moveTo(eyeCX - eyeHalfW * 0.8, eyeY - eyeHalfH * 1.6);
-          portraitCtx.bezierCurveTo(eyeCX - eyeHalfW * 0.2, eyeY - eyeHalfH * 2.0, eyeCX + eyeHalfW * 0.3, eyeY - eyeHalfH * 2.0, eyeCX + eyeHalfW * 0.8, eyeY - eyeHalfH * 1.5);
-          portraitCtx.strokeStyle = `hsla(${skinShadeHue}, 28%, 32%, 0.32)`;
-          portraitCtx.lineWidth = 1.3;
-          portraitCtx.stroke();
-
-          // Thick round-capped brows
-          portraitCtx.beginPath();
-          portraitCtx.moveTo(eyeCX - eyeHalfW * 1.1, eyeY - eyeHalfH * 2.4);
-          portraitCtx.bezierCurveTo(
-            eyeCX - eyeHalfW * 0.25, eyeY - eyeHalfH * 3.1,
-            eyeCX + eyeHalfW * 0.45, eyeY - eyeHalfH * 3.0,
-            eyeCX + eyeHalfW * 1.15, eyeY - eyeHalfH * 2.2
-          );
-          portraitCtx.strokeStyle = `hsl(${hairHue}, ${hairSat}%, ${Math.max(6, hairLight - 2)}%)`;
-          portraitCtx.lineWidth = 4.4;
-          portraitCtx.lineCap = 'round';
-          portraitCtx.stroke();
-        }
-
-        // 8. Soft gradient nose plane
-        const noseTopY = eyeY + 14;
-        const noseBotY = noseTopY + 38;
-
-        // Bridge shadow
-        portraitCtx.beginPath();
-        portraitCtx.moveTo(-rimSide * 3.5, noseTopY);
-        portraitCtx.lineTo(-rimSide * 5.5, noseBotY - 6);
-        portraitCtx.strokeStyle = `hsla(${skinShadeHue}, ${skinShadeSat}%, ${skinShadeLight - 4}%, 0.38)`;
-        portraitCtx.lineWidth = 3.6;
-        portraitCtx.stroke();
-
-        // Tip highlight bulb
-        const noseTipGrad = portraitCtx.createRadialGradient(-rimSide * 2, noseBotY - 4, 1, 0, noseBotY - 4, 10);
-        noseTipGrad.addColorStop(0, `hsla(${skinHighlightHue}, ${skinHighlightSat}%, ${skinHighlightLight}%, 0.65)`);
-        noseTipGrad.addColorStop(1, `hsla(${skinHue}, ${skinSat}%, ${skinLight}%, 0)`);
-        portraitCtx.fillStyle = noseTipGrad;
-        portraitCtx.beginPath();
-        portraitCtx.arc(0, noseBotY - 4, 10, 0, Math.PI * 2);
-        portraitCtx.fill();
-
-        // Nostrils
-        portraitCtx.beginPath();
-        portraitCtx.arc(-8, noseBotY - 2, 3.2, 0.2 * Math.PI, 0.9 * Math.PI);
-        portraitCtx.arc(8, noseBotY - 2, 3.2, 0.1 * Math.PI, 0.8 * Math.PI);
-        portraitCtx.strokeStyle = `hsla(${skinShadeHue}, 35%, 18%, 0.55)`;
-        portraitCtx.lineWidth = 1.6;
-        portraitCtx.stroke();
-
-        // Underside septum shadow
-        portraitCtx.fillStyle = `hsla(${skinShadeHue}, 35%, 22%, 0.35)`;
-        portraitCtx.beginPath();
-        portraitCtx.ellipse(0, noseBotY + 1, 6, 2.5, 0, 0, Math.PI * 2);
-        portraitCtx.fill();
-
-        // 9. Two-curve lip shape with a dark seam
-        const lipY = noseBotY + 18;
-        const lipHalfW = headW * 0.16;
-
-        // Top lip (Cupid's bow)
-        portraitCtx.beginPath();
-        portraitCtx.moveTo(-lipHalfW, lipY);
-        portraitCtx.bezierCurveTo(-lipHalfW * 0.5, lipY - 8, -lipHalfW * 0.18, lipY - 7, 0, lipY - 4);
-        portraitCtx.bezierCurveTo(lipHalfW * 0.18, lipY - 7, lipHalfW * 0.5, lipY - 8, lipHalfW, lipY);
-        portraitCtx.bezierCurveTo(lipHalfW * 0.45, lipY - 1.5, -lipHalfW * 0.45, lipY - 1.5, -lipHalfW, lipY);
-        portraitCtx.fillStyle = `hsl(${lipHue}, ${lipSat}%, ${lipLight}%)`;
-        portraitCtx.fill();
-
-        // Bottom lip
-        portraitCtx.beginPath();
-        portraitCtx.moveTo(-lipHalfW, lipY);
-        portraitCtx.bezierCurveTo(-lipHalfW * 0.55, lipY + 12, lipHalfW * 0.55, lipY + 12, lipHalfW, lipY);
-        portraitCtx.bezierCurveTo(lipHalfW * 0.45, lipY + 2, -lipHalfW * 0.45, lipY + 2, -lipHalfW, lipY);
-        const botLipGrad = portraitCtx.createLinearGradient(0, lipY, 0, lipY + 12);
-        botLipGrad.addColorStop(0, `hsl(${lipHue}, ${lipSat}%, ${lipLight + 3}%)`);
-        botLipGrad.addColorStop(0.5, `hsl(${lipHue}, ${lipSat + 4}%, ${lipLight + 7}%)`);
-        botLipGrad.addColorStop(1, `hsl(${lipHue}, ${lipSat}%, ${lipLight - 3}%)`);
-        portraitCtx.fillStyle = botLipGrad;
-        portraitCtx.fill();
-
-        // Dark seam
-        portraitCtx.beginPath();
-        portraitCtx.moveTo(-lipHalfW, lipY);
-        portraitCtx.bezierCurveTo(-lipHalfW * 0.45, lipY + 1, -lipHalfW * 0.15, lipY - 0.8, 0, lipY);
-        portraitCtx.bezierCurveTo(lipHalfW * 0.15, lipY - 0.8, lipHalfW * 0.45, lipY + 1, lipHalfW, lipY);
-        portraitCtx.strokeStyle = `hsla(${lipHue}, 35%, 15%, 0.72)`;
-        portraitCtx.lineWidth = 1.7;
-        portraitCtx.stroke();
-
-        // Accent rim light on head ellipse edge
-        portraitCtx.beginPath();
-        portraitCtx.ellipse(0, 0, headW * 0.49, headH * 0.49, 0, 0, Math.PI * 2);
-        portraitCtx.strokeStyle = `hsla(${rimHue}, ${rimSat}%, 65%, 0.38)`;
-        portraitCtx.lineWidth = 3.5;
-        portraitCtx.stroke();
-
-        portraitCtx.restore(); // Head transform restore
-
-        // 10. Hair Silhouettes (bob, long, cropped) with arced accent sheen strokes
-        const hairTypes = ['bob', 'long', 'cropped'];
-        const hairType = hairTypes[Math.floor(prng() * hairTypes.length)];
-
-        portraitCtx.save();
-        portraitCtx.translate(headCX, headCY);
-        portraitCtx.rotate(headTilt);
-
-        const hairGrad = portraitCtx.createRadialGradient(
-          -rimSide * 40, -headH * 0.25, 20,
-          0, -headH * 0.1, headH * 0.75
-        );
-        hairGrad.addColorStop(0, `hsl(${hairHue}, ${hairSat}%, ${hairLight + 10}%)`);
-        hairGrad.addColorStop(0.65, `hsl(${hairHue}, ${hairSat}%, ${hairLight}%)`);
-        hairGrad.addColorStop(1, `hsl(${hairHue}, ${hairSat + 6}%, ${Math.max(4, hairLight - 4)}%)`);
-        portraitCtx.fillStyle = hairGrad;
-
-        if (hairType === 'bob') {
-          // Bob hair: framing cheeks, curving chin-length inward
-          portraitCtx.beginPath();
-          portraitCtx.moveTo(-headW * 0.58, headH * 0.38);
-          portraitCtx.bezierCurveTo(-headW * 0.65, headH * 0.05, -headW * 0.62, -headH * 0.45, -headW * 0.15, -headH * 0.58);
-          portraitCtx.bezierCurveTo(headW * 0.15, -headH * 0.62, headW * 0.62, -headH * 0.45, headW * 0.58, headH * 0.38);
-          portraitCtx.bezierCurveTo(headW * 0.52, headH * 0.44, headW * 0.42, headH * 0.32, headW * 0.45, headH * 0.12);
-          portraitCtx.bezierCurveTo(headW * 0.42, -headH * 0.25, headW * 0.25, -headH * 0.22, 0, -headH * 0.26);
-          portraitCtx.bezierCurveTo(-headW * 0.25, -headH * 0.22, -headW * 0.42, -headH * 0.25, -headW * 0.45, headH * 0.12);
-          portraitCtx.bezierCurveTo(-headW * 0.42, headH * 0.32, -headW * 0.52, headH * 0.44, -headW * 0.58, headH * 0.38);
-          portraitCtx.closePath();
-          portraitCtx.fill();
-        } else if (hairType === 'long') {
-          // Long flowing locks past shoulders
-          portraitCtx.beginPath();
-          portraitCtx.moveTo(-headW * 0.72, headH * 1.15);
-          portraitCtx.bezierCurveTo(-headW * 0.68, headH * 0.45, -headW * 0.65, -headH * 0.48, -headW * 0.18, -headH * 0.60);
-          portraitCtx.bezierCurveTo(headW * 0.18, -headH * 0.62, headW * 0.65, -headH * 0.48, headW * 0.72, headH * 1.15);
-          portraitCtx.bezierCurveTo(headW * 0.52, headH * 1.10, headW * 0.42, headH * 0.42, headW * 0.45, headH * 0.10);
-          portraitCtx.bezierCurveTo(headW * 0.35, -headH * 0.22, 0, -headH * 0.28, -headW * 0.35, -headH * 0.22);
-          portraitCtx.bezierCurveTo(-headW * 0.42, headH * 0.42, -headW * 0.52, headH * 1.10, -headW * 0.72, headH * 1.15);
-          portraitCtx.closePath();
-          portraitCtx.fill();
-        } else {
-          // Cropped hair silhouette
-          portraitCtx.beginPath();
-          portraitCtx.moveTo(-headW * 0.53, -headH * 0.05);
-          portraitCtx.bezierCurveTo(-headW * 0.58, -headH * 0.38, -headW * 0.42, -headH * 0.64, 0, -headH * 0.64);
-          portraitCtx.bezierCurveTo(headW * 0.42, -headH * 0.64, headW * 0.58, -headH * 0.38, headW * 0.53, -headH * 0.05);
-          portraitCtx.bezierCurveTo(headW * 0.48, -headH * 0.15, headW * 0.36, -headH * 0.28, 0, -headH * 0.32);
-          portraitCtx.bezierCurveTo(-headW * 0.36, -headH * 0.28, -headW * 0.48, -headH * 0.15, -headW * 0.53, -headH * 0.05);
-          portraitCtx.closePath();
-          portraitCtx.fill();
-        }
-
-        // Arced accent sheen strokes
-        portraitCtx.lineCap = 'round';
-        const numSheens = 7;
-        for (let s = 0; s < numSheens; s++) {
-          const sT = (s + 0.5) / numSheens;
-          const sX1 = -headW * 0.38 + sT * headW * 0.76;
-          const sY1 = -headH * 0.52 + Math.sin(sT * Math.PI) * 12;
-          const sX2 = sX1 + (prng() - 0.5) * 24;
-          const sY2 = sY1 + 32 + prng() * 38;
-
-          portraitCtx.beginPath();
-          portraitCtx.moveTo(sX1, sY1);
-          portraitCtx.bezierCurveTo(
-            sX1 + rimSide * 16, sY1 + 18,
-            sX2 + rimSide * 12, sY2 - 12,
-            sX2, sY2
-          );
-
-          // Specular sheen with accent color & hair highlight
-          const sheenAlpha = 0.25 + prng() * 0.35;
-          portraitCtx.strokeStyle = s % 2 === 0
-            ? `hsla(${rimHue}, ${rimSat}%, 75%, ${sheenAlpha})`
-            : `hsla(${hairHue}, ${hairSat}%, ${hairLight + 28}%, ${sheenAlpha})`;
-          portraitCtx.lineWidth = 1.8 + prng() * 2.2;
-          portraitCtx.stroke();
-        }
-
-        portraitCtx.restore(); // Hair transform restore
-
-        // 11. Final per-pixel film grain pass of ±11 levels via getImageData
-        const imgData = portraitCtx.getImageData(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
-        const pixels = imgData.data;
-        const len = pixels.length;
-        for (let p = 0; p < len; p += 4) {
-          const grain = (prng() * 23 | 0) - 11; // ±11 levels
-          pixels[p] = Math.min(255, Math.max(0, pixels[p] + grain));
-          pixels[p + 1] = Math.min(255, Math.max(0, pixels[p + 1] + grain));
-          pixels[p + 2] = Math.min(255, Math.max(0, pixels[p + 2] + grain));
-        }
-        portraitCtx.putImageData(imgData, 0, 0);
-
-        // 12. Build three channel-isolated copies (Red, Green, Blue)
-        buildChannelCanvases();
+    if (Math.random() < 0.18 * k) {
+      const staticH = 10 + Math.floor(Math.random() * 40);
+      const staticY = Math.random() * (HEIGHT - staticH);
+      const sImg = workCtx.getImageData(0, staticY, WIDTH, staticH);
+      const sd = sImg.data;
+      for (let j = 0; j < sd.length; j += 4) {
+        const val = (Math.random() * 255) | 0;
+        sd[j] = val; sd[j+1] = val; sd[j+2] = val;
+        sd[j+3] = 140;
       }
+      workCtx.putImageData(sImg, 0, staticY);
+    }
 
-      /* --- Channel Isolation via Pure Red, Green, Blue Multiply --- */
-      function buildChannelCanvases() {
-        const filters = {
-          r: '#ff0000',
-          g: '#00ff00',
-          b: '#0000ff'
-        };
-
-        for (const key of ['r', 'g', 'b']) {
-          const cCanvas = channelCanvases[key];
-          const cCtx = cCanvas.getContext('2d');
-          cCtx.clearRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
-          cCtx.globalCompositeOperation = 'source-over';
-          cCtx.drawImage(portraitCanvas, 0, 0);
-          cCtx.globalCompositeOperation = 'multiply';
-          cCtx.fillStyle = filters[key];
-          cCtx.fillRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
-          cCtx.globalCompositeOperation = 'source-over';
-        }
-
-        // Initialize previous frame buffer with portrait
-        prevCtx.drawImage(portraitCanvas, 0, 0);
+    // 6. Occasional Inversion (Difference)
+    if (Math.random() < 0.06 * k) {
+      workCtx.save();
+      workCtx.globalCompositeOperation = 'difference';
+      workCtx.fillStyle = '#ffffff';
+      if (Math.random() < 0.3) {
+        workCtx.fillRect(0, 0, WIDTH, HEIGHT); // full frame
+      } else {
+        const invH = 10 + Math.random() * 120;
+        const invY = Math.random() * (HEIGHT - invH);
+        workCtx.fillRect(0, invY, WIDTH, invH);
       }
+      workCtx.restore();
+    }
 
-      /* ==========================================================================
-         LIVE GLITCH PIPELINE (PER ANIMATION FRAME)
-         ========================================================================== */
-      function renderGlitchFrame(timestamp) {
-        if (!lastTimestamp) lastTimestamp = timestamp;
-        const dt = Math.min(0.1, (timestamp - lastTimestamp) / 1000);
-        lastTimestamp = timestamp;
+    // 7. Radial Vignette
+    const vigGrad = workCtx.createRadialGradient(WIDTH/2, HEIGHT/2, WIDTH * 0.35, WIDTH/2, HEIGHT/2, WIDTH * 0.75);
+    vigGrad.addColorStop(0, 'transparent');
+    vigGrad.addColorStop(1, 'rgba(3, 3, 5, 0.82)');
+    workCtx.fillStyle = vigGrad;
+    workCtx.fillRect(0, 0, WIDTH, HEIGHT);
 
-        // prefers-reduced-motion check
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Save current result for next frame datamoshing
+    prevCtx.drawImage(workCanvas, 0, 0);
 
-        // Burst Envelope Update (Quick attacks every 0.4–3s, 0.9/s decay)
-        if (!isFrozen) {
-          frameCounter++;
-          topFrameCount.textContent = '0x' + frameCounter.toString(16).toUpperCase().padStart(6, '0');
+    // Present to Display Canvas
+    ctx.drawImage(workCanvas, 0, 0, canvas.width, canvas.height);
 
-          attackCountdown -= dt;
-          if (attackCountdown <= 0) {
-            attackCountdown = 0.4 + Math.random() * 2.6; // every 0.4–3 seconds
-            burst = 0.4 + Math.random() * 0.6; // Quick violent attack
-          } else {
-            burst = Math.max(0, burst - 0.9 * dt); // 0.9/s decay
-          }
-        }
+    // Telemetry display update
+    telSplit.textContent = `0x${Math.round(splitAmp).toString(16).padStart(2, '0').toUpperCase()}`;
+    telSlice.textContent = `0x${sliceCount.toString(16).padStart(2, '0').toUpperCase()}`;
+    telBlocks.textContent = `0x${blockCount.toString(16).padStart(2, '0').toUpperCase()}`;
+    telSmear.textContent = `0x${smearBands.toString(16).padStart(2, '0').toUpperCase()}`;
+    telBurst.textContent = burstEnvelope.toFixed(2);
+  }
 
-        // Effective corruption k
-        let k = sliderIntensity * (0.35 + burst);
-        if (prefersReducedMotion) {
-          k *= 0.35; // Reduce k to 35% under prefers-reduced-motion
-        }
+  // DPR-aware Canvas Resizing
+  function resizeCanvas() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.floor(rect.width * dpr);
+    const h = Math.floor(rect.height * dpr);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+  }
 
-        // If frozen, we present the existing buffer and maintain telemetry
-        if (isFrozen) {
-          presentToVisibleCanvas();
-          requestAnimationFrame(renderGlitchFrame);
-          return;
-        }
+  window.addEventListener('resize', resizeCanvas);
 
-        // --- GLITCH PIPELINE STEP 1: RGB Channel Split ---
-        // Black fill, then 3 channels composited with 'lighter' at horizontal offsets of up to ±18k px
-        workCtx.fillStyle = '#000000';
-        workCtx.fillRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
-        workCtx.globalCompositeOperation = 'lighter';
+  // Freeze Toggle Handling
+  function setFrozen(frozen) {
+    isFrozen = frozen;
+    btnFreeze.setAttribute('aria-pressed', isFrozen ? 'true' : 'false');
+    if (isFrozen) {
+      statusDot.classList.add('frozen');
+      statusText.textContent = 'Signal Loss · stream frozen';
+      recIcon.textContent = '■';
+      recIcon.style.color = 'var(--magenta)';
+      recStatus.textContent = 'HOLD';
+      freezeLabel.textContent = 'Resume Signal';
+    } else {
+      statusDot.classList.remove('frozen');
+      statusText.textContent = 'Signal Loss · live corruption';
+      recIcon.textContent = '●';
+      recIcon.style.color = '#ff3333';
+      recStatus.textContent = 'REC';
+      freezeLabel.textContent = 'Freeze Frame';
+    }
+  }
 
-        const isSplitDoubled = Math.random() < 0.16;
-        const splitMult = isSplitDoubled ? 2.0 : 1.0;
-        const baseOffset = (Math.sin(timestamp * 0.006) * 8 + (Math.random() - 0.5) * 16) * k * splitMult;
-        const vJitter = (Math.random() - 0.5) * 3.5 * k;
+  // Controls Event Listeners
+  intensitySlider.addEventListener('input', (e) => {
+    corruptionSlider = parseFloat(e.target.value);
+    intensityVal.textContent = corruptionSlider.toFixed(2);
+  });
 
-        const offRx = baseOffset;
-        const offRy = vJitter * 0.6;
-        const offGx = (Math.random() - 0.5) * 2.5 * k;
-        const offGy = (Math.random() - 0.5) * 1.5 * k;
-        const offBx = -baseOffset * 1.08;
-        const offBy = -vJitter * 0.6;
+  btnFreeze.addEventListener('click', () => setFrozen(!isFrozen));
+  btnNew.addEventListener('click', () => generatePortrait());
 
-        workCtx.drawImage(channelCanvases.r, offRx, offRy);
-        workCtx.drawImage(channelCanvases.g, offGx, offGy);
-        workCtx.drawImage(channelCanvases.b, offBx, offBy);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      setFrozen(!isFrozen);
+    } else if (e.code === 'KeyN') {
+      e.preventDefault();
+      generatePortrait();
+    }
+  });
 
-        workCtx.globalCompositeOperation = 'source-over';
-
-        // --- GLITCH PIPELINE STEP 2: Datamosh Smearing ---
-        // 1–7 horizontal bands copied from previous frame's buffer at 55–95% alpha with small offsets
-        const maxBands = Math.max(1, Math.min(7, Math.floor(1 + k * 6.5)));
-        const smearCount = Math.floor(1 + Math.random() * maxBands);
-
-        for (let b = 0; b < smearCount; b++) {
-          const bandH = Math.floor(12 + Math.random() * 65);
-          const bandY = Math.floor(Math.random() * (PORTRAIT_HEIGHT - bandH));
-          const smearAlpha = 0.55 + Math.random() * 0.40; // 55–95%
-          const smearOffX = (Math.random() - 0.5) * 14 * k;
-          const smearOffY = (Math.random() - 0.5) * 3.5 * k;
-
-          workCtx.globalAlpha = smearAlpha;
-          workCtx.drawImage(
-            prevFrameCanvas,
-            0, bandY, PORTRAIT_WIDTH, bandH,
-            smearOffX, bandY + smearOffY, PORTRAIT_WIDTH, bandH
-          );
-        }
-        workCtx.globalAlpha = 1.0;
-
-        // --- GLITCH PIPELINE STEP 3: Horizontal Slice Displacement ---
-        // Up to 14 random slices 2–60px tall shifted up to ±220k px, some underlined with 1.5px cyan (#3de9ff) or magenta (#ff3d9a) tear line
-        const maxSlices = Math.floor(Math.random() * 14 * Math.min(1.2, k * 1.3));
-        let activeDisplacementHex = 0;
-
-        for (let s = 0; s < maxSlices; s++) {
-          const sliceH = Math.floor(2 + Math.random() * 58); // 2–60px tall
-          const sliceY = Math.floor(Math.random() * (PORTRAIT_HEIGHT - sliceH));
-          const shiftX = (Math.random() - 0.5) * 2 * 220 * k; // up to ±220k px
-          activeDisplacementHex = Math.max(activeDisplacementHex, Math.abs(Math.round(shiftX)));
-
-          // Copy slice to scratch buffer then paint shifted
-          sliceCtx.clearRect(0, 0, PORTRAIT_WIDTH, sliceH);
-          sliceCtx.drawImage(workCanvas, 0, sliceY, PORTRAIT_WIDTH, sliceH, 0, 0, PORTRAIT_WIDTH, sliceH);
-          workCtx.drawImage(sliceCanvas, 0, 0, PORTRAIT_WIDTH, sliceH, shiftX, sliceY, PORTRAIT_WIDTH, sliceH);
-
-          // Underline with 1.5px cyan or magenta tear line
-          if (Math.random() < 0.42 && Math.abs(shiftX) > 3) {
-            workCtx.fillStyle = Math.random() < 0.5 ? '#3de9ff' : '#ff3d9a';
-            workCtx.fillRect(0, sliceY + sliceH - 1.5, PORTRAIT_WIDTH, 1.5);
-          }
-        }
-
-        // --- GLITCH PIPELINE STEP 4: Macroblock Corruption ---
-        // 16px-aligned blocks either copied to wrong positions or filled solid with skin, acid green #c8ff3d, or hair color
-        const blockCount = Math.floor(Math.random() * (14 * k));
-        for (let mb = 0; mb < blockCount; mb++) {
-          const blockW = (1 + Math.floor(Math.random() * 3)) * 16;
-          const blockH = (1 + Math.floor(Math.random() * 3)) * 16;
-          const srcX = Math.floor(Math.random() * ((PORTRAIT_WIDTH - blockW) / 16)) * 16;
-          const srcY = Math.floor(Math.random() * ((PORTRAIT_HEIGHT - blockH) / 16)) * 16;
-          const dstX = Math.floor(Math.random() * ((PORTRAIT_WIDTH - blockW) / 16)) * 16;
-          const dstY = Math.floor(Math.random() * ((PORTRAIT_HEIGHT - blockH) / 16)) * 16;
-
-          if (Math.random() < 0.62) {
-            // Copied to wrong position
-            workCtx.drawImage(prevFrameCanvas, srcX, srcY, blockW, blockH, dstX, dstY, blockW, blockH);
-          } else {
-            // Filled solid with skin, acid green, or hair color
-            const colors = [subjectPalette.skinHex, '#c8ff3d', subjectPalette.hairHex];
-            workCtx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
-            workCtx.fillRect(dstX, dstY, blockW, blockH);
-          }
-        }
-
-        // --- GLITCH PIPELINE STEP 5: Scanline Noise ---
-        // Dozens of faint 1px white lines plus occasional band of full random ImageData static at alpha 140
-        const numWhiteLines = 20 + Math.floor(Math.random() * 35);
-        workCtx.fillStyle = 'rgba(255, 255, 255, 0.075)';
-        for (let w = 0; w < numWhiteLines; w++) {
-          const lineY = Math.floor(Math.random() * PORTRAIT_HEIGHT);
-          workCtx.fillRect(0, lineY, PORTRAIT_WIDTH, 1);
-        }
-
-        // Band of random static at alpha 140 (~0.55)
-        if (Math.random() < 0.28 * k) {
-          const staticH = Math.floor(10 + Math.random() * 45);
-          const staticY = Math.floor(Math.random() * (PORTRAIT_HEIGHT - staticH));
-          const sImg = staticCtx.createImageData(PORTRAIT_WIDTH, staticH);
-          const sData = sImg.data;
-          const sLen = sData.length;
-          for (let sp = 0; sp < sLen; sp += 4) {
-            const v = (Math.random() * 255) | 0;
-            sData[sp] = v;
-            sData[sp + 1] = v;
-            sData[sp + 2] = v;
-            sData[sp + 3] = 140; // Alpha 140
-          }
-          staticCtx.putImageData(sImg, 0, 0);
-          workCtx.drawImage(staticCanvas, 0, 0, PORTRAIT_WIDTH, staticH, 0, staticY, PORTRAIT_WIDTH, staticH);
-        }
-
-        // --- GLITCH PIPELINE STEP 6: Occasional Inversion ---
-        // Occasional inversion of a band or the whole frame using 'difference' composite with white
-        if (Math.random() < 0.13 * k) {
-          workCtx.save();
-          workCtx.globalCompositeOperation = 'difference';
-          workCtx.fillStyle = '#ffffff';
-          if (Math.random() < 0.08 * k) {
-            // Whole frame inversion
-            workCtx.fillRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
-          } else {
-            // Band inversion
-            const invH = Math.floor(12 + Math.random() * 75);
-            const invY = Math.floor(Math.random() * (PORTRAIT_HEIGHT - invH));
-            workCtx.fillRect(0, invY, PORTRAIT_WIDTH, invH);
-          }
-          workCtx.restore();
-        }
-
-        // --- GLITCH PIPELINE STEP 7: Radial Vignette ---
-        const vignette = workCtx.createRadialGradient(
-          PORTRAIT_WIDTH * 0.5, PORTRAIT_HEIGHT * 0.5, 210,
-          PORTRAIT_WIDTH * 0.5, PORTRAIT_HEIGHT * 0.5, 520
-        );
-        vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        vignette.addColorStop(0.72, 'rgba(7, 7, 10, 0.26)');
-        vignette.addColorStop(1, 'rgba(5, 5, 8, 0.74)');
-        workCtx.fillStyle = vignette;
-        workCtx.fillRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
-
-        // Store current frame into previous frame buffer for datamoshing
-        prevCtx.drawImage(workCanvas, 0, 0);
-
-        // Render to visible canvas
-        presentToVisibleCanvas();
-
-        // Update Telemetry Grid
-        updateTelemetryReadouts({
-          slice: maxSlices,
-          split: Math.abs(Math.round(baseOffset)),
-          blocks: blockCount,
-          smear: smearCount,
-          burst: burst
-        });
-
-        requestAnimationFrame(renderGlitchFrame);
-      }
-
-      /* --- Present work canvas onto visible canvas (devicePixelRatio aware, capped at 2x) --- */
-      function presentToVisibleCanvas() {
-        const rect = viewCanvas.parentElement.getBoundingClientRect();
-        const dpr = Math.min(2, window.devicePixelRatio || 1);
-        const targetW = Math.round(rect.width * dpr);
-        const targetH = Math.round(rect.height * dpr);
-
-        if (viewCanvas.width !== targetW || viewCanvas.height !== targetH) {
-          viewCanvas.width = targetW;
-          viewCanvas.height = targetH;
-        }
-
-        viewCtx.save();
-        viewCtx.clearRect(0, 0, targetW, targetH);
-        viewCtx.scale(targetW / PORTRAIT_WIDTH, targetH / PORTRAIT_HEIGHT);
-        viewCtx.imageSmoothingEnabled = true;
-        viewCtx.imageSmoothingQuality = 'medium';
-        viewCtx.drawImage(workCanvas, 0, 0);
-        viewCtx.restore();
-      }
-
-      /* --- Telemetry Grid Updates (Hex cyan values) --- */
-      function updateTelemetryReadouts(data) {
-        cellSlice.textContent = '0x' + data.slice.toString(16).toUpperCase().padStart(2, '0');
-        cellSplit.textContent = '0x' + data.split.toString(16).toUpperCase().padStart(2, '0');
-        cellBlocks.textContent = '0x' + data.blocks.toString(16).toUpperCase().padStart(2, '0');
-        cellSmear.textContent = '0x' + data.smear.toString(16).toUpperCase().padStart(2, '0');
-        cellPalette.textContent = subjectPalette.skinHex;
-        cellBurst.textContent = '0x' + Math.round(data.burst * 255).toString(16).toUpperCase().padStart(2, '0');
-      }
-
-      /* ==========================================================================
-         SUBJECT CREATION & UI SYNCHRONIZATION
-         ========================================================================== */
-      function setSubject(newSeed) {
-        currentSeed = newSeed >>> 0;
-        subjectHex = ((currentSeed >>> 16) & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
-
-        // Update top bar subject
-        topSubjectHex.textContent = '0x' + subjectHex;
-
-        // Update museum title & curatorial statement
-        const titleIndex = (currentSeed % ARTWORK_TITLES.length + ARTWORK_TITLES.length) % ARTWORK_TITLES.length;
-        const curatorialIndex = ((currentSeed >>> 4) % CURATORIAL_STATEMENTS.length + CURATORIAL_STATEMENTS.length) % CURATORIAL_STATEMENTS.length;
-
-        const baseTitle = ARTWORK_TITLES[titleIndex];
-        artworkTitle.childNodes[0].nodeValue = baseTitle + " ";
-        titleSubjectSuffix.textContent = `(subject ${subjectHex})`;
-        editionMeta.textContent = `1/1 (seed: 0x${subjectHex})`;
-        curatorialStatement.textContent = CURATORIAL_STATEMENTS[curatorialIndex];
-
-        // Redraw procedural face & color channels
-        generateProceduralPortrait(currentSeed);
-      }
-
-      function generateNewSubject() {
-        const freshSeed = Math.floor(Math.random() * 0xFFFFFFFF);
-        setSubject(freshSeed);
-      }
-
-      /* --- Freeze Frame Toggle --- */
-      function toggleFreeze() {
-        isFrozen = !isFrozen;
-        freezeBtn.setAttribute('aria-pressed', isFrozen ? 'true' : 'false');
-        freezeBtnText.textContent = isFrozen ? 'Resume signal' : 'Freeze frame';
-
-        if (isFrozen) {
-          statusDot.classList.add('frozen');
-          portraitMatte.classList.add('frozen');
-          recBadgeText.textContent = 'HOLD';
-        } else {
-          statusDot.classList.remove('frozen');
-          portraitMatte.classList.remove('frozen');
-          recBadgeText.textContent = 'REC';
-        }
-      }
-
-      /* ==========================================================================
-         EVENT LISTENERS & KEYBOARD HANDLERS
-         ========================================================================== */
-      intensitySlider.addEventListener('input', function (e) {
-        sliderIntensity = parseFloat(e.target.value);
-        intensityValueReadout.textContent = sliderIntensity.toFixed(2);
-      });
-
-      freezeBtn.addEventListener('click', toggleFreeze);
-      newSubjectBtn.addEventListener('click', generateNewSubject);
-
-      window.addEventListener('keydown', function (e) {
-        // Ignore typing in interactive elements if any
-        if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
-
-        if (e.code === 'Space') {
-          e.preventDefault();
-          toggleFreeze();
-        } else if (e.code === 'KeyN') {
-          e.preventDefault();
-          generateNewSubject();
-        }
-      });
-
-      window.addEventListener('resize', function () {
-        presentToVisibleCanvas();
-      });
-
-      /* --- Initialization --- */
-      const initialSeed = 0x4F2A79B1;
-      setSubject(initialSeed);
-      requestAnimationFrame(renderGlitchFrame);
-
-    })();
-  </script>
+  // Initialization
+  resizeCanvas();
+  generatePortrait();
+  requestAnimationFrame(renderFrame);
+})();
+</script>
 </body>
 </html>

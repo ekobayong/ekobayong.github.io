@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Still Water — Moonlit Ripple Reflection</title>
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #05071a;
+    color: #d9dff0;
+    font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #canvas-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  /* UI Panel */
+  .panel {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 270px;
+    background: rgba(12, 18, 54, 0.45);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(217, 223, 240, 0.18);
+    border-radius: 8px;
+    padding: 18px 20px;
+    box-shadow: 0 16px 36px rgba(3, 5, 18, 0.6);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    opacity: 0;
+    animation: fadeIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+  }
+  .panel-header {
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ffb35c;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-weight: 600;
+  }
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .control-label-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    font-style: italic;
+    color: #c5cde8;
+  }
+  .readout {
+    font-style: normal;
+    color: #ffb35c;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: rgba(217, 223, 240, 0.15);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ffb35c;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(255, 179, 92, 0.6);
+    transition: transform 0.1s ease;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+  }
+  .button-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 2px;
+  }
+  button {
+    background: rgba(25, 35, 82, 0.6);
+    border: 1px solid rgba(217, 223, 240, 0.18);
+    color: #d9dff0;
+    padding: 7px 10px;
+    font-size: 0.78rem;
+    font-family: 'Iowan Old Style', Georgia, serif;
+    font-style: italic;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  button:hover {
+    background: rgba(35, 48, 110, 0.8);
+    border-color: rgba(255, 179, 92, 0.5);
+    color: #ffffff;
+  }
+  button:active {
+    transform: translateY(1px);
+  }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    font-style: italic;
+    color: #c5cde8;
+  }
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 32px;
+    height: 18px;
+  }
+  .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(217, 223, 240, 0.2);
+    transition: .3s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 18px;
+    border: 1px solid rgba(217, 223, 240, 0.1);
+  }
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 12px;
+    width: 12px;
+    left: 2px;
+    bottom: 2px;
+    background-color: #c5cde8;
+    transition: .3s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 50%;
+  }
+  input:checked + .slider {
+    background-color: rgba(255, 179, 92, 0.3);
+    border-color: rgba(255, 179, 92, 0.5);
+  }
+  input:checked + .slider:before {
+    transform: translateX(14px);
+    background-color: #ffb35c;
+    box-shadow: 0 0 6px rgba(255, 179, 92, 0.8);
+  }
+  /* Footer caption */
+  .caption {
+    position: absolute;
+    bottom: 24px;
+    left: 28px;
+    font-size: 0.96rem;
+    font-style: italic;
+    color: rgba(217, 223, 240, 0.65);
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    z-index: 10;
+    text-shadow: 0 2px 8px rgba(2, 3, 10, 0.8);
+    opacity: 0;
+    animation: fadeIn 1.5s cubic-bezier(0.16, 1, 0.3, 1) 0.6s forwards;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .panel, .caption {
+      animation: none !important;
+      opacity: 1 !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container">
+  <canvas id="main-canvas"></canvas>
+</div>
+
+<aside class="panel">
+  <div class="panel-header">Nocturne Lake</div>
+  
+  <div class="control-group">
+    <div class="control-label-row">
+      <span>Surface Water</span>
+      <span class="readout" id="restlessness-val">calm</span>
+    </div>
+    <input type="range" id="restlessness" min="0" max="4" step="1" value="1">
+  </div>
+
+  <div class="button-row">
+    <button id="btn-stone">Cast stone</button>
+    <button id="btn-settle">Let it settle</button>
+  </div>
+
+  <div class="toggle-row">
+    <label for="toggle-rain">Random raindrops</label>
+    <label class="switch">
+      <input type="checkbox" id="toggle-rain">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="toggle-row">
+    <label for="toggle-lanterns">Shore lanterns &amp; fireflies</label>
+    <label class="switch">
+      <input type="checkbox" id="toggle-lanterns" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+</aside>
+
+<div class="caption">
+  "The lake keeps whatever the sky gives it, and gives it back a little softer."
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('main-canvas');
+  const ctx = canvas.getContext('2d', { alpha: false });
+
+  // Offscreen static scene canvases
+  const fullSceneCanvas = document.createElement('canvas');
+  const fullSceneCtx = fullSceneCanvas.getContext('2d');
+  const sampleSceneCanvas = document.createElement('canvas');
+  const sampleSceneCtx = sampleSceneCanvas.getContext('2d');
+
+  // Water dynamic rendering canvas
+  const waterCanvas = document.createElement('canvas');
+  const waterCtx = waterCanvas.getContext('2d');
+
+  // Check reduced motion
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Damping presets
+  const dampingValues = [0.955, 0.970, 0.982, 0.991, 0.997];
+  const dampingLabels = ['glass', 'calm', 'stirring', 'restless', 'brooding'];
+
+  // State
+  let dpr = 1;
+  let viewW = 0, viewH = 0;
+  let skyH = 0, waterH = 0;
+  let sW = 0, sH = 0; // Low-res buffer dimensions
+  let scaleRatio = 3;
+
+  let buffer1 = null;
+  let buffer2 = null;
+  let waterImgData = null;
+  let sampleImgData = null;
+
+  let restlessnessLevel = 1;
+  let damping = dampingValues[restlessnessLevel];
+  let rainActive = false;
+  let lanternsActive = true;
+
+  // Static Seeded Stars (260)
+  const STARS_COUNT = 260;
+  const stars = [];
+  function initStars() {
+    stars.length = 0;
+    let s = 1234567;
+    function rand() {
+      s = (s * 16807) % 2147483647;
+      return (s - 1) / 2147483646;
+    }
+    for (let i = 0; i < STARS_COUNT; i++) {
+      stars.push({
+        x: rand(),
+        y: Math.pow(rand(), 1.4) * 0.88, // concentrated higher up
+        r: 0.4 + rand() * 1.3,
+        alpha: 0.25 + rand() * 0.75,
+        twinkleSpeed: 0.001 + rand() * 0.003
+      });
+    }
+  }
+  initStars();
+
+  // Lanterns (7 drifting on far shore)
+  const lanterns = [
+    { xNorm: 0.12, speed: 0.00008, baseR: 4.8, phase: 0.2 },
+    { xNorm: 0.24, speed: -0.00006, baseR: 3.2, phase: 1.5 },
+    { xNorm: 0.41, speed: 0.00010, baseR: 5.2, phase: 3.1 },
+    { xNorm: 0.58, speed: -0.00007, baseR: 3.0, phase: 4.4 },
+    { xNorm: 0.73, speed: 0.00009, baseR: 5.5, phase: 2.1 },
+    { xNorm: 0.86, speed: -0.00011, baseR: 3.3, phase: 5.6 },
+    { xNorm: 0.94, speed: 0.00005, baseR: 2.8, phase: 0.8 }
+  ];
+
+  // Fireflies (24 near shore)
+  const fireflies = [];
+  for (let i = 0; i < 24; i++) {
+    fireflies.push({
+      x: Math.random(),
+      y: 0.88 + Math.random() * 0.11, // water coordinate
+      vx: (Math.random() - 0.5) * 0.0004,
+      vy: (Math.random() - 0.5) * 0.0003,
+      phase: Math.random() * Math.PI * 2,
+      freq: 0.002 + Math.random() * 0.003
+    });
+  }
+
+  // Draw Static Scene (Sky, Moon, Ridges, Trees, Mist)
+  function paintStaticScene(tCtx, w, h) {
+    tCtx.save();
+    tCtx.clearRect(0, 0, w, h);
+
+    // 1. Sky Gradient
+    const skyGrad = tCtx.createLinearGradient(0, 0, 0, h);
+    skyGrad.addColorStop(0.0, '#05071a');
+    skyGrad.addColorStop(0.5, '#0c1236');
+    skyGrad.addColorStop(1.0, '#1a2352');
+    tCtx.fillStyle = skyGrad;
+    tCtx.fillRect(0, 0, w, h);
+
+    // 2. Stars
+    for (let i = 0; i < stars.length; i++) {
+      const st = stars[i];
+      const sx = st.x * w;
+      const sy = st.y * h;
+      tCtx.fillStyle = `rgba(217, 223, 240, ${st.alpha * 0.85})`;
+      tCtx.beginPath();
+      tCtx.arc(sx, sy, Math.max(0.4, st.r * (w / 1400)), 0, Math.PI * 2);
+      tCtx.fill();
+    }
+
+    // 3. Moon & 7-Radius Halo
+    const moonX = w * 0.68;
+    const moonY = h * 0.32;
+    const moonR = Math.max(16, Math.min(w, h) * 0.048);
+
+    // 7-Radius Halo Glows
+    const glowRadii = [8.0, 5.5, 4.0, 2.8, 2.0, 1.4, 1.15];
+    const glowAlphas = [0.015, 0.025, 0.04, 0.07, 0.12, 0.20, 0.35];
+    for (let i = 0; i < glowRadii.length; i++) {
+      const gR = moonR * glowRadii[i];
+      const radGrad = tCtx.createRadialGradient(moonX, moonY, moonR * 0.6, moonX, moonY, gR);
+      radGrad.addColorStop(0, `rgba(210, 220, 255, ${glowAlphas[i]})`);
+      radGrad.addColorStop(1, 'rgba(210, 220, 255, 0)');
+      tCtx.fillStyle = radGrad;
+      tCtx.beginPath();
+      tCtx.arc(moonX, moonY, gR, 0, Math.PI * 2);
+      tCtx.fill();
+    }
+
+    // Moon Disc
+    const discGrad = tCtx.createRadialGradient(
+      moonX - moonR * 0.25, moonY - moonR * 0.25, moonR * 0.1,
+      moonX, moonY, moonR
+    );
+    discGrad.addColorStop(0, '#ffffff');
+    discGrad.addColorStop(0.75, '#d9dff0');
+    discGrad.addColorStop(1.0, '#c5cde8');
+    tCtx.fillStyle = discGrad;
+    tCtx.beginPath();
+    tCtx.arc(moonX, moonY, moonR, 0, Math.PI * 2);
+    tCtx.fill();
+
+    // Subtle Maria (craters/shading)
+    tCtx.fillStyle = 'rgba(155, 168, 204, 0.16)';
+    const maria = [
+      { dx: -0.2, dy: -0.2, r: 0.35 },
+      { dx: 0.25, dy: -0.15, r: 0.28 },
+      { dx: -0.1, dy: 0.3, r: 0.4 },
+      { dx: 0.2, dy: 0.25, r: 0.25 },
+      { dx: -0.35, dy: 0.05, r: 0.2 }
+    ];
+    for (let m of maria) {
+      tCtx.beginPath();
+      tCtx.arc(moonX + m.dx * moonR, moonY + m.dy * moonR, m.r * moonR, 0, Math.PI * 2);
+      tCtx.fill();
+    }
+
+    // 4. Low Far Ridge (Summed Sines)
+    tCtx.fillStyle = '#0d1338';
+    tCtx.beginPath();
+    tCtx.moveTo(0, h);
+    for (let x = 0; x <= w; x += 3) {
+      const nx = x / w;
+      const ridgeElev = (
+        Math.sin(nx * 4.2 + 0.5) * 0.055 +
+        Math.sin(nx * 8.8 + 2.1) * 0.03 +
+        Math.sin(nx * 17.5 + 4.7) * 0.012
+      ) * h;
+      const y = h * 0.78 - ridgeElev;
+      tCtx.lineTo(x, y);
+    }
+    tCtx.lineTo(w, h);
+    tCtx.closePath();
+    tCtx.fill();
+
+    // 5. Jagged Treeline
+    tCtx.fillStyle = '#05071c';
+    tCtx.beginPath();
+    tCtx.moveTo(0, h);
+    const treeSpacing = Math.max(3, w * 0.007);
+    const steps = Math.ceil(w / treeSpacing);
+    for (let i = 0; i <= steps; i++) {
+      const x = i * treeSpacing;
+      const nx = x / w;
+      // High-frequency pseudo tree heights
+      const alt = ((i * 17) % 11) / 11;
+      const baseRidge = (
+        Math.sin(nx * 3.7 + 1.2) * 0.025 +
+        Math.sin(nx * 9.3 + 0.3) * 0.015
+      ) * h;
+      const treeHeight = (0.045 + alt * 0.05) * h;
+      const y = h * 0.94 - baseRidge - treeHeight;
+
+      tCtx.lineTo(x - treeSpacing * 0.45, h * 0.96);
+      tCtx.lineTo(x, y);
+      tCtx.lineTo(x + treeSpacing * 0.45, h * 0.96);
+    }
+    tCtx.lineTo(w, h);
+    tCtx.closePath();
+    tCtx.fill();
+
+    // 6. Faint Mist Gradient just above waterline
+    const mist = tCtx.createLinearGradient(0, h * 0.82, 0, h);
+    mist.addColorStop(0, 'rgba(26, 35, 82, 0)');
+    mist.addColorStop(0.7, 'rgba(197, 205, 232, 0.07)');
+    mist.addColorStop(1, 'rgba(26, 35, 82, 0.25)');
+    tCtx.fillStyle = mist;
+    tCtx.fillRect(0, h * 0.82, w, h * 0.18);
+
+    tCtx.restore();
+  }
+
+  // Lantern & Firefly Dynamic Layer on top of scene
+  function drawLanternsAndFireflies(tCtx, w, h, time) {
+    if (!lanternsActive) return;
+
+    for (let l of lanterns) {
+      const cx = ((l.xNorm + (prefersReducedMotion ? 0 : time * l.speed)) % 1 + 1) % 1 * w;
+      const cy = h * 0.955;
+      const pulse = prefersReducedMotion ? 1 : 1 + Math.sin(time * 0.0035 + l.phase) * 0.22;
+      const radius = l.baseR * (w / 1200) * pulse;
+
+      // Glow
+      const radGlow = tCtx.createRadialGradient(cx, cy, 0, cx, cy, radius * 6.5);
+      radGlow.addColorStop(0, 'rgba(255, 190, 110, 0.6)');
+      radGlow.addColorStop(0.4, 'rgba(255, 179, 92, 0.22)');
+      radGlow.addColorStop(1, 'rgba(255, 179, 92, 0)');
+      tCtx.fillStyle = radGlow;
+      tCtx.beginPath();
+      tCtx.arc(cx, cy, radius * 6.5, 0, Math.PI * 2);
+      tCtx.fill();
+
+      // Core
+      tCtx.fillStyle = '#ffeed4';
+      tCtx.beginPath();
+      tCtx.arc(cx, cy, Math.max(1.2, radius * 0.5), 0, Math.PI * 2);
+      tCtx.fill();
+
+      // Thin light streak directly down to waterline
+      tCtx.strokeStyle = 'rgba(255, 179, 92, 0.28)';
+      tCtx.lineWidth = Math.max(1, w / 1000);
+      tCtx.beginPath();
+      tCtx.moveTo(cx, cy);
+      tCtx.lineTo(cx, h);
+      tCtx.stroke();
+    }
+  }
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    viewW = window.innerWidth;
+    viewH = window.innerHeight;
+
+    canvas.width = Math.floor(viewW * dpr);
+    canvas.height = Math.floor(viewH * dpr);
+
+    skyH = Math.round(viewH * 0.56 * dpr);
+    waterH = canvas.height - skyH;
+
+    // Reflection resolution: 1/3 or 1/4 above 1400px
+    scaleRatio = (viewW > 1400 ? 4 : 3);
+    sW = Math.max(100, Math.floor(canvas.width / scaleRatio));
+    sH = Math.max(50, Math.floor(waterH / scaleRatio));
+
+    // Resize static scene offscreens
+    fullSceneCanvas.width = canvas.width;
+    fullSceneCanvas.height = skyH;
+    paintStaticScene(fullSceneCtx, fullSceneCanvas.width, fullSceneCanvas.height);
+
+    sampleSceneCanvas.width = sW;
+    sampleSceneCanvas.height = Math.floor(skyH / scaleRatio);
+    paintStaticScene(sampleSceneCtx, sampleSceneCanvas.width, sampleSceneCanvas.height);
+
+    // Water buffer canvas
+    waterCanvas.width = sW;
+    waterCanvas.height = sH;
+    waterImgData = waterCtx.createImageData(sW, sH);
+
+    // Height field buffers
+    const totalCells = sW * sH;
+    buffer1 = new Float32Array(totalCells);
+    buffer2 = new Float32Array(totalCells);
+  }
+
+  // Ripple Injection
+  function dropStone(nx, ny, radius = 3.5, amp = 90) {
+    const cx = Math.floor(nx * sW);
+    const cy = Math.floor(ny * sH);
+    const rad = Math.max(1, Math.floor(radius));
+
+    for (let dy = -rad; dy <= rad; dy++) {
+      const y = cy + dy;
+      if (y < 0 || y >= sH) continue;
+      for (let dx = -rad; dx <= rad; dx++) {
+        const x = cx + dx;
+        if (x < 0 || x >= sW) continue;
+        const d = Math.hypot(dx, dy);
+        if (d <= rad) {
+          const factor = Math.cos((d / rad) * Math.PI * 0.5);
+          buffer1[y * sW + x] += amp * factor;
+        }
+      }
+    }
+  }
+
+  // Wave Simulation Step
+  function simulateWater() {
+    const w = sW;
+    const h = sH;
+    const b1 = buffer1;
+    const b2 = buffer2;
+    const damp = damping;
+
+    // Classic 2D wave equation kernel
+    for (let y = 1; y < h - 1; y++) {
+      const row = y * w;
+      for (let x = 1; x < w - 1; x++) {
+        const i = row + x;
+        const wave = (b1[i - 1] + b1[i + 1] + b1[i - w] + b1[i + w]) * 0.5 - b2[i];
+        b2[i] = wave * damp;
+      }
+    }
+
+    // Ping-pong buffers
+    buffer1 = b2;
+    buffer2 = b1;
+  }
+
+  // Render Water ImageData
+  function renderWater(time) {
+    const w = sW;
+    const h = sH;
+    const b = buffer1;
+    const sData = sampleImgData.data;
+    const sSceneH = sampleSceneCanvas.height;
+    const dData = waterImgData.data;
+
+    // Moon alignment in low-res coordinates
+    const moonCol = w * 0.68;
+    const moonColInvStd2 = 1 / (2 * Math.pow(w * 0.08, 2));
+    const shimmerMod = prefersReducedMotion ? 0.8 : (0.7 + 0.3 * Math.sin(time * 0.002));
+
+    const k = 1.35;
+    const kVert = k * 1.6;
+
+    for (let y = 0; y < h; y++) {
+      const yRow = y * w;
+      // Perspective compression toward horizon (0 = horizon, 1 = foreground)
+      const ny = y / h;
+      const mirrorBaseY = sSceneH - 1 - (Math.pow(ny, 0.82) * (sSceneH - 1));
+      const depthFactor = 0.5 + 0.5 * (1 - ny); // dim toward near shore
+
+      for (let x = 0; x < w; x++) {
+        const idx = yRow + x;
+        const outIdx = idx << 2;
+
+        // Gradient computation
+        const left = x > 0 ? b[idx - 1] : b[idx];
+        const right = x < w - 1 ? b[idx + 1] : b[idx];
+        const up = y > 0 ? b[idx - w] : b[idx];
+        const down = y < h - 1 ? b[idx + w] : b[idx];
+
+        const gx = right - left;
+        const gy = down - up;
+
+        // Sample coordinates with perspective
+        let sx = Math.round(x + gx * k);
+        let sy = Math.round(mirrorBaseY + gy * kVert);
+
+        // Clamping to sky bounds
+        if (sx < 0) sx = 0;
+        else if (sx >= w) sx = w - 1;
+        if (sy < 0) sy = 0;
+        else if (sy >= sSceneH) sy = sSceneH - 1;
+
+        const sIdx = (sy * w + sx) << 2;
+
+        let r = sData[sIdx];
+        let g = sData[sIdx + 1];
+        let bCol = sData[sIdx + 2];
+
+        // Tint sample toward dark indigo (#090f2b) & diminish with shore distance
+        r = (r * 0.72 + 9 * 0.28) * depthFactor;
+        g = (g * 0.76 + 15 * 0.24) * depthFactor;
+        bCol = (bCol * 0.82 + 43 * 0.18) * depthFactor;
+
+        // Darken steep horizontal slopes
+        const slope = Math.abs(gx);
+        if (slope > 0.8) {
+          const dark = Math.max(0.4, 1.0 - slope * 0.03);
+          r *= dark;
+          g *= dark;
+          bCol *= dark;
+        }
+
+        // Silver Specular Moonlight Column
+        if (gy < -0.15) {
+          const colDist = x - moonCol;
+          const moonGauss = Math.exp(-(colDist * colDist) * moonColInvStd2);
+          if (moonGauss > 0.02) {
+            const spec = Math.min(1.0, -gy * 0.045) * moonGauss * shimmerMod;
+            r += (220 - r) * spec * 0.85;
+            g += (228 - g) * spec * 0.85;
+            bCol += (255 - bCol) * spec * 0.9;
+          }
+        }
+
+        dData[outIdx] = r;
+        dData[outIdx + 1] = g;
+        dData[outIdx + 2] = bCol;
+        dData[outIdx + 3] = 255;
+      }
+    }
+
+    waterCtx.putImageData(waterImgData, 0, 0);
+  }
+
+  // Draw Foreground Reeds (Swaying in corners)
+  function drawReeds(time) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const sway = prefersReducedMotion ? 0 : Math.sin(time * 0.0018) * (14 * dpr);
+
+    ctx.save();
+    ctx.strokeStyle = '#02030a';
+    ctx.lineCap = 'round';
+
+    // Left reeds
+    const leftReeds = [
+      { x: 0.02 * w, yOffset: 0.98 * h, len: 140 * dpr, bend: 35 * dpr, lw: 3.5 * dpr },
+      { x: 0.05 * w, yOffset: 0.99 * h, len: 170 * dpr, bend: 48 * dpr, lw: 4.0 * dpr },
+      { x: 0.08 * w, yOffset: 1.00 * h, len: 120 * dpr, bend: 22 * dpr, lw: 3.0 * dpr },
+      { x: 0.12 * w, yOffset: 1.01 * h, len: 155 * dpr, bend: 40 * dpr, lw: 3.2 * dpr },
+      { x: 0.15 * w, yOffset: 1.00 * h, len: 95 * dpr, bend: 18 * dpr, lw: 2.2 * dpr }
+    ];
+
+    for (let r of leftReeds) {
+      ctx.lineWidth = r.lw;
+      ctx.beginPath();
+      ctx.moveTo(r.x, r.yOffset);
+      const tipX = r.x + r.bend + sway;
+      const tipY = r.yOffset - r.len;
+      const cpX = r.x + r.bend * 0.3;
+      const cpY = r.yOffset - r.len * 0.55;
+      ctx.quadraticCurveTo(cpX, cpY, tipX, tipY);
+      ctx.stroke();
+    }
+
+    // Right reeds
+    const rightReeds = [
+      { x: 0.98 * w, yOffset: 0.99 * h, len: 150 * dpr, bend: -40 * dpr, lw: 3.8 * dpr },
+      { x: 0.94 * w, yOffset: 1.00 * h, len: 180 * dpr, bend: -55 * dpr, lw: 4.2 * dpr },
+      { x: 0.90 * w, yOffset: 0.98 * h, len: 135 * dpr, bend: -30 * dpr, lw: 3.0 * dpr },
+      { x: 0.86 * w, yOffset: 1.01 * h, len: 110 * dpr, bend: -25 * dpr, lw: 2.6 * dpr }
+    ];
+
+    for (let r of rightReeds) {
+      ctx.lineWidth = r.lw;
+      ctx.beginPath();
+      ctx.moveTo(r.x, r.yOffset);
+      const tipX = r.x + r.bend + sway * 0.8;
+      const tipY = r.yOffset - r.len;
+      const cpX = r.x + r.bend * 0.3;
+      const cpY = r.yOffset - r.len * 0.55;
+      ctx.quadraticCurveTo(cpX, cpY, tipX, tipY);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  // Draw Shoreline Fireflies Overlay
+  function drawFirefliesOverlay(time) {
+    if (!lanternsActive || prefersReducedMotion) return;
+
+    ctx.save();
+    for (let f of fireflies) {
+      // Natural float
+      f.x += f.vx;
+      f.y += f.vy;
+      if (f.x < 0) f.x = 1;
+      if (f.x > 1) f.x = 0;
+      if (f.y < 0.75) f.vy += 0.00005;
+      if (f.y > 0.98) f.vy -= 0.00005;
+
+      // Cubed sine flicker: smooth dark spells, sharp glowing crests
+      const s = Math.sin(time * f.freq + f.phase);
+      const intensity = Math.pow(Math.max(0, s), 3);
+      if (intensity < 0.01) continue;
+
+      const px = f.x * canvas.width;
+      const py = skyH + f.y * waterH;
+      const rad = (1.5 + intensity * 2.5) * dpr;
+
+      const glow = ctx.createRadialGradient(px, py, 0, px, py, rad * 3);
+      glow.addColorStop(0, `rgba(255, 220, 130, ${intensity * 0.9})`);
+      glow.addColorStop(0.5, `rgba(255, 179, 92, ${intensity * 0.35})`);
+      glow.addColorStop(1, 'rgba(255, 179, 92, 0)');
+
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(px, py, rad * 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Main Render Loop
+  let lastTime = performance.now();
+  let frameCount = 0;
+
+  function loop(time) {
+    requestAnimationFrame(loop);
+    frameCount++;
+
+    // Halve simulation rate for reduced motion
+    if (prefersReducedMotion && frameCount % 2 !== 0) return;
+
+    // Refresh dynamic layer (lanterns) on scene canvases
+    paintStaticScene(fullSceneCtx, fullSceneCanvas.width, fullSceneCanvas.height);
+    drawLanternsAndFireflies(fullSceneCtx, fullSceneCanvas.width, fullSceneCanvas.height, time);
+
+    paintStaticScene(sampleSceneCtx, sampleSceneCanvas.width, sampleSceneCanvas.height);
+    drawLanternsAndFireflies(sampleSceneCtx, sampleSceneCanvas.width, sampleSceneCanvas.height, time);
+
+    sampleImgData = sampleSceneCtx.getImageData(0, 0, sampleSceneCanvas.width, sampleSceneCanvas.height);
+
+    // Subtle persistent breeze if restlessness > 50%
+    if (!prefersReducedMotion && restlessnessLevel >= 3) {
+      const breezeCount = restlessnessLevel === 3 ? 1 : 2;
+      for (let b = 0; b < breezeCount; b++) {
+        if (Math.random() < 0.45) {
+          dropStone(Math.random(), Math.random(), 1.2, 5 + Math.random() * 8);
+        }
+      }
+    }
+
+    // Raindrop drops
+    if (rainActive) {
+      const dropProb = (restlessnessLevel + 1) * 0.12;
+      if (Math.random() < dropProb) {
+        dropStone(Math.random(), Math.random(), 1.8 + Math.random() * 1.5, 30 + Math.random() * 45);
+      }
+    }
+
+    // Run 2 physics steps per frame
+    simulateWater();
+    simulateWater();
+
+    // Render ripple refraction image
+    renderWater(time);
+
+    // Assemble Frame on Canvas
+    // 1. Draw top sky scene
+    ctx.drawImage(fullSceneCanvas, 0, 0);
+
+    // 2. Draw upscaled water surface
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(waterCanvas, 0, 0, sW, sH, 0, skyH, canvas.width, waterH);
+
+    // 3. Horizon Seam
+    ctx.fillStyle = 'rgba(5, 7, 28, 0.75)';
+    ctx.fillRect(0, skyH - 1 * dpr, canvas.width, 2.5 * dpr);
+
+    // Horizon line highlight
+    ctx.strokeStyle = 'rgba(217, 223, 240, 0.08)';
+    ctx.lineWidth = 1 * dpr;
+    ctx.beginPath();
+    ctx.moveTo(0, skyH);
+    ctx.lineTo(canvas.width, skyH);
+    ctx.stroke();
+
+    // 4. Dark Shore Gradient (Bottom)
+    const shoreGrad = ctx.createLinearGradient(0, canvas.height - 70 * dpr, 0, canvas.height);
+    shoreGrad.addColorStop(0, 'rgba(5, 7, 28, 0)');
+    shoreGrad.addColorStop(0.7, 'rgba(3, 4, 15, 0.6)');
+    shoreGrad.addColorStop(1, 'rgba(1, 2, 8, 0.95)');
+    ctx.fillStyle = shoreGrad;
+    ctx.fillRect(0, canvas.height - 70 * dpr, canvas.width, 70 * dpr);
+
+    // 5. Reeds & Fireflies
+    drawReeds(time);
+    drawFirefliesOverlay(time);
+
+    lastTime = time;
+  }
+
+  // Pointer Interaction
+  let isPointerDown = false;
+  let lastDragTime = 0;
+
+  function handleWaterAction(e, isDrag = false) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    if (clientX === undefined || clientY === undefined) return;
+
+    const px = (clientX - rect.left) * dpr;
+    const py = (clientY - rect.top) * dpr;
+
+    if (py >= skyH) {
+      const nx = px / canvas.width;
+      const ny = (py - skyH) / waterH;
+      if (isDrag) {
+        dropStone(nx, ny, 2.2, 45);
+      } else {
+        dropStone(nx, ny, 3.2, 90);
+      }
+    }
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    isPointerDown = true;
+    handleWaterAction(e, false);
+  });
+
+  window.addEventListener('pointerup', () => {
+    isPointerDown = false;
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (!isPointerDown) return;
+    const now = performance.now();
+    if (now - lastDragTime >= 28) {
+      lastDragTime = now;
+      handleWaterAction(e, true);
+    }
+  });
+
+  // UI Event Handlers
+  const restlessnessSlider = document.getElementById('restlessness');
+  const restlessnessReadout = document.getElementById('restlessness-val');
+
+  restlessnessSlider.addEventListener('input', (e) => {
+    restlessnessLevel = parseInt(e.target.value, 10);
+    damping = dampingValues[restlessnessLevel];
+    restlessnessReadout.textContent = dampingLabels[restlessnessLevel];
+  });
+
+  document.getElementById('btn-stone').addEventListener('click', () => {
+    const rx = 0.25 + Math.random() * 0.5;
+    const ry = 0.25 + Math.random() * 0.5;
+    dropStone(rx, ry, 6.0, 180);
+  });
+
+  document.getElementById('btn-settle').addEventListener('click', () => {
+    if (buffer1 && buffer2) {
+      buffer1.fill(0);
+      buffer2.fill(0);
+    }
+  });
+
+  const rainToggle = document.getElementById('toggle-rain');
+  rainToggle.addEventListener('change', (e) => {
+    rainActive = e.target.checked;
+  });
+
+  const lanternsToggle = document.getElementById('toggle-lanterns');
+  lanternsToggle.addEventListener('change', (e) => {
+    lanternsActive = e.target.checked;
+  });
+
+  // Initialization & Window Resize
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Dispersion — An Interactive Prism</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body, html {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #04050a; color: #e4ecf7;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    user-select: none; -webkit-user-select: none;
+  }
+  canvas#c {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: block; cursor: default;
+  }
+  .panel {
+    position: absolute; z-index: 10;
+    background: rgba(14, 16, 24, 0.72);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px; pointer-events: auto;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+  }
+  header {
+    top: 24px; left: 28px; padding: 18px 24px; pointer-events: none;
+  }
+  .kicker {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.18em;
+    text-transform: uppercase; color: #8fd3ff; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .kicker::before {
+    content: ""; display: inline-block; width: 6px; height: 6px;
+    border-radius: 50%; background: #8fd3ff; box-shadow: 0 0 8px #8fd3ff;
+  }
+  h1 {
+    font-size: 22px; line-height: 1.3; font-weight: 300; color: #f0f4fa;
+    letter-spacing: -0.01em;
+  }
+  h1 strong { font-weight: 700; color: #fff; }
+  .controls-panel {
+    top: 24px; right: 28px; padding: 14px 18px; display: flex;
+    flex-direction: column; gap: 12px; font-size: 13px; min-width: 240px;
+  }
+  .control-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  }
+  .btn-group {
+    display: flex; background: rgba(255,255,255,0.06);
+    border-radius: 8px; padding: 2px; border: 1px solid rgba(255,255,255,0.08);
+  }
+  .btn-toggle {
+    background: transparent; border: none; color: #9ab; font-size: 11.5px;
+    font-weight: 500; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-toggle.active {
+    background: rgba(143, 211, 255, 0.2); color: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .checkbox-label {
+    display: flex; align-items: center; gap: 8px; cursor: pointer; color: #cbd5e1;
+  }
+  input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none; width: 16px; height: 16px;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 4px; outline: none; cursor: pointer; position: relative;
+    transition: all 0.2s;
+  }
+  input[type="checkbox"]:checked {
+    background: #8fd3ff; border-color: #8fd3ff;
+  }
+  input[type="checkbox"]:checked::after {
+    content: "✓"; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -52%); color: #04050a; font-size: 11px; font-weight: 900;
+  }
+  .btn-action {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+    color: #e2e8f0; padding: 7px 12px; border-radius: 6px; font-size: 12px;
+    cursor: pointer; transition: background 0.2s, border-color 0.2s;
+    text-align: center; width: 100%;
+  }
+  .btn-action:hover {
+    background: rgba(255,255,255,0.12); border-color: rgba(143,211,255,0.4);
+  }
+  .info-panel {
+    bottom: 24px; left: 28px; width: 340px; padding: 18px 20px;
+    font-size: 12px; line-height: 1.55; color: #a1adbd;
+  }
+  .info-panel h2 {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.12em; color: #cbd5e1; margin-bottom: 8px;
+  }
+  .info-panel p { margin-bottom: 10px; }
+  .code-math {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11.5px; color: #8fd3ff; background: rgba(143,211,255,0.08);
+    padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 4px;
+  }
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .stat-box {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+  }
+  .stat-label { color: #64748b; font-size: 10px; text-transform: uppercase; }
+  .stat-val { color: #f1f5f9; font-weight: 600; margin-top: 2px; }
+  .readout-tooltip {
+    position: absolute; pointer-events: none; z-index: 20;
+    background: rgba(10, 12, 18, 0.92); border: 1px solid #8fd3ff;
+    border-radius: 6px; padding: 6px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px; color: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.7);
+    transform: translate(-100%, -50%); margin-left: -14px;
+    display: none; white-space: nowrap;
+  }
+  .tooltip-line { color: #8fd3ff; font-weight: bold; }
+  @media (max-width: 768px) {
+    header { top: 12px; left: 12px; right: 12px; padding: 12px 16px; }
+    h1 { font-size: 16px; }
+    .controls-panel { top: auto; bottom: 12px; right: 12px; left: 12px; padding: 12px 16px; }
+    .info-panel { display: none; }
+    details.mobile-info {
+      display: block; position: absolute; top: 96px; left: 12px; right: 12px;
+      z-index: 10;
+    }
+    details.mobile-info summary {
+      cursor: pointer; font-size: 12px; color: #8fd3ff; font-weight: 600;
+      padding: 8px 12px; outline: none;
+    }
+  }
+  @media (min-width: 769px) {
+    details.mobile-info { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<header class="panel">
+  <div class="kicker">Gallery of Optics · Exhibit 07</div>
+  <h1>Why the rainbow lives inside glass<br><strong>Dispersion &amp; Refraction</strong></h1>
+</header>
+
+<div class="controls-panel panel">
+  <div class="control-row">
+    <span style="font-weight: 500;">Dispersion</span>
+    <div class="btn-group">
+      <button class="btn-toggle active" id="btnAccurate">Physics</button>
+      <button class="btn-toggle" id="btnArtistic">Artistic</button>
+    </div>
+  </div>
+  <div class="control-row">
+    <label class="checkbox-label">
+      <input type="checkbox" id="chkSecondPrism">
+      <span>Recombination prism</span>
+    </label>
+  </div>
+  <button class="btn-action" id="btnReset">Reset layout</button>
+</div>
+
+<div class="info-panel panel">
+  <h2>Prism Dispersion</h2>
+  <p>Light slows in optical media. Shorter wavelengths (blue/violet) experience higher optical density than longer wavelengths (red), bending more sharply according to Snell’s Law:</p>
+  <div class="code-math">n₁ · sin(θ₁) = n₂ · sin(θ₂)</div><br>
+  <div class="code-math">n(λ) = A + B / λ²</div>
+  <div class="stats-grid">
+    <div class="stat-box">
+      <div class="stat-label">n (400nm)</div>
+      <div class="stat-val" id="statN400">1.5308</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">n (680nm)</div>
+      <div class="stat-val" id="statN680">1.5137</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Δθ spread</div>
+      <div class="stat-val" id="statSpread">1.84°</div>
+    </div>
+  </div>
+</div>
+
+<details class="mobile-info panel">
+  <summary>Physics explanation &amp; stats</summary>
+  <div style="padding: 10px 14px; font-size: 11px; line-height: 1.5; color: #a1adbd;">
+    <p>Cauchy dispersion: n(λ) = A + B/λ². Blue refracts more than red. Drag lamp, prisms, or screen.</p>
+    <div style="margin-top: 6px; font-family: monospace; color:#8fd3ff;" id="mobileStats">Spread: 1.84°</div>
+  </div>
+</details>
+
+<div id="tooltip" class="readout-tooltip"></div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const tooltip = document.getElementById('tooltip');
+
+  const btnAccurate = document.getElementById('btnAccurate');
+  const btnArtistic = document.getElementById('btnArtistic');
+  const chkSecondPrism = document.getElementById('chkSecondPrism');
+  const btnReset = document.getElementById('btnReset');
+  const statN400 = document.getElementById('statN400');
+  const statN680 = document.getElementById('statN680');
+  const statSpread = document.getElementById('statSpread');
+  const mobileStats = document.getElementById('mobileStats');
+
+  const offscreen = document.createElement('canvas');
+  const offCtx = offscreen.getContext('2d');
+
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let width = 0, height = 0, dpr = 1;
+  let artistic = false;
+  let showSecondPrism = false;
+  let animTime = 0;
+  let hoveredScreenY = null;
+  let activeHoverWavelength = null;
+
+  // Cauchy coefficients
+  const CAUCHY_A = 1.5046;
+  const CAUCHY_B_ACCURATE = 0.0042;
+  const CAUCHY_B_ARTISTIC = 0.0042 * 11.0;
+
+  // Scene items
+  const lamp = { x: 0.16, y: 0.46, radius: 24, dragging: false };
+  const prism1 = { x: 0.44, y: 0.48, size: 165, angle: 0, dragging: false };
+  const prism2 = { x: 0.64, y: 0.42, size: 165, angle: Math.PI, dragging: false }; // inverted
+  const screen = { x: 0.88, top: 0.15, bottom: 0.75, dragging: false };
+
+  let dragOffset = { x: 0, y: 0 };
+  let draggedObj = null;
+
+  function resetPositions() {
+    lamp.x = 0.16; lamp.y = 0.46;
+    prism1.x = 0.44; prism1.y = 0.48; prism1.angle = 0;
+    prism2.x = 0.64; prism2.y = 0.42; prism2.angle = Math.PI;
+    screen.x = 0.88;
+    requestRender();
+  }
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    offscreen.width = canvas.width;
+    offscreen.height = canvas.height;
+    requestRender();
+  }
+  window.addEventListener('resize', resize);
+
+  // Wavelength to RGB (Dan Bruton algorithm)
+  function wavelengthToRGB(wl, alpha = 1) {
+    let r = 0, g = 0, b = 0;
+    if (wl >= 380 && wl < 440) {
+      r = -(wl - 440) / (440 - 380);
+      g = 0;
+      b = 1;
+    } else if (wl >= 440 && wl < 490) {
+      r = 0;
+      g = (wl - 440) / (490 - 440);
+      b = 1;
+    } else if (wl >= 490 && wl < 510) {
+      r = 0;
+      g = 1;
+      b = -(wl - 510) / (510 - 490);
+    } else if (wl >= 510 && wl < 580) {
+      r = (wl - 510) / (580 - 510);
+      g = 1;
+      b = 0;
+    } else if (wl >= 580 && wl < 645) {
+      r = 1;
+      g = -(wl - 645) / (645 - 580);
+      b = 0;
+    } else if (wl >= 645 && wl <= 780) {
+      r = 1;
+      g = 0;
+      b = 0;
+    }
+
+    let factor = 0;
+    if (wl >= 380 && wl < 420) {
+      factor = 0.3 + 0.7 * (wl - 380) / (420 - 380);
+    } else if (wl >= 420 && wl <= 700) {
+      factor = 1.0;
+    } else if (wl > 700 && wl <= 780) {
+      factor = 0.3 + 0.7 * (780 - wl) / (780 - 700);
+    }
+
+    const gamma = 0.8;
+    const R = Math.round(255 * Math.pow(r * factor, gamma));
+    const G = Math.round(255 * Math.pow(g * factor, gamma));
+    const B = Math.round(255 * Math.pow(b * factor, gamma));
+    return `rgba(${R}, ${G}, ${B}, ${alpha})`;
+  }
+
+  function getRefractiveIndex(wl_nm) {
+    const lambda_um = wl_nm / 1000.0;
+    const b = artistic ? CAUCHY_B_ARTISTIC : CAUCHY_B_ACCURATE;
+    return CAUCHY_A + b / (lambda_um * lambda_um);
+  }
+
+  function getPrismVertices(p) {
+    const cx = p.x * width;
+    const cy = p.y * height;
+    const R = p.size;
+    const pts = [];
+    for (let i = 0; i < 3; i++) {
+      const a = p.angle - Math.PI / 2 + (i * 2 * Math.PI) / 3;
+      pts.push({ x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) });
+    }
+    return pts;
+  }
+
+  // Geometry helpers
+  function lineIntersect(p1, p2, p3, p4) {
+    const denom = (p4.y - p3.y) * (p2.x - p1.x) - (p4.x - p3.x) * (p2.y - p1.y);
+    if (Math.abs(denom) < 1e-9) return null;
+    const ua = ((p4.x - p3.x) * (p1.y - p3.y) - (p4.y - p3.y) * (p1.x - p3.x)) / denom;
+    const ub = ((p2.x - p1.x) * (p1.y - p3.y) - (p2.y - p1.y) * (p1.x - p3.x)) / denom;
+    if (ua >= 0 && ub >= 0 && ub <= 1) {
+      return {
+        x: p1.x + ua * (p2.x - p1.x),
+        y: p1.y + ua * (p2.y - p1.y),
+        dist: ua,
+        edge: [p3, p4]
+      };
+    }
+    return null;
+  }
+
+  // Refract vector I using normal N and ratio eta = n1/n2
+  function refract(I, N, eta) {
+    const dot = I.x * N.x + I.y * N.y;
+    const k = 1.0 - eta * eta * (1.0 - dot * dot);
+    if (k < 0) return null; // Total internal reflection
+    return {
+      x: eta * I.x - (eta * dot + Math.sqrt(k)) * N.x,
+      y: eta * I.y - (eta * dot + Math.sqrt(k)) * N.y
+    };
+  }
+
+  function reflect(I, N) {
+    const dot = I.x * N.x + I.y * N.y;
+    return {
+      x: I.x - 2 * dot * N.x,
+      y: I.y - 2 * dot * N.y
+    };
+  }
+
+  // Ray Tracer
+  function traceRay(origin, dir, wl) {
+    const segments = [];
+    const reflections = [];
+    let currentPt = { ...origin };
+    let currentDir = { ...dir };
+    let currentN = 1.0; // Air
+    const rayN = getRefractiveIndex(wl);
+
+    const prisms = [prism1];
+    if (showSecondPrism) prisms.push(prism2);
+
+    let screenHit = null;
+
+    for (let bounce = 0; bounce < 7; bounce++) {
+      let closestHit = null;
+      let hitPrism = null;
+      let hitEdgeIndex = -1;
+      let hitNormal = null;
+
+      // Far point in current direction
+      const farPt = {
+        x: currentPt.x + currentDir.x * 3000,
+        y: currentPt.y + currentDir.y * 3000
+      };
+
+      // Test against screen first if traveling towards it
+      const screenX = screen.x * width;
+      const screenY1 = screen.top * height;
+      const screenY2 = screen.bottom * height;
+      const sHit = lineIntersect(currentPt, farPt, { x: screenX, y: screenY1 }, { x: screenX, y: screenY2 });
+
+      for (let p of prisms) {
+        const verts = getPrismVertices(p);
+        for (let i = 0; i < 3; i++) {
+          const v1 = verts[i];
+          const v2 = verts[(i + 1) % 3];
+          const hit = lineIntersect(currentPt, farPt, v1, v2);
+          if (hit && hit.dist > 1e-4) {
+            if (!closestHit || hit.dist < closestHit.dist) {
+              closestHit = hit;
+              hitPrism = p;
+              hitEdgeIndex = i;
+              // normal pointing outward
+              const dx = v2.x - v1.x;
+              const dy = v2.y - v1.y;
+              let nx = -dy, ny = dx;
+              const len = Math.hypot(nx, ny);
+              nx /= len; ny /= len;
+
+              // Ensure normal points away from prism center
+              const cx = p.x * width, cy = p.y * height;
+              const midx = (v1.x + v2.x) / 2, midy = (v1.y + v2.y) / 2;
+              if ((midx - cx) * nx + (midy - cy) * ny < 0) {
+                nx = -nx; ny = -ny;
+              }
+              hitNormal = { x: nx, y: ny };
+            }
+          }
+        }
+      }
+
+      // Check if ray hits screen before any prism
+      if (sHit && sHit.dist > 1e-4 && (!closestHit || sHit.dist < closestHit.dist)) {
+        segments.push({ from: { ...currentPt }, to: { x: sHit.x, y: sHit.y }, inside: currentN > 1.0 });
+        screenHit = { x: sHit.x, y: sHit.y, wl: wl };
+        break;
+      }
+
+      if (closestHit) {
+        segments.push({ from: { ...currentPt }, to: { x: closestHit.x, y: closestHit.y }, inside: currentN > 1.0 });
+
+        // Normal must oppose incoming ray
+        let normal = { ...hitNormal };
+        let entering = true;
+        if (currentDir.x * normal.x + currentDir.y * normal.y > 0) {
+          normal.x = -normal.x;
+          normal.y = -normal.y;
+          entering = false;
+        }
+
+        const nextN = entering ? rayN : 1.0;
+        const eta = currentN / nextN;
+        const refr = refract(currentDir, normal, eta);
+
+        // Fresnel reflection ray (faint ghost)
+        const refl = reflect(currentDir, normal);
+        reflections.push({
+          from: { x: closestHit.x, y: closestHit.y },
+          to: { x: closestHit.x + refl.x * 80, y: closestHit.y + refl.y * 80 }
+        });
+
+        if (refr) {
+          currentPt = { x: closestHit.x + refr.x * 1e-3, y: closestHit.y + refr.y * 1e-3 };
+          currentDir = refr;
+          currentN = nextN;
+        } else {
+          // Total Internal Reflection
+          currentPt = { x: closestHit.x + refl.x * 1e-3, y: closestHit.y + refl.y * 1e-3 };
+          currentDir = refl;
+        }
+      } else {
+        segments.push({ from: { ...currentPt }, to: farPt, inside: currentN > 1.0 });
+        break;
+      }
+    }
+    return { segments, reflections, screenHit };
+  }
+
+  // Spectral famous lines lookup
+  function getNearestLine(wl) {
+    const lines = [
+      { name: "Hγ", wl: 434, desc: "Balmer Hγ" },
+      { name: "Hβ", wl: 486, desc: "Balmer Hβ" },
+      { name: "Na D", wl: 589, desc: "Sodium D" },
+      { name: "Hα", wl: 656, desc: "Balmer Hα" }
+    ];
+    let nearest = null;
+    let minDist = 12;
+    for (let l of lines) {
+      const d = Math.abs(l.wl - wl);
+      if (d < minDist) {
+        minDist = d;
+        nearest = l;
+      }
+    }
+    return nearest;
+  }
+
+  function getColorName(wl) {
+    if (wl < 420) return "Deep Violet";
+    if (wl < 450) return "Violet";
+    if (wl < 480) return "Blue";
+    if (wl < 500) return "Cyan";
+    if (wl < 550) return "Green";
+    if (wl < 590) return "Yellow";
+    if (wl < 625) return "Orange";
+    return "Red";
+  }
+
+  function renderScene(cContext) {
+    cContext.clearRect(0, 0, width, height);
+
+    // Dark studio background radial gradient
+    const bgGrad = cContext.createRadialGradient(
+      width * 0.5, height * 0.45, 80,
+      width * 0.5, height * 0.45, Math.max(width, height) * 0.75
+    );
+    bgGrad.addColorStop(0, '#0e121c');
+    bgGrad.addColorStop(0.5, '#07090f');
+    bgGrad.addColorStop(1, '#04050a');
+    cContext.fillStyle = bgGrad;
+    cContext.fillRect(0, 0, width, height);
+
+    // Optical breadboard grid (subtle science exhibit look)
+    cContext.strokeStyle = 'rgba(255, 255, 255, 0.022)';
+    cContext.lineWidth = 1;
+    const gridStep = 40;
+    cContext.beginPath();
+    for (let x = 0; x < width; x += gridStep) {
+      cContext.moveTo(x, 0); cContext.lineTo(x, height);
+    }
+    for (let y = 0; y < height; y += gridStep) {
+      cContext.moveTo(0, y); cContext.lineTo(width, y);
+    }
+    cContext.stroke();
+
+    // Aim beam at first prism centroid
+    const lampX = lamp.x * width;
+    const lampY = lamp.y * height;
+    const targetPrismX = prism1.x * width;
+    const targetPrismY = prism1.y * height;
+    const beamAngle = Math.atan2(targetPrismY - lampY, targetPrismX - lampX);
+    const baseDir = { x: Math.cos(beamAngle), y: Math.sin(beamAngle) };
+
+    const NUM_RAYS = 40;
+    const wlMin = 400, wlMax = 680;
+    const rayResults = [];
+    const screenHits = [];
+
+    for (let i = 0; i < NUM_RAYS; i++) {
+      const wl = wlMin + (i / (NUM_RAYS - 1)) * (wlMax - wlMin);
+      const res = traceRay({ x: lampX, y: lampY }, baseDir, wl);
+      rayResults.push({ wl, ...res });
+      if (res.screenHit) screenHits.push(res.screenHit);
+    }
+
+    // Update live readouts
+    if (screenHits.length >= 2) {
+      const vHit = screenHits[0]; // 400nm
+      const rHit = screenHits[screenHits.length - 1]; // 680nm
+      const dy = Math.abs(vHit.y - rHit.y);
+      const dist = Math.abs(screen.x * width - prism1.x * width);
+      const spreadDeg = (Math.atan2(dy, dist) * 180 / Math.PI).toFixed(2);
+
+      const n400 = getRefractiveIndex(400).toFixed(4);
+      const n680 = getRefractiveIndex(680).toFixed(4);
+
+      if (statN400) statN400.textContent = n400;
+      if (statN680) statN680.textContent = n680;
+      if (statSpread) statSpread.textContent = spreadDeg + '°';
+      if (mobileStats) mobileStats.textContent = `Spread: ${spreadDeg}° · n(400): ${n400} · n(680): ${n680}`;
+    }
+
+    // Draw Fresnel Ghost reflections
+    cContext.lineWidth = 1;
+    for (let r of rayResults) {
+      for (let refl of r.reflections) {
+        cContext.strokeStyle = wavelengthToRGB(r.wl, 0.07);
+        cContext.beginPath();
+        cContext.moveTo(refl.from.x, refl.from.y);
+        cContext.lineTo(refl.to.x, refl.to.y);
+        cContext.stroke();
+      }
+    }
+
+    // Draw main light rays
+    cContext.save();
+    cContext.globalCompositeOperation = 'lighter';
+
+    for (let r of rayResults) {
+      const isHovered = activeHoverWavelength && Math.abs(activeHoverWavelength - r.wl) < 4.5;
+      const alpha = isHovered ? 0.9 : 0.12;
+      const widthRay = isHovered ? 3.0 : 1.6;
+      cContext.lineWidth = widthRay;
+      cContext.strokeStyle = wavelengthToRGB(r.wl, alpha);
+
+      for (let seg of r.segments) {
+        cContext.beginPath();
+        cContext.moveTo(seg.from.x, seg.from.y);
+        cContext.lineTo(seg.to.x, seg.to.y);
+        cContext.stroke();
+      }
+    }
+    cContext.restore();
+
+    // Incident White Light Core Beam (from lamp to entry)
+    cContext.save();
+    cContext.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    cContext.lineWidth = 2.5;
+    cContext.shadowColor = 'rgba(255, 255, 255, 0.8)';
+    cContext.shadowBlur = 12;
+    if (rayResults[0] && rayResults[0].segments[0]) {
+      const s = rayResults[0].segments[0];
+      cContext.beginPath();
+      cContext.moveTo(lampX, lampY);
+      cContext.lineTo(s.to.x, s.to.y);
+      cContext.stroke();
+    }
+    cContext.restore();
+
+    // Draw Prisms
+    const drawPrismObj = (p, label) => {
+      const verts = getPrismVertices(p);
+      cContext.save();
+
+      // Translucent Glass Body
+      const prismGrad = cContext.createLinearGradient(verts[0].x, verts[0].y, verts[1].x, verts[2].y);
+      prismGrad.addColorStop(0, 'rgba(180, 220, 255, 0.16)');
+      prismGrad.addColorStop(1, 'rgba(200, 230, 255, 0.14)');
+      cContext.fillStyle = prismGrad;
+      cContext.beginPath();
+      cContext.moveTo(verts[0].x, verts[0].y);
+      cContext.lineTo(verts[1].x, verts[1].y);
+      cContext.lineTo(verts[2].x, verts[2].y);
+      cContext.closePath();
+      cContext.fill();
+
+      // Luminous Glass Flare Edges
+      cContext.shadowColor = 'rgba(143, 211, 255, 0.9)';
+      cContext.shadowBlur = 14;
+      cContext.strokeStyle = 'rgba(220, 240, 255, 0.65)';
+      cContext.lineWidth = 1.8;
+      cContext.stroke();
+
+      // Caustic drifting ribbons inside glass
+      cContext.save();
+      cContext.clip();
+      cContext.shadowBlur = 0;
+      const t = animTime * 0.0015;
+      for (let c = 0; c < 3; c++) {
+        cContext.beginPath();
+        const cy = p.y * height + (c - 1) * 22;
+        cContext.strokeStyle = `rgba(180, 225, 255, ${0.05 + c * 0.02})`;
+        cContext.lineWidth = 10 + c * 4;
+        for (let gx = p.x * width - p.size; gx <= p.x * width + p.size; gx += 8) {
+          const gy = cy + Math.sin(gx * 0.035 + t + c * 1.8) * 12;
+          if (gx === p.x * width - p.size) cContext.moveTo(gx, gy);
+          else cContext.lineTo(gx, gy);
+        }
+        cContext.stroke();
+      }
+      cContext.restore();
+
+      // Vertex blooms
+      for (let v of verts) {
+        const bloom = cContext.createRadialGradient(v.x, v.y, 0, v.x, v.y, 16);
+        bloom.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+        bloom.addColorStop(0.3, 'rgba(143, 211, 255, 0.4)');
+        bloom.addColorStop(1, 'transparent');
+        cContext.fillStyle = bloom;
+        cContext.beginPath();
+        cContext.arc(v.x, v.y, 16, 0, Math.PI * 2);
+        cContext.fill();
+      }
+
+      // Small center handle anchor
+      cContext.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      cContext.beginPath();
+      cContext.arc(p.x * width, p.y * height, 3, 0, Math.PI * 2);
+      cContext.fill();
+
+      // Caption label
+      cContext.font = '9px ui-monospace, SFMono-Regular, monospace';
+      cContext.fillStyle = 'rgba(143, 211, 255, 0.5)';
+      cContext.textAlign = 'center';
+      cContext.fillText(label, p.x * width, p.y * height + p.size * 0.6 + 14);
+
+      cContext.restore();
+    };
+
+    drawPrismObj(prism1, "DISPERSION PRISM");
+    if (showSecondPrism) {
+      drawPrismObj(prism2, "RECOMBINATION PRISM");
+    }
+
+    // Draw Screen
+    const scrX = screen.x * width;
+    const scrTop = screen.top * height;
+    const scrBottom = screen.bottom * height;
+    cContext.save();
+
+    // Screen backing plate
+    cContext.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    cContext.lineWidth = 3;
+    cContext.beginPath();
+    cContext.moveTo(scrX, scrTop);
+    cContext.lineTo(scrX, scrBottom);
+    cContext.stroke();
+
+    // Screen tick marks & ticks label
+    cContext.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    cContext.lineWidth = 1;
+    const numTicks = 20;
+    for (let i = 0; i <= numTicks; i++) {
+      const ty = scrTop + (i / numTicks) * (scrBottom - scrTop);
+      const len = (i % 5 === 0) ? 8 : 4;
+      cContext.beginPath();
+      cContext.moveTo(scrX + 2, ty);
+      cContext.lineTo(scrX + 2 + len, ty);
+      cContext.stroke();
+    }
+
+    cContext.font = '10px ui-monospace, SFMono-Regular, monospace';
+    cContext.fillStyle = 'rgba(143, 211, 255, 0.7)';
+    cContext.textAlign = 'left';
+    cContext.fillText('PROJECTION SCREEN', scrX + 16, scrTop + 12);
+
+    // Rainbow spectrum blobs painted on the screen
+    cContext.globalCompositeOperation = 'lighter';
+    for (let hit of screenHits) {
+      const isHov = activeHoverWavelength && Math.abs(activeHoverWavelength - hit.wl) < 4.5;
+      const radY = isHov ? 18 : 12;
+      const radX = isHov ? 14 : 7;
+      const glow = cContext.createRadialGradient(hit.x + 3, hit.y, 0, hit.x + 3, hit.y, radY);
+      glow.addColorStop(0, wavelengthToRGB(hit.wl, isHov ? 0.95 : 0.45));
+      glow.addColorStop(0.5, wavelengthToRGB(hit.wl, isHov ? 0.5 : 0.18));
+      glow.addColorStop(1, 'transparent');
+      cContext.fillStyle = glow;
+      cContext.beginPath();
+      cContext.ellipse(hit.x + 3, hit.y, radX, radY, 0, 0, Math.PI * 2);
+      cContext.fill();
+    }
+    cContext.restore();
+
+    // Draw Lamp
+    cContext.save();
+    // Radial bright glow
+    const lampGlow = cContext.createRadialGradient(lampX, lampY, 2, lampX, lampY, lamp.radius * 2.8);
+    lampGlow.addColorStop(0, '#ffffff');
+    lampGlow.addColorStop(0.2, 'rgba(255, 255, 255, 0.85)');
+    lampGlow.addColorStop(0.5, 'rgba(180, 220, 255, 0.25)');
+    lampGlow.addColorStop(1, 'transparent');
+    cContext.fillStyle = lampGlow;
+    cContext.beginPath();
+    cContext.arc(lampX, lampY, lamp.radius * 2.8, 0, Math.PI * 2);
+    cContext.fill();
+
+    // Solid inner core
+    cContext.fillStyle = '#ffffff';
+    cContext.shadowColor = '#8fd3ff';
+    cContext.shadowBlur = 18;
+    cContext.beginPath();
+    cContext.arc(lampX, lampY, 8, 0, Math.PI * 2);
+    cContext.fill();
+
+    // Dashed handle ring
+    cContext.shadowBlur = 0;
+    cContext.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    cContext.setLineDash([4, 4]);
+    cContext.lineWidth = 1.5;
+    cContext.beginPath();
+    cContext.arc(lampX, lampY, lamp.radius, 0, Math.PI * 2);
+    cContext.stroke();
+
+    // Label
+    cContext.setLineDash([]);
+    cContext.font = '9px ui-monospace, SFMono-Regular, monospace';
+    cContext.fillStyle = 'rgba(143, 211, 255, 0.8)';
+    cContext.textAlign = 'center';
+    cContext.fillText('LAMP', lampX, lampY + lamp.radius + 14);
+
+    cContext.restore();
+  }
+
+  // Polished Floor Reflection Compositing
+  function render() {
+    // 1. Render to offscreen canvas
+    offCtx.save();
+    offCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    renderScene(offCtx);
+    offCtx.restore();
+
+    // 2. Clear visible canvas and draw main stage
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const floorY = height * 0.84;
+    const floorYCanvas = floorY * dpr;
+
+    // Draw upper stage directly
+    ctx.drawImage(offscreen, 0, 0);
+
+    // 3. Draw Polished Floor Reflection below floor line
+    ctx.save();
+    // Clip to floor region
+    ctx.beginPath();
+    ctx.rect(0, floorYCanvas, canvas.width, canvas.height - floorYCanvas);
+    ctx.clip();
+
+    // Flip vertically around floor line
+    ctx.translate(0, floorYCanvas * 2);
+    ctx.scale(1, -1);
+
+    // Reflection styling: 28% alpha and faint blur
+    ctx.globalAlpha = 0.28;
+    ctx.filter = 'blur(3px)';
+    ctx.drawImage(offscreen, 0, 0);
+
+    // Revert transform for gradient overlays
+    ctx.restore();
+
+    // Fade reflection to dark with polished floor gradient
+    ctx.save();
+    const floorGrad = ctx.createLinearGradient(0, floorY, 0, height);
+    floorGrad.addColorStop(0, 'rgba(4, 5, 10, 0.4)');
+    floorGrad.addColorStop(0.35, 'rgba(4, 5, 10, 0.75)');
+    floorGrad.addColorStop(1, '#04050a');
+    ctx.fillStyle = floorGrad;
+    ctx.fillRect(0, floorY, width, height - floorY);
+
+    // Floor horizon line
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, floorY);
+    ctx.lineTo(width, floorY);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  let animationFrameId = null;
+  function animate(ts) {
+    animTime = ts;
+    render();
+    if (!prefersReducedMotion) {
+      animationFrameId = requestAnimationFrame(animate);
+    }
+  }
+
+  function requestRender() {
+    if (prefersReducedMotion) {
+      render();
+    } else if (!animationFrameId) {
+      animationFrameId = requestAnimationFrame(animate);
+    }
+  }
+
+  // Pointer Interaction
+  function getCanvasPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: (clientX - rect.left),
+      y: (clientY - rect.top),
+      clientX,
+      clientY
+    };
+  }
+
+  function getHitObject(x, y) {
+    // Check lamp
+    const lx = lamp.x * width, ly = lamp.y * height;
+    if (Math.hypot(x - lx, y - ly) <= lamp.radius + 8) return lamp;
+
+    // Check prism 2 (if active)
+    if (showSecondPrism) {
+      const p2x = prism2.x * width, p2y = prism2.y * height;
+      if (Math.hypot(x - p2x, y - p2y) <= prism2.size * 0.7) return prism2;
+    }
+
+    // Check prism 1
+    const p1x = prism1.x * width, p1y = prism1.y * height;
+    if (Math.hypot(x - p1x, y - p1y) <= prism1.size * 0.7) return prism1;
+
+    // Check screen
+    const sx = screen.x * width;
+    const sy1 = screen.top * height, sy2 = screen.bottom * height;
+    if (Math.abs(x - sx) < 18 && y >= sy1 - 10 && y <= sy2 + 10) return screen;
+
+    return null;
+  }
+
+  function onPointerDown(e) {
+    const pos = getCanvasPos(e);
+    const hit = getHitObject(pos.x, pos.y);
+    if (hit) {
+      draggedObj = hit;
+      draggedObj.dragging = true;
+      dragOffset.x = pos.x - (hit.x * width);
+      dragOffset.y = pos.y - (hit.y ? (hit.y * height) : 0);
+      canvas.style.cursor = 'grabbing';
+    }
+  }
+
+  function onPointerMove(e) {
+    const pos = getCanvasPos(e);
+
+    if (draggedObj) {
+      const nx = (pos.x - dragOffset.x) / width;
+      draggedObj.x = Math.max(0.05, Math.min(0.95, nx));
+
+      if (draggedObj !== screen) {
+        const ny = (pos.y - dragOffset.y) / height;
+        draggedObj.y = Math.max(0.1, Math.min(0.78, ny));
+      }
+      requestRender();
+      return;
+    }
+
+    // Hover state & Screen Ray Readout Tooltip
+    const hit = getHitObject(pos.x, pos.y);
+    canvas.style.cursor = hit ? 'grab' : 'default';
+
+    const scrX = screen.x * width;
+    if (Math.abs(pos.x - scrX) < 32 && pos.y >= screen.top * height && pos.y <= screen.bottom * height) {
+      hoveredScreenY = pos.y;
+      // Trace rays to identify nearest ray landing here
+      const lampX = lamp.x * width, lampY = lamp.y * height;
+      const targetPrismX = prism1.x * width, targetPrismY = prism1.y * height;
+      const baseDir = {
+        x: Math.cos(Math.atan2(targetPrismY - lampY, targetPrismX - lampX)),
+        y: Math.sin(Math.atan2(targetPrismY - lampY, targetPrismX - lampX))
+      };
+
+      let closestWl = null;
+      let minDistance = 9999;
+      for (let i = 0; i < 40; i++) {
+        const wl = 400 + (i / 39) * 280;
+        const res = traceRay({ x: lampX, y: lampY }, baseDir, wl);
+        if (res.screenHit) {
+          const d = Math.abs(res.screenHit.y - pos.y);
+          if (d < minDistance) {
+            minDistance = d;
+            closestWl = wl;
+          }
+        }
+      }
+
+      if (closestWl && minDistance < 28) {
+        activeHoverWavelength = closestWl;
+        const nearLine = getNearestLine(closestWl);
+        const colName = getColorName(closestWl);
+
+        tooltip.style.display = 'block';
+        tooltip.style.left = `${pos.clientX}px`;
+        tooltip.style.top = `${pos.clientY}px`;
+        tooltip.innerHTML = `
+          <div>λ = <span class="tooltip-line">${Math.round(closestWl)} nm</span> (${colName})</div>
+          <div>n = ${getRefractiveIndex(closestWl).toFixed(4)}</div>
+          ${nearLine ? `<div style="color:#fcd34d; font-size:10px; margin-top:2px;">Line: ${nearLine.desc}</div>` : ''}
+        `;
+      } else {
+        activeHoverWavelength = null;
+        tooltip.style.display = 'none';
+      }
+    } else {
+      activeHoverWavelength = null;
+      tooltip.style.display = 'none';
+    }
+
+    if (prefersReducedMotion) requestRender();
+  }
+
+  function onPointerUp() {
+    if (draggedObj) {
+      draggedObj.dragging = false;
+      draggedObj = null;
+      canvas.style.cursor = 'default';
+    }
+  }
+
+  // Event Listeners
+  canvas.addEventListener('mousedown', onPointerDown);
+  window.addEventListener('mousemove', onPointerMove);
+  window.addEventListener('mouseup', onPointerUp);
+
+  canvas.addEventListener('touchstart', onPointerDown, { passive: true });
+  window.addEventListener('touchmove', onPointerMove, { passive: true });
+  window.addEventListener('touchend', onPointerUp, { passive: true });
+
+  btnAccurate.addEventListener('click', () => {
+    artistic = false;
+    btnAccurate.classList.add('active');
+    btnArtistic.classList.remove('active');
+    requestRender();
+  });
+
+  btnArtistic.addEventListener('click', () => {
+    artistic = true;
+    btnArtistic.classList.add('active');
+    btnAccurate.classList.remove('active');
+    requestRender();
+  });
+
+  chkSecondPrism.addEventListener('change', (e) => {
+    showSecondPrism = e.target.checked;
+    requestRender();
+  });
+
+  btnReset.addEventListener('click', () => {
+    resetPositions();
+  });
+
+  // Init
+  resize();
+  if (!prefersReducedMotion) {
+    animationFrameId = requestAnimationFrame(animate);
+  } else {
+    render();
+  }
+
+})();
+</script>
+</body>
+</html>

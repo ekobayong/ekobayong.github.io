@@ -1,1317 +1,948 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Plate XVII · Arbor recursiva var. lindenmayeri</title>
-  <style>
-    /* Reset & Base Setup */
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arbor recursiva — Generative L-System Botanical Plate</title>
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #f1e7d3;
+    background-image: radial-gradient(circle at 50% 30%, #f7f0e3 0%, #ecdcc0 70%, #dfcdae 100%);
+    color: #2b2318;
+    font-family: Georgia, "Iowan Old Style", Palatino, "Palatino Linotype", serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    user-select: none;
+  }
 
-    :root {
-      --ink-primary: #2b2318;
-      --ink-secondary: #6b5b45;
-      --paper-light: #f1e7d3;
-      --paper-dark: #e4d6ba;
-      --frame-color: rgba(43, 35, 24, 0.35);
-      --font-serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', Palatino, serif;
-      --font-mono: 'Courier New', Courier, monospace;
-    }
+  /* SVG Fractal Noise Filter Overlay for Paper Fiber */
+  .paper-grain {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.45;
+    mix-blend-mode: multiply;
+  }
 
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: var(--paper-dark);
-      background: radial-gradient(ellipse at 50% 40%, #f7f1e5 0%, var(--paper-light) 45%, var(--paper-dark) 100%);
-      color: var(--ink-primary);
-      font-family: var(--font-serif);
-      user-select: none;
-      -webkit-user-select: none;
-    }
+  /* Engraving Frame Inset */
+  .botanical-frame {
+    position: fixed;
+    top: 24px;
+    bottom: 24px;
+    left: 24px;
+    right: 24px;
+    border: 1px solid rgba(43, 35, 24, 0.38);
+    outline: 1px solid rgba(43, 35, 24, 0.38);
+    outline-offset: 5px;
+    pointer-events: none;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 24px 30px;
+  }
 
-    /* Paper texture overlay in multiply blend */
-    .paper-texture-svg {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      pointer-events: none;
-      z-index: 100;
-      mix-blend-mode: multiply;
-      opacity: 0.28;
-    }
+  /* Header Typography */
+  .herbarium-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+  }
+  .plate-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .plate-num {
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: #6b5b45;
+    font-weight: 600;
+  }
+  .binomial {
+    font-size: 26px;
+    font-style: italic;
+    font-weight: normal;
+    color: #2b2318;
+    letter-spacing: 0.02em;
+    margin-top: 2px;
+  }
+  .family-line {
+    font-size: 12px;
+    font-style: italic;
+    color: #6b5b45;
+    letter-spacing: 0.03em;
+  }
+  .production-rules {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 10px;
+    line-height: 1.45;
+    color: #554533;
+    text-align: right;
+    background: rgba(245, 238, 224, 0.4);
+    padding: 8px 12px;
+    border: 1px solid rgba(43, 35, 24, 0.15);
+    border-radius: 2px;
+    pointer-events: auto;
+  }
 
-    /* Plate Double Hairline Outer Frame */
-    .plate-outer {
-      position: absolute;
-      top: 22px;
-      bottom: 22px;
-      left: 22px;
-      right: 22px;
-      border: 1px solid var(--frame-color);
-      outline: 1px solid var(--frame-color);
-      outline-offset: 4px;
-      display: flex;
-      flex-direction: column;
-      pointer-events: none;
-      z-index: 10;
-      background: transparent;
-      box-shadow: inset 0 0 60px rgba(180, 160, 130, 0.12);
-    }
+  /* Fullscreen Canvas */
+  #plateCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 10;
+    cursor: crosshair;
+  }
 
-    /* Decorative corner engravings */
-    .corner-mark {
-      position: absolute;
-      width: 12px;
-      height: 12px;
-      pointer-events: none;
-    }
-    .corner-mark::before, .corner-mark::after {
-      content: '';
-      position: absolute;
-      background: var(--frame-color);
-    }
-    .corner-mark.top-left { top: -8px; left: -8px; }
-    .corner-mark.top-left::before { top: 7px; left: 0; width: 12px; height: 1px; }
-    .corner-mark.top-left::after { top: 0; left: 7px; width: 1px; height: 12px; }
+  /* Footer Controls Bar */
+  .caption-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    pointer-events: auto;
+    gap: 20px;
+  }
 
-    .corner-mark.top-right { top: -8px; right: -8px; }
-    .corner-mark.top-right::before { top: 7px; right: 0; width: 12px; height: 1px; }
-    .corner-mark.top-right::after { top: 0; right: 7px; width: 1px; height: 12px; }
+  .controls-group {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    background: rgba(247, 241, 230, 0.75);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding: 8px 16px;
+    border: 1px solid rgba(43, 35, 24, 0.2);
+    box-shadow: 0 4px 15px rgba(43, 35, 24, 0.04);
+  }
 
-    .corner-mark.bottom-left { bottom: -8px; left: -8px; }
-    .corner-mark.bottom-left::before { bottom: 7px; left: 0; width: 12px; height: 1px; }
-    .corner-mark.bottom-left::after { bottom: 0; left: 7px; width: 1px; height: 12px; }
+  /* Season Pills */
+  .season-selector {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .season-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #6b5b45;
+    margin-right: 4px;
+  }
+  .season-btn {
+    appearance: none;
+    border: 1px solid rgba(43, 35, 24, 0.25);
+    background: transparent;
+    padding: 4px 10px 4px 6px;
+    font-family: Georgia, serif;
+    font-size: 12px;
+    color: #554533;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+  }
+  .season-btn:hover {
+    border-color: #2b2318;
+    color: #2b2318;
+  }
+  .season-btn.active {
+    background: #2b2318;
+    color: #f5eedf;
+    border-color: #2b2318;
+  }
+  .swatch {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .swatch-spring { background: #ea8ea6; }
+  .swatch-summer { background: #5f8f45; }
+  .swatch-autumn { background: #d98a2c; }
+  .swatch-winter { background: #96afc4; border: 1px solid rgba(0,0,0,0.2); }
 
-    .corner-mark.bottom-right { bottom: -8px; right: -8px; }
-    .corner-mark.bottom-right::before { bottom: 7px; right: 0; width: 12px; height: 1px; }
-    .corner-mark.bottom-right::after { top: 0; right: 7px; width: 1px; height: 12px; }
+  /* Wind Slider */
+  .wind-control {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 140px;
+  }
+  .wind-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #6b5b45;
+  }
+  .wind-slider {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    height: 2px;
+    background: rgba(43, 35, 24, 0.3);
+    outline: none;
+    cursor: pointer;
+  }
+  .wind-slider::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #f1e7d3;
+    border: 1.5px solid #2b2318;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    transition: transform 0.1s;
+  }
+  .wind-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+  }
+  .wind-slider::-moz-range-thumb {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #f1e7d3;
+    border: 1.5px solid #2b2318;
+    cursor: pointer;
+  }
 
-    /* Top Botanical Plate Heading & Metadata */
-    .plate-header {
-      padding: 16px 22px 10px 22px;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      pointer-events: auto;
-      border-bottom: 1px solid rgba(43, 35, 24, 0.18);
-      background: linear-gradient(180deg, rgba(241, 231, 211, 0.5) 0%, rgba(241, 231, 211, 0) 100%);
-    }
+  /* Plant Button */
+  .plant-btn {
+    appearance: none;
+    background: #2b2318;
+    color: #f7f1e4;
+    border: 1px solid #2b2318;
+    padding: 9px 18px;
+    font-family: Georgia, serif;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    box-shadow: 0 3px 8px rgba(43, 35, 24, 0.15);
+  }
+  .plant-btn:hover {
+    background: #f1e7d3;
+    color: #2b2318;
+    border-color: #2b2318;
+  }
+  .plant-btn:active {
+    transform: translateY(1px);
+  }
 
-    .plate-title-group {
-      max-width: 62%;
-    }
+  /* Footnote & Toast */
+  .plate-footer-meta {
+    font-size: 11px;
+    color: #6b5b45;
+    font-style: italic;
+    max-width: 320px;
+    line-height: 1.35;
+    text-align: right;
+  }
 
-    .plate-number {
-      font-size: 10px;
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-      color: var(--ink-secondary);
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-
-    .latin-binomial {
-      font-size: 27px;
-      font-style: italic;
-      font-weight: normal;
-      color: var(--ink-primary);
-      line-height: 1.15;
-      letter-spacing: 0.01em;
-    }
-
-    .latin-binomial span {
-      font-size: 21px;
-      font-style: normal;
-      color: var(--ink-secondary);
-    }
-
-    .family-line {
-      font-size: 12.5px;
-      font-style: italic;
-      color: var(--ink-secondary);
-      margin-top: 5px;
-      letter-spacing: 0.02em;
-    }
-
-    /* Production Rules in Courier New at top right */
-    .production-rules-box {
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      line-height: 1.45;
-      color: var(--ink-primary);
-      background: rgba(244, 236, 222, 0.75);
-      border: 1px solid rgba(43, 35, 24, 0.32);
-      padding: 8px 12px;
-      border-radius: 2px;
-      box-shadow: 0 1px 3px rgba(43, 35, 24, 0.05);
-      white-space: pre;
-    }
-
-    .rules-legend {
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: var(--ink-secondary);
-      border-bottom: 1px solid rgba(43, 35, 24, 0.2);
-      padding-bottom: 3px;
-      margin-bottom: 5px;
-    }
-
-    /* Center Canvas Area */
-    .canvas-container {
-      position: relative;
-      flex: 1;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      cursor: crosshair;
-      pointer-events: auto;
-    }
-
-    #botanicalCanvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-
-    /* Caption & Controls Bar along bottom of plate */
-    .caption-bar {
-      padding: 12px 22px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      border-top: 1px solid rgba(43, 35, 24, 0.2);
-      background: linear-gradient(0deg, rgba(241, 231, 211, 0.8) 0%, rgba(241, 231, 211, 0.25) 100%);
-      pointer-events: auto;
-      flex-wrap: wrap;
-    }
-
-    /* Season pill-group with colour swatches */
-    .season-group {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .season-label-prefix {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: var(--ink-secondary);
-      margin-right: 4px;
-      font-weight: 600;
-    }
-
-    .season-pill {
-      background: rgba(241, 231, 211, 0.7);
-      border: 1px solid rgba(43, 35, 24, 0.35);
-      border-radius: 14px;
-      padding: 5px 11px;
-      font-family: var(--font-serif);
-      font-size: 11.5px;
-      color: var(--ink-primary);
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      transition: all 0.25s ease;
-    }
-
-    .season-pill:hover {
-      background: rgba(248, 242, 232, 0.95);
-      border-color: var(--ink-primary);
-    }
-
-    .season-pill.active {
-      background: var(--ink-primary);
-      color: var(--paper-light);
-      border-color: var(--ink-primary);
-      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35);
-    }
-
-    .swatches-cluster {
-      display: inline-flex;
-      gap: 2.5px;
-      align-items: center;
-    }
-
-    .swatch-dot {
-      width: 6.5px;
-      height: 6.5px;
-      border-radius: 50%;
-      border: 0.5px solid rgba(43, 35, 24, 0.25);
-      display: inline-block;
-    }
-
-    /* Wind Slider Control */
-    .wind-control-group {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      min-width: 240px;
-      flex: 1;
-      max-width: 340px;
-    }
-
-    .wind-title-box {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      min-width: 80px;
-    }
-
-    .wind-caption {
-      font-size: 10px;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: var(--ink-secondary);
-      font-weight: 600;
-    }
-
-    .wind-readout {
-      font-size: 12px;
-      font-style: italic;
-      color: var(--ink-primary);
-    }
-
-    .wind-slider-wrap {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    /* Hairline range slider */
-    input[type=range] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      background: transparent;
-      cursor: pointer;
-      padding: 4px 0;
-    }
-
-    input[type=range]:focus {
-      outline: none;
-    }
-
-    input[type=range]::-webkit-slider-runnable-track {
-      height: 1px;
-      background: rgba(43, 35, 24, 0.45);
-      border-radius: 1px;
-    }
-
-    input[type=range]::-moz-range-track {
-      height: 1px;
-      background: rgba(43, 35, 24, 0.45);
-      border-radius: 1px;
-    }
-
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 13px;
-      height: 13px;
-      border-radius: 50%;
-      background: var(--paper-light);
-      border: 1.5px solid var(--ink-primary);
-      margin-top: -6px;
-      box-shadow: 0 1px 3px rgba(43, 35, 24, 0.25);
-      transition: transform 0.15s ease, background-color 0.15s ease;
-    }
-
-    input[type=range]::-moz-range-thumb {
-      width: 13px;
-      height: 13px;
-      border-radius: 50%;
-      background: var(--paper-light);
-      border: 1.5px solid var(--ink-primary);
-      box-shadow: 0 1px 3px rgba(43, 35, 24, 0.25);
-      transition: transform 0.15s ease, background-color 0.15s ease;
-    }
-
-    input[type=range]:hover::-webkit-slider-thumb {
-      transform: scale(1.2);
-      background: #ffffff;
-    }
-
-    .wind-notches {
-      display: flex;
-      justify-content: space-between;
-      font-size: 8.5px;
-      text-transform: lowercase;
-      color: var(--ink-secondary);
-      letter-spacing: 0.05em;
-      padding: 0 1px;
-    }
-
-    .wind-notches span.active-notch {
-      color: var(--ink-primary);
-      font-weight: bold;
-    }
-
-    /* Action Buttons (Plant new tree & Reduced Motion) */
-    .action-group {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .btn-plant {
-      position: relative;
-      background: var(--ink-primary);
-      color: var(--paper-light);
-      border: 1px solid var(--ink-primary);
-      border-radius: 2px;
-      padding: 8px 18px;
-      font-family: var(--font-serif);
-      font-size: 11.5px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      cursor: pointer;
-      overflow: hidden;
-      z-index: 1;
-      transition: color 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.35s ease;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    /* Button wipe to paper on hover */
-    .btn-plant::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: var(--paper-light);
-      transform: scaleX(0);
-      transform-origin: left;
-      transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
-      z-index: -1;
-    }
-
-    .btn-plant:hover {
-      color: var(--ink-primary);
-      border-color: var(--ink-primary);
-    }
-
-    .btn-plant:hover::before {
-      transform: scaleX(1);
-    }
-
-    .btn-plant kbd {
-      font-family: var(--font-mono);
-      font-size: 9px;
-      opacity: 0.75;
-      padding: 1px 4px;
-      border: 1px solid currentColor;
-      border-radius: 2px;
-      letter-spacing: 0;
-    }
-
-    /* Toast Notification for Sapling Planting */
-    .toast {
-      position: absolute;
-      top: 18px;
-      left: 50%;
-      transform: translate(-50%, -8px);
-      background: var(--paper-light);
-      color: var(--ink-primary);
-      border: 1px solid rgba(43, 35, 24, 0.4);
-      outline: 1px solid rgba(43, 35, 24, 0.3);
-      outline-offset: 2px;
-      padding: 6px 18px;
-      font-family: var(--font-serif);
-      font-size: 12px;
-      font-style: italic;
-      letter-spacing: 0.05em;
-      box-shadow: 0 4px 14px rgba(43, 35, 24, 0.12);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.35s ease, transform 0.35s ease;
-      z-index: 50;
-    }
-
-    .toast.visible {
-      opacity: 1;
-      transform: translate(-50%, 0);
-    }
-
-    /* Small click hint badge */
-    .canvas-hint {
-      position: absolute;
-      bottom: 12px;
-      left: 18px;
-      font-size: 10.5px;
-      font-style: italic;
-      color: var(--ink-secondary);
-      pointer-events: none;
-      opacity: 0.7;
-    }
-
-    /* Responsive adjustments */
-    @media (max-width: 900px) {
-      .plate-outer {
-        top: 12px;
-        bottom: 12px;
-        left: 12px;
-        right: 12px;
-      }
-      .plate-header {
-        flex-direction: column;
-        gap: 12px;
-        padding: 12px 16px;
-      }
-      .plate-title-group {
-        max-width: 100%;
-      }
-      .production-rules-box {
-        align-self: flex-start;
-      }
-      .caption-bar {
-        padding: 10px 14px;
-        gap: 10px;
-      }
-      .wind-control-group {
-        min-width: 180px;
-      }
-    }
-  </style>
+  .toast {
+    position: fixed;
+    bottom: 85px;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: rgba(43, 35, 24, 0.9);
+    color: #f7f1e4;
+    font-style: italic;
+    font-size: 13px;
+    padding: 6px 16px;
+    border-radius: 20px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    z-index: 100;
+  }
+  .toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
 </head>
 <body>
 
-  <!-- SVG Fractal Noise Filter for 19th-century Paper Fibre Texture -->
-  <svg class="paper-texture-svg" aria-hidden="true">
-    <filter id="paper-noise" x="0%" y="0%" width="100%" height="100%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.038 0.038" numOctaves="4" result="noise" />
-      <feColorMatrix type="matrix" values="
-        0.33 0.33 0.33 0 0
-        0.33 0.33 0.33 0 0
-        0.33 0.33 0.33 0 0
-        0    0    0    1 0" result="grayNoise" />
-      <feComponentTransfer>
-        <feFuncR type="linear" slope="0.85" intercept="0.15" />
-        <feFuncG type="linear" slope="0.82" intercept="0.18" />
-        <feFuncB type="linear" slope="0.75" intercept="0.25" />
-      </feComponentTransfer>
-    </filter>
-    <rect width="100%" height="100%" filter="url(#paper-noise)" />
-  </svg>
+<!-- Paper Grain Filter -->
+<svg class="paper-grain" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+  <filter id="fibres">
+    <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="4" result="noise" />
+    <feColorMatrix type="matrix" values="0 0 0 0 0.17  0 0 0 0 0.13  0 0 0 0 0.08  0 0 0 0.45 0" />
+  </filter>
+  <rect width="100%" height="100%" filter="url(#fibres)" />
+</svg>
 
-  <!-- Botanical Herbarium Inset Plate Frame -->
-  <div class="plate-outer" role="region" aria-label="Botanical Plate">
-    <div class="corner-mark top-left"></div>
-    <div class="corner-mark top-right"></div>
-    <div class="corner-mark bottom-left"></div>
-    <div class="corner-mark bottom-right"></div>
+<canvas id="plateCanvas"></canvas>
 
-    <!-- Header Section -->
-    <header class="plate-header">
-      <div class="plate-title-group">
-        <div class="plate-number">Plate XVII · Lindenmayer Herbarium</div>
-        <h1 class="latin-binomial">Arbor recursiva <span>var. lindenmayeri</span></h1>
-        <div class="family-line">Grammaticaceae — a stochastic bracketed L-system, five derivations</div>
+<div class="botanical-frame">
+  <header class="herbarium-header">
+    <div class="plate-meta">
+      <span class="plate-num">Plate XVII · Lindenmayer Herbarium</span>
+      <h1 class="binomial">Arbor recursiva var. lindenmayeri</h1>
+      <p class="family-line">Grammaticaceae — a stochastic bracketed L-system, five derivations</p>
+    </div>
+    <div class="production-rules">
+      <div style="font-weight:bold; margin-bottom:2px; letter-spacing:0.05em;">LINDENMAYER SPECIFICATION</div>
+      Axiom: X<br>
+      p₁ (0.34): X → F[+X]F[−X]+X<br>
+      p₂ (0.33): X → F[−X]F[+X]−X<br>
+      p₃ (0.33): X → F[+X][−X]FX<br>
+      p₄: F → FF<br>
+      δ: 22°–28° jittered
+    </div>
+  </header>
+
+  <footer class="caption-bar">
+    <div class="controls-group">
+      <div class="season-selector">
+        <span class="season-label">Season:</span>
+        <button class="season-btn active" data-season="spring"><span class="swatch swatch-spring"></span>Spring</button>
+        <button class="season-btn" data-season="summer"><span class="swatch swatch-summer"></span>Summer</button>
+        <button class="season-btn" data-season="autumn"><span class="swatch swatch-autumn"></span>Autumn</button>
+        <button class="season-btn" data-season="winter"><span class="swatch swatch-winter"></span>Winter</button>
       </div>
 
-      <div class="production-rules-box" aria-label="L-system Production Rules">
-        <div class="rules-legend">Production Rules</div>axiom X;
-X → F[+X]F[−X]+X,
-X → F[−X]F[+X]−X,
-X → F[+X][−X]FX;
-F → FF;
-angle 22–28°, jittered</div>
-    </header>
-
-    <!-- Center 2D Botanical Canvas -->
-    <main class="canvas-container">
-      <canvas id="botanicalCanvas"></canvas>
-      <div id="toast" class="toast" role="status" aria-live="polite">Sapling planted</div>
-      <div class="canvas-hint">Click anywhere to plant a sapling (max 8)</div>
-    </main>
-
-    <!-- Caption & Controls Bar -->
-    <footer class="caption-bar">
-      <!-- Season Pill Group -->
-      <div class="season-group" role="radiogroup" aria-label="Seasonal Season Selector">
-        <span class="season-label-prefix">Season:</span>
-        <button class="season-pill active" data-season="spring" role="radio" aria-checked="true">
-          <span>Spring</span>
-          <span class="swatches-cluster">
-            <span class="swatch-dot" style="background:#f4a9bc"></span>
-            <span class="swatch-dot" style="background:#f9c9d5"></span>
-            <span class="swatch-dot" style="background:#ea8ea6"></span>
-            <span class="swatch-dot" style="background:#fff1f3"></span>
-          </span>
-        </button>
-        <button class="season-pill" data-season="summer" role="radio" aria-checked="false">
-          <span>Summer</span>
-          <span class="swatches-cluster">
-            <span class="swatch-dot" style="background:#5f8f45"></span>
-            <span class="swatch-dot" style="background:#78a659"></span>
-            <span class="swatch-dot" style="background:#3e6d33"></span>
-            <span class="swatch-dot" style="background:#93bb6e"></span>
-          </span>
-        </button>
-        <button class="season-pill" data-season="autumn" role="radio" aria-checked="false">
-          <span>Autumn</span>
-          <span class="swatches-cluster">
-            <span class="swatch-dot" style="background:#d98a2c"></span>
-            <span class="swatch-dot" style="background:#c2561f"></span>
-            <span class="swatch-dot" style="background:#e6b04b"></span>
-            <span class="swatch-dot" style="background:#a63d1a"></span>
-          </span>
-        </button>
-        <button class="season-pill" data-season="winter" role="radio" aria-checked="false">
-          <span>Winter</span>
-          <span class="swatches-cluster">
-            <span class="swatch-dot" style="background:#ffffff; border: 0.5px solid #bbb;"></span>
-            <span class="swatch-dot" style="background:#e2eaf0"></span>
-            <span class="swatch-dot" style="background:#b8c9d9"></span>
-            <span class="swatch-dot" style="background:#8ea6bf"></span>
-          </span>
-        </button>
-      </div>
-
-      <!-- Wind Slider -->
-      <div class="wind-control-group">
-        <div class="wind-title-box">
-          <span class="wind-caption">Breeze:</span>
-          <span id="windReadout" class="wind-readout">gentle</span>
+      <div class="wind-control">
+        <div class="wind-meta">
+          <span>Wind</span>
+          <span id="windLabel">Gentle</span>
         </div>
-        <div class="wind-slider-wrap">
-          <input type="range" id="windSlider" min="0" max="100" value="32" aria-label="Wind Velocity Slider">
-          <div class="wind-notches">
-            <span id="notchStill">still</span>
-            <span id="notchGentle" class="active-notch">gentle</span>
-            <span id="notchBrisk">brisk</span>
-            <span id="notchGale">gale</span>
-          </div>
-        </div>
+        <input type="range" id="windSlider" class="wind-slider" min="0" max="100" value="25" />
       </div>
 
-      <!-- Plant New Tree Action Button -->
-      <div class="action-group">
-        <button id="btnPlant" class="btn-plant" title="Plant a new specimen tree (Space)">
-          <span>Plant new tree</span>
-          <kbd>Space</kbd>
-        </button>
-      </div>
-    </footer>
-  </div>
+      <button id="plantBtn" class="plant-btn" title="Shortcut: Spacebar">Plant new tree</button>
+    </div>
 
-  <script>
-    (function() {
-      'use strict';
+    <div class="plate-footer-meta">
+      Click canvas to plant saplings.<br>
+      Perspective scale reflects depth of planting.
+    </div>
+  </footer>
+</div>
 
-      // --- 1. SEEDED XORSHIFT RANDOM NUMBER GENERATOR ---
-      function createXorshift(seed) {
-        let s = (seed >>> 0) || 88675123;
-        return function() {
-          s ^= s << 13;
-          s ^= s >>> 17;
-          s ^= s << 5;
-          return ((s >>> 0) / 4294967296);
-        };
+<div id="toast" class="toast">Sapling planted</div>
+
+<script>
+(() => {
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const canvas = document.getElementById('plateCanvas');
+  const ctx = canvas.getContext('2d');
+  const toast = document.getElementById('toast');
+  const windSlider = document.getElementById('windSlider');
+  const windLabel = document.getElementById('windLabel');
+  const plantBtn = document.getElementById('plantBtn');
+  const seasonBtns = document.querySelectorAll('.season-btn');
+
+  // Seasons Palette
+  const SEASONS = {
+    spring: {
+      leaves: ['#f4a9bc', '#f9c9d5', '#ea8ea6', '#fff1f3'],
+      skyTint: 'rgba(248, 225, 230, 0.16)',
+      name: 'Spring'
+    },
+    summer: {
+      leaves: ['#5f8f45', '#78a659', '#3e6d33', '#93bb6e'],
+      skyTint: 'rgba(215, 235, 195, 0.15)',
+      name: 'Summer'
+    },
+    autumn: {
+      leaves: ['#d98a2c', '#c2561f', '#e6b04b', '#a63d1a'],
+      skyTint: 'rgba(245, 218, 178, 0.22)',
+      name: 'Autumn'
+    },
+    winter: {
+      leaves: [],
+      skyTint: 'rgba(210, 225, 238, 0.25)',
+      name: 'Winter'
+    }
+  };
+
+  let currentSeason = 'spring';
+  let targetSeason = 'spring';
+  let seasonTransition = 1.0; // 0 = old season shrinking, 1 = new fully grown
+  let oldSeason = 'spring';
+
+  // PRNG (Xorshift32)
+  function createRNG(seed) {
+    let s = (seed >>> 0) || 123456789;
+    return function() {
+      s ^= s << 13;
+      s ^= s >>> 17;
+      s ^= s << 5;
+      return ((s >>> 0) / 4294967296);
+    };
+  }
+
+  // Smooth ease out cubic
+  function easeOutCubic(t) {
+    return 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
+  }
+
+  // L-System Builder
+  function generateLSystem(seed, derivations = 5) {
+    const rng = createRNG(seed);
+    let str = "X";
+    for (let i = 0; i < derivations; i++) {
+      let nextStr = "";
+      for (let j = 0; j < str.length; j++) {
+        const c = str[j];
+        if (c === 'X') {
+          const r = rng();
+          if (r < 0.34) {
+            nextStr += "F[+X]F[-X]+X";
+          } else if (r < 0.67) {
+            nextStr += "F[-X]F[+X]-X";
+          } else {
+            nextStr += "F[+X][-X]FX";
+          }
+        } else if (c === 'F') {
+          nextStr += "FF";
+        } else {
+          nextStr += c;
+        }
+      }
+      str = nextStr;
+    }
+    return { str, rng };
+  }
+
+  // Tree Interpretation
+  class Tree {
+    constructor(x, y, scale = 1.0, seed = Math.floor(Math.random() * 1000000)) {
+      this.x = x;
+      this.y = y;
+      this.baseScale = scale;
+      this.seed = seed;
+      this.age = prefersReducedMotion ? 100000 : 0;
+      this.segments = [];
+      this.maxOrder = 0;
+      this.compile();
+    }
+
+    compile() {
+      const { str, rng } = generateLSystem(this.seed, 5);
+      const stack = [];
+      let currentOrder = 0;
+      let currentDepth = 0;
+      let parentIdx = -1;
+
+      // Base step length scaled to fit viewport
+      const stepLen = 4.2 * this.baseScale;
+      const baseAngle = (25 * Math.PI) / 180;
+
+      for (let i = 0; i < str.length; i++) {
+        const c = str[i];
+        if (c === 'F') {
+          currentOrder++;
+          if (currentOrder > this.maxOrder) this.maxOrder = currentOrder;
+
+          // Tiny organic curl / natural variation
+          const curvature = (rng() - 0.5) * 0.04;
+          const lengthVar = stepLen * (0.85 + rng() * 0.3);
+
+          const seg = {
+            parent: parentIdx,
+            order: currentOrder,
+            depth: currentDepth,
+            relAngle: curvature,
+            length: lengthVar,
+            isTip: false,
+            // Precalculate leaf properties
+            leafSize: (7 + rng() * 6) * this.baseScale,
+            leafAngle: (rng() - 0.5) * 1.5,
+            leafColorIdx: Math.floor(rng() * 4),
+            leafAspect: 0.45 + rng() * 0.35,
+            // Runtime dynamic cache
+            x0: 0, y0: 0, x1: 0, y1: 0,
+            worldAngle: 0,
+            growProgress: 0
+          };
+
+          const newIdx = this.segments.length;
+          this.segments.push(seg);
+          parentIdx = newIdx;
+        } else if (c === '+') {
+          const jitter = baseAngle * (0.88 + rng() * 0.24);
+          if (this.segments.length > 0) {
+            // Apply turn to next branch
+            this.segments[this.segments.length - 1].relAngle += jitter;
+          }
+        } else if (c === '-') {
+          const jitter = baseAngle * (0.88 + rng() * 0.24);
+          if (this.segments.length > 0) {
+            this.segments[this.segments.length - 1].relAngle -= jitter;
+          }
+        } else if (c === '[') {
+          stack.push({
+            order: currentOrder,
+            depth: currentDepth,
+            parent: parentIdx
+          });
+          currentDepth++;
+        } else if (c === ']') {
+          if (stack.length > 0) {
+            const popped = stack.pop();
+            currentOrder = popped.order;
+            currentDepth = popped.depth;
+            parentIdx = popped.parent;
+          }
+        }
       }
 
-      // --- 2. COLOR PALETTES ---
-      const PALETTES = {
-        spring: ['#f4a9bc', '#f9c9d5', '#ea8ea6', '#fff1f3'],
-        summer: ['#5f8f45', '#78a659', '#3e6d33', '#93bb6e'],
-        autumn: ['#d98a2c', '#c2561f', '#e6b04b', '#a63d1a'],
-        winter: [] // Winter has no leaves, uses snow highlights
-      };
+      // Mark tip segments (nodes that have no children)
+      const hasChildren = new Uint8Array(this.segments.length);
+      for (let i = 0; i < this.segments.length; i++) {
+        const p = this.segments[i].parent;
+        if (p >= 0) hasChildren[p] = 1;
+      }
+      for (let i = 0; i < this.segments.length; i++) {
+        if (!hasChildren[i]) this.segments[i].isTip = true;
+      }
+    }
 
-      const SKY_TINTS = {
-        spring: { r: 244, g: 195, b: 205, a: 0.16 },
-        summer: { r: 180, g: 218, b: 175, a: 0.12 },
-        autumn: { r: 232, g: 195, b: 155, a: 0.16 },
-        winter: { r: 205, g: 220, b: 235, a: 0.20 }
-      };
+    update(dt) {
+      this.age += dt;
+    }
 
-      // --- 3. L-SYSTEM DERIVATION & TREE HIERARCHY ---
-      function deriveLSystem(seed, derivations = 5) {
-        const rng = createXorshift(seed);
-        let str = 'X';
+    draw(ctx, time, windAmt, seasonKey, oldSeasonKey, seasonFactor) {
+      const segs = this.segments;
+      const maxOrd = this.maxOrder || 1;
 
-        const xRules = [
-          'F[+X]F[-X]+X',
-          'F[-X]F[+X]-X',
-          'F[+X][-X]FX'
-        ];
+      for (let i = 0; i < segs.length; i++) {
+        const seg = segs[i];
 
-        for (let d = 0; d < derivations; d++) {
-          let nextStr = '';
-          for (let i = 0; i < str.length; i++) {
-            const ch = str[i];
-            if (ch === 'X') {
-              const r = rng();
-              if (r < 0.334) nextStr += xRules[0];
-              else if (r < 0.667) nextStr += xRules[1];
-              else nextStr += xRules[2];
-            } else if (ch === 'F') {
-              nextStr += 'FF';
-            } else {
-              nextStr += ch;
+        // Animated growth order by order
+        let growth = 1.0;
+        if (!prefersReducedMotion) {
+          const startTime = seg.order * 55;
+          const duration = 105;
+          const t = (this.age - startTime) / duration;
+          growth = easeOutCubic(t);
+        }
+
+        seg.growProgress = growth;
+        if (growth <= 0) continue;
+
+        // Tree hierarchical kinematic sway
+        let parentX = this.x;
+        let parentY = this.y;
+        let parentAngle = -Math.PI / 2; // Point upwards
+
+        if (seg.parent >= 0) {
+          const p = segs[seg.parent];
+          parentX = p.x1;
+          parentY = p.y1;
+          parentAngle = p.worldAngle;
+        }
+
+        // Wind sway accumulation
+        const normOrder = seg.order / maxOrd;
+        const windBase = windAmt * (0.003 + 0.014 * normOrder) * Math.sin(time * 1.6 + seg.order * 0.35);
+        const windFlutter = (windAmt * 0.003) * Math.sin(time * 3.8 + seg.depth * 0.85);
+        const currentAngle = parentAngle + seg.relAngle + (windBase + windFlutter);
+
+        const currentLen = seg.length * growth;
+        const x1 = parentX + Math.cos(currentAngle) * currentLen;
+        const y1 = parentY + Math.sin(currentAngle) * currentLen;
+
+        seg.x0 = parentX;
+        seg.y0 = parentY;
+        seg.x1 = x1;
+        seg.y1 = y1;
+        seg.worldAngle = currentAngle;
+
+        // Draw Branch Stroke
+        const taper = Math.pow(1 - (seg.order / (maxOrd + 3)), 1.6);
+        const strokeW = Math.max(0.7, taper * 9.5 * this.baseScale);
+
+        ctx.beginPath();
+        ctx.moveTo(parentX, parentY);
+        ctx.lineTo(x1, y1);
+        ctx.lineWidth = strokeW;
+        ctx.strokeStyle = '#3b2a1c';
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Winter Snow Highlight on Top Edges of Thicker Branches
+        if (targetSeason === 'winter' || oldSeasonKey === 'winter') {
+          const snowAlpha = targetSeason === 'winter' ? seasonFactor : (1 - seasonFactor);
+          if (snowAlpha > 0.01 && strokeW > 2.2) {
+            // Check branch orientation so snow only rests on top
+            const nx = Math.sin(currentAngle);
+            const ny = -Math.cos(currentAngle);
+            if (ny < 0) { // Facing upward
+              ctx.beginPath();
+              ctx.moveTo(parentX + nx * (strokeW * 0.35), parentY + ny * (strokeW * 0.35));
+              ctx.lineTo(x1 + nx * (strokeW * 0.35), y1 + ny * (strokeW * 0.35));
+              ctx.lineWidth = strokeW * 0.45;
+              ctx.strokeStyle = `rgba(245, 248, 252, ${0.85 * snowAlpha})`;
+              ctx.stroke();
             }
           }
-          str = nextStr;
         }
 
-        return { str, rng };
-      }
+        // Draw Tip Blossoms / Foliage
+        if (seg.isTip && growth >= 0.95) {
+          const tipAge = this.age - (seg.order * 55 + 105);
+          let bloomEase = prefersReducedMotion ? 1.0 : Math.min(1.0, Math.max(0, tipAge / 700));
+          bloomEase = easeOutCubic(bloomEase);
 
-      function buildTreeHierarchy(lSystemData, baseSegmentLength) {
-        const { str, rng } = lSystemData;
+          // Foliage Transition Scaling
+          const drawLeaf = (palKey, scaleMultiplier, opacity) => {
+            if (opacity <= 0.01 || scaleMultiplier <= 0.01) return;
+            const pal = SEASONS[palKey].leaves;
+            if (!pal || pal.length === 0) return;
+            const col = pal[seg.leafColorIdx % pal.length];
+            const leafRad = seg.leafSize * bloomEase * scaleMultiplier;
 
-        const root = {
-          order: 0,
-          depth: 0,
-          turnAngle: 0,
-          length: baseSegmentLength,
-          children: [],
-          isTip: false,
-          leafColorIdx: 0,
-          leafAngle: 0,
-          leafSize: 1
-        };
-
-        let currentParent = root;
-        let pendingAngle = 0;
-        let currentDepth = 0;
-        const stack = [];
-
-        for (let i = 0; i < str.length; i++) {
-          const ch = str[i];
-          if (ch === '+') {
-            // angle 22°–28°, jittered
-            const deg = 22 + rng() * 6;
-            pendingAngle += deg * (Math.PI / 180);
-          } else if (ch === '-') {
-            const deg = 22 + rng() * 6;
-            pendingAngle -= deg * (Math.PI / 180);
-          } else if (ch === '[') {
-            stack.push({ parent: currentParent, angle: pendingAngle, depth: currentDepth });
-            currentDepth++;
-            pendingAngle = 0;
-          } else if (ch === ']') {
-            if (stack.length > 0) {
-              const state = stack.pop();
-              currentParent = state.parent;
-              pendingAngle = state.angle;
-              currentDepth = state.depth;
-            }
-          } else if (ch === 'F') {
-            const nextOrder = currentParent.order + 1;
-            const segment = {
-              order: nextOrder,
-              depth: currentDepth,
-              turnAngle: pendingAngle,
-              length: baseSegmentLength * (0.85 + rng() * 0.3),
-              children: [],
-              isTip: false,
-              leafColorIdx: Math.floor(rng() * 4),
-              leafAngle: (rng() - 0.5) * 1.4,
-              leafSize: 0.85 + rng() * 0.35
-            };
-            currentParent.children.push(segment);
-            currentParent = segment;
-            pendingAngle = 0;
-          }
-        }
-
-        // Post-process to calculate maxOrder and mark tips
-        let maxOrder = 0;
-        function traverse(node) {
-          if (node.order > maxOrder) maxOrder = node.order;
-          if (node.children.length === 0 && node.order > 0) {
-            node.isTip = true;
-          }
-          for (let c = 0; c < node.children.length; c++) {
-            traverse(node.children[c]);
-          }
-        }
-        traverse(root);
-
-        return { root, maxOrder };
-      }
-
-      // --- 4. TREE SPECIMEN CLASS ---
-      class BotanicalTree {
-        constructor(seed, x, y, scale = 1.0, isInstant = false) {
-          this.seed = seed;
-          this.x = x;
-          this.y = y;
-          this.scale = scale;
-          this.age = isInstant ? 999999 : 0;
-          this.baseWidth = Math.max(2.4, 9.5 * scale);
-          this.stepLength = Math.max(5, 14.5 * scale);
-
-          const lData = deriveLSystem(seed, 5);
-          const treeData = buildTreeHierarchy(lData, this.stepLength);
-          this.root = treeData.root;
-          this.maxOrder = treeData.maxOrder;
-        }
-
-        update(dt) {
-          this.age += dt;
-        }
-
-        draw(ctx, time, windAmt, currentSeason, leafScaleMul) {
-          ctx.save();
-          ctx.translate(this.x, this.y);
-
-          // Render starting from root children (trunk base)
-          for (let i = 0; i < this.root.children.length; i++) {
-            this.drawSegment(this.root.children[i], ctx, time, windAmt, currentSeason, leafScaleMul);
-          }
-
-          ctx.restore();
-        }
-
-        drawSegment(node, ctx, time, windAmt, currentSeason, leafScaleMul) {
-          const appearTime = node.order * 55;
-          if (this.age < appearTime) return; // not yet grown
-
-          // Growth eases out (cubic) over ~100 ms
-          const growProgress = Math.min(1, Math.max(0, (this.age - appearTime) / 100));
-          const easedGrow = 1 - Math.pow(1 - growProgress, 3);
-          const curLength = node.length * easedGrow;
-
-          // Wind sway accumulation:
-          // windAmt * (0.003 + 0.014 * order/maxOrder) * sin(time * 1.6 + order * 0.35)
-          // plus a faster low-amplitude term keyed to bracket depth
-          const sway1 = windAmt * (0.003 + 0.014 * (node.order / (this.maxOrder || 1))) * Math.sin(time * 1.6 + node.order * 0.35);
-          const sway2 = windAmt * 0.0042 * Math.sin(time * 3.6 + node.depth * 0.78);
-          const totalTurn = node.turnAngle + sway1 + sway2;
-
-          ctx.save();
-          ctx.rotate(totalTurn);
-
-          // Line width tapers as (1 - order/maxOrder)^1.6 with round caps, bark colour near #3b2a1c
-          const taper = Math.max(0, 1 - (node.order / (this.maxOrder + 1)));
-          const branchWidth = Math.max(1.05, this.baseWidth * Math.pow(taper, 1.6));
-
-          // Draw branch
-          ctx.lineWidth = branchWidth;
-          ctx.strokeStyle = '#3b2a1c';
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(0, -curLength);
-          ctx.stroke();
-
-          // Winter: thin white highlight along top edge of thick branches
-          if (currentSeason === 'winter' && branchWidth >= 2.0 && curLength > 1.5) {
             ctx.save();
-            ctx.lineWidth = Math.max(0.75, branchWidth * 0.32);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.84)';
-            const snowOffset = branchWidth * 0.33;
+            ctx.translate(x1, y1);
+            ctx.rotate(currentAngle + seg.leafAngle);
             ctx.beginPath();
-            ctx.moveTo(-snowOffset, 0);
-            ctx.lineTo(-snowOffset, -curLength);
+            ctx.ellipse(0, -leafRad * 0.6, leafRad * seg.leafAspect, leafRad, 0, 0, Math.PI * 2);
+            ctx.fillStyle = col;
+            ctx.globalAlpha = opacity * 0.92;
+            ctx.fill();
+
+            // Deliberate botanical hairline ink contour
+            ctx.lineWidth = 0.55;
+            ctx.strokeStyle = 'rgba(43, 35, 24, 0.45)';
             ctx.stroke();
             ctx.restore();
-          }
+          };
 
-          // Advance turtle to branch end
-          ctx.translate(0, -curLength);
-
-          // Blossom at tips once grown: rotated ellipses whose scale eases in over 700 ms
-          if (node.isTip && growProgress >= 1.0) {
-            const finishGrowTime = appearTime + 100;
-            if (this.age >= finishGrowTime) {
-              const bloomProgress = Math.min(1, Math.max(0, (this.age - finishGrowTime) / 700));
-              const easedBloom = 1 - Math.pow(1 - bloomProgress, 3);
-              const activeScale = easedBloom * leafScaleMul;
-
-              if (activeScale > 0.001 && currentSeason !== 'winter') {
-                this.drawBlossom(ctx, node, activeScale, currentSeason);
-              }
-            }
-          }
-
-          // Recurse down children
-          if (curLength > 0.5) {
-            for (let c = 0; c < node.children.length; c++) {
-              this.drawSegment(node.children[c], ctx, time, windAmt, currentSeason, leafScaleMul);
-            }
-          }
-
-          ctx.restore();
-        }
-
-        drawBlossom(ctx, node, scale, season) {
-          const colors = PALETTES[season];
-          if (!colors || colors.length === 0) return;
-
-          const color = colors[node.leafColorIdx % colors.length];
-          const leafScale = scale * node.leafSize * this.scale;
-
-          ctx.save();
-          ctx.scale(leafScale, leafScale);
-          ctx.rotate(node.leafAngle);
-
-          if (season === 'spring') {
-            // Spring pink blossom petals cluster
-            for (let a = -0.55; a <= 0.55; a += 0.38) {
-              ctx.save();
-              ctx.rotate(a);
-              ctx.fillStyle = color;
-              ctx.strokeStyle = 'rgba(43, 35, 24, 0.35)';
-              ctx.lineWidth = 0.55;
-              ctx.beginPath();
-              ctx.ellipse(0, -6.5, 3.2, 5.8, 0, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.stroke();
-              ctx.restore();
-            }
-            // golden-sepia stamen dot
-            ctx.fillStyle = '#b38e4a';
-            ctx.beginPath();
-            ctx.arc(0, -1, 1.3, 0, Math.PI * 2);
-            ctx.fill();
-          } else if (season === 'summer') {
-            // Summer foliage: elliptical botanical leaves with central vein
-            ctx.fillStyle = color;
-            ctx.strokeStyle = 'rgba(43, 35, 24, 0.4)';
-            ctx.lineWidth = 0.55;
-            ctx.beginPath();
-            ctx.ellipse(0, -9, 4.2, 8.5, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-
-            // Delicately etched central leaf vein
-            ctx.strokeStyle = 'rgba(43, 35, 24, 0.22)';
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(0, -16);
-            ctx.stroke();
-          } else if (season === 'autumn') {
-            // Autumn ambers: fluttering oval leaves
-            ctx.fillStyle = color;
-            ctx.strokeStyle = 'rgba(43, 35, 24, 0.42)';
-            ctx.lineWidth = 0.55;
-            ctx.beginPath();
-            ctx.ellipse(0, -8.5, 4.0, 7.8, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-
-            // Etched central leaf vein
-            ctx.strokeStyle = 'rgba(60, 30, 10, 0.24)';
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(0, -15);
-            ctx.stroke();
-          }
-
-          ctx.restore();
-        }
-      }
-
-      // --- 5. ENVIRONMENT: MIST, GRASS TICKS, SNOWFLAKES ---
-      const mistEllipses = [
-        { xRatio: 0.15, yOffset: -16, width: 440, height: 38, speed: 7.5 },
-        { xRatio: 0.65, yOffset: 8,   width: 620, height: 50, speed: 12.0 },
-        { xRatio: 0.40, yOffset: -6,  width: 360, height: 30, speed: 9.0 }
-      ];
-
-      let grassTicks = [];
-      function generateGrass(width, horizonY, bottomY) {
-        grassTicks = [];
-        const count = Math.floor(width / 8);
-        const rng = createXorshift(492041);
-        for (let i = 0; i < count; i++) {
-          const x = rng() * width;
-          const y = horizonY + rng() * Math.max(10, bottomY - horizonY);
-          const height = 4 + rng() * 8.5;
-          const baseTilt = (rng() - 0.5) * 0.25;
-          grassTicks.push({ x, y, height, baseTilt });
-        }
-      }
-
-      // 120 snowflakes for Winter
-      const snowflakes = [];
-      function initSnowflakes(width, height) {
-        snowflakes.length = 0;
-        const rng = createXorshift(738192);
-        for (let i = 0; i < 120; i++) {
-          snowflakes.push({
-            x: rng() * width,
-            y: rng() * height,
-            vy: 0.35 + rng() * 0.75,
-            vx: (rng() - 0.5) * 0.25,
-            radius: 1.1 + rng() * 1.7,
-            opacity: 0.4 + rng() * 0.55,
-            wobbleSpeed: 1.2 + rng() * 1.5,
-            wobbleAmp: 0.5 + rng() * 1.0,
-            wobblePhase: rng() * Math.PI * 2
-          });
-        }
-      }
-
-      // --- 6. APPLICATION STATE ---
-      const canvas = document.getElementById('botanicalCanvas');
-      const ctx = canvas.getContext('2d');
-      const toast = document.getElementById('toast');
-      const windSlider = document.getElementById('windSlider');
-      const windReadout = document.getElementById('windReadout');
-      const btnPlant = document.getElementById('btnPlant');
-      const seasonPills = document.querySelectorAll('.season-pill');
-      const notches = {
-        still: document.getElementById('notchStill'),
-        gentle: document.getElementById('notchGentle'),
-        brisk: document.getElementById('notchBrisk'),
-        gale: document.getElementById('notchGale')
-      };
-
-      let canvasWidth = 0;
-      let canvasHeight = 0;
-      let horizonY = 0;
-      let dpr = 1;
-
-      // Reduced motion check
-      let isReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-      // Trees
-      let mainTree = null;
-      const saplings = []; // at most 8 kept
-
-      // Wind State
-      let windAmt = 0.32; // 0 to 1
-
-      // Season State & Animated Switch Transition
-      let currentSeason = 'spring';
-      let targetSeason = 'spring';
-      let seasonTransitionState = 'idle'; // 'shrinking', 'growing'
-      let seasonTransitionTime = 0;
-      let leafScaleMultiplier = 1.0;
-      let winterAtmosphereAlpha = 0.0; // 0 to 1 for snowflakes & highlights
-
-      // Time tracking
-      let lastTimestamp = performance.now();
-      let toastTimer = null;
-
-      function showToast(text) {
-        toast.textContent = text;
-        toast.classList.add('visible');
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => {
-          toast.classList.remove('visible');
-        }, 2200);
-      }
-
-      function updateWindUI(val) {
-        windAmt = val / 100;
-        let desc = 'still';
-        if (val <= 15) desc = 'still';
-        else if (val <= 45) desc = 'gentle';
-        else if (val <= 75) desc = 'brisk';
-        else desc = 'gale';
-
-        windReadout.textContent = desc;
-
-        for (const k in notches) {
-          notches[k].classList.remove('active-notch');
-        }
-        if (val <= 15) notches.still.classList.add('active-notch');
-        else if (val <= 45) notches.gentle.classList.add('active-notch');
-        else if (val <= 75) notches.brisk.classList.add('active-notch');
-        else notches.gale.classList.add('active-notch');
-      }
-
-      function setSeason(newSeason) {
-        if (newSeason === currentSeason && seasonTransitionState === 'idle') return;
-        targetSeason = newSeason;
-        seasonTransitionState = 'shrinking';
-        seasonTransitionTime = performance.now();
-
-        seasonPills.forEach(pill => {
-          const match = pill.dataset.season === newSeason;
-          pill.classList.toggle('active', match);
-          pill.setAttribute('aria-checked', match ? 'true' : 'false');
-        });
-      }
-
-      function plantSpecimenTree() {
-        const seed = Math.floor(Math.random() * 9000000) + 1000000;
-        const mainScale = Math.max(0.7, Math.min(1.15, canvasHeight / 850));
-        mainTree = new BotanicalTree(seed, canvasWidth * 0.5, horizonY + 22, mainScale, isReducedMotion);
-        saplings.length = 0; // reset saplings for fresh specimen plate
-        showToast('Specimen planted · Seed #' + seed);
-      }
-
-      function plantSaplingAt(cx, cy) {
-        // Perspective scaling: saplings lower on the plate are drawn a little larger
-        const relativeDepth = (cy - (horizonY - 60)) / Math.max(50, canvasHeight - (horizonY - 60));
-        const clampedDepth = Math.max(0.05, Math.min(1.2, relativeDepth));
-        const saplingScale = (0.24 + clampedDepth * 0.44) * Math.max(0.65, canvasHeight / 900);
-
-        const seed = Math.floor(Math.random() * 9000000) + 1000000;
-        const sapling = new BotanicalTree(seed, cx, cy, saplingScale, isReducedMotion);
-
-        saplings.push(sapling);
-        if (saplings.length > 8) {
-          saplings.shift(); // at most eight saplings are kept
-        }
-
-        showToast('Sapling planted');
-      }
-
-      // --- 7. RESIZE & CANVAS MANAGEMENT ---
-      function handleResize() {
-        const container = canvas.parentElement;
-        const rect = container.getBoundingClientRect();
-        dpr = window.devicePixelRatio || 1;
-
-        canvasWidth = rect.width;
-        canvasHeight = rect.height;
-        horizonY = Math.floor(canvasHeight * 0.77);
-
-        canvas.width = Math.floor(canvasWidth * dpr);
-        canvas.height = Math.floor(canvasHeight * dpr);
-
-        generateGrass(canvasWidth, horizonY, canvasHeight);
-        initSnowflakes(canvasWidth, canvasHeight);
-
-        // Reposition or create main specimen tree
-        const mainScale = Math.max(0.7, Math.min(1.15, canvasHeight / 850));
-        if (!mainTree) {
-          plantSpecimenTree();
-        } else {
-          mainTree.x = canvasWidth * 0.5;
-          mainTree.y = horizonY + 22;
-          mainTree.scale = mainScale;
-        }
-      }
-
-      window.addEventListener('resize', handleResize);
-
-      // --- 8. USER EVENT LISTENERS ---
-      // Canvas click to plant sapling
-      canvas.addEventListener('click', function(e) {
-        const rect = canvas.getBoundingClientRect();
-        const cx = e.clientX - rect.left;
-        const cy = e.clientY - rect.top;
-        plantSaplingAt(cx, cy);
-      });
-
-      // Wind slider
-      windSlider.addEventListener('input', function(e) {
-        updateWindUI(parseInt(e.target.value, 10));
-      });
-
-      // Season pills
-      seasonPills.forEach(pill => {
-        pill.addEventListener('click', function(e) {
-          e.stopPropagation();
-          const s = this.dataset.season;
-          setSeason(s);
-        });
-      });
-
-      // Plant new tree button
-      btnPlant.addEventListener('click', function(e) {
-        e.stopPropagation();
-        plantSpecimenTree();
-      });
-
-      // Space bar plants new tree
-      window.addEventListener('keydown', function(e) {
-        if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') {
-          e.preventDefault();
-          plantSpecimenTree();
-        }
-      });
-
-      // --- 9. DRAWING ENVIRONMENT (GROUND, HORIZON, MIST, SKY) ---
-      function drawEnvironment(ctx, time) {
-        // Faint seasonal sky tint fading toward ground
-        const tint = SKY_TINTS[currentSeason] || SKY_TINTS.spring;
-        const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
-        skyGrad.addColorStop(0, `rgba(${tint.r}, ${tint.g}, ${tint.b}, ${tint.a})`);
-        skyGrad.addColorStop(0.7, `rgba(${tint.r}, ${tint.g}, ${tint.b}, ${tint.a * 0.4})`);
-        skyGrad.addColorStop(1, `rgba(${tint.r}, ${tint.g}, ${tint.b}, 0)`);
-        ctx.fillStyle = skyGrad;
-        ctx.fillRect(0, 0, canvasWidth, horizonY);
-
-        // Three translucent mist ellipses drift slowly across the horizon
-        for (let i = 0; i < mistEllipses.length; i++) {
-          const mist = mistEllipses[i];
-          const totalDistance = canvasWidth + mist.width * 2;
-          const currentX = ((mist.xRatio * canvasWidth + time * mist.speed) % totalDistance) - mist.width;
-          const currentY = horizonY + mist.yOffset;
-
-          ctx.save();
-          ctx.translate(currentX, currentY);
-          ctx.scale(1, mist.height / mist.width);
-
-          const mistGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, mist.width * 0.5);
-          mistGrad.addColorStop(0, 'rgba(245, 240, 230, 0.25)');
-          mistGrad.addColorStop(0.5, 'rgba(245, 240, 230, 0.14)');
-          mistGrad.addColorStop(1, 'rgba(245, 240, 230, 0)');
-
-          ctx.fillStyle = mistGrad;
-          ctx.beginPath();
-          ctx.arc(0, 0, mist.width * 0.5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-        }
-
-        // Soft earth gradient below horizon
-        const earthGrad = ctx.createLinearGradient(0, horizonY, 0, canvasHeight);
-        earthGrad.addColorStop(0, 'rgba(224, 212, 188, 0.35)');
-        earthGrad.addColorStop(0.2, 'rgba(215, 201, 174, 0.45)');
-        earthGrad.addColorStop(1, 'rgba(195, 180, 150, 0.65)');
-        ctx.fillStyle = earthGrad;
-        ctx.fillRect(0, horizonY, canvasWidth, canvasHeight - horizonY);
-
-        // Hand-ruled copperplate horizon line
-        ctx.save();
-        ctx.strokeStyle = 'rgba(43, 35, 24, 0.45)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(0, horizonY);
-        ctx.lineTo(canvasWidth, horizonY);
-        ctx.stroke();
-
-        // Secondary delicate hairline 2px below
-        ctx.strokeStyle = 'rgba(43, 35, 24, 0.22)';
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(0, horizonY + 2.5);
-        ctx.lineTo(canvasWidth, horizonY + 2.5);
-        ctx.stroke();
-        ctx.restore();
-
-        // Tiny grass ticks that lean with the wind
-        ctx.save();
-        ctx.strokeStyle = '#4a3d2c';
-        ctx.lineWidth = 0.75;
-        ctx.lineCap = 'round';
-        for (let i = 0; i < grassTicks.length; i++) {
-          const g = grassTicks[i];
-          const grassWind = windAmt * 0.48 * Math.sin(time * 2.2 + g.x * 0.08) + windAmt * 0.32;
-          const lean = g.baseTilt + grassWind;
-          const tipX = g.x + lean * g.height;
-          const tipY = g.y - g.height;
-
-          ctx.beginPath();
-          ctx.moveTo(g.x, g.y);
-          ctx.quadraticCurveTo(g.x + lean * g.height * 0.4, g.y - g.height * 0.5, tipX, tipY);
-          ctx.stroke();
-        }
-        ctx.restore();
-      }
-
-      // Draw drifting snowflakes in Winter
-      function drawSnowflakes(ctx, dt, time) {
-        if (winterAtmosphereAlpha <= 0.001) return;
-
-        ctx.save();
-        for (let i = 0; i < snowflakes.length; i++) {
-          const flake = snowflakes[i];
-
-          // Advance snowflake position
-          flake.y += flake.vy * (dt * 0.06);
-          const windPush = windAmt * 1.6 + Math.sin(time * flake.wobbleSpeed + flake.wobblePhase) * flake.wobbleAmp;
-          flake.x += (flake.vx + windPush * 0.35) * (dt * 0.06);
-
-          if (flake.y > canvasHeight + 5) {
-            flake.y = -8;
-            flake.x = Math.random() * canvasWidth;
-          }
-          if (flake.x > canvasWidth + 10) flake.x = -10;
-          if (flake.x < -10) flake.x = canvasWidth + 10;
-
-          ctx.fillStyle = `rgba(255, 255, 255, ${flake.opacity * winterAtmosphereAlpha})`;
-          ctx.beginPath();
-          ctx.arc(flake.x, flake.y, flake.radius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-
-      // --- 10. MAIN ANIMATION LOOP ---
-      function animate(now) {
-        const dt = Math.min(64, now - lastTimestamp);
-        lastTimestamp = now;
-        const timeSec = now * 0.001;
-
-        // Season changing transition:
-        // Changing season shrinks the leaves to nothing (over 350ms)
-        // and lets them re-bloom in the new colours (over 700ms).
-        if (seasonTransitionState === 'shrinking') {
-          const elapsed = now - seasonTransitionTime;
-          leafScaleMultiplier = Math.max(0, 1 - (elapsed / 350));
-          if (leafScaleMultiplier <= 0) {
-            currentSeason = targetSeason;
-            seasonTransitionState = 'growing';
-            seasonTransitionTime = now;
-          }
-        } else if (seasonTransitionState === 'growing') {
-          const elapsed = now - seasonTransitionTime;
-          leafScaleMultiplier = Math.min(1, elapsed / 700);
-          if (leafScaleMultiplier >= 1) {
-            seasonTransitionState = 'idle';
+          if (seasonFactor < 1.0 && oldSeasonKey !== targetSeason) {
+            // Retracting old leaves, blooming new ones
+            drawLeaf(oldSeasonKey, 1.0 - seasonFactor, 1.0 - seasonFactor);
+            drawLeaf(targetSeason, seasonFactor, seasonFactor);
+          } else {
+            drawLeaf(targetSeason, 1.0, 1.0);
           }
         }
-
-        // Smoothly fade winter atmosphere alpha (snowflakes)
-        const targetWinterAlpha = (currentSeason === 'winter') ? 1.0 : 0.0;
-        winterAtmosphereAlpha += (targetWinterAlpha - winterAtmosphereAlpha) * Math.min(1, dt * 0.005);
-
-        // Update trees
-        if (mainTree) mainTree.update(dt);
-        for (let i = 0; i < saplings.length; i++) {
-          saplings[i].update(dt);
-        }
-
-        // Prepare DPR scaled canvas context
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
-        // Draw Environment: Sky tint, drifting mist, ground, horizon, grass
-        drawEnvironment(ctx, timeSec);
-
-        // Draw Saplings (ordered by y position so distant trees are drawn behind foreground trees)
-        const allTrees = [...saplings];
-        allTrees.sort((a, b) => a.y - b.y);
-
-        for (let i = 0; i < allTrees.length; i++) {
-          allTrees[i].draw(ctx, timeSec, windAmt, currentSeason, leafScaleMultiplier);
-        }
-
-        // Draw Main Specimen Tree
-        if (mainTree) {
-          mainTree.draw(ctx, timeSec, windAmt, currentSeason, leafScaleMultiplier);
-        }
-
-        // Draw Winter Snowflakes
-        drawSnowflakes(ctx, dt, timeSec);
-
-        requestAnimationFrame(animate);
       }
+    }
+  }
 
-      // --- 11. INITIALIZATION ---
-      handleResize();
-      updateWindUI(32);
-      requestAnimationFrame(animate);
+  // Mist Cloud Representation
+  class Mist {
+    constructor(canvasWidth, horizonY) {
+      this.w = 280 + Math.random() * 320;
+      this.h = 24 + Math.random() * 30;
+      this.x = Math.random() * canvasWidth;
+      this.y = horizonY - 10 + (Math.random() - 0.5) * 40;
+      this.speed = 4 + Math.random() * 6;
+    }
+    update(dt, canvasWidth) {
+      this.x += this.speed * dt;
+      if (this.x - this.w > canvasWidth) {
+        this.x = -this.w;
+      }
+    }
+    draw(ctx) {
+      ctx.save();
+      const grad = ctx.createRadialGradient(this.x, this.y, 5, this.x, this.y, this.w / 2);
+      grad.addColorStop(0, 'rgba(235, 226, 208, 0.42)');
+      grad.addColorStop(0.6, 'rgba(235, 226, 208, 0.18)');
+      grad.addColorStop(1, 'rgba(235, 226, 208, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(this.x, this.y, this.w / 2, this.h / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
 
-    })();
-  </script>
+  // Snow Particle Field for Winter
+  class Snowflake {
+    constructor(canvasWidth, canvasHeight) {
+      this.reset(canvasWidth, canvasHeight, true);
+    }
+    reset(w, h, randomY = false) {
+      this.x = Math.random() * w;
+      this.y = randomY ? Math.random() * h : -10;
+      this.size = 1.2 + Math.random() * 2.4;
+      this.speedY = 20 + Math.random() * 35;
+      this.swaySeed = Math.random() * 100;
+      this.alpha = 0.35 + Math.random() * 0.55;
+    }
+    update(dt, w, h, windSpeed) {
+      this.y += this.speedY * dt;
+      this.x += (windSpeed * 0.6 + Math.sin(this.swaySeed + this.y * 0.02) * 12) * dt;
+      if (this.y > h + 10 || this.x < -20 || this.x > w + 20) {
+        this.reset(w, h, false);
+      }
+    }
+    draw(ctx) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Scene State
+  let trees = [];
+  let mists = [];
+  let snowflakes = [];
+  let grassBlades = [];
+  let horizonY = 0;
+  let windAmount = 0.25;
+  let lastTimestamp = performance.now();
+  let toastTimer = null;
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.classList.remove('visible');
+    }, 2200);
+  }
+
+  function resizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    horizonY = h * 0.77;
+
+    // Generate static grass ticks along horizon
+    grassBlades = [];
+    const bladeCount = Math.floor(w / 10);
+    const rng = createRNG(98765);
+    for (let i = 0; i < bladeCount; i++) {
+      const gx = i * 10 + (rng() - 0.5) * 8;
+      const gh = 4 + rng() * 9;
+      const lean = (rng() - 0.5) * 0.3;
+      grassBlades.push({ x: gx, h: gh, lean });
+    }
+
+    // Reposition initial primary tree if first launch
+    if (trees.length === 0) {
+      plantPrimaryTree();
+    }
+
+    // Initialize Mists
+    if (mists.length === 0) {
+      for (let i = 0; i < 3; i++) {
+        mists.push(new Mist(w, horizonY));
+      }
+    }
+
+    // Initialize Snowflakes
+    if (snowflakes.length === 0) {
+      for (let i = 0; i < 90; i++) {
+        snowflakes.push(new Snowflake(w, h));
+      }
+    }
+  }
+
+  function plantPrimaryTree() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    trees = [new Tree(w * 0.5, horizonY + 12, 1.25, Math.floor(Math.random() * 999999))];
+  }
+
+  function plantSapling(x, y) {
+    const h = window.innerHeight;
+    // Horizon perspective: objects lower down appear closer & bigger
+    const depthRatio = Math.max(0.65, Math.min(1.4, 0.75 + ((y - horizonY) / (h - horizonY)) * 0.7));
+    const newTree = new Tree(x, y, depthRatio * 0.95, Math.floor(Math.random() * 999999));
+    trees.push(newTree);
+
+    // Keep at most eight saplings
+    if (trees.length > 8) {
+      trees.shift();
+    }
+
+    showToast("Sapling planted");
+  }
+
+  // Draw Scenic Background (Sky Tint, Mist, Horizon Line, Grass)
+  function drawAtmosphere(w, h, time) {
+    // Faint Seasonal Sky Tint
+    const skyTint = SEASONS[targetSeason].skyTint;
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
+    skyGrad.addColorStop(0, skyTint);
+    skyGrad.addColorStop(1, 'rgba(241, 231, 211, 0)');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, w, horizonY);
+
+    // Drifting Mist Ellipses
+    for (const mist of mists) {
+      mist.draw(ctx);
+    }
+
+    // Ground Earth Gradient
+    const groundGrad = ctx.createLinearGradient(0, horizonY, 0, h);
+    groundGrad.addColorStop(0, 'rgba(224, 211, 185, 0.45)');
+    groundGrad.addColorStop(0.35, 'rgba(215, 199, 170, 0.7)');
+    groundGrad.addColorStop(1, 'rgba(195, 178, 148, 0.95)');
+    ctx.fillStyle = groundGrad;
+    ctx.fillRect(0, horizonY, w, h - horizonY);
+
+    // Hand-ruled Horizon Line (faint double/weathered plate engraving ink)
+    ctx.save();
+    ctx.strokeStyle = 'rgba(43, 35, 24, 0.32)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(24, horizonY);
+    ctx.lineTo(w - 24, horizonY);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(43, 35, 24, 0.12)';
+    ctx.beginPath();
+    ctx.moveTo(24, horizonY + 2);
+    ctx.lineTo(w - 24, horizonY + 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // Grass Ticks along Horizon leaning with wind
+    ctx.save();
+    ctx.strokeStyle = 'rgba(59, 42, 28, 0.55)';
+    ctx.lineWidth = 0.9;
+    const windLean = (windAmount - 0.25) * 1.8;
+    for (let i = 0; i < grassBlades.length; i++) {
+      const g = grassBlades[i];
+      const tipX = g.x + Math.sin(g.lean + windLean + Math.sin(time * 2 + g.x) * 0.15) * g.h;
+      ctx.beginPath();
+      ctx.moveTo(g.x, horizonY + 1);
+      ctx.lineTo(tipX, horizonY - g.h);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Animation Loop
+  function tick(timestamp) {
+    const dt = Math.min(0.06, (timestamp - lastTimestamp) / 1000);
+    lastTimestamp = timestamp;
+    const time = timestamp / 1000;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Season Transition interpolator
+    if (seasonTransition < 1.0) {
+      seasonTransition += dt * 1.6; // ~600ms leaf transition
+      if (seasonTransition >= 1.0) {
+        seasonTransition = 1.0;
+        oldSeason = targetSeason;
+      }
+    }
+
+    // Update Mists
+    for (const mist of mists) {
+      mist.update(dt, w);
+    }
+
+    // Draw Sky, Mist, Earth & Horizon
+    drawAtmosphere(w, h, time);
+
+    // Update & Draw Trees (sorted by Y for depth perspective)
+    trees.sort((a, b) => a.y - b.y);
+    for (const tree of trees) {
+      tree.update(dt * 1000);
+      tree.draw(ctx, time, windAmount, targetSeason, oldSeason, seasonTransition);
+    }
+
+    // Winter Snow Field
+    if (targetSeason === 'winter' || (oldSeason === 'winter' && seasonTransition < 1.0)) {
+      const snowAlpha = targetSeason === 'winter' ? seasonTransition : (1 - seasonTransition);
+      ctx.save();
+      ctx.globalAlpha = snowAlpha;
+      for (const flake of snowflakes) {
+        flake.update(dt, w, h, windAmount * 80);
+        flake.draw(ctx);
+      }
+      ctx.restore();
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  // Event Listeners & Interaction
+  window.addEventListener('resize', resizeCanvas);
+
+  windSlider.addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    windAmount = val / 100;
+    if (val < 15) windLabel.textContent = "Still";
+    else if (val < 45) windLabel.textContent = "Gentle";
+    else if (val < 78) windLabel.textContent = "Brisk";
+    else windLabel.textContent = "Gale";
+  });
+
+  seasonBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const season = btn.dataset.season;
+      if (season === targetSeason) return;
+      seasonBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      oldSeason = targetSeason;
+      targetSeason = season;
+      seasonTransition = 0.0;
+    });
+  });
+
+  plantBtn.addEventListener('click', () => {
+    plantPrimaryTree();
+    showToast("Cultivating primary tree");
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
+      e.preventDefault();
+      plantPrimaryTree();
+      showToast("Cultivating primary tree");
+    }
+  });
+
+  canvas.addEventListener('pointerdown', (e) => {
+    // Only accept clicks on lower half/ground region for plausible botanical plate planting
+    const bounds = canvas.getBoundingClientRect();
+    const x = e.clientX - bounds.left;
+    const y = e.clientY - bounds.top;
+
+    // Minimum distance from top plate title
+    if (y > horizonY - 40) {
+      plantSapling(x, Math.max(horizonY - 5, y));
+    } else {
+      plantSapling(x, horizonY + 20);
+    }
+  });
+
+  // Initialization
+  resizeCanvas();
+  requestAnimationFrame(tick);
+})();
+</script>
 </body>
 </html>
