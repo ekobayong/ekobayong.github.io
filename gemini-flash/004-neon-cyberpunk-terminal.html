@@ -1,0 +1,1795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KESTREL//OS v9.4.1 Nightjar</title>
+  <style>
+    /* ==========================================================================
+       RESET & ROOT VARIABLES
+       ========================================================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-dark: #05060a;
+      --bg-lift: #10142a;
+      --neon-magenta: #ff2bd6;
+      --neon-cyan: #00f0ff;
+      --amber-warn: #ffb830;
+      --mint-ok: #5cff8a;
+      --dim-slate: #6b7390;
+      --pale-blue: #d8e6ff;
+      --error-red: #ff3b5c;
+      --panel-bg: rgba(10, 12, 22, 0.82);
+      --panel-border: rgba(0, 240, 255, 0.28);
+      --panel-glow: rgba(0, 240, 255, 0.08);
+      --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: var(--bg-dark);
+      background-image: radial-gradient(ellipse 130% 90% at 50% -10%, var(--bg-lift) 0%, var(--bg-dark) 72%, #020306 100%);
+      color: var(--pale-blue);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ==========================================================================
+       CRT & SCREEN EFFECTS (FIXED OVERLAYS)
+       ========================================================================== */
+    /* 1. Fixed repeating scanlines: 2px clear, 1px dark in multiply blend */
+    .crt-scanlines {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 900;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0) 0px,
+        rgba(0, 0, 0, 0) 2px,
+        rgba(0, 0, 0, 0.65) 2px,
+        rgba(0, 0, 0, 0.65) 3px
+      );
+      mix-blend-mode: multiply;
+    }
+
+    /* 2. Slowly sweeping cyan refresh band (7s loop) */
+    .crt-sweep {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 905;
+      background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(0, 240, 255, 0.0) 35%,
+        rgba(0, 240, 255, 0.04) 48%,
+        rgba(0, 240, 255, 0.16) 50%,
+        rgba(0, 240, 255, 0.06) 52%,
+        transparent 65%,
+        transparent 100%
+      );
+      background-size: 100% 250%;
+      animation: crtSweepAnim 7s linear infinite;
+    }
+
+    @keyframes crtSweepAnim {
+      0% {
+        background-position: 0 -150%;
+      }
+      100% {
+        background-position: 0 150%;
+      }
+    }
+
+    /* 3. 2% white flicker layer stepping at 0.12s */
+    .crt-flicker {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 910;
+      background: #ffffff;
+      opacity: 0.02;
+      animation: crtFlickerAnim 0.12s steps(2, start) infinite;
+    }
+
+    @keyframes crtFlickerAnim {
+      0% { opacity: 0.007; }
+      50% { opacity: 0.020; }
+      100% { opacity: 0.012; }
+    }
+
+    /* 4. Radial vignette */
+    .crt-vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 915;
+      background: radial-gradient(
+        ellipse at 50% 50%,
+        transparent 50%,
+        rgba(4, 5, 8, 0.45) 75%,
+        rgba(2, 3, 5, 0.94) 100%
+      );
+    }
+
+    /* 5. Perspective-tilted neon grid floor (rotateX 62deg) */
+    .grid-floor-container {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100vw;
+      height: 36vh;
+      perspective: 340px;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .grid-floor {
+      position: absolute;
+      top: 0;
+      left: -50%;
+      width: 200%;
+      height: 100%;
+      transform-origin: 50% 100%;
+      transform: rotateX(62deg);
+      background-image:
+        linear-gradient(to right, rgba(0, 240, 255, 0.18) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 43, 214, 0.24) 1px, transparent 1px);
+      background-size: 44px 44px;
+      background-position: 0 0;
+      mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
+      animation: gridFloorScroll 2.2s linear infinite;
+    }
+
+    @keyframes gridFloorScroll {
+      0% {
+        background-position: 0 0;
+      }
+      100% {
+        background-position: 0 44px;
+      }
+    }
+
+    /* ==========================================================================
+       VIEWPORT LAYOUT: TWO-ROW GRID (HEADER, MAIN)
+       ========================================================================== */
+    .os-viewport {
+      position: relative;
+      z-index: 10;
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      padding: 14px;
+      gap: 12px;
+    }
+
+    /* ==========================================================================
+       HEADER: CHAMFERED CORNERS, TITLE GLITCH & STATUS ROW
+       ========================================================================== */
+    .header-panel {
+      position: relative;
+      background: rgba(8, 10, 20, 0.92);
+      border: 1px solid rgba(0, 240, 255, 0.35);
+      box-shadow: 0 0 16px rgba(0, 240, 255, 0.12), inset 0 0 20px rgba(0, 0, 0, 0.7);
+      clip-path: polygon(
+        14px 0,
+        calc(100% - 14px) 0,
+        100% 14px,
+        100% calc(100% - 14px),
+        calc(100% - 14px) 100%,
+        14px 100%,
+        0 calc(100% - 14px),
+        0 14px
+      );
+    }
+
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 24px;
+      min-height: 54px;
+    }
+
+    .header-title-box {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      user-select: none;
+    }
+
+    .header-title {
+      position: relative;
+      font-size: 1.4rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--neon-cyan);
+      text-shadow: 0 0 10px rgba(0, 240, 255, 0.75), 0 0 24px rgba(0, 240, 255, 0.35);
+      display: inline-block;
+    }
+
+    .header-title .slash {
+      color: var(--neon-magenta);
+      text-shadow: 0 0 12px rgba(255, 43, 214, 0.85), 0 0 25px rgba(255, 43, 214, 0.5);
+    }
+
+    .header-subtext {
+      font-size: 0.78rem;
+      color: var(--dim-slate);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    /* Chromatic Aberration Glitch Keyframes (0.42s) */
+    @keyframes titleGlitch {
+      0% {
+        transform: translate(0, 0) skewX(0deg);
+        text-shadow: 0 0 10px rgba(0, 240, 255, 0.75);
+        clip-path: inset(0 0 0 0);
+      }
+      15% {
+        transform: translate(-3px, 1px) skewX(-3deg);
+        text-shadow: -3px 0 var(--neon-magenta), 3px 0 var(--neon-cyan), 0 0 14px var(--neon-cyan);
+        clip-path: inset(20% 0 54% 0);
+      }
+      32% {
+        transform: translate(4px, -1px) skewX(3deg);
+        text-shadow: 4px -1px var(--neon-magenta), -4px 1px var(--neon-cyan), 0 0 16px var(--neon-magenta);
+        clip-path: inset(68% 0 8% 0);
+      }
+      48% {
+        transform: translate(-2px, -2px) skewX(-1.5deg);
+        text-shadow: -2px 1px var(--neon-magenta), 2px -1px var(--neon-cyan);
+        clip-path: inset(6% 0 74% 0);
+      }
+      65% {
+        transform: translate(2px, 2px) skewX(2deg);
+        text-shadow: 3px 1px var(--neon-magenta), -3px -1px var(--neon-cyan);
+        clip-path: inset(36% 0 42% 0);
+      }
+      82% {
+        transform: translate(-1px, 1px) skewX(-1deg);
+        text-shadow: -2px 0 var(--neon-magenta), 2px 0 var(--neon-cyan);
+        clip-path: inset(82% 0 4% 0);
+      }
+      100% {
+        transform: translate(0, 0) skewX(0deg);
+        text-shadow: 0 0 10px rgba(0, 240, 255, 0.75);
+        clip-path: inset(0 0 0 0);
+      }
+    }
+
+    .header-title.glitching {
+      animation: titleGlitch 0.42s steps(2, end) forwards;
+    }
+
+    /* Status Row */
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      color: var(--dim-slate);
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      white-space: nowrap;
+    }
+
+    .status-item .val {
+      color: var(--pale-blue);
+    }
+
+    .led-indicator {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: var(--mint-ok);
+      box-shadow: 0 0 8px var(--mint-ok), 0 0 14px var(--mint-ok);
+      animation: ledPulse 1.1s ease-in-out infinite alternate;
+    }
+
+    @keyframes ledPulse {
+      0% { opacity: 0.35; transform: scale(0.9); }
+      100% { opacity: 1; transform: scale(1.15); }
+    }
+
+    .live-clock {
+      color: var(--neon-cyan);
+      font-weight: 600;
+      text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+    }
+
+    /* ==========================================================================
+       MAIN GRID: CONSOLE (WIDE) + SIDEBAR (280-340px)
+       ========================================================================== */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1fr minmax(280px, 320px);
+      gap: 12px;
+      min-height: 0;
+      height: 100%;
+    }
+
+    /* Cyber Panels Base */
+    .cyber-panel {
+      position: relative;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      box-shadow: 0 0 20px var(--panel-glow), inset 0 0 24px rgba(4, 6, 12, 0.8);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    /* Floating uppercase label cut into top border via attr(data-label) */
+    .cyber-panel::before {
+      content: attr(data-label);
+      position: absolute;
+      top: -8px;
+      left: 18px;
+      padding: 0 8px;
+      background: #080a16;
+      color: var(--neon-magenta);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      text-shadow: 0 0 8px rgba(255, 43, 214, 0.7);
+      border-left: 2px solid var(--neon-magenta);
+      border-right: 2px solid var(--neon-magenta);
+      z-index: 15;
+      pointer-events: none;
+    }
+
+    /* Four Cyan Corner Brackets */
+    .bracket {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-color: var(--neon-cyan);
+      border-style: solid;
+      pointer-events: none;
+      z-index: 20;
+      filter: drop-shadow(0 0 4px var(--neon-cyan));
+    }
+    .bracket-tl { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+    .bracket-tr { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
+    .bracket-bl { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
+    .bracket-br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+    /* ==========================================================================
+       CONSOLE PANEL & TERMINAL
+       ========================================================================== */
+    .console-panel {
+      padding: 16px 18px 14px 18px;
+      cursor: text;
+    }
+
+    .console-scroll-area {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-right: 8px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Scrollbars */
+    .console-scroll-area::-webkit-scrollbar {
+      width: 5px;
+    }
+    .console-scroll-area::-webkit-scrollbar-track {
+      background: rgba(5, 6, 12, 0.6);
+    }
+    .console-scroll-area::-webkit-scrollbar-thumb {
+      background: rgba(0, 240, 255, 0.28);
+      border-radius: 2px;
+    }
+    .console-scroll-area::-webkit-scrollbar-thumb:hover {
+      background: var(--neon-magenta);
+      box-shadow: 0 0 8px var(--neon-magenta);
+    }
+
+    .console-log {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      word-break: break-word;
+    }
+
+    /* Log line aesthetics */
+    .log-line {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.88rem;
+    }
+
+    .ascii-banner {
+      color: var(--neon-cyan);
+      text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+      font-weight: bold;
+      font-size: 11px;
+      line-height: 1.15;
+      margin-bottom: 12px;
+      user-select: none;
+      white-space: pre;
+    }
+
+    .timestamp {
+      color: var(--dim-slate);
+      font-size: 0.8rem;
+      user-select: none;
+      flex-shrink: 0;
+    }
+
+    .log-text {
+      color: var(--pale-blue);
+      flex: 1;
+    }
+
+    .tag-ok {
+      color: var(--mint-ok);
+      font-weight: bold;
+      text-shadow: 0 0 8px rgba(92, 255, 138, 0.7);
+      margin-left: auto;
+      user-select: none;
+    }
+
+    .tag-warn {
+      color: var(--amber-warn);
+      font-weight: bold;
+      text-shadow: 0 0 8px rgba(255, 184, 48, 0.7);
+      margin-left: auto;
+      user-select: none;
+    }
+
+    .tag-err {
+      color: var(--error-red);
+      font-weight: bold;
+      text-shadow: 0 0 8px rgba(255, 59, 92, 0.7);
+    }
+
+    /* Caret block */
+    .typing-caret {
+      display: inline-block;
+      width: 8px;
+      height: 1.1em;
+      vertical-align: -2px;
+      background: var(--neon-cyan);
+      box-shadow: 0 0 8px var(--neon-cyan);
+      margin-left: 2px;
+      animation: caretBlink 0.75s steps(1) infinite;
+    }
+
+    @keyframes caretBlink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+
+    /* Progress bar lines */
+    .progress-line-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      margin: 2px 0;
+    }
+
+    .progress-bar-track {
+      flex: 1;
+      max-width: 220px;
+      height: 8px;
+      background: rgba(0, 240, 255, 0.1);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--neon-cyan) 0%, var(--neon-magenta) 100%);
+      box-shadow: 0 0 10px rgba(255, 43, 214, 0.75);
+    }
+
+    .progress-percent {
+      color: var(--neon-cyan);
+      font-size: 0.8rem;
+      min-width: 38px;
+      text-align: right;
+    }
+
+    /* Output Tables */
+    .table-output {
+      width: 100%;
+      margin: 8px 0;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+    }
+
+    .table-output th {
+      text-align: left;
+      color: var(--dim-slate);
+      border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+      padding: 4px 10px 4px 0;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+
+    .table-output td {
+      padding: 4px 10px 4px 0;
+      vertical-align: top;
+    }
+
+    .table-output .cmd-name {
+      color: var(--neon-cyan);
+      font-weight: bold;
+      text-shadow: 0 0 6px rgba(0, 240, 255, 0.5);
+    }
+
+    .table-output .subsystem-name {
+      color: var(--pale-blue);
+      font-weight: 600;
+    }
+
+    .table-output .metric-val {
+      color: var(--dim-slate);
+    }
+
+    /* Prompt Input Row */
+    .prompt-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(0, 240, 255, 0.14);
+      flex-shrink: 0;
+    }
+
+    .prompt-prefix {
+      color: var(--neon-magenta);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-shadow: 0 0 8px rgba(255, 43, 214, 0.75);
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .cli-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--pale-blue);
+      font-family: inherit;
+      font-size: 0.92rem;
+      caret-color: var(--neon-cyan);
+      text-shadow: 0 0 4px rgba(216, 230, 255, 0.5);
+    }
+
+    .cli-input:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    /* ==========================================================================
+       SIDEBAR: CORE ASSEMBLY CANVAS, GAUGES & HEX DUMP
+       ========================================================================== */
+    .telemetry-panel {
+      padding: 16px 14px 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    .section-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      color: var(--dim-slate);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* 1. Core Assembly Canvas */
+    .canvas-container {
+      position: relative;
+      width: 100%;
+      height: 180px;
+      background: rgba(5, 7, 14, 0.85);
+      border: 1px solid rgba(0, 240, 255, 0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    #core-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .angle-readout {
+      position: absolute;
+      bottom: 4px;
+      left: 6px;
+      font-size: 0.68rem;
+      color: var(--dim-slate);
+      letter-spacing: 0.06em;
+      pointer-events: none;
+    }
+
+    /* 2. Gauges */
+    .gauges-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 2px 0;
+    }
+
+    .gauge-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .gauge-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.74rem;
+    }
+
+    .gauge-name {
+      color: var(--dim-slate);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .gauge-value {
+      color: var(--neon-cyan);
+      font-weight: 700;
+      text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+    }
+
+    .meter-track {
+      width: 100%;
+      height: 4px;
+      background: rgba(16, 20, 36, 0.85);
+      border: 1px solid rgba(0, 240, 255, 0.18);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .meter-bar {
+      height: 100%;
+      background: var(--neon-magenta);
+      box-shadow: 0 0 8px var(--neon-magenta);
+      transition: width 0.35s ease;
+    }
+
+    /* 3. Memory · 0x7f3a Hex Dump */
+    .hexdump-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border-top: 1px dashed rgba(0, 240, 255, 0.16);
+      padding-top: 8px;
+    }
+
+    .hexdump-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      font-size: 10.5px;
+      line-height: 1.42;
+      display: flex;
+      flex-direction: column;
+      mask-image: linear-gradient(to bottom, black 0%, black 72%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, black 0%, black 72%, transparent 100%);
+    }
+
+    .hex-row {
+      display: flex;
+      gap: 6px;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .hex-addr {
+      color: var(--neon-magenta);
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .hex-bytes {
+      display: flex;
+      gap: 4px;
+      color: var(--dim-slate);
+      flex: 1;
+    }
+
+    .hex-byte {
+      display: inline-block;
+      width: 14px;
+      text-align: center;
+    }
+
+    .hex-byte.cyan-glow {
+      color: var(--neon-cyan);
+      font-weight: bold;
+      text-shadow: 0 0 6px var(--neon-cyan);
+    }
+
+    .hex-ascii {
+      color: var(--pale-blue);
+      letter-spacing: 0.08em;
+      border-left: 1px solid rgba(0, 240, 255, 0.2);
+      padding-left: 6px;
+      flex-shrink: 0;
+      font-weight: 500;
+    }
+
+    /* ==========================================================================
+       RESPONSIVE DESIGN
+       ========================================================================== */
+    @media (min-width: 1800px) {
+      .canvas-container {
+        height: 240px;
+      }
+    }
+
+    @media (max-width: 860px) {
+      html, body {
+        overflow-y: auto;
+      }
+      .os-viewport {
+        height: auto;
+        min-height: 100vh;
+      }
+      .main-layout {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+      .console-panel {
+        height: 60vh;
+      }
+      .telemetry-panel {
+        height: auto;
+      }
+      .hexdump-scroll {
+        height: 210px;
+      }
+      .status-item.node-id-item {
+        display: none;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .header-inner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px 14px;
+      }
+      .header-title {
+        font-size: 1.15rem;
+      }
+      .header-status {
+        gap: 12px;
+        font-size: 0.72rem;
+      }
+      .progress-bar-track {
+        max-width: 120px;
+      }
+    }
+
+    /* ==========================================================================
+       PREFERS-REDUCED-MOTION
+       ========================================================================== */
+    @media (prefers-reduced-motion: reduce) {
+      .header-title.glitching {
+        animation: none !important;
+      }
+      .crt-sweep,
+      .crt-flicker,
+      .grid-floor,
+      .typing-caret,
+      .led-indicator {
+        animation: none !important;
+      }
+      .crt-flicker {
+        opacity: 0 !important;
+      }
+      .crt-sweep {
+        display: none !important;
+      }
+      .typing-caret {
+        opacity: 1 !important;
+      }
+      .grid-floor {
+        background-position: 0 0 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Full-Screen CRT Overlays -->
+  <div class="crt-scanlines" aria-hidden="true"></div>
+  <div class="crt-sweep" aria-hidden="true"></div>
+  <div class="crt-flicker" aria-hidden="true"></div>
+  <div class="crt-vignette" aria-hidden="true"></div>
+
+  <!-- Perspective-Tilted Neon Grid Floor (rotateX 62deg) -->
+  <div class="grid-floor-container" aria-hidden="true">
+    <div class="grid-floor"></div>
+  </div>
+
+  <!-- Main Viewport Layout -->
+  <div class="os-viewport">
+    <!-- Header Panel -->
+    <header class="header-panel">
+      <div class="header-inner">
+        <div class="header-title-box">
+          <h1 id="header-title" class="header-title">KESTREL<span class="slash">//</span>OS</h1>
+          <span class="header-subtext">v9.4.1 Nightjar</span>
+        </div>
+        <div class="header-status">
+          <div class="status-item">
+            <span class="led-indicator" aria-hidden="true"></span>
+            <span class="val">SYS: NOMINAL</span>
+          </div>
+          <div class="status-item node-id-item">
+            <span>NODE //</span>
+            <span class="val">NJ-9401-K</span>
+          </div>
+          <div class="status-item">
+            <span id="live-clock" class="live-clock">UTC 2026.09.04 07:54:01</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Grid -->
+    <main class="main-layout">
+      <!-- Wide Console Panel -->
+      <section class="cyber-panel console-panel" data-label="CONSOLE // TERMINAL" id="console-panel">
+        <div class="bracket bracket-tl"></div>
+        <div class="bracket bracket-tr"></div>
+        <div class="bracket bracket-bl"></div>
+        <div class="bracket bracket-br"></div>
+
+        <div class="console-scroll-area" id="console-scroll">
+          <div class="console-log" id="console-log">
+            <!-- ASCII Art Banner & Dynamic Boot Log inserted here -->
+          </div>
+        </div>
+
+        <div class="prompt-row" id="prompt-row">
+          <span class="prompt-prefix">operator@kestrel:~$</span>
+          <input type="text" id="cli-input" class="cli-input" autocomplete="off" spellcheck="false" autofocus disabled>
+        </div>
+      </section>
+
+      <!-- Telemetry Sidebar (280-340px) -->
+      <aside class="cyber-panel telemetry-panel" data-label="TELEMETRY // SUBSYSTEM">
+        <div class="bracket bracket-tl"></div>
+        <div class="bracket bracket-tr"></div>
+        <div class="bracket bracket-bl"></div>
+        <div class="bracket bracket-br"></div>
+
+        <!-- 1. Core Assembly Canvas -->
+        <div class="core-assembly-box">
+          <div class="section-label">
+            <span>Core assembly</span>
+            <span style="color: var(--neon-cyan);">[3D-MESH]</span>
+          </div>
+          <div class="canvas-container">
+            <canvas id="core-canvas"></canvas>
+            <div id="angle-readout" class="angle-readout">ROT: X: 000° Y: 000°</div>
+          </div>
+        </div>
+
+        <!-- 2. Gauges -->
+        <div class="gauges-container">
+          <div class="gauge-item">
+            <div class="gauge-header">
+              <span class="gauge-name">Core temp</span>
+              <span id="temp-val" class="gauge-value">48.2 °C</span>
+            </div>
+            <div class="meter-track">
+              <div id="temp-bar" class="meter-bar" style="width: 48.2%;"></div>
+            </div>
+          </div>
+
+          <div class="gauge-item">
+            <div class="gauge-header">
+              <span class="gauge-name">Flux</span>
+              <span id="flux-val" class="gauge-value">93.4 %</span>
+            </div>
+            <div class="meter-track">
+              <div id="flux-bar" class="meter-bar" style="width: 93.4%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Memory · 0x7f3a Hex Dump -->
+        <div class="hexdump-wrapper">
+          <div class="section-label">
+            <span>Memory · 0x7f3a</span>
+            <span style="color: var(--neon-magenta);">14 ROWS ACTIVE</span>
+          </div>
+          <div class="hexdump-scroll" id="hexdump-scroll">
+            <!-- 14 Hex Dump rows managed dynamically -->
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    (function() {
+      'use strict';
+
+      // ========================================================================
+      // PREFERENCES & UTILITIES
+      // ========================================================================
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      function randRange(min, max) {
+        return Math.random() * (max - min) + min;
+      }
+
+      function pad2(n) {
+        return n.toString().padStart(2, '0');
+      }
+
+      function pad3(n) {
+        return n.toString().padStart(3, '0');
+      }
+
+      function getLiveTimestamp() {
+        const now = new Date();
+        return `[${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}.${pad3(now.getMilliseconds())}]`;
+      }
+
+      // ========================================================================
+      // LIVE CLOCK IN HEADER
+      // ========================================================================
+      const liveClockEl = document.getElementById('live-clock');
+      function updateClock() {
+        const now = new Date();
+        const year = now.getUTCFullYear();
+        const month = pad2(now.getUTCMonth() + 1);
+        const day = pad2(now.getUTCDate());
+        const hours = pad2(now.getUTCHours());
+        const mins = pad2(now.getUTCMinutes());
+        const secs = pad2(now.getUTCSeconds());
+        liveClockEl.textContent = `UTC ${year}.${month}.${day} ${hours}:${mins}:${secs}`;
+      }
+      updateClock();
+      setInterval(updateClock, 1000);
+
+      // ========================================================================
+      // HEADER TITLE CHROMATIC GLITCH (0.42s every 2.5–8.5s & on scan)
+      // ========================================================================
+      const titleEl = document.getElementById('header-title');
+
+      function triggerHeaderGlitch(forced = false) {
+        if (prefersReducedMotion && !forced) return;
+        if (!titleEl) return;
+        titleEl.classList.remove('glitching');
+        void titleEl.offsetWidth; // Force CSS reflow
+        titleEl.classList.add('glitching');
+        setTimeout(() => {
+          titleEl.classList.remove('glitching');
+        }, 420);
+      }
+
+      function scheduleNextGlitch() {
+        const delay = randRange(2500, 8500);
+        setTimeout(() => {
+          triggerHeaderGlitch(false);
+          scheduleNextGlitch();
+        }, delay);
+      }
+      scheduleNextGlitch();
+
+      // ========================================================================
+      // CONSOLE PANEL DOM & CLI STATE
+      // ========================================================================
+      const consolePanel = document.getElementById('console-panel');
+      const consoleScroll = document.getElementById('console-scroll');
+      const consoleLog = document.getElementById('console-log');
+      const cliInput = document.getElementById('cli-input');
+
+      let isAsyncRunning = true;
+      const cmdHistory = [];
+      let historyIdx = -1;
+      let draftInput = '';
+
+      function scrollToBottom() {
+        consoleScroll.scrollTop = consoleScroll.scrollHeight;
+      }
+
+      consolePanel.addEventListener('click', () => {
+        if (!cliInput.disabled) {
+          cliInput.focus();
+        }
+      });
+
+      // ASCII Banner
+      const ASCII_BANNER = 
+`██╗  ██╗███████╗███████╗████████╗██████╗ ███████╗██╗     
+██║ ██╔╝██╔════╝██╔════╝╚══██╔══╝██╔══██╗██╔════╝██║     
+█████╔╝ █████╗  ███████╗   ██║   ██████╔╝█████╗  ██║     
+██╔═██╗ ██╔══╝  ╚════██║   ██║   ██╔══██╗██╔══╝  ██║     
+██║  ██╗███████╗███████║   ██║   ██║  ██║███████╗███████╗
+╚═╝  ╚═╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝
+[ K E S T R E L // O S   v 9 . 4 . 1   N I G H T J A R ]`;
+
+      // System Boot Checks
+      const BOOT_SEQUENCE = [
+        { type: 'line', text: 'Initializing quantum hypervisor core (x86_64-qnt)...', tag: '[ OK ]', isWarn: false },
+        { type: 'line', text: 'Calibrating primary tachyon oscillator (4.29 GHz)...', tag: '[ OK ]', isWarn: false },
+        { type: 'line', text: 'Synaptic bus integrity verification (98.4%)...', tag: '[ OK ]', isWarn: false },
+        { type: 'line', text: 'Sub-layer parity matrix: 412/412 nodes synced...', tag: '[ OK ]', isWarn: false },
+        { type: 'line', text: 'Cryptographic cipher ring handshake (RSA-8192-Q)...', tag: '[ OK ]', isWarn: false },
+        { type: 'line', text: 'Thermal gradient sensor 3 drift (+1.2mK)...', tag: '[WARN]', isWarn: true },
+        { type: 'line', text: 'Telemetry daemon binding to 127.0.0.1:9401...', tag: '[ OK ]', isWarn: false },
+        { type: 'progress', label: 'Hydrating memory lattice', duration: 750 },
+        { type: 'progress', label: 'Loading operator profile', duration: 650 },
+        { type: 'line', text: 'Security perimeter: ZERO TRUST PROTOCOL ENGAGED...', tag: '[ OK ]', isWarn: false },
+        { type: 'line', text: "KESTREL//OS NIGHTJAR READY. Type 'help' for available directives.", tag: '', isWarn: false }
+      ];
+
+      // Typewriter line function (14ms per char with jitter & 2-char bursts)
+      function typeLine(item) {
+        return new Promise((resolve) => {
+          const row = document.createElement('div');
+          row.className = 'log-line';
+
+          const ts = document.createElement('span');
+          ts.className = 'timestamp';
+          ts.textContent = getLiveTimestamp();
+          row.appendChild(ts);
+
+          const txtSpan = document.createElement('span');
+          txtSpan.className = 'log-text';
+          row.appendChild(txtSpan);
+
+          const caret = document.createElement('span');
+          caret.className = 'typing-caret';
+          caret.textContent = '█';
+          row.appendChild(caret);
+
+          consoleLog.appendChild(row);
+          scrollToBottom();
+
+          if (prefersReducedMotion) {
+            txtSpan.textContent = item.text + ' ';
+            caret.remove();
+            if (item.tag) {
+              const tagSpan = document.createElement('span');
+              tagSpan.className = item.isWarn ? 'tag-warn' : 'tag-ok';
+              tagSpan.textContent = item.tag;
+              row.appendChild(tagSpan);
+            }
+            scrollToBottom();
+            resolve();
+            return;
+          }
+
+          let charIdx = 0;
+          const fullText = item.text + ' ';
+
+          function nextChar() {
+            if (charIdx < fullText.length) {
+              // Occasional 2-character burst
+              let burst = (Math.random() < 0.15 && charIdx + 1 < fullText.length) ? 2 : 1;
+              txtSpan.textContent += fullText.slice(charIdx, charIdx + burst);
+              charIdx += burst;
+              scrollToBottom();
+
+              const delay = Math.max(4, Math.floor(14 + (Math.random() * 16 - 8)));
+              setTimeout(nextChar, delay);
+            } else {
+              caret.remove();
+              if (item.tag) {
+                const tagSpan = document.createElement('span');
+                tagSpan.className = item.isWarn ? 'tag-warn' : 'tag-ok';
+                tagSpan.textContent = item.tag;
+                row.appendChild(tagSpan);
+              }
+              scrollToBottom();
+              setTimeout(resolve, 35);
+            }
+          }
+          nextChar();
+        });
+      }
+
+      // Animated Progress Bar function
+      function typeProgressBar(label, duration) {
+        return new Promise((resolve) => {
+          const row = document.createElement('div');
+          row.className = 'log-line progress-line-wrapper';
+
+          const ts = document.createElement('span');
+          ts.className = 'timestamp';
+          ts.textContent = getLiveTimestamp();
+          row.appendChild(ts);
+
+          const lbl = document.createElement('span');
+          lbl.className = 'log-text';
+          lbl.textContent = label + '...';
+          row.appendChild(lbl);
+
+          const track = document.createElement('div');
+          track.className = 'progress-bar-track';
+          const fill = document.createElement('div');
+          fill.className = 'progress-bar-fill';
+          track.appendChild(fill);
+          row.appendChild(track);
+
+          const pct = document.createElement('span');
+          pct.className = 'progress-percent';
+          pct.textContent = '0%';
+          row.appendChild(pct);
+
+          const tagSpan = document.createElement('span');
+          tagSpan.className = 'tag-ok';
+          tagSpan.style.visibility = 'hidden';
+          tagSpan.textContent = '[ OK ]';
+          row.appendChild(tagSpan);
+
+          consoleLog.appendChild(row);
+          scrollToBottom();
+
+          if (prefersReducedMotion) {
+            fill.style.width = '100%';
+            pct.textContent = '100%';
+            tagSpan.style.visibility = 'visible';
+            scrollToBottom();
+            resolve();
+            return;
+          }
+
+          const startTime = performance.now();
+          function updateProgress(now) {
+            const elapsed = now - startTime;
+            const progress = Math.min(1, elapsed / duration);
+            const percent = Math.floor(progress * 100);
+
+            fill.style.width = `${percent}%`;
+            pct.textContent = `${percent}%`;
+            scrollToBottom();
+
+            if (progress < 1) {
+              requestAnimationFrame(updateProgress);
+            } else {
+              fill.style.width = '100%';
+              pct.textContent = '100%';
+              tagSpan.style.visibility = 'visible';
+              scrollToBottom();
+              setTimeout(resolve, 50);
+            }
+          }
+          requestAnimationFrame(updateProgress);
+        });
+      }
+
+      // Execute Boot Sequence
+      async function runBootSequence() {
+        // 1. Banner
+        const bannerPre = document.createElement('pre');
+        bannerPre.className = 'ascii-banner';
+        bannerPre.textContent = ASCII_BANNER;
+        consoleLog.appendChild(bannerPre);
+        scrollToBottom();
+
+        await new Promise(r => setTimeout(r, prefersReducedMotion ? 0 : 200));
+
+        // 2. Checks & Progress Bars
+        for (const item of BOOT_SEQUENCE) {
+          if (item.type === 'line') {
+            await typeLine(item);
+          } else if (item.type === 'progress') {
+            await typeProgressBar(item.label, item.duration);
+          }
+        }
+
+        // Complete: Enable Input
+        isAsyncRunning = false;
+        cliInput.disabled = false;
+        cliInput.focus();
+        scrollToBottom();
+      }
+
+      // ========================================================================
+      // COMMAND SYSTEM & REPL
+      // ========================================================================
+      function printCommandEcho(cmd) {
+        const row = document.createElement('div');
+        row.className = 'log-line';
+        row.innerHTML = `<span class="prompt-prefix">operator@kestrel:~$</span> <span style="color: var(--pale-blue); font-weight: 500;">${escapeHtml(cmd)}</span>`;
+        consoleLog.appendChild(row);
+        scrollToBottom();
+      }
+
+      function handleCommand(cmdRaw) {
+        const cmd = cmdRaw.trim();
+        if (!cmd) return;
+
+        printCommandEcho(cmd);
+        cmdHistory.push(cmd);
+        historyIdx = -1;
+
+        const parts = cmd.split(/\s+/);
+        const action = parts[0].toLowerCase();
+
+        switch (action) {
+          case 'help':
+            cmdHelp();
+            break;
+          case 'status':
+            cmdStatus();
+            break;
+          case 'scan':
+            cmdScan();
+            break;
+          case 'about':
+            cmdAbout();
+            break;
+          case 'clear':
+            cmdClear();
+            break;
+          default:
+            cmdUnknown(cmd);
+            break;
+        }
+      }
+
+      // 1. HELP COMMAND
+      function cmdHelp() {
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <table class="table-output">
+            <thead>
+              <tr>
+                <th style="width: 140px;">COMMAND</th>
+                <th>DESCRIPTION</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="cmd-name">help</td>
+                <td>Display available system commands & syntax reference</td>
+              </tr>
+              <tr>
+                <td class="cmd-name">status</td>
+                <td>Inspect subsystem telemetry, hypervisor matrix & voltage</td>
+              </tr>
+              <tr>
+                <td class="cmd-name">scan</td>
+                <td>Execute wide-band signal sweep for RF & quantum transponders</td>
+              </tr>
+              <tr>
+                <td class="cmd-name">about</td>
+                <td>Display OS provenance, architecture & offline manifest</td>
+              </tr>
+              <tr>
+                <td class="cmd-name">clear</td>
+                <td>Flush terminal display buffer and purge history view</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
+        consoleLog.appendChild(div);
+        scrollToBottom();
+      }
+
+      // 2. STATUS COMMAND
+      function cmdStatus() {
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <table class="table-output">
+            <thead>
+              <tr>
+                <th style="width: 190px;">SUBSYSTEM</th>
+                <th style="width: 150px;">METRIC / LOAD</th>
+                <th>STATE</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="subsystem-name">CORE HYPERVISOR</td>
+                <td class="metric-val">4.29 GHz / 12%</td>
+                <td><span class="tag-ok">[ OK ] NOMINAL</span></td>
+              </tr>
+              <tr>
+                <td class="subsystem-name">NEURAL BUS (AXON-4)</td>
+                <td class="metric-val">99.98% COHERENCE</td>
+                <td><span class="tag-ok">[ OK ] OPTIMAL</span></td>
+              </tr>
+              <tr>
+                <td class="subsystem-name">MEMORY MATRIX (128TB)</td>
+                <td class="metric-val">41.2 TB ALLOCATED</td>
+                <td><span class="tag-ok">[ OK ] SYNCHRONIZED</span></td>
+              </tr>
+              <tr>
+                <td class="subsystem-name">Q-SHIELD CIPHER RING</td>
+                <td class="metric-val">8192-BIT ACTIVE</td>
+                <td><span class="tag-ok">[ OK ] ENFORCED</span></td>
+              </tr>
+              <tr>
+                <td class="subsystem-name">THERMAL DISSIPATOR</td>
+                <td class="metric-val">+48.2 °C (+1.2mK)</td>
+                <td><span class="tag-warn">[WARN] ELEVATED</span></td>
+              </tr>
+              <tr>
+                <td class="subsystem-name">TELEMETRY DOWNLINK</td>
+                <td class="metric-val">-42.8 dBm (LOCK)</td>
+                <td><span class="tag-ok">[ OK ] CARRIER LOCK</span></td>
+              </tr>
+              <tr>
+                <td class="subsystem-name">PERIMETER SENTINEL</td>
+                <td class="metric-val">GRID LINK SECURE</td>
+                <td><span class="tag-ok">[ OK ] ARMED</span></td>
+              </tr>
+            </tbody>
+          </table>
+        `;
+        consoleLog.appendChild(div);
+        scrollToBottom();
+      }
+
+      // 3. SCAN COMMAND (Async sweep, 3 signals, summary, forced header glitch)
+      async function cmdScan() {
+        isAsyncRunning = true;
+        cliInput.disabled = true;
+
+        await typeProgressBar('Sweeping RF, quantum & tachyon bands', prefersReducedMotion ? 0 : 900);
+
+        const signals = [
+          { text: 'SIGNAL [0x9F4A-B8]  ID: HELIOS-BEACON    PWR: -42.8 dBm  CLASS: ENCRYPTED CARRIER', tag: '[ OK ]', isWarn: false },
+          { text: 'SIGNAL [0x0A2F-1C]  ID: GHOST-RELAY-04   PWR: -88.1 dBm  CLASS: ROGUE SYNAPSE', tag: '[WARN]', isWarn: true },
+          { text: 'SIGNAL [0xEE71-80]  ID: ORBITAL-SYNC-9   PWR: -31.4 dBm  CLASS: MIL-SPEC TELEMETRY', tag: '[ OK ]', isWarn: false }
+        ];
+
+        for (const sig of signals) {
+          await typeLine(sig);
+        }
+
+        const summaryRow = document.createElement('div');
+        summaryRow.className = 'log-line';
+        summaryRow.innerHTML = `<span class="timestamp">${getLiveTimestamp()}</span> <span style="color: var(--neon-cyan); font-weight: 700;">[SCAN COMPLETE] 3 active transponders isolated. Signal mesh registered.</span>`;
+        consoleLog.appendChild(summaryRow);
+        scrollToBottom();
+
+        // Forced header chromatic aberration glitch
+        triggerHeaderGlitch(true);
+
+        isAsyncRunning = false;
+        cliInput.disabled = false;
+        cliInput.focus();
+        scrollToBottom();
+      }
+
+      // 4. ABOUT COMMAND (3 lines explaining single offline file)
+      function cmdAbout() {
+        const lines = [
+          'KESTREL//OS v9.4.1 Nightjar is an autonomous, zero-dependency cyberpunk workstation.',
+          'Architected entirely in a single offline HTML5/CSS3/ES6 manifest with no remote assets.',
+          'Engineered for secure deep-grid terminal operations under air-gapped conditions.'
+        ];
+
+        lines.forEach(text => {
+          const row = document.createElement('div');
+          row.className = 'log-line';
+          row.innerHTML = `<span class="timestamp">${getLiveTimestamp()}</span> <span class="log-text">${escapeHtml(text)}</span>`;
+          consoleLog.appendChild(row);
+        });
+        scrollToBottom();
+      }
+
+      // 5. CLEAR COMMAND
+      function cmdClear() {
+        consoleLog.innerHTML = '';
+      }
+
+      // 6. UNKNOWN COMMAND
+      function cmdUnknown(cmd) {
+        const row = document.createElement('div');
+        row.className = 'log-line';
+        row.innerHTML = `<span class="tag-err">kestrel: command not found: '${escapeHtml(cmd)}'.</span> <span style="color: var(--dim-slate);">Type 'help' for available directives.</span>`;
+        consoleLog.appendChild(row);
+        scrollToBottom();
+      }
+
+      // Input Event Handlers
+      cliInput.addEventListener('keydown', (e) => {
+        if (isAsyncRunning) return;
+
+        if (e.key === 'Enter') {
+          const val = cliInput.value;
+          cliInput.value = '';
+          handleCommand(val);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (cmdHistory.length === 0) return;
+          if (historyIdx === -1) {
+            draftInput = cliInput.value;
+            historyIdx = cmdHistory.length - 1;
+          } else if (historyIdx > 0) {
+            historyIdx--;
+          }
+          cliInput.value = cmdHistory[historyIdx] || '';
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (historyIdx === -1) return;
+          if (historyIdx < cmdHistory.length - 1) {
+            historyIdx++;
+            cliInput.value = cmdHistory[historyIdx];
+          } else {
+            historyIdx = -1;
+            cliInput.value = draftInput;
+          }
+        }
+      });
+
+      // ========================================================================
+      // SIDEBAR 1: CORE ASSEMBLY 3D WIREFRAME ICOSAHEDRON CANVAS
+      // ========================================================================
+      const canvas = document.getElementById('core-canvas');
+      const ctx = canvas.getContext('2d');
+      const readoutEl = document.getElementById('angle-readout');
+
+      // Regular Icosahedron Mathematical Model
+      const phi = (1 + Math.sqrt(5)) / 2; // ~1.6180339887
+      const rawVerts = [
+        [-1,  phi, 0],
+        [ 1,  phi, 0],
+        [-1, -phi, 0],
+        [ 1, -phi, 0],
+        [0, -1,  phi],
+        [0,  1,  phi],
+        [0, -1, -phi],
+        [0,  1, -phi],
+        [ phi, 0, -1],
+        [ phi, 0,  1],
+        [-phi, 0, -1],
+        [-phi, 0,  1]
+      ];
+
+      // Normalize vertices to unit sphere
+      const unitLen = Math.sqrt(1 + phi * phi);
+      const icosaVertices = rawVerts.map(v => [v[0] / unitLen, v[1] / unitLen, v[2] / unitLen]);
+
+      // Detect all 30 edges (vertices separated by distance 2/unitLen)
+      const edgeThreshold = 4 / (unitLen * unitLen); // squared dist threshold ~ 1.05
+      const icosaEdges = [];
+      for (let i = 0; i < icosaVertices.length; i++) {
+        for (let j = i + 1; j < icosaVertices.length; j++) {
+          const dx = icosaVertices[i][0] - icosaVertices[j][0];
+          const dy = icosaVertices[i][1] - icosaVertices[j][1];
+          const dz = icosaVertices[i][2] - icosaVertices[j][2];
+          const distSq = dx * dx + dy * dy + dz * dz;
+          if (Math.abs(distSq - edgeThreshold) < 0.1) {
+            icosaEdges.push([i, j]);
+          }
+        }
+      }
+
+      let rotX = 0.45;
+      let rotY = 0.65;
+      let rotZ = 0.25;
+      let arcRotation = 0;
+
+      let canvasW = 0;
+      let canvasH = 0;
+      let dpr = 1;
+
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        dpr = Math.min(window.devicePixelRatio || 1, 3);
+        canvasW = rect.width;
+        canvasH = rect.height;
+        canvas.width = Math.round(rect.width * dpr);
+        canvas.height = Math.round(rect.height * dpr);
+      }
+
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+
+      function renderCoreAssembly() {
+        if (!canvasW || !canvasH) {
+          resizeCanvas();
+        }
+
+        ctx.save();
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, canvasW, canvasH);
+
+        const cx = canvasW / 2;
+        const cy = canvasH / 2;
+        const radius = Math.min(canvasW, canvasH) * 0.40;
+        const scale = radius * 0.82;
+        const cameraDist = 3.2;
+
+        // 1. Static Magenta Outer Ring
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 43, 214, 0.38)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Crosshairs ticks
+        const tickLen = 4;
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
+        ctx.beginPath();
+        ctx.moveTo(cx - radius - tickLen, cy); ctx.lineTo(cx - radius + tickLen, cy);
+        ctx.moveTo(cx + radius - tickLen, cy); ctx.lineTo(cx + radius + tickLen, cy);
+        ctx.moveTo(cx, cy - radius - tickLen); ctx.lineTo(cx, cy - radius + tickLen);
+        ctx.moveTo(cx, cy + radius - tickLen); ctx.lineTo(cx, cy + radius + tickLen);
+        ctx.stroke();
+        ctx.restore();
+
+        // 2. Dashed Rotating Arc
+        ctx.save();
+        ctx.strokeStyle = '#ff2bd6';
+        ctx.lineWidth = 1.6;
+        ctx.shadowColor = '#ff2bd6';
+        ctx.shadowBlur = 6;
+        ctx.setLineDash([7, 6]);
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + 6, arcRotation, arcRotation + Math.PI * 0.85);
+        ctx.stroke();
+        ctx.restore();
+
+        // 3. Rotate Vertices
+        const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+        const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+        const cosZ = Math.cos(rotZ), sinZ = Math.sin(rotZ);
+
+        const transformed = icosaVertices.map(v => {
+          let x = v[0], y = v[1], z = v[2];
+
+          // Rotate Y
+          let x1 = x * cosY + z * sinY;
+          let z1 = -x * sinY + z * cosY;
+
+          // Rotate X
+          let y2 = y * cosX - z1 * sinX;
+          let z2 = y * sinX + z1 * cosX;
+
+          // Rotate Z
+          let x3 = x1 * cosZ - y2 * sinZ;
+          let y3 = x1 * sinZ + y2 * cosZ;
+
+          // Perspective Projection
+          const pz = z2 + cameraDist;
+          const k = scale / pz;
+          const px = cx + x3 * k;
+          const py = cy + y3 * k;
+
+          return { px, py, z: z2 };
+        });
+
+        // 4. Depth-Shaded Cyan Edges
+        const sortedEdges = icosaEdges.map(e => {
+          const v0 = transformed[e[0]];
+          const v1 = transformed[e[1]];
+          const avgZ = (v0.z + v1.z) / 2;
+          return { v0, v1, avgZ };
+        });
+
+        // Sort back-to-front (smaller z is farther)
+        sortedEdges.sort((a, b) => a.avgZ - b.avgZ);
+
+        sortedEdges.forEach(edge => {
+          // z is in [-1, 1], depthRatio in [0, 1]
+          const depthRatio = Math.max(0, Math.min(1, (edge.avgZ + 1) / 2));
+          const alpha = 0.22 + 0.78 * depthRatio;
+          const width = 0.8 + 1.6 * depthRatio;
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(edge.v0.px, edge.v0.py);
+          ctx.lineTo(edge.v1.px, edge.v1.py);
+          ctx.strokeStyle = `rgba(0, 240, 255, ${alpha.toFixed(3)})`;
+          ctx.lineWidth = width;
+
+          if (depthRatio > 0.55) {
+            ctx.shadowColor = '#00f0ff';
+            ctx.shadowBlur = 8 * depthRatio;
+          }
+          ctx.stroke();
+          ctx.restore();
+        });
+
+        // 5. Magenta Vertices
+        transformed.forEach(v => {
+          const depthRatio = Math.max(0, Math.min(1, (v.z + 1) / 2));
+          const dotSize = 1.4 + 1.8 * depthRatio;
+
+          ctx.save();
+          ctx.fillStyle = '#ff2bd6';
+          ctx.shadowColor = '#ff2bd6';
+          ctx.shadowBlur = 6 * depthRatio;
+          ctx.beginPath();
+          ctx.arc(v.px, v.py, dotSize, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        });
+
+        ctx.restore();
+
+        // Update Readout
+        const degX = Math.round(((rotX * 180 / Math.PI) % 360 + 360) % 360);
+        const degY = Math.round(((rotY * 180 / Math.PI) % 360 + 360) % 360);
+        readoutEl.textContent = `ROT: X: ${pad3(degX)}° Y: ${pad3(degY)}°`;
+      }
+
+      function coreLoop() {
+        if (!prefersReducedMotion) {
+          rotX += 0.009;
+          rotY += 0.014;
+          rotZ += 0.005;
+          arcRotation -= 0.018;
+          renderCoreAssembly();
+          requestAnimationFrame(coreLoop);
+        } else {
+          renderCoreAssembly();
+        }
+      }
+      coreLoop();
+
+      // ========================================================================
+      // SIDEBAR 2: TELEMETRY GAUGES (Updates every 1.4s)
+      // ========================================================================
+      const tempValEl = document.getElementById('temp-val');
+      const tempBarEl = document.getElementById('temp-bar');
+      const fluxValEl = document.getElementById('flux-val');
+      const fluxBarEl = document.getElementById('flux-bar');
+
+      let currentTemp = 48.2;
+      let currentFlux = 93.4;
+
+      function updateGauges() {
+        // Core temp random walk
+        const tempDelta = (Math.random() - 0.48) * 0.9;
+        currentTemp = Math.max(45.1, Math.min(52.8, currentTemp + tempDelta));
+        tempValEl.textContent = `${currentTemp.toFixed(1)} °C`;
+        tempBarEl.style.width = `${Math.min(100, Math.max(0, (currentTemp / 65) * 100)).toFixed(1)}%`;
+
+        // Flux random walk
+        const fluxDelta = (Math.random() - 0.5) * 2.8;
+        currentFlux = Math.max(86.5, Math.min(98.9, currentFlux + fluxDelta));
+        fluxValEl.textContent = `${currentFlux.toFixed(1)} %`;
+        fluxBarEl.style.width = `${currentFlux.toFixed(1)}%`;
+      }
+
+      setInterval(updateGauges, 1400);
+
+      // ========================================================================
+      // SIDEBAR 3: MEMORY · 0x7f3a HEX DUMP (14 Rows, 220ms recycle)
+      // ========================================================================
+      const hexContainer = document.getElementById('hexdump-scroll');
+      const HEX_ROWS_COUNT = 14;
+      let hexBaseAddr = 0x7f3a00;
+
+      function generateHexRow(addr) {
+        const row = document.createElement('div');
+        row.className = 'hex-row';
+
+        const addrSpan = document.createElement('span');
+        addrSpan.className = 'hex-addr';
+        const hexStr = (addr & 0xffff).toString(16).padStart(4, '0').toUpperCase();
+        addrSpan.textContent = `0x7f3a:${hexStr.slice(-2)}`;
+        row.appendChild(addrSpan);
+
+        const bytesContainer = document.createElement('span');
+        bytesContainer.className = 'hex-bytes';
+
+        let asciiStr = '';
+        for (let i = 0; i < 8; i++) {
+          const byteVal = Math.floor(Math.random() * 256);
+          const byteHex = byteVal.toString(16).padStart(2, '0').toUpperCase();
+
+          const bSpan = document.createElement('span');
+          bSpan.className = 'hex-byte';
+          // ~12% highlighted in glowing cyan
+          if (Math.random() < 0.12) {
+            bSpan.classList.add('cyan-glow');
+          }
+          bSpan.textContent = byteHex;
+          bytesContainer.appendChild(bSpan);
+
+          // ASCII representation
+          if (byteVal >= 33 && byteVal <= 126) {
+            asciiStr += String.fromCharCode(byteVal);
+          } else {
+            asciiStr += '·';
+          }
+        }
+        row.appendChild(bytesContainer);
+
+        const asciiSpan = document.createElement('span');
+        asciiSpan.className = 'hex-ascii';
+        asciiSpan.textContent = asciiStr;
+        row.appendChild(asciiSpan);
+
+        return row;
+      }
+
+      // Populate initial 14 rows
+      for (let i = 0; i < HEX_ROWS_COUNT; i++) {
+        const row = generateHexRow(hexBaseAddr + (i * 8));
+        hexContainer.appendChild(row);
+      }
+
+      // Recycle rows from top to bottom every 220ms (or 1.5s on reduced-motion)
+      const hexIntervalTime = prefersReducedMotion ? 1500 : 220;
+      let nextAddrOffset = HEX_ROWS_COUNT * 8;
+
+      setInterval(() => {
+        if (hexContainer.children.length >= HEX_ROWS_COUNT) {
+          hexContainer.removeChild(hexContainer.firstElementChild);
+        }
+        const newRow = generateHexRow(hexBaseAddr + nextAddrOffset);
+        hexContainer.appendChild(newRow);
+        nextAddrOffset = (nextAddrOffset + 8) & 0xffff;
+      }, hexIntervalTime);
+
+      // ========================================================================
+      // STARTUP
+      // ========================================================================
+      window.addEventListener('load', () => {
+        resizeCanvas();
+        runBootSequence();
+      });
+
+    })();
+  </script>
+</body>
+</html>

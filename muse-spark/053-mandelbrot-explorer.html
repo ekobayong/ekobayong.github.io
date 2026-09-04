@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>053 · Mandelbrot Explorer</title>
+<style>
+ * {
+  box-sizing:border-box
+}
+html,body {
+  margin:0;
+  height:100%;
+  overflow:hidden;
+  background:#070912;
+  color:#e8ecf5;
+  font-family:ui-sans-serif,system-ui
+}
+ #view {
+  position:fixed;
+  inset:0;
+  width:100%;
+  height:100%;
+  cursor:crosshair
+}
+ #prog {
+  position:fixed;
+  top:0;
+  left:0;
+  height:2px;
+  width:0;
+  background:#f0b35a;
+  box-shadow:0 0 12px #f0b35a;
+  z-index:10
+}
+ .panel {
+  position:fixed;
+  background:rgba(14,16,24,.78);
+  border:1px solid rgba(255,255,255,.09);
+  backdrop-filter:blur(16px);
+  border-radius:12px;
+  padding:12px 14px;
+  z-index:5
+}
+ #brand {
+  top:14px;
+  left:14px;
+  display:flex;
+  gap:10px;
+  align-items:center
+}
+ #brand svg {
+  flex:none
+}
+ #brand h1 {
+  font-family:Georgia,serif;
+  font-weight:400;
+  font-size:19px;
+  margin:0
+}
+ #brand p {
+  margin:2px 0 0;
+  font-size:9px;
+  letter-spacing:.3em;
+  text-transform:uppercase;
+  opacity:.6
+}
+ #hud {
+  top:14px;
+  right:14px;
+  font-family:ui-monospace,Menlo,monospace;
+  font-size:11.5px;
+  line-height:1.7;
+  text-align:right;
+  font-variant-numeric:tabular-nums
+}
+ #hud b {
+  color:#f0b35a;
+  font-weight:400
+}
+ #dock {
+  bottom:14px;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  gap:12px;
+  align-items:center;
+  max-width:96vw;
+  overflow-x:auto;
+  padding:12px 16px
+}
+ .bm {
+  border:1px solid rgba(255,255,255,.14);
+  background:none;
+  border-radius:8px;
+  padding:0;
+  cursor:pointer;
+  color:#fff;
+  width:112px;
+  flex:none;
+  transition:transform .3s cubic-bezier(.2,.9,.3,1.3)
+}
+ .bm:hover {
+  transform:translateY(-4px)
+}
+.bm.active {
+  border-color:#f0b35a;
+  box-shadow:0 0 0 1px #f0b35a
+}
+ .bm canvas {
+  width:112px;
+  height:72px;
+  display:block;
+  border-radius:7px 7px 0 0
+}
+ .bm span {
+  display:block;
+  font-size:9px;
+  letter-spacing:.1em;
+  padding:5px;
+  background:linear-gradient(180deg,rgba(255,255,255,.08),transparent);
+  border-radius:0 0 7px 7px
+}
+ .tools {
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex:none
+}
+ .seg {
+  display:flex;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:8px;
+  overflow:hidden
+}
+ .seg button {
+  border:0;
+  background:transparent;
+  color:#cfd;
+   padding:8px 10px;
+  cursor:pointer;
+  font-size:11px
+}
+ .seg button.on {
+  background:#f0b35a;
+  color:#111
+}
+ .tbtn {
+  border:1px solid rgba(255,255,255,.16);
+  background:transparent;
+  color:#fff;
+  border-radius:8px;
+  padding:8px 11px;
+  cursor:pointer;
+  font-size:12px
+}
+ .tbtn:hover {
+  border-color:#f0b35a;
+  color:#f0b35a
+}
+ #hint {
+  position:fixed;
+  bottom:110px;
+  left:50%;
+  transform:translateX(-50%);
+  font-size:11px;
+  letter-spacing:.06em;
+  opacity:.6;
+  z-index:4;
+  background:rgba(0,0,0,.4);
+  padding:6px 12px;
+  border-radius:99px;
+  transition:opacity 1s
+}
+ @media(max-width:760px) {
+  #hud {
+    top:auto;
+    bottom:150px;
+    right:8px;
+    font-size:10px
+  }
+  .bm,.bm canvas {
+    width:92px
+  }
+  .bm canvas {
+    height:60px
+  }
+  #hint {
+    display:none
+  }
+  
+}
+ @media(prefers-reduced-motion:reduce) {
+  * {
+    transition:none!important
+  }
+  
+}
+ 
+/* —— explorer chrome: focus, readout, tour, print —— */ ::selection {
+  background:#f0b35a;
+  color:#111
+}
+ button:focus-visible {
+  outline:2px solid #f0b35a;
+  outline-offset:2px
+}
+ #scalebar {
+  position:fixed;
+  left:16px;
+  bottom:16px;
+  z-index:5;
+  font-family:ui-monospace,monospace;
+  font-size:10.5px;
+   background:rgba(14,16,24,.78);
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:8px;
+  padding:8px 12px
+}
+ #scalebar .bar {
+  height:3px;
+  background:linear-gradient(90deg,#f0b35a,transparent);
+  margin-top:6px
+}
+ .tour {
+  position:fixed;
+  left:50%;
+  top:76px;
+  transform:translateX(-50%);
+  z-index:5;
+  display:flex;
+  gap:8px
+}
+ .tour button {
+  background:rgba(14,16,24,.78);
+  border:1px solid rgba(255,255,255,.14);
+  color:#fff;
+  border-radius:99px;
+   padding:7px 14px;
+  font-size:11px;
+  letter-spacing:.08em;
+  cursor:pointer;
+  backdrop-filter:blur(16px)
+}
+ .tour button:hover {
+  border-color:#f0b35a;
+  color:#f0b35a
+}
+ .cross {
+  position:fixed;
+  left:50%;
+  top:50%;
+  width:22px;
+  height:22px;
+  transform:translate(-50%,-50%);
+  z-index:4;
+   pointer-events:none;
+  opacity:.5
+}
+ .cross::before,.cross::after {
+  content:"";
+  position:absolute;
+  background:#fff
+}
+ .cross::before {
+  left:10px;
+  top:0;
+  width:1px;
+  height:22px
+}
+ .cross::after {
+  top:10px;
+  left:0;
+  height:1px;
+  width:22px
+}
+ #loader {
+  position:fixed;
+  inset:0;
+  display:grid;
+  place-items:center;
+  background:#070912;
+  z-index:20;
+   font-family:Georgia,serif;
+  font-style:italic;
+  font-size:18px;
+  transition:opacity .6s
+}
+ #loader.gone {
+  opacity:0;
+  pointer-events:none
+}
+ noscript div {
+  position:fixed;
+  inset:0;
+  display:grid;
+  place-items:center;
+  background:#070912;
+  color:#fff;
+  z-index:30
+}
+ @media(max-width:760px) {
+   .tour {
+    display:none
+  }
+   #scalebar {
+    display:none
+  }
+   #dock {
+    gap:8px;
+    padding:10px
+  }
+   
+}
+ @media(min-width:2000px) {
+   #brand h1 {
+    font-size:24px
+  }
+   #hud {
+    font-size:13px
+  }
+   
+}
+ @media(prefers-contrast:more) {
+   .panel {
+    background:#000;
+    border-color:#fff
+  }
+   .bm {
+    border-width:2px
+  }
+   
+}
+ @media print {
+   #dock,#hint,.tour {
+    display:none
+  }
+   
+}
+ 
+</style>
+</head>
+<body>
+<canvas id="view"></canvas><div id="prog"></div>
+<div class="panel" id="brand"><svg width="26" height="26" viewBox="0 0 26 26"><path d="M13 2 C7 2 4 8 6 12 C3 11 2 15 5 17 C4 20 8 24 13 22 C18 24 22 20 21 17 C24 15 23 11 20 12 C22 8 19 2 13 2Z" fill="none" stroke="#f0b35a" stroke-width="1.6"/></svg><div><h1>Mandelbrot Explorer</h1><p>Progressive fractal renderer</p></div></div>
+<div class="panel" id="hud">Re <b id="hRe">-0.75</b> · Im <b id="hIm">0</b><br>zoom <b id="hZ">×1</b> · iter <b id="hI">–</b><br><span id="hT">– ms</span> · <span id="hW">main-thread</span></div>
+<div class="panel" id="dock"><div id="bms" style="display:flex;gap:8px"></div>
+<div class="tools"><div class="seg" id="palSeg"></div>
+<button class="tbtn" id="iMinus">−</button><button class="tbtn" id="iPlus">+</button>
+<button class="tbtn" id="zOut">− zoom</button><button class="tbtn" id="reset">Reset</button></div></div>
+<div id="hint">click zoom in · shift-click zoom out · drag pan · wheel zoom · 1–4 palettes</div>
+<script>
+const cv=document.getElementById('view'),ctx=cv.getContext('2d');
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let W=0,H=0,DPR=1,renderId=0;
+let view={cx:-0.75,cy:0,span:3.4},palIdx=0,iterMul=1;
+const PALS=[
+ {n:'Ultra',pts:[[0,0x00,0x07,0x64],[.16,0x20,0x6b,0xcb],[.42,0xed,0xff,0xff],[.63,0xff,0xaa,0x00],[.82,0x00,0x02,0x00]]},
+ {n:'Ember',pts:[[0,10,4,2],[.25,90,12,6],[.5,200,60,10],[.7,255,170,40],[.85,255,240,200],[1,60,10,20]]},
+ {n:'Ice',pts:[[0,2,6,20],[.3,10,40,110],[.55,60,140,220],[.75,200,240,255],[.9,255,255,255],[1,30,20,70]]},
+ {n:'Mono',pts:[[0,8,8,10],[.5,240,238,232],[1,8,8,10]]}];
+function smooth(a,b,x){x=Math.min(1,Math.max(0,(x-a)/(b-a)));return x*x*(3-2*x)}
+function buildLUT(p){const L=new Uint8Array(2048*3);
+ for(let i=0;i<2048;i++){const u=i/2048;let k=0;while(k<p.pts.length-2&&u>p.pts[k+1][0])k++;
+  const A=p.pts[k],B=p.pts[k+1];let f=(u-A[0])/Math.max(1e-6,B[0]-A[0]);f=Math.min(1,Math.max(0,f));f=f*f*(3-2*f);
+  L[i*3]=A[1]+(B[1]-A[1])*f;L[i*3+1]=A[2]+(B[2]-A[2])*f;L[i*3+2]=A[3]+(B[3]-A[3])*f}return L}
+let LUT=buildLUT(PALS[0]);
+function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);schedule()}
+addEventListener('resize',resize);
+function depth(){return Math.log2(3.4/view.span)}
+function maxIter(){return Math.min(12000,(120+90*Math.pow(Math.max(0,depth()),1.15))*iterMul)}
+function kernel(px,py){
+  const x0=view.cx+(px/W-.5)*view.span* (W/H>1?1:1),dx=view.span/W;
+  // aspect-correct mapping
+  const asp=W/H;let re,im;
+  if(asp>=1){re=view.cx+(px/W-.5)*view.span*asp;im=view.cy+(py/H-.5)*view.span}
+  else{re=view.cx+(px/W-.5)*view.span;im=view.cy+(py/H-.5)*view.span/asp}
+  const q=(re-.25)*(re-.25)+im*im;
+  if(q*(q+(re-.25))<.25*im*im||((re+1)*(re+1)+im*im)<.0625)return null;
+  let zr=0,zi=0,n=0;const M=maxIter();
+  while(zr*zr+zi*zi<65536&&n<M){const t=zr*zr-zi*zi+re;zi=2*zr*zi+im;zr=t;n++}
+  if(n>=M)return null;
+  const l=Math.log(zr*zr+zi*zi)/2;const nu=n+1-Math.log2(l/Math.LN2);
+  return Math.floor((Math.sqrt(nu)*96+240))%2048;
+}
+let queued=false;
+function schedule(){if(queued)return;queued=true;setTimeout(()=>{queued=false;render()},30)}
+async function render(){
+  const id=++renderId;const t0=performance.now();
+  const steps=[8,4,2,1];const prog=document.getElementById('prog');
+  const img=ctx.createImageData(W,H);
+  // low-res buffer reused
+  for(const s of steps){
+    if(id!==renderId)return;
+    prog.style.width=(s===8?15:s===4?40:s===2?70:95)+'%';
+    const cw=Math.ceil(W/s),ch=Math.ceil(H/s);
+    const small=new ImageData(cw,ch);
+    for(let y=0;y<ch;y++){for(let x=0;x<cw;x++){
+      const v=kernel(x*s,s*y);
+      const o=(y*cw+x)*4;
+      if(v==null){small.data[o]=small.data[o+1]=small.data[o+2]=0;small.data[o+3]=255}
+      else{small.data[o]=LUT[v*3];small.data[o+1]=LUT[v*3+1];small.data[o+2]=LUT[v*3+2];small.data[o+3]=255}
+    }
+      if((y&15)===0)await new Promise(r=>setTimeout(r,0));
+      if(id!==renderId)return;
+    }
+    const tmp=document.createElement('canvas');tmp.width=cw;tmp.height=ch;tmp.getContext('2d').putImageData(small,0,0);
+    ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,W,H);ctx.drawImage(tmp,0,0,W,H);
+  }
+  prog.style.width='100%';setTimeout(()=>prog.style.width='0',300);
+  const ms=(performance.now()-t0)|0;
+  document.getElementById('hI').textContent=maxIter()|0;
+  document.getElementById('hT').textContent=ms+' ms';
+  updateHUD();
+}
+function updateHUD(){
+  document.getElementById('hRe').textContent=view.cx.toFixed(12);
+  document.getElementById('hIm').textContent=view.cy.toFixed(12);
+  const z=3.4/view.span;
+  document.getElementById('hZ').textContent=z>1000?'×'+z.toExponential(1):'×'+z.toFixed(1);
+  document.getElementById('hW').textContent=(navigator.hardwareConcurrency||4)+' workers → fallback';
+}
+// nav
+function zoomAt(px,py,f,anim){
+  const asp=W/H;let re,im;
+  if(asp>=1){re=view.cx+(px/W-.5)*view.span*asp;im=view.cy+(py/H-.5)*view.span}
+  else{re=view.cx+(px/W-.5)*view.span;im=view.cy+(py/H-.5)*view.span/asp}
+  const apply=()=>{view.span/=f;
+    // keep point under cursor
+    if(asp>=1){view.cx=re-(px/W-.5)*view.span*asp;view.cy=im-(py/H-.5)*view.span}
+    else{view.cx=re-(px/W-.5)*view.span;view.cy=im-(py/H-.5)*view.span/asp}
+    schedule()};
+  if(anim&&!RM){ // bitmap scale flash
+    ctx.imageSmoothingEnabled=true;const snap=document.createElement('canvas');snap.width=cv.width;snap.height=cv.height;snap.getContext('2d').drawImage(cv,0,0);
+    const st=performance.now();(function a(){const k=Math.min(1,(performance.now()-st)/300),e=1-Math.pow(1-k,3);
+      ctx.clearRect(0,0,W,H);const sc=1+(f-1)*e*.3;ctx.save();ctx.translate(px,py);ctx.scale(f>1?sc:1/sc,f>1?sc:1/sc);ctx.translate(-px,-py);ctx.drawImage(snap,0,0,W,H);ctx.restore();
+      if(k<1)requestAnimationFrame(a);else apply()})()
+  }else apply();
+  hideHint();
+}
+let drag=null,snap=null;
+cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,moved:false};cv.setPointerCapture(e.pointerId);
+  snap=document.createElement('canvas');snap.width=cv.width;snap.height=cv.height;snap.getContext('2d').drawImage(cv,0,0)});
+cv.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+  if(Math.hypot(dx,dy)>4)drag.moved=true;
+  if(drag.moved){ctx.clearRect(0,0,W,H);ctx.drawImage(snap,dx,dy,W,H)}});
+cv.addEventListener('pointerup',e=>{if(!drag)return;
+  if(!drag.moved){zoomAt(e.clientX,e.clientY,e.shiftKey?1/2.5:2.5,true)}
+  else{const dx=e.clientX-drag.x,dy=e.clientY-drag.y;const asp=W/H;
+    if(asp>=1){view.cx-=dx/W*view.span*asp;view.cy-=dy/H*view.span}else{view.cx-=dx/W*view.span;view.cy-=dy/H*view.span/asp}
+    schedule()}drag=null});
+cv.addEventListener('wheel',e=>{e.preventDefault();zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*.0018),false)},{passive:false});
+cv.addEventListener('contextmenu',e=>{e.preventDefault();zoomAt(e.clientX,e.clientY,1/2.5,false)});
+addEventListener('keydown',e=>{if(e.key==='r'||e.key==='R')reset();if(e.key==='Escape')zoomAt(W/2,H/2,1/2.5,false);
+  if(e.key==='+' )iterMul=Math.min(8,iterMul*2),schedule();if(e.key==='-')iterMul=Math.max(.5,iterMul/2),schedule();
+  if(e.key>='1'&&e.key<='4')setPal(+e.key-1)});
+function reset(){view={cx:-0.75,cy:0,span:3.4};setActive(-1);schedule()}
+document.getElementById('reset').onclick=reset;
+document.getElementById('zOut').onclick=()=>zoomAt(W/2,H/2,1/2.5,true);
+document.getElementById('iPlus').onclick=()=>{iterMul=Math.min(8,iterMul*2);schedule()};
+document.getElementById('iMinus').onclick=()=>{iterMul=Math.max(.5,iterMul/2);schedule()};
+// palettes
+const seg=document.getElementById('palSeg');
+PALS.forEach((p,i)=>{const b=document.createElement('button');b.textContent=p.n.slice(0,2);b.title=p.n;
+  b.style.background=`linear-gradient(90deg,rgb(${p.pts[1][1]},${p.pts[1][2]},${p.pts[1][3]}),rgb(${p.pts[2][1]},${p.pts[2][2]},${p.pts[2][3]}))`;
+  b.onclick=()=>setPal(i);seg.appendChild(b)});
+function setPal(i){palIdx=i;LUT=buildLUT(PALS[i]);[...seg.children].forEach((b,j)=>b.classList.toggle('on',j===i));schedule()}
+setPal(0);
+// bookmarks
+const BMS=[['Overview',-0.75,0,3.4],['Seahorse',-0.7435669,0.1314023,0.0022],['Elephant',0.2749,0.00655,0.012],['Triple',-0.088,0.654,0.012],['Spiral',-0.16070135,1.0375665,0.0012],['Mini',-1.7548776,0,0.028]];
+const bmsEl=document.getElementById('bms');
+BMS.forEach((b,i)=>{const btn=document.createElement('button');btn.className='bm'+(i===0?' active':'');
+  const c=document.createElement('canvas');c.width=224;c.height=144;btn.appendChild(c);
+  const s=document.createElement('span');s.textContent=b[0];btn.appendChild(s);
+  btn.onclick=()=>{view={cx:b[1],cy:b[2],span:b[3]};setActive(i);schedule();hideHint()};
+  bmsEl.appendChild(btn);thumb(c,b)});
+function setActive(i){[...bmsEl.children].forEach((b,j)=>b.classList.toggle('active',j===i))}
+function thumb(c,b){
+  const x=c.getContext('2d'),cw=112,ch=72;const keep={...view};
+  // quick low-iter thumb
+  for(let py=0;py<ch;py+=2)for(let px=0;px<cw;px+=2){
+    const asp=2;const re=b[1]+(px/cw-.5)*b[3]*asp,im=b[2]+(py/ch-.5)*b[3];
+    let zr=0,zi=0,n=0;while(zr*zr+zi*zi<256&&n<80){const t=zr*zr-zi*zi+re;zi=2*zr*zi+im;zr=t;n++}
+    x.fillStyle=n>=80?'#000':`rgb(${LUT[(n*37)%2048*3]|0},${LUT[(n*37)%2048*3+1]|0},${LUT[(n*37)%2048*3+2]|0})`;
+    x.fillRect(px*2,py*2,4,4)}
+}
+function hideHint(){document.getElementById('hint').style.opacity=0}
+setTimeout(hideHint,9000);
+resize();
+</script>
+</body>
+</html>

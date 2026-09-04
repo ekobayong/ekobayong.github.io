@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vellmar Metro — Live Network Map</title>
+<style>
+:root
+{
+  --bg:#f5f2ea;--panel:#ebe7dc;--ink:#1b1e24;--sub:#5a5f6b;--rule:#d5d0c4;--river:#cfe3ec;--halo:#f5f2ea;--disc:#fff
+}
+
+body.night
+{
+  --bg:#0f1318;--panel:#151a21;--ink:#e9ecf1;--sub:#9aa3b2;--rule:#252c36;--river:#17232e;--halo:#151a21;--disc:#0f1318
+}
+
+*
+{
+  box-sizing:border-box
+}
+body
+{
+  margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,"Helvetica Neue",Helvetica,Arial,sans-serif;transition:background .5s,color .5s
+}
+
+header
+{
+  max-width:1240px;margin:0 auto;padding:18px 20px 6px;display:flex;align-items:center;gap:14px;flex-wrap:wrap
+}
+
+.word
+{
+  font-weight:700;font-size:20px;letter-spacing:.02em
+}
+.word span
+{
+  color:#d9363e
+}
+
+.legend
+{
+  display:flex;gap:8px;flex-wrap:wrap;margin-left:auto
+}
+
+.lg
+{
+  display:flex;align-items:center;gap:7px;font-size:12px;border:1px solid var(--rule);border-radius:999px;padding:6px 12px;cursor:pointer;background:var(--panel)
+}
+
+.lg i
+{
+  width:12px;height:12px;border-radius:50%;display:inline-block
+}
+.lg.off
+{
+  opacity:.4
+}
+
+#nightBtn
+{
+  border-radius:999px;border:1px solid var(--rule);padding:8px 16px;background:var(--ink);color:var(--bg);cursor:pointer;font-size:12px;letter-spacing:.14em
+}
+
+main
+{
+  max-width:1240px;margin:0 auto;padding:10px 20px 30px;display:grid;grid-template-columns:1fr 320px;gap:16px
+}
+
+#mapBox
+{
+  background:var(--panel);border:1px solid var(--rule);border-radius:16px;position:relative;overflow:hidden;transition:background .5s
+}
+
+#mapBox svg
+{
+  display:block;width:100%;height:auto
+}
+
+#clock
+{
+  position:absolute;right:12px;top:10px;font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--ink);color:var(--bg);padding:5px 10px;border-radius:8px;font-variant-numeric:tabular-nums
+}
+
+aside
+{
+  display:flex;flex-direction:column;gap:14px
+}
+
+.card
+{
+  background:var(--panel);border:1px solid var(--rule);border-radius:16px;padding:16px;transition:background .5s
+}
+
+.card h3
+{
+  margin:0 0 10px;font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--sub)
+}
+
+#arrivals .r
+{
+  display:flex;align-items:center;gap:8px;font-size:13px;padding:7px 0;border-top:1px solid var(--rule)
+}
+
+.pip
+{
+  width:11px;height:11px;border-radius:50%;flex:none
+}
+
+ mono,.eta
+{
+  font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums
+}
+.eta
+{
+  margin-left:auto;font-weight:700
+}
+.due
+{
+  color:#1e9e5a
+}
+
+#statusList .s
+{
+  display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 0;border-top:1px solid var(--rule)
+}
+
+.badge
+{
+  margin-left:auto;font-size:11px;padding:3px 10px;border-radius:999px;background:#1e9e5a;color:#fff
+}
+.badge.delay
+{
+  background:#f0a020;animation:pulse 1.2s infinite
+}
+
+@keyframes pulse
+{
+  50%
+{
+  opacity:.55
+}
+
+}
+
+line.pl
+{
+  fill:none;stroke-linecap:round;stroke-linejoin:round;transition:opacity .3s,stroke-width .2s
+}
+
+.dim
+{
+  opacity:.13!important
+}
+
+.st
+{
+  cursor:pointer
+}
+text.lbl
+{
+  font-size:11.5px;fill:var(--ink);paint-order:stroke;stroke:var(--halo);stroke-width:3px;font-weight:500
+}
+
+text.lbl.sel
+{
+  font-weight:700
+}
+
+@media(max-width:860px)
+{
+  main
+{
+  grid-template-columns:1fr
+}
+
+}
+
+@media(prefers-reduced-motion:reduce)
+{
+  .badge.delay
+{
+  animation:none
+}
+
+}
+
+</style>
+</head>
+<body>
+<header><div class="word">VELLMAR <span>●</span> METRO</div><div style="font-size:12px;color:var(--sub)">Network Diagram · 2026 · live</div><div class="legend" id="legend"></div><button id="nightBtn">◐ NIGHT</button></header>
+<main>
+<div id="mapBox"><div id="clock">--:--:--</div><svg id="map" viewBox="0 0 1000 740" role="img" aria-label="Vellmar metro map"></svg></div>
+<aside>
+<div class="card" id="arrivals"><h3>Next arrivals</h3><div id="stName" style="font-weight:700;font-size:17px">Pick a station</div><div id="stLines" style="margin:6px 0"></div><div id="arrList"><p style="color:var(--sub);font-size:13px">Click any station dot on the map.</p></div></div>
+<div class="card" id="statusList"><h3>Service status</h3><div id="stRows"></div></div>
+</aside>
+</main>
+<script>
+const NS='http://www.w3.org/2000/svg';
+const LINES=[
+
+{
+  id:'Crimson',c:'#d9363e',pts:[[60,620],[220,620],[280,560],[400,560],[460,500],[620,500],[700,420],[860,420]]
+}
+,
+
+{
+  id:'Cobalt',c:'#1f6fd6',pts:[[120,80],[120,300],[220,400],[220,560],[300,640],[420,640]]
+}
+,
+
+{
+  id:'Emerald',c:'#1e9e5a',pts:[[60,300],[260,300],[340,220],[560,220],[640,300],[940,300]]
+}
+,
+
+{
+  id:'Amber',c:'#f0a020',pts:[[400,80],[400,220],[480,300],[480,560],[560,640],[760,640]]
+}
+,
+
+{
+  id:'Violet',c:'#7b4fbf',pts:[[60,480],[240,480],[320,400],[520,400],[600,480],[900,480],[940,520]]
+}
+,
+
+{
+  id:'Slate',c:'#3a8c96',pts:[[200,140],[700,140],[780,220],[780,420],[700,500],[700,660]]
+}
+];
+const NAMES=['Westgate Quay','Harbor Mills','Tannery Steps','Museum Quarter',"Weaver's Row",'Ferry Landing','Central Vellmar','Kingsrow','Aurora Park','Lantern Court','Riverside','Botanic Gardens','Foundry Square','Priory Gate','Saltmarsh','Old Docks','Eastmoor Terminal','Northfield','Canal Side','Market Cross','University','Stadium','Hilltop','Airport Link'];
+const svg=document.getElementById('map');
+function el(n,a)
+{
+  const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;
+}
+
+svg.appendChild(el('defs',
+{
+  
+}
+));
+const grid=el('g',
+{
+  opacity:.5
+}
+);for(let x=0;x<=1000;x+=100)grid.appendChild(el('line',
+{
+  x1:x,y1:0,x2:x,y2:740,stroke:'currentColor','stroke-opacity':.06
+}
+));for(let y=0;y<=740;y+=100)grid.appendChild(el('line',
+{
+  x1:0,y1:y,x2:1000,y2:y,stroke:'currentColor','stroke-opacity':.06
+}
+));svg.appendChild(grid);
+const river=el('path',
+{
+  d:'M-20 560 C 180 540, 260 600, 430 580 S 700 520, 1020 580 L1020 640 C 700 580, 420 640, 220 620 S 80 620, -20 630 Z',fill:'var(--river)',opacity:.9
+}
+);svg.appendChild(river);
+const cap=el('text',
+{
+  x:20,y:726,'font-size':11,fill:'var(--sub)'
+}
+);cap.textContent='Vellmar Metro · Network Diagram · 2026 — Beck-style schematic';svg.appendChild(cap);
+const lineEls=
+{
+  
+}
+,stationList=[];let si=0;
+LINES.forEach((L,li)=>
+{
+  
+const d='M'+L.pts.map(p=>p.join(' ')).join(' L ');
+const hit=el('path',
+{
+  d,fill:'none',stroke:'transparent','stroke-width':26,style:'cursor:pointer'
+}
+);svg.appendChild(hit);
+const p=el('path',
+{
+  d,fill:'none',stroke:L.c,'stroke-width':9,class:'pl','data-line':L.id
+}
+);svg.appendChild(p);lineEls[L.id]=p;
+const g=el('g',
+{
+  
+}
+);svg.appendChild(g);L.g=g;L.pathEl=p;
+hit.addEventListener('pointerenter',()=>hl(L.id,true));hit.addEventListener('pointerleave',()=>hl(L.id,false));hit.addEventListener('click',()=>toggleLine(L.id));
+L.stations=[];const n=L.id==='Crimson'?8:L.id==='Violet'?7:6;
+for(let i=0;i<n;i++)
+{
+  const nm=NAMES[(si++)%NAMES.length];L.stations.push(
+{
+  name:nm,t:i/(n-1),inter:(nm==='Central Vellmar'||i===3)
+}
+);
+}
+
+
+}
+);
+function hl(id,on)
+{
+  document.querySelectorAll('.pl').forEach(p=>p.classList.toggle('dim',on&&p.dataset.line!==id));document.querySelectorAll('.train').forEach(t=>t.style.opacity=(on&&t.dataset.line!==id)?.13:1);document.querySelectorAll('.st').forEach(s=>
+{
+  if(!s.dataset.lines.includes(id)&&on)s.style.opacity=.13;else s.style.opacity=1;
+}
+);if(on)
+{
+  lineEls[id].setAttribute('stroke-width',13);
+}
+else
+{
+  Object.values(lineEls).forEach(p=>p.setAttribute('stroke-width',9));
+}
+
+}
+
+const hidden=
+{
+  
+}
+;
+function toggleLine(id)
+{
+  hidden[id]=!hidden[id];lineEls[id].style.display=hidden[id]?'none':'';document.querySelector(`[data-lg="$
+{
+  id
+}
+"]`).classList.toggle('off',!!hidden[id]);trains.filter(t=>t.line===id).forEach(t=>t.el.style.display=hidden[id]?'none':'');
+}
+
+const legend=document.getElementById('legend');
+LINES.forEach(L=>
+{
+  const b=document.createElement('button');b.className='lg';b.dataset.lg=L.id;b.innerHTML=`<i style="background:$
+{
+  L.c
+}
+"></i>$
+{
+  L.id
+}
+`;b.onmouseenter=()=>hl(L.id,true);b.onmouseleave=()=>hl(L.id,false);b.onclick=()=>toggleLine(L.id);legend.appendChild(b);
+}
+);
+let selected=null;const trains=[];
+LINES.forEach(L=>
+{
+  const len=L.pathEl.getTotalLength();
+L.stations.forEach((s,k)=>
+{
+  const target=s.t*len;let best=0,bd=1e9;for(let d=0;d<=len;d+=6)
+{
+  const pt=L.pathEl.getPointAtLength(d);const dd=Math.abs(d-target);if(dd<bd)
+{
+  bd=dd;best=d;
+}
+
+}
+s.dist=best;s.pos=L.pathEl.getPointAtLength(best);
+const g=L.g;const dot=el('circle',
+{
+  cx:s.pos.x,cy:s.pos.y,r:s.inter?9:5.5,fill:'var(--disc)',stroke:'#1b1e24','stroke-width':s.inter?4:2.5,class:'st',tabindex:0,role:'button','aria-label':s.name
+}
+);dot.dataset.lines=L.id;dot.style.stroke='var(--ink)';
+const lb=el('text',
+{
+  x:s.pos.x+9,y:s.pos.y-9,class:'lbl'
+}
+);lb.textContent=s.name;g.appendChild(dot);g.appendChild(lb);s.el=dot;s.lbl=lb;s.line=L.id;
+const act=()=>selectStation(s,L);dot.addEventListener('click',act);dot.addEventListener('keydown',e=>
+{
+  if(e.key==='Enter'||e.key===' ')
+{
+  e.preventDefault();act();
+}
+
+}
+);stationList.push(s);
+}
+);
+for(let k=0;k<4;k++)
+{
+  const e2=el('g',
+{
+  class:'train'
+}
+);const halo=el('circle',
+{
+  r:10,fill:L.c,opacity:.25
+}
+);const c=el('circle',
+{
+  r:5.5,fill:L.c,stroke:'#fff','stroke-width':2
+}
+);e2.appendChild(halo);e2.appendChild(c);e2.dataset.line=L.id;svg.appendChild(e2);trains.push(
+{
+  line:L.id,L,el:e2,d:(k%2?1:-1),s:(k<2?k*.5:(k-2)*.5+.25),dwell:0,dir:k%2?1:-1
+}
+);
+}
+
+
+}
+);
+const red=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const delays=
+{
+  
+}
+;LINES.forEach(L=>delays[L.id]=false);
+setInterval(()=>
+{
+  const L=LINES[Math.floor(Math.random()*LINES.length)];delays[L.id]=!delays[L.id]&&Math.random()>.4;if(delays[L.id])setTimeout(()=>delays[L.id]=false,14000+Math.random()*16000);renderStatus();
+}
+,18000);
+function renderStatus()
+{
+  const w=document.getElementById('stRows');w.innerHTML='';LINES.forEach(L=>
+{
+  const d=document.createElement('div');d.className='s';d.innerHTML=`<i class="pip" style="background:$
+{
+  L.c
+}
+"></i>$
+{
+  L.id
+}
+<span class="badge $
+{
+  delays[L.id]?'delay':''
+}
+">$
+{
+  delays[L.id]?'Minor delays':'Good service'
+}
+</span>`;d.onmouseenter=()=>hl(L.id,true);d.onmouseleave=()=>hl(L.id,false);w.appendChild(d);
+}
+);
+}
+
+renderStatus();
+function selectStation(s,L)
+{
+  selected=s;document.querySelectorAll('.lbl').forEach(t=>t.classList.remove('sel'));s.lbl.classList.add('sel');document.getElementById('stName').textContent=s.name;document.getElementById('stLines').innerHTML=`<span class="pip" style="background:$
+{
+  L.c
+}
+;display:inline-block"></span> <b>$
+{
+  L.id
+}
+</b> · towards $
+{
+  L.stations[L.stations.length-1].name
+}
+`;updateArrivals();
+}
+
+function updateArrivals()
+{
+  if(!selected)return;const box=document.getElementById('arrList');const rows=[];trains.filter(t=>t.line===selected.line).forEach(t=>
+{
+  const len=t.L.pathEl.getTotalLength();let d=t.s*len;let ahead=(selected.dist-d)*t.dir;if(ahead<0)ahead+=len;const sec=ahead/(62*(delays[t.line]?.45:1));rows.push(
+{
+  t,sec
+}
+);
+}
+);rows.sort((a,b)=>a.sec-b.sec);box.innerHTML=rows.slice(0,6).map(r=>
+{
+  const mm=Math.floor(r.sec/60),ss=Math.floor(r.sec%60);const txt=r.sec<3?'<span class="due">Due</span>':r.sec<60?Math.round(r.sec)+'s':`$
+{
+  mm
+}
+:$
+{
+  String(ss).padStart(2,'0')
+}
+`;const dest=r.t.dir>0?r.t.L.stations[r.t.L.stations.length-1].name:r.t.L.stations[0].name;return `<div class="r"><i class="pip" style="background:$
+{
+  r.t.L.c
+}
+"></i><span>$
+{
+  r.t.L.id
+}
+ · towards $
+{
+  dest
+}
+</span><span class="eta">$
+{
+  txt
+}
+</span></div>`;
+}
+).join('');
+}
+
+setInterval(updateArrivals,250);
+let last=performance.now();
+function tick(now)
+{
+  requestAnimationFrame(tick);const dt=Math.min(.05,(now-last)/1000);last=now;const sp=red?30:62;
+trains.forEach(t=>
+{
+  if(hidden[t.line])return;const len=t.L.pathEl.getTotalLength();if(t.dwell>0)
+{
+  t.dwell-=dt;
+}
+else
+{
+  t.s=(t.s+t.dir*sp*dt*(delays[t.line]?.45:1)/len+1)%1;const dd=t.s*len;const near=t.L.stations.find(s=>Math.abs(s.dist-dd)<4);if(near)
+{
+  t.dwell=delays[t.line]?3.2:1.6;t.s=near.dist/len;
+}
+
+}
+
+const pt=t.L.pathEl.getPointAtLength(t.s*len);t.el.setAttribute('transform',`translate($
+{
+  pt.x
+}
+ $
+{
+  pt.y
+}
+)`);
+}
+);
+}
+
+requestAnimationFrame(tick);
+setInterval(()=>
+{
+  const d=new Date();document.getElementById('clock').textContent=d.toLocaleTimeString('en-GB');
+}
+,500);
+const nb=document.getElementById('nightBtn');if(matchMedia('(prefers-color-scheme: dark)').matches)document.body.classList.add('night');
+nb.onclick=()=>document.body.classList.toggle('night');
+</script>
+</body>
+</html>

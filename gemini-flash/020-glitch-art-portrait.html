@@ -1,0 +1,1783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signal Loss — Generative Glitch Portrait</title>
+  <style>
+    /* ==========================================================================
+       SIGNAL LOSS — MUSEUM-GRADE GENERATIVE GLITCH PORTRAIT
+       Museum of Unstable Media · Gallery 4
+       ========================================================================== */
+
+    :root {
+      --bg-void: #07070a;
+      --bg-panel: #0d0d12;
+      --bg-matte: #0a0a0f;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-cyan-dashed: rgba(61, 233, 255, 0.28);
+      --acid-green: #c8ff3d;
+      --glitch-magenta: #ff3d9a;
+      --glitch-cyan: #3de9ff;
+      --text-main: #f0f0f5;
+      --text-dim: #9494a6;
+      --text-muted: #5c5c6e;
+      --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+      --font-serif: Georgia, "Iowan Old Style", Palatino, "Times New Roman", serif;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      background-color: var(--bg-void);
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Fixed 3px repeating scanline overlay with overlay blend mode */
+    .scanline-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 900;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.38) 0px,
+        rgba(0, 0, 0, 0.38) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+      mix-blend-mode: overlay;
+      opacity: 0.85;
+    }
+
+    /* Vignette ambient overlay */
+    .vignette-ambient {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 890;
+      background: radial-gradient(circle at 50% 50%, transparent 60%, rgba(3, 3, 5, 0.85) 100%);
+    }
+
+    /* ==========================================================================
+       TOP BAR
+       ========================================================================== */
+    .top-bar {
+      position: sticky;
+      top: 0;
+      width: 100%;
+      height: 46px;
+      background-color: rgba(13, 13, 18, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 800;
+      user-select: none;
+    }
+
+    .top-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--acid-green);
+      box-shadow: 0 0 10px var(--acid-green), 0 0 2px var(--acid-green);
+      animation: pulse-dot 1.4s infinite ease-in-out;
+      transition: background-color 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .status-dot.frozen {
+      background-color: var(--glitch-magenta);
+      box-shadow: 0 0 10px var(--glitch-magenta), 0 0 2px var(--glitch-magenta);
+      animation: none;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.3; transform: scale(0.85); }
+    }
+
+    .app-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-weight: 500;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .app-title .dim {
+      color: var(--text-muted);
+    }
+
+    .top-right {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+    }
+
+    .telemetry-tag {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .telemetry-tag .label {
+      color: var(--text-muted);
+    }
+
+    .telemetry-tag .val {
+      color: var(--glitch-cyan);
+      font-weight: 600;
+      min-width: 58px;
+    }
+
+    /* ==========================================================================
+       MAIN EXHIBIT LAYOUT
+       ========================================================================== */
+    .exhibit-container {
+      flex: 1;
+      width: 100%;
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 44px 28px 48px;
+      display: grid;
+      grid-template-columns: minmax(360px, 560px) minmax(340px, 1fr);
+      gap: 48px;
+      align-items: start;
+      justify-content: center;
+      position: relative;
+      z-index: 100;
+    }
+
+    /* ==========================================================================
+       PORTRAIT FRAME (3:4 ASPECT RATIO)
+       ========================================================================== */
+    .frame-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+    }
+
+    .portrait-matte {
+      width: 100%;
+      max-width: 540px;
+      aspect-ratio: 3 / 4;
+      background: var(--bg-panel);
+      padding: 12px;
+      border: 1px solid var(--border-subtle);
+      box-shadow:
+        0 24px 70px rgba(0, 0, 0, 0.85),
+        0 0 45px rgba(200, 255, 61, 0.035);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* Corner brackets (Acid Green) */
+    .corner-bracket {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-color: var(--acid-green);
+      pointer-events: none;
+      z-index: 10;
+      transition: border-color 0.25s ease;
+    }
+    .portrait-matte.frozen .corner-bracket {
+      border-color: var(--glitch-magenta);
+    }
+    .corner-tl { top: 6px; left: 6px; border-top: 2px solid; border-left: 2px solid; }
+    .corner-tr { top: 6px; right: 6px; border-top: 2px solid; border-right: 2px solid; }
+    .corner-bl { bottom: 6px; left: 6px; border-bottom: 2px solid; border-left: 2px solid; }
+    .corner-br { bottom: 6px; right: 6px; border-bottom: 2px solid; border-right: 2px solid; }
+
+    /* REC / HOLD Tag */
+    .rec-tag-container {
+      position: absolute;
+      top: 18px;
+      left: 20px;
+      z-index: 12;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      font-weight: 600;
+      color: var(--text-main);
+      background: rgba(7, 7, 10, 0.75);
+      padding: 3px 8px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      backdrop-filter: blur(4px);
+    }
+
+    .rec-indicator {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--acid-green);
+      box-shadow: 0 0 6px var(--acid-green);
+      animation: blink-rec 1s infinite steps(2, start);
+    }
+
+    .portrait-matte.frozen .rec-indicator {
+      width: 7px;
+      height: 7px;
+      border-radius: 0;
+      background: var(--glitch-magenta);
+      box-shadow: 0 0 6px var(--glitch-magenta);
+      animation: none;
+    }
+
+    @keyframes blink-rec {
+      to { visibility: hidden; }
+    }
+
+    /* Inner canvas presentation */
+    .canvas-viewport {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      background: #000000;
+      overflow: hidden;
+      border: 1px solid rgba(0, 0, 0, 0.6);
+    }
+
+    canvas#viewCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: contain;
+      image-rendering: auto;
+    }
+
+    .canvas-noise-sheen {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.7);
+    }
+
+    /* ==========================================================================
+       RIGHT COLUMN: MUSEUM PLAQUE & CONTROLS
+       ========================================================================== */
+    .plaque-column {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .museum-plaque {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      padding: 32px 36px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+      position: relative;
+    }
+
+    .museum-kicker {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .museum-kicker::before {
+      content: "";
+      display: inline-block;
+      width: 18px;
+      height: 1px;
+      background-color: var(--acid-green);
+    }
+
+    .plaque-title {
+      font-family: var(--font-serif);
+      font-size: clamp(30px, 3.4vw, 42px);
+      line-height: 1.15;
+      font-weight: 400;
+      color: #f7f7fa;
+      letter-spacing: -0.015em;
+      margin-bottom: 14px;
+    }
+
+    .plaque-title .subject-suffix {
+      display: inline-block;
+      font-style: italic;
+      font-size: 0.68em;
+      color: var(--text-dim);
+      margin-left: 8px;
+      font-weight: 300;
+    }
+
+    /* Plaque Two-Column Metadata */
+    .plaque-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 24px;
+      padding: 18px 0;
+      margin: 18px 0 20px;
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .meta-item .meta-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+    }
+
+    .meta-item .meta-value {
+      font-size: 12px;
+      color: var(--text-main);
+      letter-spacing: 0.04em;
+    }
+
+    .meta-item .meta-value.seed-val {
+      color: var(--glitch-cyan);
+      font-weight: 600;
+    }
+
+    /* Plaque Statement */
+    .plaque-statement {
+      font-family: var(--font-serif);
+      font-size: 14.5px;
+      line-height: 1.68;
+      color: #bbbbc8;
+      font-style: normal;
+    }
+
+    /* ==========================================================================
+       CONTROLS PANEL
+       ========================================================================== */
+    .controls-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      padding: 26px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Slider Group */
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+
+    .slider-label {
+      color: var(--text-dim);
+    }
+
+    .slider-val-readout {
+      color: var(--acid-green);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+
+    .slider-track-wrap {
+      position: relative;
+      height: 24px;
+      display: flex;
+      align-items: center;
+    }
+
+    /* Custom range input */
+    input[type="range"]#intensitySlider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 24px;
+      background: transparent;
+      outline: none;
+      margin: 0;
+      cursor: ew-resize;
+    }
+
+    /* Track: 1px acid-to-magenta gradient track */
+    input[type="range"]#intensitySlider::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(90deg, var(--acid-green) 0%, var(--glitch-cyan) 50%, var(--glitch-magenta) 100%);
+      border: none;
+    }
+    input[type="range"]#intensitySlider::-moz-range-track {
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(90deg, var(--acid-green) 0%, var(--glitch-cyan) 50%, var(--glitch-magenta) 100%);
+      border: none;
+    }
+
+    /* Thumb: 6x18px rectangular thumb */
+    input[type="range"]#intensitySlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 6px;
+      height: 18px;
+      background: #ffffff;
+      border: 1px solid #07070a;
+      border-radius: 0;
+      margin-top: -8.5px;
+      box-shadow: 0 0 10px rgba(200, 255, 61, 0.7);
+      transition: transform 0.1s ease, background 0.15s ease;
+    }
+    input[type="range"]#intensitySlider::-moz-range-thumb {
+      width: 6px;
+      height: 18px;
+      background: #ffffff;
+      border: 1px solid #07070a;
+      border-radius: 0;
+      box-shadow: 0 0 10px rgba(200, 255, 61, 0.7);
+      transition: transform 0.1s ease, background 0.15s ease;
+    }
+    input[type="range"]#intensitySlider:focus-visible::-webkit-slider-thumb {
+      outline: 2px solid var(--glitch-cyan);
+      outline-offset: 2px;
+    }
+
+    /* Buttons row */
+    .buttons-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .btn-action {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      padding: 13px 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.2s ease;
+      outline: none;
+      user-select: none;
+    }
+
+    .btn-action:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+
+    .btn-action:focus-visible {
+      border-color: var(--glitch-cyan);
+      box-shadow: 0 0 8px rgba(61, 233, 255, 0.4);
+    }
+
+    /* Square indicator dot that glows acid green on hover */
+    .btn-sq-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background-color: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      transition: all 0.2s ease;
+    }
+
+    .btn-action:hover .btn-sq-dot {
+      background-color: var(--acid-green);
+      border-color: var(--acid-green);
+      box-shadow: 0 0 8px var(--acid-green);
+    }
+
+    /* Freeze frame active / aria-pressed toggle (turns magenta, relabels Resume signal) */
+    .btn-freeze[aria-pressed="true"] {
+      border-color: var(--glitch-magenta);
+      color: var(--glitch-magenta);
+      background: rgba(255, 61, 154, 0.08);
+      box-shadow: 0 0 14px rgba(255, 61, 154, 0.25);
+    }
+
+    .btn-freeze[aria-pressed="true"] .btn-sq-dot {
+      background-color: var(--glitch-magenta);
+      border-color: var(--glitch-magenta);
+      box-shadow: 0 0 8px var(--glitch-magenta);
+    }
+
+    /* Readout Grid: six cells with dashed separators showing cyan hex values */
+    .readout-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border: 1px dashed var(--border-cyan-dashed);
+      background: rgba(7, 7, 10, 0.65);
+    }
+
+    .readout-cell {
+      padding: 12px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      border-right: 1px dashed var(--border-cyan-dashed);
+      border-bottom: 1px dashed var(--border-cyan-dashed);
+    }
+
+    /* Remove right border on 3rd column, bottom border on 2nd row */
+    .readout-cell:nth-child(3n) {
+      border-right: none;
+    }
+    .readout-cell:nth-child(n+4) {
+      border-bottom: none;
+    }
+
+    .cell-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+    }
+
+    .cell-val {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--glitch-cyan);
+      letter-spacing: 0.05em;
+      font-family: var(--font-mono);
+    }
+
+    .hotkey-hint {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      text-align: center;
+      padding-top: 2px;
+    }
+
+    .hotkey-hint kbd {
+      color: var(--text-dim);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 1px 4px;
+      font-family: var(--font-mono);
+      font-size: 9px;
+    }
+
+    /* ==========================================================================
+       FOOTER BAR
+       ========================================================================== */
+    .footer-bar {
+      width: 100%;
+      height: 42px;
+      background-color: var(--bg-panel);
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      user-select: none;
+      z-index: 800;
+    }
+
+    .footer-bar .accent-loc {
+      color: var(--text-dim);
+    }
+
+    /* ==========================================================================
+       RESPONSIVE DESIGN
+       Stack the plaque under the frame below 860px
+       ========================================================================== */
+    @media (max-width: 860px) {
+      .exhibit-container {
+        grid-template-columns: 1fr;
+        gap: 36px;
+        padding: 24px 18px 40px;
+      }
+
+      .portrait-matte {
+        max-width: 460px;
+      }
+
+      .top-bar {
+        padding: 0 16px;
+      }
+
+      .top-right {
+        gap: 14px;
+      }
+
+      .footer-bar {
+        padding: 0 16px;
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+        height: auto;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        text-align: center;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .status-dot {
+        animation: none !important;
+      }
+      .rec-indicator {
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fixed 3px repeating scanline overlay (overlay blend mode) -->
+  <div class="scanline-overlay" aria-hidden="true"></div>
+  <div class="vignette-ambient" aria-hidden="true"></div>
+
+  <!-- Top Bar -->
+  <header class="top-bar">
+    <div class="top-left">
+      <span class="status-dot" id="statusDot" aria-hidden="true"></span>
+      <h1 class="app-title">
+        Signal Loss <span class="dim">·</span> live corruption
+      </h1>
+    </div>
+    <div class="top-right">
+      <div class="telemetry-tag">
+        <span class="label">SUBJECT</span>
+        <span class="val" id="topSubjectHex">0x0000</span>
+      </div>
+      <div class="telemetry-tag">
+        <span class="label">FRAME</span>
+        <span class="val" id="topFrameCount">0x000000</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Exhibit Layout -->
+  <main class="exhibit-container">
+
+    <!-- Center / Portrait Frame (3:4 aspect ratio) -->
+    <section class="frame-column" aria-label="Generative portrait display">
+      <div class="portrait-matte" id="portraitMatte">
+        <!-- Corner Brackets -->
+        <div class="corner-bracket corner-tl" aria-hidden="true"></div>
+        <div class="corner-bracket corner-tr" aria-hidden="true"></div>
+        <div class="corner-bracket corner-bl" aria-hidden="true"></div>
+        <div class="corner-bracket corner-br" aria-hidden="true"></div>
+
+        <!-- Small REC ● tag (HOLD ■ when frozen) -->
+        <div class="rec-tag-container" id="recBadge" aria-live="polite">
+          <span class="rec-label" id="recBadgeText">REC</span>
+          <span class="rec-indicator" id="recIndicator" aria-hidden="true"></span>
+        </div>
+
+        <!-- Visible Canvas Viewport -->
+        <div class="canvas-viewport">
+          <canvas id="viewCanvas" width="600" height="800" role="img" aria-label="Live corrupted procedural portrait of an unstable face"></canvas>
+          <div class="canvas-noise-sheen" aria-hidden="true"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right / Museum Plaque & Controls -->
+    <aside class="plaque-column" aria-label="Museum plaque and signal controls">
+
+      <!-- Museum Plaque -->
+      <article class="museum-plaque">
+        <div class="museum-kicker">ARCHIVAL ENTRY · UNSTABLE SIGNAL</div>
+        <h2 class="plaque-title" id="artworkTitle">
+          Woman in Static <span class="subject-suffix" id="titleSubjectSuffix">(subject 4F2A)</span>
+        </h2>
+
+        <!-- Two-column meta list -->
+        <div class="plaque-meta">
+          <div class="meta-item">
+            <span class="meta-label">MEDIUM</span>
+            <span class="meta-value">Procedural pigment on unstable signal</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">YEAR</span>
+            <span class="meta-value">2026</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">DIMENSIONS</span>
+            <span class="meta-value">Variable (600 × 800 native)</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">EDITION</span>
+            <span class="meta-value seed-val" id="editionMeta">1/1 (seed: 0x4F2A)</span>
+          </div>
+        </div>
+
+        <!-- Short serif statement -->
+        <p class="plaque-statement" id="curatorialStatement">
+          A synthetic consciousness reconstructed from degraded memory buffers. As the carrier frequency dissolves, facial contours oscillate between photographic clarity and irreversible entropy — an ephemeral study in digital impermanence.
+        </p>
+      </article>
+
+      <!-- Controls Panel -->
+      <section class="controls-panel" aria-label="Signal corruption controls">
+
+        <!-- Corruption intensity range slider 0-1 -->
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="intensitySlider" class="slider-label">Corruption intensity</label>
+            <span class="slider-val-readout" id="intensityValueReadout">0.55</span>
+          </div>
+          <div class="slider-track-wrap">
+            <input type="range" id="intensitySlider" min="0" max="1" step="0.01" value="0.55" aria-label="Corruption intensity" />
+          </div>
+        </div>
+
+        <!-- Buttons row: Freeze frame and New subject -->
+        <div class="buttons-row">
+          <button type="button" class="btn-action btn-freeze" id="freezeBtn" aria-pressed="false" aria-label="Freeze frame">
+            <span class="btn-sq-dot" aria-hidden="true"></span>
+            <span id="freezeBtnText">Freeze frame</span>
+          </button>
+          <button type="button" class="btn-action btn-new" id="newSubjectBtn" aria-label="Generate new subject">
+            <span class="btn-sq-dot" aria-hidden="true"></span>
+            <span>New subject</span>
+          </button>
+        </div>
+
+        <!-- Six-cell readout grid with dashed separators showing cyan hex values -->
+        <div class="readout-grid" aria-label="Signal telemetry grid">
+          <div class="readout-cell">
+            <span class="cell-label">SLICE</span>
+            <span class="cell-val" id="cellSlice">0x00</span>
+          </div>
+          <div class="readout-cell">
+            <span class="cell-label">SPLIT</span>
+            <span class="cell-val" id="cellSplit">0x00</span>
+          </div>
+          <div class="readout-cell">
+            <span class="cell-label">BLOCKS</span>
+            <span class="cell-val" id="cellBlocks">0x00</span>
+          </div>
+          <div class="readout-cell">
+            <span class="cell-label">SMEAR</span>
+            <span class="cell-val" id="cellSmear">0x00</span>
+          </div>
+          <div class="readout-cell">
+            <span class="cell-label">PALETTE</span>
+            <span class="cell-val" id="cellPalette">#000000</span>
+          </div>
+          <div class="readout-cell">
+            <span class="cell-label">BURST</span>
+            <span class="cell-val" id="cellBurst">0x00</span>
+          </div>
+        </div>
+
+        <div class="hotkey-hint">
+          Shortcuts: <kbd>SPACE</kbd> Freeze / Resume · <kbd>N</kbd> New Subject
+        </div>
+
+      </section>
+
+    </aside>
+
+  </main>
+
+  <!-- Footer Bar -->
+  <footer class="footer-bar">
+    <span>Rendered entirely in-browser · no images · no network</span>
+    <span class="accent-loc">Museum of Unstable Media · Gallery 4</span>
+  </footer>
+
+  <!-- ==========================================================================
+       JAVASCRIPT: PROCEDURAL PORTRAIT GENERATION & LIVE GLITCH PIPELINE
+       ========================================================================== -->
+  <script>
+    (function () {
+      'use strict';
+
+      /* --- Museum Titles & Curatorial Statements Pool --- */
+      const ARTWORK_TITLES = [
+        "Woman in Static",
+        "The Last Keyframe",
+        "Ghost in the Phosphor",
+        "Transmission Loss",
+        "Memory of an Unknown Face",
+        "Artifact No. 404",
+        "Desynchronized Visage",
+        "Cathode Apparition",
+        "Entropy of Form",
+        "Spectral Resonance",
+        "Decayed Signal #88",
+        "Subcarrier Shadow",
+        "Phosphor Remanence",
+        "Null Vector Portrait",
+        "Fading Carrier Wave",
+        "Echo in the Drift"
+      ];
+
+      const CURATORIAL_STATEMENTS = [
+        "A synthetic consciousness reconstructed from degraded memory buffers. As the carrier frequency dissolves, facial contours oscillate between photographic clarity and irreversible entropy — an ephemeral study in digital impermanence.",
+        "Captured during late-stage carrier collapse. The procedural geometry attempts to sustain structural coherence against persistent packet loss, yielding an intimate dialogue between human likeness and machinic decay.",
+        "Synthesized without photograph or camera, this visage exists solely within the phosphor refresh interval. The subject resists stillness; every frame is an unrepeatable aberration of algorithmic memory.",
+        "An inquiry into digital mortality. Rendered from mathematical seeds into an unstable transmission matrix, the portrait decomposes before the viewer's gaze, embodying the fragile threshold between form and void.",
+        "Traced from residual electromagnetic drift in an abandoned relay. The subject emerges from harmonic interference, hovering momentarily in sharp resolution before fracturing into discrete chroma bands."
+      ];
+
+      /* --- DOM Elements --- */
+      const viewCanvas = document.getElementById('viewCanvas');
+      const viewCtx = viewCanvas.getContext('2d');
+      const portraitMatte = document.getElementById('portraitMatte');
+      const statusDot = document.getElementById('statusDot');
+      const topSubjectHex = document.getElementById('topSubjectHex');
+      const topFrameCount = document.getElementById('topFrameCount');
+      const recBadgeText = document.getElementById('recBadgeText');
+      const recIndicator = document.getElementById('recIndicator');
+      const artworkTitle = document.getElementById('artworkTitle');
+      const titleSubjectSuffix = document.getElementById('titleSubjectSuffix');
+      const editionMeta = document.getElementById('editionMeta');
+      const curatorialStatement = document.getElementById('curatorialStatement');
+      const intensitySlider = document.getElementById('intensitySlider');
+      const intensityValueReadout = document.getElementById('intensityValueReadout');
+      const freezeBtn = document.getElementById('freezeBtn');
+      const freezeBtnText = document.getElementById('freezeBtnText');
+      const newSubjectBtn = document.getElementById('newSubjectBtn');
+
+      const cellSlice = document.getElementById('cellSlice');
+      const cellSplit = document.getElementById('cellSplit');
+      const cellBlocks = document.getElementById('cellBlocks');
+      const cellSmear = document.getElementById('cellSmear');
+      const cellPalette = document.getElementById('cellPalette');
+      const cellBurst = document.getElementById('cellBurst');
+
+      /* --- Offscreen Canvases (Native 600x800) --- */
+      const PORTRAIT_WIDTH = 600;
+      const PORTRAIT_HEIGHT = 800;
+
+      const portraitCanvas = document.createElement('canvas');
+      portraitCanvas.width = PORTRAIT_WIDTH;
+      portraitCanvas.height = PORTRAIT_HEIGHT;
+      const portraitCtx = portraitCanvas.getContext('2d');
+
+      const workCanvas = document.createElement('canvas');
+      workCanvas.width = PORTRAIT_WIDTH;
+      workCanvas.height = PORTRAIT_HEIGHT;
+      const workCtx = workCanvas.getContext('2d');
+
+      const prevFrameCanvas = document.createElement('canvas');
+      prevFrameCanvas.width = PORTRAIT_WIDTH;
+      prevFrameCanvas.height = PORTRAIT_HEIGHT;
+      const prevCtx = prevFrameCanvas.getContext('2d');
+
+      // Slice scratch canvas
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = PORTRAIT_WIDTH;
+      sliceCanvas.height = 120;
+      const sliceCtx = sliceCanvas.getContext('2d');
+
+      // Static noise scratch canvas
+      const staticCanvas = document.createElement('canvas');
+      staticCanvas.width = PORTRAIT_WIDTH;
+      staticCanvas.height = 100;
+      const staticCtx = staticCanvas.getContext('2d');
+
+      // Three channel-isolated canvases
+      const channelCanvases = {
+        r: document.createElement('canvas'),
+        g: document.createElement('canvas'),
+        b: document.createElement('canvas')
+      };
+      for (const key of ['r', 'g', 'b']) {
+        channelCanvases[key].width = PORTRAIT_WIDTH;
+        channelCanvases[key].height = PORTRAIT_HEIGHT;
+      }
+
+      /* --- State Variables --- */
+      let currentSeed = 0;
+      let subjectHex = "0000";
+      let sliderIntensity = 0.55;
+      let isFrozen = false;
+      let frameCounter = 0;
+
+      // Burst envelope
+      let burst = 0.0;
+      let attackCountdown = 1.2; // seconds until next burst attack
+      let lastTimestamp = 0;
+
+      // Active subject palette info
+      let subjectPalette = {
+        baseHue: 200,
+        skinHex: "#E2A87A",
+        skinHue: 28,
+        skinSat: 40,
+        skinLight: 60,
+        hairHex: "#1A1A24"
+      };
+
+      /* --- Mulberry32 Seeded PRNG --- */
+      function mulberry32(a) {
+        return function () {
+          let t = a += 0x6D2B79F5;
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      /* --- Color Utility: HSL to Hex --- */
+      function hslToHex(h, s, l) {
+        h = (h % 360 + 360) % 360;
+        s /= 100;
+        l /= 100;
+        const a = s * Math.min(l, 1 - l);
+        const f = n => {
+          const k = (n + h / 30) % 12;
+          const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+          return Math.round(255 * color).toString(16).padStart(2, '0');
+        };
+        return `#${f(0)}${f(8)}${f(4)}`.toUpperCase();
+      }
+
+      /* ==========================================================================
+         PROCEDURAL FACE PAINTING (600x800 CANVAS)
+         ========================================================================== */
+      function generateProceduralPortrait(seed) {
+        const prng = mulberry32(seed);
+
+        // Derive palette
+        const baseHue = Math.floor(prng() * 360);
+        const bgHue = baseHue;
+        const bgSat = 25 + prng() * 20; // 25–45%
+        const bgLight = 6 + prng() * 6; // 6–12%
+
+        // Skin hsl(18–40, 30–50%, 45–75%)
+        const skinHue = 18 + prng() * 22; // 18–40
+        const skinSat = 30 + prng() * 20; // 30–50%
+        const skinLight = 45 + prng() * 30; // 45–75%
+
+        // Darker shade and lighter highlight variants
+        const skinShadeLight = Math.max(14, skinLight - 22);
+        const skinShadeSat = Math.min(65, skinSat + 8);
+        const skinShadeHue = Math.max(14, skinHue - 2);
+
+        const skinHighlightLight = Math.min(94, skinLight + 16);
+        const skinHighlightSat = Math.max(12, skinSat - 8);
+        const skinHighlightHue = Math.min(42, skinHue + 2);
+
+        // Hair from complementary hue at 6–20% lightness
+        const hairHue = (baseHue + 180) % 360;
+        const hairLight = 6 + prng() * 14; // 6–20%
+        const hairSat = 16 + prng() * 28;
+
+        // Iris hue offset by 120–200°
+        const irisOffset = 120 + prng() * 80;
+        const irisHue = (baseHue + irisOffset) % 360;
+        const irisSat = 60 + prng() * 25;
+        const irisLight = 38 + prng() * 18;
+
+        // Lip: desaturated darker skin tone
+        const lipHue = Math.max(10, skinHue - 6);
+        const lipSat = Math.max(16, skinSat - 12);
+        const lipLight = Math.max(25, skinLight - 16);
+
+        // Accent rim light at hue+40 with 90% saturation
+        const rimHue = (baseHue + 40) % 360;
+        const rimSat = 90;
+        const rimLight = 60;
+
+        // Store palette for telemetry
+        subjectPalette.baseHue = baseHue;
+        subjectPalette.skinHue = skinHue;
+        subjectPalette.skinSat = skinSat;
+        subjectPalette.skinLight = skinLight;
+        subjectPalette.skinHex = hslToHex(skinHue, skinSat, skinLight);
+        subjectPalette.hairHex = hslToHex(hairHue, hairSat, hairLight);
+
+        // Clear canvas
+        portraitCtx.clearRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
+
+        // 1. Gradient background with a radial accent rim
+        const bgGrad = portraitCtx.createLinearGradient(0, 0, 0, PORTRAIT_HEIGHT);
+        bgGrad.addColorStop(0, `hsl(${bgHue}, ${bgSat}%, ${bgLight}%)`);
+        bgGrad.addColorStop(0.7, `hsl(${bgHue}, ${bgSat * 0.7}%, ${bgLight * 0.4}%)`);
+        bgGrad.addColorStop(1, `hsl(${bgHue}, 18%, 2%)`);
+        portraitCtx.fillStyle = bgGrad;
+        portraitCtx.fillRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
+
+        const rimSide = prng() < 0.5 ? -1 : 1; // Left or Right key rim
+        const rimGlow = portraitCtx.createRadialGradient(
+          300 + rimSide * 180, 260, 30,
+          300 + rimSide * 180, 260, 420
+        );
+        rimGlow.addColorStop(0, `hsla(${rimHue}, ${rimSat}%, ${rimLight}%, 0.35)`);
+        rimGlow.addColorStop(0.5, `hsla(${rimHue}, ${rimSat}%, ${rimLight}%, 0.12)`);
+        rimGlow.addColorStop(1, `hsla(${rimHue}, ${rimSat}%, ${rimLight}%, 0)`);
+        portraitCtx.fillStyle = rimGlow;
+        portraitCtx.fillRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
+
+        // 2. Dark torso half-ellipse
+        portraitCtx.save();
+        portraitCtx.beginPath();
+        portraitCtx.ellipse(300, 780, 290, 200, 0, 0, Math.PI * 2);
+        const torsoGrad = portraitCtx.createLinearGradient(0, 580, 0, 800);
+        torsoGrad.addColorStop(0, `hsl(${(hairHue + 15) % 360}, 14%, 8%)`);
+        torsoGrad.addColorStop(1, `hsl(${bgHue}, 16%, 3%)`);
+        portraitCtx.fillStyle = torsoGrad;
+        portraitCtx.fill();
+
+        // Subtle illuminated shoulder rim stroke
+        portraitCtx.strokeStyle = `hsla(${rimHue}, ${rimSat}%, 70%, 0.22)`;
+        portraitCtx.lineWidth = 4;
+        portraitCtx.beginPath();
+        portraitCtx.arc(300 + rimSide * 140, 750, 150, Math.PI * 1.05, Math.PI * 1.5, rimSide > 0);
+        portraitCtx.stroke();
+        portraitCtx.restore();
+
+        // 3. Gradient neck
+        const headW = 150 + prng() * 40; // width 150–190
+        const headH = 200 + prng() * 40; // height 200–240
+        const headTilt = (prng() - 0.5) * 0.08; // slight random tilt
+        const headCX = 300 + (prng() - 0.5) * 14;
+        const headCY = 390 + (prng() - 0.5) * 16;
+
+        portraitCtx.save();
+        portraitCtx.beginPath();
+        const neckTopW = headW * 0.44;
+        const neckBotW = headW * 0.72;
+        portraitCtx.moveTo(headCX - neckTopW * 0.5, headCY + headH * 0.32);
+        portraitCtx.lineTo(headCX - neckBotW * 0.5, 630);
+        portraitCtx.lineTo(headCX + neckBotW * 0.5, 630);
+        portraitCtx.lineTo(headCX + neckTopW * 0.5, headCY + headH * 0.32);
+        portraitCtx.closePath();
+
+        const neckGrad = portraitCtx.createLinearGradient(
+          headCX - rimSide * 50, headCY + 50,
+          headCX + rimSide * 50, 630
+        );
+        neckGrad.addColorStop(0, `hsl(${skinShadeHue}, ${skinShadeSat}%, ${skinShadeLight}%)`); // chin drop shadow
+        neckGrad.addColorStop(0.35, `hsl(${skinHue}, ${skinSat}%, ${skinLight}%)`);
+        neckGrad.addColorStop(1, `hsl(${skinShadeHue}, ${skinShadeSat}%, ${Math.max(10, skinShadeLight - 10)}%)`);
+        portraitCtx.fillStyle = neckGrad;
+        portraitCtx.fill();
+
+        // Ambient shadow on neck under jaw
+        portraitCtx.beginPath();
+        portraitCtx.ellipse(headCX, headCY + headH * 0.44, neckTopW * 0.65, 24, 0, 0, Math.PI);
+        portraitCtx.fillStyle = `hsla(${skinShadeHue}, 35%, 10%, 0.48)`;
+        portraitCtx.fill();
+        portraitCtx.restore();
+
+        // 4. Ears (behind head ellipse)
+        for (const side of [-1, 1]) {
+          portraitCtx.save();
+          portraitCtx.translate(headCX, headCY);
+          portraitCtx.rotate(headTilt);
+          const earX = side * (headW * 0.51);
+          const earY = headH * 0.02;
+          portraitCtx.beginPath();
+          portraitCtx.ellipse(earX, earY, 13, 26, side * 0.08, 0, Math.PI * 2);
+          const earGrad = portraitCtx.createLinearGradient(earX - side * 10, earY, earX + side * 10, earY);
+          earGrad.addColorStop(0, `hsl(${skinShadeHue}, ${skinShadeSat}%, ${skinShadeLight}%)`);
+          earGrad.addColorStop(1, `hsl(${skinHue}, ${skinSat}%, ${skinLight}%)`);
+          portraitCtx.fillStyle = earGrad;
+          portraitCtx.fill();
+          portraitCtx.restore();
+        }
+
+        // 5. Head ellipse shaded by radial gradient from highlight to shade plus jaw shadow gradient
+        portraitCtx.save();
+        portraitCtx.translate(headCX, headCY);
+        portraitCtx.rotate(headTilt);
+
+        portraitCtx.beginPath();
+        portraitCtx.ellipse(0, 0, headW * 0.5, headH * 0.5, 0, 0, Math.PI * 2);
+        const headGrad = portraitCtx.createRadialGradient(
+          -rimSide * headW * 0.18, -headH * 0.15, 8,
+          0, 0, headH * 0.54
+        );
+        headGrad.addColorStop(0, `hsl(${skinHighlightHue}, ${skinHighlightSat}%, ${skinHighlightLight}%)`);
+        headGrad.addColorStop(0.55, `hsl(${skinHue}, ${skinSat}%, ${skinLight}%)`);
+        headGrad.addColorStop(0.85, `hsl(${skinShadeHue}, ${skinShadeSat}%, ${skinShadeLight}%)`);
+        headGrad.addColorStop(1, `hsl(${skinShadeHue}, ${skinShadeSat + 6}%, ${Math.max(10, skinShadeLight - 10)}%)`);
+        portraitCtx.fillStyle = headGrad;
+        portraitCtx.fill();
+
+        // Jaw shadow gradient defining chin and jaw contour
+        portraitCtx.beginPath();
+        portraitCtx.arc(0, headH * 0.28, headW * 0.36, 0.12 * Math.PI, 0.88 * Math.PI, false);
+        portraitCtx.strokeStyle = `hsla(${skinShadeHue}, ${skinShadeSat + 10}%, ${Math.max(8, skinShadeLight - 12)}%, 0.45)`;
+        portraitCtx.lineWidth = 15;
+        portraitCtx.stroke();
+
+        // Soft chin highlight bulb
+        const chinGrad = portraitCtx.createRadialGradient(0, headH * 0.38, 2, 0, headH * 0.38, 22);
+        chinGrad.addColorStop(0, `hsla(${skinHighlightHue}, ${skinHighlightSat}%, ${skinHighlightLight}%, 0.45)`);
+        chinGrad.addColorStop(1, `hsla(${skinHue}, ${skinSat}%, ${skinLight}%, 0)`);
+        portraitCtx.fillStyle = chinGrad;
+        portraitCtx.beginPath();
+        portraitCtx.arc(0, headH * 0.38, 22, 0, Math.PI * 2);
+        portraitCtx.fill();
+
+        // 6. Warm radial cheek glows
+        const cheekOffsetX = headW * 0.27;
+        const cheekOffsetY = headH * 0.08;
+        const cheekRadius = headW * 0.22;
+        for (const cSide of [-1, 1]) {
+          const cGrad = portraitCtx.createRadialGradient(
+            cSide * cheekOffsetX, cheekOffsetY, 4,
+            cSide * cheekOffsetX, cheekOffsetY, cheekRadius
+          );
+          cGrad.addColorStop(0, `hsla(14, 62%, 54%, 0.22)`);
+          cGrad.addColorStop(0.55, `hsla(14, 58%, 52%, 0.08)`);
+          cGrad.addColorStop(1, `hsla(14, 58%, 52%, 0)`);
+          portraitCtx.fillStyle = cGrad;
+          portraitCtx.beginPath();
+          portraitCtx.arc(cSide * cheekOffsetX, cheekOffsetY, cheekRadius, 0, Math.PI * 2);
+          portraitCtx.fill();
+        }
+
+        // 7. Two almond eyes with radial iris/pupil gradients, catchlights, lid strokes and thick round-capped brows
+        const eyeSpacing = headW * 0.24;
+        const eyeY = -headH * 0.05;
+        const eyeHalfW = 16;
+        const eyeHalfH = 8;
+
+        for (const eSide of [-1, 1]) {
+          const eyeCX = eSide * eyeSpacing;
+
+          // Almond eye shape (sclera)
+          portraitCtx.save();
+          portraitCtx.beginPath();
+          portraitCtx.moveTo(eyeCX - eyeHalfW, eyeY);
+          portraitCtx.bezierCurveTo(eyeCX - eyeHalfW * 0.35, eyeY - eyeHalfH * 1.1, eyeCX + eyeHalfW * 0.35, eyeY - eyeHalfH * 1.1, eyeCX + eyeHalfW, eyeY);
+          portraitCtx.bezierCurveTo(eyeCX + eyeHalfW * 0.35, eyeY + eyeHalfH * 0.9, eyeCX - eyeHalfW * 0.35, eyeY + eyeHalfH * 0.9, eyeCX - eyeHalfW, eyeY);
+          portraitCtx.fillStyle = `hsl(${skinHue}, 12%, 90%)`;
+          portraitCtx.fill();
+
+          // Soft upper shadow on sclera
+          portraitCtx.fillStyle = `hsla(${skinShadeHue}, 20%, 30%, 0.22)`;
+          portraitCtx.fill();
+
+          // Clip for Iris
+          portraitCtx.clip();
+
+          // Radial Iris & Pupil
+          const irisRadius = 9;
+          const irisGrad = portraitCtx.createRadialGradient(
+            eyeCX, eyeY, 1,
+            eyeCX, eyeY, irisRadius
+          );
+          irisGrad.addColorStop(0, '#0a0a0f'); // Pupil
+          irisGrad.addColorStop(0.38, '#0a0a0f');
+          irisGrad.addColorStop(0.42, `hsl(${irisHue}, ${irisSat}%, ${irisLight}%)`);
+          irisGrad.addColorStop(0.85, `hsl(${irisHue}, ${irisSat - 10}%, ${irisLight - 8}%)`);
+          irisGrad.addColorStop(1, `hsl(${irisHue}, 35%, 15%)`); // Limbal ring
+          portraitCtx.fillStyle = irisGrad;
+          portraitCtx.beginPath();
+          portraitCtx.arc(eyeCX, eyeY, irisRadius, 0, Math.PI * 2);
+          portraitCtx.fill();
+          portraitCtx.restore();
+
+          // Crisp catchlights
+          portraitCtx.fillStyle = '#ffffff';
+          portraitCtx.beginPath();
+          portraitCtx.arc(eyeCX - rimSide * 2.5, eyeY - 2.5, 1.8, 0, Math.PI * 2);
+          portraitCtx.fill();
+
+          portraitCtx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+          portraitCtx.beginPath();
+          portraitCtx.arc(eyeCX + rimSide * 2, eyeY + 2, 0.8, 0, Math.PI * 2);
+          portraitCtx.fill();
+
+          // Upper eyelid stroke
+          portraitCtx.beginPath();
+          portraitCtx.moveTo(eyeCX - eyeHalfW - 1, eyeY + 0.5);
+          portraitCtx.bezierCurveTo(eyeCX - eyeHalfW * 0.35, eyeY - eyeHalfH * 1.15, eyeCX + eyeHalfW * 0.35, eyeY - eyeHalfH * 1.15, eyeCX + eyeHalfW + 1, eyeY + (eSide > 0 ? -1 : 1));
+          portraitCtx.strokeStyle = `hsl(${hairHue}, 25%, 14%)`;
+          portraitCtx.lineWidth = 2.4;
+          portraitCtx.stroke();
+
+          // Upper lid crease
+          portraitCtx.beginPath();
+          portraitCtx.moveTo(eyeCX - eyeHalfW * 0.8, eyeY - eyeHalfH * 1.6);
+          portraitCtx.bezierCurveTo(eyeCX - eyeHalfW * 0.2, eyeY - eyeHalfH * 2.0, eyeCX + eyeHalfW * 0.3, eyeY - eyeHalfH * 2.0, eyeCX + eyeHalfW * 0.8, eyeY - eyeHalfH * 1.5);
+          portraitCtx.strokeStyle = `hsla(${skinShadeHue}, 28%, 32%, 0.32)`;
+          portraitCtx.lineWidth = 1.3;
+          portraitCtx.stroke();
+
+          // Thick round-capped brows
+          portraitCtx.beginPath();
+          portraitCtx.moveTo(eyeCX - eyeHalfW * 1.1, eyeY - eyeHalfH * 2.4);
+          portraitCtx.bezierCurveTo(
+            eyeCX - eyeHalfW * 0.25, eyeY - eyeHalfH * 3.1,
+            eyeCX + eyeHalfW * 0.45, eyeY - eyeHalfH * 3.0,
+            eyeCX + eyeHalfW * 1.15, eyeY - eyeHalfH * 2.2
+          );
+          portraitCtx.strokeStyle = `hsl(${hairHue}, ${hairSat}%, ${Math.max(6, hairLight - 2)}%)`;
+          portraitCtx.lineWidth = 4.4;
+          portraitCtx.lineCap = 'round';
+          portraitCtx.stroke();
+        }
+
+        // 8. Soft gradient nose plane
+        const noseTopY = eyeY + 14;
+        const noseBotY = noseTopY + 38;
+
+        // Bridge shadow
+        portraitCtx.beginPath();
+        portraitCtx.moveTo(-rimSide * 3.5, noseTopY);
+        portraitCtx.lineTo(-rimSide * 5.5, noseBotY - 6);
+        portraitCtx.strokeStyle = `hsla(${skinShadeHue}, ${skinShadeSat}%, ${skinShadeLight - 4}%, 0.38)`;
+        portraitCtx.lineWidth = 3.6;
+        portraitCtx.stroke();
+
+        // Tip highlight bulb
+        const noseTipGrad = portraitCtx.createRadialGradient(-rimSide * 2, noseBotY - 4, 1, 0, noseBotY - 4, 10);
+        noseTipGrad.addColorStop(0, `hsla(${skinHighlightHue}, ${skinHighlightSat}%, ${skinHighlightLight}%, 0.65)`);
+        noseTipGrad.addColorStop(1, `hsla(${skinHue}, ${skinSat}%, ${skinLight}%, 0)`);
+        portraitCtx.fillStyle = noseTipGrad;
+        portraitCtx.beginPath();
+        portraitCtx.arc(0, noseBotY - 4, 10, 0, Math.PI * 2);
+        portraitCtx.fill();
+
+        // Nostrils
+        portraitCtx.beginPath();
+        portraitCtx.arc(-8, noseBotY - 2, 3.2, 0.2 * Math.PI, 0.9 * Math.PI);
+        portraitCtx.arc(8, noseBotY - 2, 3.2, 0.1 * Math.PI, 0.8 * Math.PI);
+        portraitCtx.strokeStyle = `hsla(${skinShadeHue}, 35%, 18%, 0.55)`;
+        portraitCtx.lineWidth = 1.6;
+        portraitCtx.stroke();
+
+        // Underside septum shadow
+        portraitCtx.fillStyle = `hsla(${skinShadeHue}, 35%, 22%, 0.35)`;
+        portraitCtx.beginPath();
+        portraitCtx.ellipse(0, noseBotY + 1, 6, 2.5, 0, 0, Math.PI * 2);
+        portraitCtx.fill();
+
+        // 9. Two-curve lip shape with a dark seam
+        const lipY = noseBotY + 18;
+        const lipHalfW = headW * 0.16;
+
+        // Top lip (Cupid's bow)
+        portraitCtx.beginPath();
+        portraitCtx.moveTo(-lipHalfW, lipY);
+        portraitCtx.bezierCurveTo(-lipHalfW * 0.5, lipY - 8, -lipHalfW * 0.18, lipY - 7, 0, lipY - 4);
+        portraitCtx.bezierCurveTo(lipHalfW * 0.18, lipY - 7, lipHalfW * 0.5, lipY - 8, lipHalfW, lipY);
+        portraitCtx.bezierCurveTo(lipHalfW * 0.45, lipY - 1.5, -lipHalfW * 0.45, lipY - 1.5, -lipHalfW, lipY);
+        portraitCtx.fillStyle = `hsl(${lipHue}, ${lipSat}%, ${lipLight}%)`;
+        portraitCtx.fill();
+
+        // Bottom lip
+        portraitCtx.beginPath();
+        portraitCtx.moveTo(-lipHalfW, lipY);
+        portraitCtx.bezierCurveTo(-lipHalfW * 0.55, lipY + 12, lipHalfW * 0.55, lipY + 12, lipHalfW, lipY);
+        portraitCtx.bezierCurveTo(lipHalfW * 0.45, lipY + 2, -lipHalfW * 0.45, lipY + 2, -lipHalfW, lipY);
+        const botLipGrad = portraitCtx.createLinearGradient(0, lipY, 0, lipY + 12);
+        botLipGrad.addColorStop(0, `hsl(${lipHue}, ${lipSat}%, ${lipLight + 3}%)`);
+        botLipGrad.addColorStop(0.5, `hsl(${lipHue}, ${lipSat + 4}%, ${lipLight + 7}%)`);
+        botLipGrad.addColorStop(1, `hsl(${lipHue}, ${lipSat}%, ${lipLight - 3}%)`);
+        portraitCtx.fillStyle = botLipGrad;
+        portraitCtx.fill();
+
+        // Dark seam
+        portraitCtx.beginPath();
+        portraitCtx.moveTo(-lipHalfW, lipY);
+        portraitCtx.bezierCurveTo(-lipHalfW * 0.45, lipY + 1, -lipHalfW * 0.15, lipY - 0.8, 0, lipY);
+        portraitCtx.bezierCurveTo(lipHalfW * 0.15, lipY - 0.8, lipHalfW * 0.45, lipY + 1, lipHalfW, lipY);
+        portraitCtx.strokeStyle = `hsla(${lipHue}, 35%, 15%, 0.72)`;
+        portraitCtx.lineWidth = 1.7;
+        portraitCtx.stroke();
+
+        // Accent rim light on head ellipse edge
+        portraitCtx.beginPath();
+        portraitCtx.ellipse(0, 0, headW * 0.49, headH * 0.49, 0, 0, Math.PI * 2);
+        portraitCtx.strokeStyle = `hsla(${rimHue}, ${rimSat}%, 65%, 0.38)`;
+        portraitCtx.lineWidth = 3.5;
+        portraitCtx.stroke();
+
+        portraitCtx.restore(); // Head transform restore
+
+        // 10. Hair Silhouettes (bob, long, cropped) with arced accent sheen strokes
+        const hairTypes = ['bob', 'long', 'cropped'];
+        const hairType = hairTypes[Math.floor(prng() * hairTypes.length)];
+
+        portraitCtx.save();
+        portraitCtx.translate(headCX, headCY);
+        portraitCtx.rotate(headTilt);
+
+        const hairGrad = portraitCtx.createRadialGradient(
+          -rimSide * 40, -headH * 0.25, 20,
+          0, -headH * 0.1, headH * 0.75
+        );
+        hairGrad.addColorStop(0, `hsl(${hairHue}, ${hairSat}%, ${hairLight + 10}%)`);
+        hairGrad.addColorStop(0.65, `hsl(${hairHue}, ${hairSat}%, ${hairLight}%)`);
+        hairGrad.addColorStop(1, `hsl(${hairHue}, ${hairSat + 6}%, ${Math.max(4, hairLight - 4)}%)`);
+        portraitCtx.fillStyle = hairGrad;
+
+        if (hairType === 'bob') {
+          // Bob hair: framing cheeks, curving chin-length inward
+          portraitCtx.beginPath();
+          portraitCtx.moveTo(-headW * 0.58, headH * 0.38);
+          portraitCtx.bezierCurveTo(-headW * 0.65, headH * 0.05, -headW * 0.62, -headH * 0.45, -headW * 0.15, -headH * 0.58);
+          portraitCtx.bezierCurveTo(headW * 0.15, -headH * 0.62, headW * 0.62, -headH * 0.45, headW * 0.58, headH * 0.38);
+          portraitCtx.bezierCurveTo(headW * 0.52, headH * 0.44, headW * 0.42, headH * 0.32, headW * 0.45, headH * 0.12);
+          portraitCtx.bezierCurveTo(headW * 0.42, -headH * 0.25, headW * 0.25, -headH * 0.22, 0, -headH * 0.26);
+          portraitCtx.bezierCurveTo(-headW * 0.25, -headH * 0.22, -headW * 0.42, -headH * 0.25, -headW * 0.45, headH * 0.12);
+          portraitCtx.bezierCurveTo(-headW * 0.42, headH * 0.32, -headW * 0.52, headH * 0.44, -headW * 0.58, headH * 0.38);
+          portraitCtx.closePath();
+          portraitCtx.fill();
+        } else if (hairType === 'long') {
+          // Long flowing locks past shoulders
+          portraitCtx.beginPath();
+          portraitCtx.moveTo(-headW * 0.72, headH * 1.15);
+          portraitCtx.bezierCurveTo(-headW * 0.68, headH * 0.45, -headW * 0.65, -headH * 0.48, -headW * 0.18, -headH * 0.60);
+          portraitCtx.bezierCurveTo(headW * 0.18, -headH * 0.62, headW * 0.65, -headH * 0.48, headW * 0.72, headH * 1.15);
+          portraitCtx.bezierCurveTo(headW * 0.52, headH * 1.10, headW * 0.42, headH * 0.42, headW * 0.45, headH * 0.10);
+          portraitCtx.bezierCurveTo(headW * 0.35, -headH * 0.22, 0, -headH * 0.28, -headW * 0.35, -headH * 0.22);
+          portraitCtx.bezierCurveTo(-headW * 0.42, headH * 0.42, -headW * 0.52, headH * 1.10, -headW * 0.72, headH * 1.15);
+          portraitCtx.closePath();
+          portraitCtx.fill();
+        } else {
+          // Cropped hair silhouette
+          portraitCtx.beginPath();
+          portraitCtx.moveTo(-headW * 0.53, -headH * 0.05);
+          portraitCtx.bezierCurveTo(-headW * 0.58, -headH * 0.38, -headW * 0.42, -headH * 0.64, 0, -headH * 0.64);
+          portraitCtx.bezierCurveTo(headW * 0.42, -headH * 0.64, headW * 0.58, -headH * 0.38, headW * 0.53, -headH * 0.05);
+          portraitCtx.bezierCurveTo(headW * 0.48, -headH * 0.15, headW * 0.36, -headH * 0.28, 0, -headH * 0.32);
+          portraitCtx.bezierCurveTo(-headW * 0.36, -headH * 0.28, -headW * 0.48, -headH * 0.15, -headW * 0.53, -headH * 0.05);
+          portraitCtx.closePath();
+          portraitCtx.fill();
+        }
+
+        // Arced accent sheen strokes
+        portraitCtx.lineCap = 'round';
+        const numSheens = 7;
+        for (let s = 0; s < numSheens; s++) {
+          const sT = (s + 0.5) / numSheens;
+          const sX1 = -headW * 0.38 + sT * headW * 0.76;
+          const sY1 = -headH * 0.52 + Math.sin(sT * Math.PI) * 12;
+          const sX2 = sX1 + (prng() - 0.5) * 24;
+          const sY2 = sY1 + 32 + prng() * 38;
+
+          portraitCtx.beginPath();
+          portraitCtx.moveTo(sX1, sY1);
+          portraitCtx.bezierCurveTo(
+            sX1 + rimSide * 16, sY1 + 18,
+            sX2 + rimSide * 12, sY2 - 12,
+            sX2, sY2
+          );
+
+          // Specular sheen with accent color & hair highlight
+          const sheenAlpha = 0.25 + prng() * 0.35;
+          portraitCtx.strokeStyle = s % 2 === 0
+            ? `hsla(${rimHue}, ${rimSat}%, 75%, ${sheenAlpha})`
+            : `hsla(${hairHue}, ${hairSat}%, ${hairLight + 28}%, ${sheenAlpha})`;
+          portraitCtx.lineWidth = 1.8 + prng() * 2.2;
+          portraitCtx.stroke();
+        }
+
+        portraitCtx.restore(); // Hair transform restore
+
+        // 11. Final per-pixel film grain pass of ±11 levels via getImageData
+        const imgData = portraitCtx.getImageData(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
+        const pixels = imgData.data;
+        const len = pixels.length;
+        for (let p = 0; p < len; p += 4) {
+          const grain = (prng() * 23 | 0) - 11; // ±11 levels
+          pixels[p] = Math.min(255, Math.max(0, pixels[p] + grain));
+          pixels[p + 1] = Math.min(255, Math.max(0, pixels[p + 1] + grain));
+          pixels[p + 2] = Math.min(255, Math.max(0, pixels[p + 2] + grain));
+        }
+        portraitCtx.putImageData(imgData, 0, 0);
+
+        // 12. Build three channel-isolated copies (Red, Green, Blue)
+        buildChannelCanvases();
+      }
+
+      /* --- Channel Isolation via Pure Red, Green, Blue Multiply --- */
+      function buildChannelCanvases() {
+        const filters = {
+          r: '#ff0000',
+          g: '#00ff00',
+          b: '#0000ff'
+        };
+
+        for (const key of ['r', 'g', 'b']) {
+          const cCanvas = channelCanvases[key];
+          const cCtx = cCanvas.getContext('2d');
+          cCtx.clearRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
+          cCtx.globalCompositeOperation = 'source-over';
+          cCtx.drawImage(portraitCanvas, 0, 0);
+          cCtx.globalCompositeOperation = 'multiply';
+          cCtx.fillStyle = filters[key];
+          cCtx.fillRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
+          cCtx.globalCompositeOperation = 'source-over';
+        }
+
+        // Initialize previous frame buffer with portrait
+        prevCtx.drawImage(portraitCanvas, 0, 0);
+      }
+
+      /* ==========================================================================
+         LIVE GLITCH PIPELINE (PER ANIMATION FRAME)
+         ========================================================================== */
+      function renderGlitchFrame(timestamp) {
+        if (!lastTimestamp) lastTimestamp = timestamp;
+        const dt = Math.min(0.1, (timestamp - lastTimestamp) / 1000);
+        lastTimestamp = timestamp;
+
+        // prefers-reduced-motion check
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        // Burst Envelope Update (Quick attacks every 0.4–3s, 0.9/s decay)
+        if (!isFrozen) {
+          frameCounter++;
+          topFrameCount.textContent = '0x' + frameCounter.toString(16).toUpperCase().padStart(6, '0');
+
+          attackCountdown -= dt;
+          if (attackCountdown <= 0) {
+            attackCountdown = 0.4 + Math.random() * 2.6; // every 0.4–3 seconds
+            burst = 0.4 + Math.random() * 0.6; // Quick violent attack
+          } else {
+            burst = Math.max(0, burst - 0.9 * dt); // 0.9/s decay
+          }
+        }
+
+        // Effective corruption k
+        let k = sliderIntensity * (0.35 + burst);
+        if (prefersReducedMotion) {
+          k *= 0.35; // Reduce k to 35% under prefers-reduced-motion
+        }
+
+        // If frozen, we present the existing buffer and maintain telemetry
+        if (isFrozen) {
+          presentToVisibleCanvas();
+          requestAnimationFrame(renderGlitchFrame);
+          return;
+        }
+
+        // --- GLITCH PIPELINE STEP 1: RGB Channel Split ---
+        // Black fill, then 3 channels composited with 'lighter' at horizontal offsets of up to ±18k px
+        workCtx.fillStyle = '#000000';
+        workCtx.fillRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
+        workCtx.globalCompositeOperation = 'lighter';
+
+        const isSplitDoubled = Math.random() < 0.16;
+        const splitMult = isSplitDoubled ? 2.0 : 1.0;
+        const baseOffset = (Math.sin(timestamp * 0.006) * 8 + (Math.random() - 0.5) * 16) * k * splitMult;
+        const vJitter = (Math.random() - 0.5) * 3.5 * k;
+
+        const offRx = baseOffset;
+        const offRy = vJitter * 0.6;
+        const offGx = (Math.random() - 0.5) * 2.5 * k;
+        const offGy = (Math.random() - 0.5) * 1.5 * k;
+        const offBx = -baseOffset * 1.08;
+        const offBy = -vJitter * 0.6;
+
+        workCtx.drawImage(channelCanvases.r, offRx, offRy);
+        workCtx.drawImage(channelCanvases.g, offGx, offGy);
+        workCtx.drawImage(channelCanvases.b, offBx, offBy);
+
+        workCtx.globalCompositeOperation = 'source-over';
+
+        // --- GLITCH PIPELINE STEP 2: Datamosh Smearing ---
+        // 1–7 horizontal bands copied from previous frame's buffer at 55–95% alpha with small offsets
+        const maxBands = Math.max(1, Math.min(7, Math.floor(1 + k * 6.5)));
+        const smearCount = Math.floor(1 + Math.random() * maxBands);
+
+        for (let b = 0; b < smearCount; b++) {
+          const bandH = Math.floor(12 + Math.random() * 65);
+          const bandY = Math.floor(Math.random() * (PORTRAIT_HEIGHT - bandH));
+          const smearAlpha = 0.55 + Math.random() * 0.40; // 55–95%
+          const smearOffX = (Math.random() - 0.5) * 14 * k;
+          const smearOffY = (Math.random() - 0.5) * 3.5 * k;
+
+          workCtx.globalAlpha = smearAlpha;
+          workCtx.drawImage(
+            prevFrameCanvas,
+            0, bandY, PORTRAIT_WIDTH, bandH,
+            smearOffX, bandY + smearOffY, PORTRAIT_WIDTH, bandH
+          );
+        }
+        workCtx.globalAlpha = 1.0;
+
+        // --- GLITCH PIPELINE STEP 3: Horizontal Slice Displacement ---
+        // Up to 14 random slices 2–60px tall shifted up to ±220k px, some underlined with 1.5px cyan (#3de9ff) or magenta (#ff3d9a) tear line
+        const maxSlices = Math.floor(Math.random() * 14 * Math.min(1.2, k * 1.3));
+        let activeDisplacementHex = 0;
+
+        for (let s = 0; s < maxSlices; s++) {
+          const sliceH = Math.floor(2 + Math.random() * 58); // 2–60px tall
+          const sliceY = Math.floor(Math.random() * (PORTRAIT_HEIGHT - sliceH));
+          const shiftX = (Math.random() - 0.5) * 2 * 220 * k; // up to ±220k px
+          activeDisplacementHex = Math.max(activeDisplacementHex, Math.abs(Math.round(shiftX)));
+
+          // Copy slice to scratch buffer then paint shifted
+          sliceCtx.clearRect(0, 0, PORTRAIT_WIDTH, sliceH);
+          sliceCtx.drawImage(workCanvas, 0, sliceY, PORTRAIT_WIDTH, sliceH, 0, 0, PORTRAIT_WIDTH, sliceH);
+          workCtx.drawImage(sliceCanvas, 0, 0, PORTRAIT_WIDTH, sliceH, shiftX, sliceY, PORTRAIT_WIDTH, sliceH);
+
+          // Underline with 1.5px cyan or magenta tear line
+          if (Math.random() < 0.42 && Math.abs(shiftX) > 3) {
+            workCtx.fillStyle = Math.random() < 0.5 ? '#3de9ff' : '#ff3d9a';
+            workCtx.fillRect(0, sliceY + sliceH - 1.5, PORTRAIT_WIDTH, 1.5);
+          }
+        }
+
+        // --- GLITCH PIPELINE STEP 4: Macroblock Corruption ---
+        // 16px-aligned blocks either copied to wrong positions or filled solid with skin, acid green #c8ff3d, or hair color
+        const blockCount = Math.floor(Math.random() * (14 * k));
+        for (let mb = 0; mb < blockCount; mb++) {
+          const blockW = (1 + Math.floor(Math.random() * 3)) * 16;
+          const blockH = (1 + Math.floor(Math.random() * 3)) * 16;
+          const srcX = Math.floor(Math.random() * ((PORTRAIT_WIDTH - blockW) / 16)) * 16;
+          const srcY = Math.floor(Math.random() * ((PORTRAIT_HEIGHT - blockH) / 16)) * 16;
+          const dstX = Math.floor(Math.random() * ((PORTRAIT_WIDTH - blockW) / 16)) * 16;
+          const dstY = Math.floor(Math.random() * ((PORTRAIT_HEIGHT - blockH) / 16)) * 16;
+
+          if (Math.random() < 0.62) {
+            // Copied to wrong position
+            workCtx.drawImage(prevFrameCanvas, srcX, srcY, blockW, blockH, dstX, dstY, blockW, blockH);
+          } else {
+            // Filled solid with skin, acid green, or hair color
+            const colors = [subjectPalette.skinHex, '#c8ff3d', subjectPalette.hairHex];
+            workCtx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+            workCtx.fillRect(dstX, dstY, blockW, blockH);
+          }
+        }
+
+        // --- GLITCH PIPELINE STEP 5: Scanline Noise ---
+        // Dozens of faint 1px white lines plus occasional band of full random ImageData static at alpha 140
+        const numWhiteLines = 20 + Math.floor(Math.random() * 35);
+        workCtx.fillStyle = 'rgba(255, 255, 255, 0.075)';
+        for (let w = 0; w < numWhiteLines; w++) {
+          const lineY = Math.floor(Math.random() * PORTRAIT_HEIGHT);
+          workCtx.fillRect(0, lineY, PORTRAIT_WIDTH, 1);
+        }
+
+        // Band of random static at alpha 140 (~0.55)
+        if (Math.random() < 0.28 * k) {
+          const staticH = Math.floor(10 + Math.random() * 45);
+          const staticY = Math.floor(Math.random() * (PORTRAIT_HEIGHT - staticH));
+          const sImg = staticCtx.createImageData(PORTRAIT_WIDTH, staticH);
+          const sData = sImg.data;
+          const sLen = sData.length;
+          for (let sp = 0; sp < sLen; sp += 4) {
+            const v = (Math.random() * 255) | 0;
+            sData[sp] = v;
+            sData[sp + 1] = v;
+            sData[sp + 2] = v;
+            sData[sp + 3] = 140; // Alpha 140
+          }
+          staticCtx.putImageData(sImg, 0, 0);
+          workCtx.drawImage(staticCanvas, 0, 0, PORTRAIT_WIDTH, staticH, 0, staticY, PORTRAIT_WIDTH, staticH);
+        }
+
+        // --- GLITCH PIPELINE STEP 6: Occasional Inversion ---
+        // Occasional inversion of a band or the whole frame using 'difference' composite with white
+        if (Math.random() < 0.13 * k) {
+          workCtx.save();
+          workCtx.globalCompositeOperation = 'difference';
+          workCtx.fillStyle = '#ffffff';
+          if (Math.random() < 0.08 * k) {
+            // Whole frame inversion
+            workCtx.fillRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
+          } else {
+            // Band inversion
+            const invH = Math.floor(12 + Math.random() * 75);
+            const invY = Math.floor(Math.random() * (PORTRAIT_HEIGHT - invH));
+            workCtx.fillRect(0, invY, PORTRAIT_WIDTH, invH);
+          }
+          workCtx.restore();
+        }
+
+        // --- GLITCH PIPELINE STEP 7: Radial Vignette ---
+        const vignette = workCtx.createRadialGradient(
+          PORTRAIT_WIDTH * 0.5, PORTRAIT_HEIGHT * 0.5, 210,
+          PORTRAIT_WIDTH * 0.5, PORTRAIT_HEIGHT * 0.5, 520
+        );
+        vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        vignette.addColorStop(0.72, 'rgba(7, 7, 10, 0.26)');
+        vignette.addColorStop(1, 'rgba(5, 5, 8, 0.74)');
+        workCtx.fillStyle = vignette;
+        workCtx.fillRect(0, 0, PORTRAIT_WIDTH, PORTRAIT_HEIGHT);
+
+        // Store current frame into previous frame buffer for datamoshing
+        prevCtx.drawImage(workCanvas, 0, 0);
+
+        // Render to visible canvas
+        presentToVisibleCanvas();
+
+        // Update Telemetry Grid
+        updateTelemetryReadouts({
+          slice: maxSlices,
+          split: Math.abs(Math.round(baseOffset)),
+          blocks: blockCount,
+          smear: smearCount,
+          burst: burst
+        });
+
+        requestAnimationFrame(renderGlitchFrame);
+      }
+
+      /* --- Present work canvas onto visible canvas (devicePixelRatio aware, capped at 2x) --- */
+      function presentToVisibleCanvas() {
+        const rect = viewCanvas.parentElement.getBoundingClientRect();
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const targetW = Math.round(rect.width * dpr);
+        const targetH = Math.round(rect.height * dpr);
+
+        if (viewCanvas.width !== targetW || viewCanvas.height !== targetH) {
+          viewCanvas.width = targetW;
+          viewCanvas.height = targetH;
+        }
+
+        viewCtx.save();
+        viewCtx.clearRect(0, 0, targetW, targetH);
+        viewCtx.scale(targetW / PORTRAIT_WIDTH, targetH / PORTRAIT_HEIGHT);
+        viewCtx.imageSmoothingEnabled = true;
+        viewCtx.imageSmoothingQuality = 'medium';
+        viewCtx.drawImage(workCanvas, 0, 0);
+        viewCtx.restore();
+      }
+
+      /* --- Telemetry Grid Updates (Hex cyan values) --- */
+      function updateTelemetryReadouts(data) {
+        cellSlice.textContent = '0x' + data.slice.toString(16).toUpperCase().padStart(2, '0');
+        cellSplit.textContent = '0x' + data.split.toString(16).toUpperCase().padStart(2, '0');
+        cellBlocks.textContent = '0x' + data.blocks.toString(16).toUpperCase().padStart(2, '0');
+        cellSmear.textContent = '0x' + data.smear.toString(16).toUpperCase().padStart(2, '0');
+        cellPalette.textContent = subjectPalette.skinHex;
+        cellBurst.textContent = '0x' + Math.round(data.burst * 255).toString(16).toUpperCase().padStart(2, '0');
+      }
+
+      /* ==========================================================================
+         SUBJECT CREATION & UI SYNCHRONIZATION
+         ========================================================================== */
+      function setSubject(newSeed) {
+        currentSeed = newSeed >>> 0;
+        subjectHex = ((currentSeed >>> 16) & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+
+        // Update top bar subject
+        topSubjectHex.textContent = '0x' + subjectHex;
+
+        // Update museum title & curatorial statement
+        const titleIndex = (currentSeed % ARTWORK_TITLES.length + ARTWORK_TITLES.length) % ARTWORK_TITLES.length;
+        const curatorialIndex = ((currentSeed >>> 4) % CURATORIAL_STATEMENTS.length + CURATORIAL_STATEMENTS.length) % CURATORIAL_STATEMENTS.length;
+
+        const baseTitle = ARTWORK_TITLES[titleIndex];
+        artworkTitle.childNodes[0].nodeValue = baseTitle + " ";
+        titleSubjectSuffix.textContent = `(subject ${subjectHex})`;
+        editionMeta.textContent = `1/1 (seed: 0x${subjectHex})`;
+        curatorialStatement.textContent = CURATORIAL_STATEMENTS[curatorialIndex];
+
+        // Redraw procedural face & color channels
+        generateProceduralPortrait(currentSeed);
+      }
+
+      function generateNewSubject() {
+        const freshSeed = Math.floor(Math.random() * 0xFFFFFFFF);
+        setSubject(freshSeed);
+      }
+
+      /* --- Freeze Frame Toggle --- */
+      function toggleFreeze() {
+        isFrozen = !isFrozen;
+        freezeBtn.setAttribute('aria-pressed', isFrozen ? 'true' : 'false');
+        freezeBtnText.textContent = isFrozen ? 'Resume signal' : 'Freeze frame';
+
+        if (isFrozen) {
+          statusDot.classList.add('frozen');
+          portraitMatte.classList.add('frozen');
+          recBadgeText.textContent = 'HOLD';
+        } else {
+          statusDot.classList.remove('frozen');
+          portraitMatte.classList.remove('frozen');
+          recBadgeText.textContent = 'REC';
+        }
+      }
+
+      /* ==========================================================================
+         EVENT LISTENERS & KEYBOARD HANDLERS
+         ========================================================================== */
+      intensitySlider.addEventListener('input', function (e) {
+        sliderIntensity = parseFloat(e.target.value);
+        intensityValueReadout.textContent = sliderIntensity.toFixed(2);
+      });
+
+      freezeBtn.addEventListener('click', toggleFreeze);
+      newSubjectBtn.addEventListener('click', generateNewSubject);
+
+      window.addEventListener('keydown', function (e) {
+        // Ignore typing in interactive elements if any
+        if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+
+        if (e.code === 'Space') {
+          e.preventDefault();
+          toggleFreeze();
+        } else if (e.code === 'KeyN') {
+          e.preventDefault();
+          generateNewSubject();
+        }
+      });
+
+      window.addEventListener('resize', function () {
+        presentToVisibleCanvas();
+      });
+
+      /* --- Initialization --- */
+      const initialSeed = 0x4F2A79B1;
+      setSubject(initialSeed);
+      requestAnimationFrame(renderGlitchFrame);
+
+    })();
+  </script>
+</body>
+</html>

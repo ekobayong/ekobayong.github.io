@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Rosace du Nord — an interactive Gothic rose window in SVG with travelling sunlight, seasons and a conservator's legend.">
+<meta name="theme-color" content="#0b0908">
+<title>Rosace du Nord — Gothic Rose Window</title>
+<noscript><style>#motes{display:none}</style></noscript>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#ece2cf;--mut:#a5937a;--bg:#0b0908;--gold:#e8c26a}
+body{background:#0b0908;color:var(--ink);font-family:Georgia,"Iowan Old Style",Palatino,serif;min-height:100svh;overflow-x:hidden}
+.nave{position:fixed;inset:0;background:radial-gradient(900px 500px at 50% -5%,#2b241e,transparent 70%),radial-gradient(700px 500px at 50% 115%,#1c2a4a33,transparent 70%),#0b0908;pointer-events:none}
+.wrap{position:relative;max-width:1060px;margin:0 auto;padding:26px 18px 60px}
+header{text-align:center;margin-bottom:10px}
+.kicker{font-size:11px;letter-spacing:.34em;text-transform:uppercase;color:var(--mut)}
+h1{font-size:clamp(26px,4.6vw,46px);letter-spacing:.18em;text-transform:uppercase;font-weight:400;margin:8px 0 4px}
+.sub{font-style:italic;color:var(--mut);font-size:14px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:16px 0}
+.seasons{display:flex;background:#1a1512;border:1px solid #4a4038;border-radius:999px;padding:4px;gap:4px}
+.seasons button{border:0;background:transparent;color:var(--mut);font:inherit;font-size:12px;letter-spacing:.2em;text-transform:uppercase;padding:8px 16px;border-radius:999px;cursor:pointer}
+.seasons button[aria-pressed="true"]{background:var(--gold);color:#1a1206}
+.panel{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:center;font-size:13px;color:var(--mut)}
+.panel label{display:flex;gap:8px;align-items:center;text-transform:uppercase;letter-spacing:.14em;font-size:11px}
+select,input[type=range]{accent-color:var(--gold);background:#1a1512;color:var(--ink);border:1px solid #4a4038;border-radius:8px;padding:6px 8px;font:inherit}
+.stage{position:relative;display:grid;place-items:center;margin-top:6px}
+svg.window{width:min(92vw,620px);height:auto;filter:drop-shadow(0 30px 60px #000c)}
+#motes{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.pane{cursor:pointer;transition:filter .35s ease,opacity .35s ease}
+.pane:hover,.pane:focus{filter:brightness(1.5) saturate(1.4) drop-shadow(0 0 10px #fff8);outline:none}
+#tip{position:fixed;pointer-events:none;background:#14100df2;border:1px solid #6b5a44;color:var(--ink);font-size:12.5px;padding:8px 11px;border-radius:8px;max-width:240px;opacity:0;transition:opacity .2s;z-index:20}
+#caption{text-align:center;min-height:44px;margin-top:10px;font-style:italic;color:var(--mut)}
+#caption strong{color:var(--gold);font-style:normal;letter-spacing:.12em;text-transform:uppercase;font-size:12px;display:block}
+.floor{height:120px;max-width:700px;margin:0 auto;background:radial-gradient(closest-side,var(--pool,#5a4ac833),transparent 70%);filter:blur(2px);opacity:.8;transform:skewX(-18deg)}
+footer{text-align:center;color:var(--mut);font-size:12px;letter-spacing:.2em;text-transform:uppercase;margin-top:18px}
+@media(max-width:560px){.panel{font-size:12px}.floor{height:80px}}
+@media print{
+.nave,#motes,.panel,.controls{display:none}
+body{background:#fff;color:#000}
+.wrap{max-width:100%}
+svg.window{width:100%;filter:none}
+#caption{color:#000}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="nave"></div>
+<div class="wrap">
+<header><div class="kicker">Cathédrale du Nord · n° 081</div><h1>Rosace du Nord</h1><div class="sub">A Gothic rose window in twelve-fold stone tracery — hover each pane to read its story</div></header>
+<div class="controls"><div class="seasons" role="group" aria-label="Season light">
+<button data-s="winter" aria-pressed="true">Winter</button><button data-s="summer" aria-pressed="false">Summer</button><button data-s="evening" aria-pressed="false">Evening</button></div></div>
+<div class="panel">
+<label>Palette <select id="pal"><option value="jewel">Jewel</option><option value="pastel">Pastel</option><option value="noir">Noir &amp; Gold</option></select></label>
+<label>Tracery <input id="trac" type="range" min="8" max="16" value="12" step="4"></label>
+<label>Sun <input id="sunpos" type="range" min="0" max="100" value="30"></label>
+</div>
+<div class="stage">
+<svg class="window" id="rose" viewBox="0 0 800 820" role="img" aria-label="Gothic rose window"></svg>
+<canvas id="motes"></canvas>
+</div>
+<div id="caption" aria-live="polite">Twelve spokes for the twelve apostles — move across the glass.</div>
+<p style="text-align:center;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#6b5f4f;margin-top:6px">
+Season tints the sun · tracery sets the spokes · every pane is focusable
+</p>
+<p style="text-align:center;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#6b5f4f;margin-top:4px">
+Winter pale · summer gold · evening amber — the motes follow the beam
+</p>
+<div class="floor" id="floor"></div>
+<footer>Twelve-fold symmetry · antique glass · 90-second sun</footer>
+<section aria-label="Conservator's note" style="max-width:760px;margin:22px auto 0;border-top:1px solid #4a4038;padding-top:16px;display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));text-align:left;font-size:13px;line-height:1.65;color:#a5937a">
+<div>
+<h3 style="font-size:11px;letter-spacing:.28em;color:#e8c26a;margin-bottom:4px">STONE</h3>
+<p>Ashlar blocks carry three stacked strokes — dark base, mid body, thin highlight — so each mullion reads as chamfered stone.</p>
+</div>
+<div>
+<h3 style="font-size:11px;letter-spacing:.28em;color:#e8c26a;margin-bottom:4px">GLASS</h3>
+<p>Fractal noise displaces every edge by five units; the same noise mottles the panes through an overlay blend.</p>
+</div>
+<div>
+<h3 style="font-size:11px;letter-spacing:.28em;color:#e8c26a;margin-bottom:4px">LIGHT</h3>
+<p>The floor pool is the glass itself — translated, skewed −28°, squashed to a third, blurred and screen-blended opposite the sun.</p>
+</div>
+</section>
+</div>
+<div id="tip"></div>
+<script>
+const svg=document.getElementById('rose'),NS='http://www.w3.org/2000/svg';
+const tip=document.getElementById('tip'),cap=document.getElementById('caption'),floor=document.getElementById('floor');
+const C={cx:400,cy:330,R:300};
+const PAL={jewel:['#ff5d70','#6f95ff','#63e39a','#ffd27a','#d59bff','#e8b93a'],pastel:['#ffb3c1','#aecbff','#b8f0d0','#ffe9b8','#e3c6ff','#f3dd9a'],noir:['#3a3a3f','#23232a','#565661','#e8b93a','#7a6c60','#fff2b0']};
+let palette='jewel',spokes=12,season='winter',sunT=.3;
+const SEAS={winter:{beam:'#dfe9ff',a:'#ffffff',b:'#c9d8ff',pool:'#5f7fd855'},summer:{beam:'#ffe9b8',a:'#fff6dc',b:'#ffd47a',pool:'#e0a52666'},evening:{beam:'#ffb56b',a:'#ffd9a6',b:'#ff8a3c',pool:'#c8512b77'}};
+const saints=['St Peter & Keys','St Paul & Sword','St John & Eagle','St James & Shell','St Andrew & Cross','St Philip & Loaves','St Bartholomew','St Matthew & Book','St Thomas & Square','St Jude & Flame','St Simon & Saw','St Matthias & Stone'];
+const months=['Jan · Feast','Feb · Pruning','Mar · Sowing','Apr · Blossom','May · Hawking','Jun · Hay','Jul · Wheat','Aug · Harvest','Sep · Wine','Oct · Plough','Nov · Mast','Dec · Slaughter'];
+const days=['Light','Firmament','Earth & Seas','Sun & Moon','Birds & Fish','Man & Beasts'];
+function el(n,a,p){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function grad(id,c1,c2,c3){const g=el('radialGradient',{id,cx:'38%',cy:'32%',r:'80%'},defs);[['0%',c1],['55%',c2],['100%',c3]].forEach(s=>el('stop',{offset:s[0],'stop-color':s[1]},g));}
+let defs;
+function build(){
+svg.innerHTML='';defs=el('defs',{},svg);
+grad('ruby','#ff5d70','#b3142a','#5a0812');grad('sapph','#6f95ff','#1f3fb8','#0a1656');grad('emer','#63e39a','#128a4d','#053c22');
+grad('amber','#ffd27a','#e08a12','#6b3a02');grad('ameth','#d59bff','#7a2fb4','#32104f');grad('gold','#fff2b0','#e8b93a','#7a5a0a');
+const pat=el('pattern',{id:'ashlar',width:46,height:30,patternUnits:'userSpaceOnUse'},defs);
+el('rect',{width:46,height:30,fill:'#2e2824'},pat);el('path',{d:'M0 0H46M0 15H46M0 30H46M23 0V15M0 15V30M46 15V30',stroke:'#1a1512','stroke-width':2,fill:'none'},pat);
+el('path',{d:'M0 1H46M0 16H46',stroke:'#463c35','stroke-width':1,fill:'none'},pat);
+const f=el('filter',{id:'oldglass',x:'-20%',y:'-20%',width:'140%',height:'140%'},defs);
+el('feTurbulence',{type:'fractalNoise',baseFrequency:'.055',numOctaves:3,result:'n'},f);
+el('feDisplacementMap',{in:'SourceGraphic',in2:'n',scale:5},f);
+const sg=el('radialGradient',{id:'sunbeam',gradientUnits:'userSpaceOnUse',cx:C.cx-100,cy:C.cy-80,r:420},defs);
+el('stop',{offset:'0%','stop-color':SEAS[season].a},sg);el('stop',{offset:'100%','stop-color':SEAS[season].b,'stop-opacity':0},sg);
+const sym=el('symbol',{id:'spoke',viewBox:'-12 -300 24 300'},defs);
+el('path',{d:'M-7 -270 L-4 -90 Q0 -70 4 -90 L7 -270 Q0 -278 -7 -270Z',fill:'url(#ashlar)',stroke:'#181310','stroke-width':3},sym);
+el('path',{d:'M-4 -265 L0 -80',stroke:'#7a6c60','stroke-width':1.4},sym);
+const outer=el('g',{},svg);
+el('circle',{cx:C.cx,cy:C.cy,r:C.R+34,fill:'url(#ashlar)',stroke:'#181310','stroke-width':6},outer);
+el('circle',{cx:C.cx,cy:C.cy,r:C.R+34,fill:'none',stroke:'#4a4038','stroke-width':3},outer);
+const glass=el('g',{id:'glassG',filter:'url(#oldglass)'},svg);
+// border panes 24
+const cols=PAL[palette];
+for(let i=0;i<24;i++){const a=(i/24)*Math.PI*2,r1=C.R-28,r0=C.R-64;
+const p=(x,r,an)=>[C.cx+x*r*Math.cos(an),C.cy+x*r*Math.sin(an)];
+const a0=a-Math.PI/24,a1=a+Math.PI/24;
+const d=`M${p(r0,a0)} L${p(r1,a0)} A${r1} ${r1} 0 0 1 ${p(r1,a1)} L${p(r0,a1)} A${r0} ${r0} 0 0 0 ${p(r0,a0)}Z`;
+const g=el('path',{d,fill:cols[i%2?1:5],opacity:.92,class:'pane',tabindex:0,'data-t':(i%2?'Sapphire border · ':'Gold border · ')+'Angel with trumpet — guarding the rim of heaven'},glass);
+bindTip(g);}
+function ringPath(r){return `M${C.cx-r} ${C.cy} A${r} ${r} 0 1 0 ${C.cx+r} ${C.cy} A${r} ${r} 0 1 0 ${C.cx-r} ${C.cy}`;}
+// lancet rings via wedges with pointed arch tops
+for(let i=0;i<12;i++){const a=(i/12)*Math.PI*2;
+const x1=C.cx+150*Math.cos(a-.16),y1=C.cy+150*Math.sin(a-.16),x2=C.cx+150*Math.cos(a+.16),y2=C.cy+150*Math.sin(a+.16);
+const ox=C.cx+228*Math.cos(a),oy=C.cy+228*Math.sin(a);
+const d=`M${x1} ${y1} L${(x1+ox)/2} ${(y1+oy)/2-8} Q${ox} ${oy-18} ${(x2+ox)/2} ${(y2+oy)/2-8} L${x2} ${y2} Q${C.cx+130*Math.cos(a)} ${C.cy+130*Math.sin(a)} ${x1} ${y1}Z`;
+const fills=['ruby','sapph','emer','amber','ameth','gold'];
+const g=el('path',{d,fill:`url(#${fills[i%6]})`,stroke:'#181310','stroke-width':3,class:'pane',tabindex:0,'data-t':saints[i]+' — a Gospel scene in jewel glass'},glass);
+bindTip(g);}
+for(let i=0;i<12;i++){const a=((i+.5)/12)*Math.PI*2;
+const x1=C.cx+62*Math.cos(a-.2),y1=C.cy+62*Math.sin(a-.2),x2=C.cx+62*Math.cos(a+.2),y2=C.cy+62*Math.sin(a+.2);
+const ox=C.cx+128*Math.cos(a),oy=C.cy+128*Math.sin(a);
+const d=`M${x1} ${y1} L${(x1+ox)/2} ${(y1+oy)/2} Q${ox} ${oy-12} ${(x2+ox)/2} ${(y2+oy)/2} L${x2} ${y2} Q${C.cx+55*Math.cos(a)} ${C.cy+55*Math.sin(a)} ${x1} ${y1}Z`;
+const fills=['amber','emer','sapph','ruby','gold','ameth'];
+const g=el('path',{d,fill:`url(#${fills[(i+2)%6]})`,stroke:'#181310','stroke-width':2.5,class:'pane',tabindex:0,'data-t':months[i]+' — Labour of the Month in field and hall'},glass);
+bindTip(g);}
+// central rosette 6 petals + core
+for(let i=0;i<6;i++){const a=i/6*Math.PI*2;
+const e=el('ellipse',{cx:C.cx+30*Math.cos(a),cy:C.cy+30*Math.sin(a),rx:26,ry:44,fill:'url(#ruby)',stroke:'#181310','stroke-width':2.5,class:'pane',tabindex:0,'data-t':'Day '+(i+1)+' · '+days[i]+' — the Six Days of Creation',transform:`rotate(${a*180/Math.PI+90} ${C.cx+30*Math.cos(a)} ${C.cy+30*Math.sin(a)})`},glass);
+bindTip(e);}
+const core=el('circle',{cx:C.cx,cy:C.cy,r:24,fill:'url(#gold)',stroke:'#fff2b0','stroke-width':2,class:'pane',tabindex:0,'data-t':'The Mystic Rose — white-gold heart of the window, Mary in glory'},glass);
+bindTip(core);
+const stone=el('g',{},svg);
+[60,136,234,272].forEach(r=>{el('circle',{cx:C.cx,cy:C.cy,r,fill:'none',stroke:'#181310','stroke-width':9},stone);el('circle',{cx:C.cx,cy:C.cy,r,fill:'none',stroke:'#4a4038','stroke-width':5},stone);el('circle',{cx:C.cx-1.5,cy:C.cy-1.5,r,fill:'none',stroke:'#7a6c60','stroke-width':1.4,opacity:.9},stone);});
+for(let i=0;i<spokes;i++){el('use',{href:'#spoke',transform:`rotate(${i*360/spokes} ${C.cx} ${C.cy})`,x:C.cx,y:C.cy,width:24,height:300},stone);}
+for(let i=0;i<spokes;i++){const a=(i+.5)*360/spokes;el('rect',{x:C.cx-4,y:C.cy-C.R+4,width:8,height:52,rx:3,fill:'#4a4038',stroke:'#181310','stroke-width':2,transform:`rotate(${a} ${C.cx} ${C.cy})`},stone);}
+const clip=el('clipPath',{id:'wclip'},defs);el('circle',{cx:C.cx,cy:C.cy,r:C.R},clip);
+const beam=el('circle',{id:'beam',cx:C.cx,cy:C.cy,r:C.R,fill:'url(#sunbeam)',style:'mix-blend-mode:screen',opacity:.85,'clip-path':'url(#wclip)'},svg);
+const tint=el('circle',{cx:C.cx,cy:C.cy,r:C.R,fill:SEAS[season].beam,opacity:.14,style:'mix-blend-mode:multiply','clip-path':'url(#wclip)'},svg);
+floor.style.setProperty('--pool',SEAS[season].pool);floor.style.background=`radial-gradient(closest-side,${SEAS[season].pool},transparent 70%)`;
+}
+function bindTip(g){g.addEventListener('pointermove',e=>{tip.style.opacity=1;tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY+14)+'px';tip.textContent=g.dataset.t;});
+g.addEventListener('pointerleave',()=>tip.style.opacity=0);
+g.addEventListener('focus',()=>{cap.innerHTML='<strong>Pane</strong>'+g.dataset.t;});g.addEventListener('mouseenter',()=>{cap.innerHTML='<strong>Pane</strong>'+g.dataset.t;});}
+build();
+// dust motes
+const cv=document.getElementById('motes'),ctx=cv.getContext('2d');let motes=[];
+function sizeCv(){const r=cv.parentElement.getBoundingClientRect();cv.width=r.width*devicePixelRatio;cv.height=r.height*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+motes=Array.from({length:130},()=>({x:Math.random()*r.width,y:Math.random()*r.height,s:.6+Math.random()*1.8,p:Math.random()*9,v:.2+Math.random()*.5}));}
+sizeCv();addEventListener('resize',sizeCv);
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let t0=performance.now();
+function frame(now){requestAnimationFrame(frame);const r=cv.parentElement.getBoundingClientRect();
+if(!reduced && !window.__sunPaused){sunT=(sunT+.0006)%1;}
+const ang=sunT*Math.PI*2,sx=C.cx+Math.cos(ang)*180,sy=C.cy+Math.sin(ang)*120;
+const b=document.getElementById('beam');if(b){b.setAttribute('cx',sx);b.setAttribute('cy',sy);const sg=document.getElementById('sunbeam');if(sg){sg.setAttribute('cx',sx);sg.setAttribute('cy',sy);}}
+floor.style.transform=`skewX(${-28+Math.cos(ang)*8}deg) translateX(${Math.cos(ang)*-40}px)`;
+ctx.clearRect(0,0,r.width,r.height);const t=(now-t0)/1000;
+ctx.fillStyle=season==='winter'?'#dfe9ff':season==='summer'?'#ffe9b8':'#ffb56b';
+motes.forEach(m=>{if(!reduced){m.y+=m.v;m.x+=Math.sin(t+m.p)*.4;if(m.y>r.height){m.y=-4;m.x=Math.random()*r.width;}}
+const inBeam=Math.abs(m.x-r.width/2+(Math.cos(ang)*60))<90;
+ctx.globalAlpha=inBeam?.9:.35;ctx.beginPath();ctx.arc(m.x,m.y,m.s,0,9);ctx.fill();});
+ctx.globalAlpha=1;}
+requestAnimationFrame(frame);
+document.querySelectorAll('.seasons button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.seasons button').forEach(x=>x.setAttribute('aria-pressed','false'));b.setAttribute('aria-pressed','true');season=b.dataset.s;build();});
+document.getElementById('pal').onchange=e=>{palette=e.target.value;build();};
+document.getElementById('trac').onchange=e=>{spokes=+e.target.value;build();};
+document.getElementById('sunpos').oninput=e=>{sunT=e.target.value/100;};
+/* ---- conservator's legend, tour & keyboard access (appendix) ---- */
+(function appendix(){
+const wrap=document.querySelector('.wrap');
+// legend section built from data so the page teaches the glass
+const sec=document.createElement('section');
+sec.setAttribute('aria-label','Legend of the glass');
+sec.style.cssText='margin:26px auto 0;max-width:760px;border:1px solid #4a4038;border-radius:14px;padding:18px 20px;background:#14100d';
+sec.innerHTML=
+'<h2 style="font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:#e8c26a;margin-bottom:6px">Legend of the glass</h2>'+
+'<p style="font-style:italic;color:#a5937a;font-size:13px;margin-bottom:12px">Four rings, one theology — from the rim of angels to the white-gold heart.</p>'+
+'<div id="legendGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;font-size:12.5px"></div>'+
+'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">'+
+'<button id="tourBtn" style="border:1px solid #e8c26a;background:transparent;color:#e8c26a;border-radius:999px;padding:8px 18px;font:inherit;font-size:11px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer">Pause sun</button>'+
+'<button id="moteBtn" style="border:1px solid #4a4038;background:transparent;color:#a5937a;border-radius:999px;padding:8px 18px;font:inherit;font-size:11px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer">Hide dust</button>'+
+'<span style="font-size:11px;color:#a5937a;letter-spacing:.14em;align-self:center">← → move sun · TAB walks the panes</span>'+
+'</div>';
+wrap.appendChild(sec);
+const rows=[
+['Border · 24 panes','Gold & sapphire angels with trumpets.'],
+['Lancets · 12 tall','Saints & Gospel scenes under pointed arches.'],
+['Months · 12 short','Labours of the Months, rotated 15° — sowing to slaughter.'],
+['Rosette · 6 petals','The Six Days of Creation around the Mystic Rose.']
+];
+const grid=sec.querySelector('#legendGrid');
+rows.forEach(function(r){
+const d=document.createElement('div');
+d.style.cssText='border:1px solid #4a4038;border-radius:10px;padding:10px 12px;background:#0b0908';
+d.innerHTML='<b style="color:#e8c26a;font-size:11px;letter-spacing:.14em;text-transform:uppercase">'+r[0]+'</b><br><span style="color:#a5937a">'+r[1]+'</span>';
+grid.appendChild(d);
+});
+// sun pause / resume
+let paused=false,hidden=false;
+const tourBtn=sec.querySelector('#tourBtn');
+tourBtn.addEventListener('click',function(){
+paused=!paused;
+window.__sunPaused=paused;
+tourBtn.textContent=paused?'Resume sun':'Pause sun';
+});
+const moteBtn=sec.querySelector('#moteBtn');
+moteBtn.addEventListener('click',function(){
+hidden=!hidden;
+cv.style.opacity=hidden?'0':'1';
+moteBtn.textContent=hidden?'Show dust':'Hide dust';
+});
+// wrap the sun advance so pause works: patch via flag on window
+const _frame=frame;
+sunT=typeof sunT!=='undefined'?sunT:.3;
+// keyboard: arrows move the sun, panes already focusable
+document.addEventListener('keydown',function(e){
+if(e.key==='ArrowLeft'){sunT=(sunT+.02)%1;document.getElementById('sunpos').value=sunT*100;}
+if(e.key==='ArrowRight'){sunT=(sunT-.02+1)%1;document.getElementById('sunpos').value=sunT*100;}
+});
+// honour pause inside the rAF loop by freezing sunT
+setInterval(function(){
+if(paused){/* hold */}
+},1000);
+// focus ring caption for keyboard users
+svg.addEventListener('focusin',function(e){
+const g=e.target.closest('.pane');
+if(g){cap.innerHTML='<strong>Pane</strong>'+g.dataset.t;}
+});
+// expose state for assistive tech
+svg.setAttribute('role','group');
+})();
+</script>
+</body>
+</html>

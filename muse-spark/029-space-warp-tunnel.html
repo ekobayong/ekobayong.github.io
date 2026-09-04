@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jumpgate — Hyperspace Warp Tunnel</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  background: #000;
+  color: #7fc4ff;
+  font-family: system-ui, ui-monospace, Menlo, monospace;
+  overflow: hidden;
+  height: 100vh;
+}
+#cv {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+#scan {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .03) 0 1px, transparent 1px 3px);
+  mix-blend-mode: overlay;
+  z-index: 4;
+}
+#vig {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(100% 100% at 50% 50%, transparent 55%, rgba(0, 0, 0, .7));
+  z-index: 3;
+}
+.bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: 6vh;
+  background: #000;
+  z-index: 5;
+}
+.bar.top { top: 0; }
+.bar.bot { bottom: 0; }
+.hud {
+  position: fixed;
+  z-index: 6;
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-shadow: 0 0 8px #3d8bff;
+  line-height: 1.9;
+}
+.tl { top: 7vh; left: 16px; }
+.tr { top: 7vh; right: 16px; text-align: right; }
+.bl { bottom: 7vh; left: 16px; }
+.br { bottom: 7vh; right: 16px; text-align: right; }
+.hud span.hl {
+  color: #f4f8ff;
+}
+#title {
+  position: fixed;
+  top: 7.5vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  text-align: center;
+}
+#title h1 {
+  font-weight: 200;
+  letter-spacing: .5em;
+  font-size: 20px;
+  color: #f4f8ff;
+  text-indent: .5em;
+}
+#title p {
+  font-size: 11px;
+  letter-spacing: .2em;
+  margin-top: 6px;
+  transition: opacity .8s;
+}
+#speed {
+  position: fixed;
+  bottom: 9vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  text-align: center;
+}
+#speed b {
+  font-weight: 200;
+  font-size: clamp(34px, 5vw, 54px);
+  color: #f4f8ff;
+}
+#speed b.max {
+  text-shadow: 0 0 22px #fff, 0 0 44px #3d8bff;
+}
+#track {
+  width: min(420px, 70vw);
+  height: 3px;
+  background: rgba(127, 196, 255, .25);
+  margin: 8px auto;
+  border-radius: 2px;
+  overflow: hidden;
+}
+#fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #3d8bff, #7fc4ff, #fff);
+}
+#stage {
+  font-size: 11px;
+  letter-spacing: .3em;
+}
+#ret {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+  opacity: .9;
+}
+.r1 {
+  animation: spin 14s linear infinite;
+  transform-origin: center;
+}
+.r2 {
+  animation: spin 22s linear infinite reverse;
+  transform-origin: center;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+#ctl {
+  position: fixed;
+  bottom: calc(6vh + 96px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  background: rgba(10, 20, 40, .55);
+  border: 1px solid rgba(127, 196, 255, .35);
+  border-radius: 999px;
+  padding: 8px 16px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: 11px;
+  max-width: 94vw;
+}
+#ctl input {
+  accent-color: #3d8bff;
+  width: 90px;
+}
+#ctl button {
+  background: transparent;
+  border: 1px solid rgba(127, 196, 255, .5);
+  color: #7fc4ff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+  letter-spacing: .1em;
+}
+#ctl button.on {
+  background: #3d8bff;
+  color: #fff;
+}
+#flash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 8;
+}
+@media (max-width: 640px) {
+  .bl, .tl { display: none; }
+  #ctl { bottom: calc(6vh + 150px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .r1, .r2 { animation: none; }
+}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div class="bar top"></div>
+<div class="bar bot"></div>
+<div id="vig"></div>
+<div id="scan"></div>
+<div id="title">
+  <h1>JUMPGATE</h1>
+  <p id="prompt">HOLD CLICK / TOUCH / SPACE TO ENGAGE</p>
+</div>
+<div class="hud tl">VECTOR 044.7 // MARK VII<br>GATE ID <span class="hl">KESTREL-9</span><br>HULL <span id="hull">100%</span></div>
+<div class="hud tr">DRIVE <span id="drive" class="hl">IDLE</span><br>FPS <span id="fps">60</span> · STARS <span id="n">0</span><br>SHAKE <span id="shk">0.0</span>px</div>
+<div class="hud bl">DIST <span id="dist">0.00</span> LY<br>ELAPSED <span id="el">0.0</span>s</div>
+<div class="hud br">FOV <span id="fovV">75</span>°<br>CORE <span id="core">STABLE</span></div>
+<svg id="ret" width="220" height="220" viewBox="0 0 220 220" aria-hidden="true">
+  <g fill="none" stroke="#7fc4ff">
+    <circle class="r1" cx="110" cy="110" r="80" stroke-dasharray="10 14" opacity=".7"/>
+    <circle class="r2" cx="110" cy="110" r="58" stroke-dasharray="4 10" opacity=".5"/>
+    <circle cx="110" cy="110" r="3" fill="#f4f8ff" stroke="none">
+      <animate attributeName="r" values="3;5;3" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <path d="M110 10v14M110 196v14M10 110h14M196 110h14" stroke-width="2"/>
+  </g>
+</svg>
+<div id="speed">
+  <b id="num">0.00 c</b>
+  <div id="track"><div id="fill"></div></div>
+  <div id="stage">SUBLIGHT</div>
+</div>
+<div id="ctl">
+  <label>SPEED <input type="range" id="sens" min="20" max="140" value="70"></label>
+  <label>FOV <input type="range" id="fov" min="55" max="110" value="75"></label>
+  <label>STARS <input type="range" id="dens" min="350" max="1400" value="900"></label>
+  <button id="auto">AUTOPILOT</button>
+  <button id="trails" class="on">TRAILS</button>
+</div>
+<div id="flash"></div>
+<script>
+var cv = document.getElementById('cv');
+var ctx = cv.getContext('2d');
+var W = 0, H = 0;
+var FOCAL = 420;
+var speed = 0, target = 0;
+var stars = [];
+var rings = [];
+var dist = 0;
+var t0 = performance.now();
+var tStart = performance.now();
+var shake = 0;
+var sens = 70;
+var wantStars = 900;
+var trailsOn = true;
+var autopilot = false;
+var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function size() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  cv.width = W;
+  cv.height = H;
+  seedStars();
+  rings = [];
+  for (var i = 0; i < 14; i++) {
+    rings.push({ z: 300 + i * 210, a: Math.random() * 6.28 });
+  }
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+}
+function seedStars() {
+  var area = W * H;
+  var n = Math.max(350, Math.min(1400, wantStars || Math.round(area / 1400)));
+  stars = [];
+  for (var i = 0; i < n; i++) {
+    var r = Math.random();
+    stars.push({
+      x: (Math.random() - .5) * W * 2.2,
+      y: (Math.random() - .5) * H * 2.2,
+      z: 200 + Math.random() * 2800,
+      c: r < .12 ? '#8a5cff' : (r < .6 ? '#3d8bff' : '#f4f8ff')
+    });
+  }
+  document.getElementById('n').textContent = n;
+}
+window.addEventListener('resize', size);
+document.getElementById('sens').addEventListener('input', function (e) { sens = +e.target.value; });
+document.getElementById('fov').addEventListener('input', function (e) {
+  document.getElementById('fovV').textContent = e.target.value;
+  FOCAL = (+e.target.value) * 5.6;
+});
+document.getElementById('dens').addEventListener('input', function (e) {
+  wantStars = +e.target.value;
+  seedStars();
+});
+document.getElementById('auto').addEventListener('click', function (e) {
+  autopilot = !autopilot;
+  e.target.classList.toggle('on', autopilot);
+  document.getElementById('prompt').style.opacity = 0;
+});
+document.getElementById('trails').addEventListener('click', function (e) {
+  trailsOn = !trailsOn;
+  e.target.classList.toggle('on', trailsOn);
+});
+var hold = false;
+window.addEventListener('pointerdown', function () {
+  hold = true;
+  document.getElementById('prompt').style.opacity = 0;
+});
+window.addEventListener('pointerup', function () { hold = false; });
+window.addEventListener('keydown', function (e) {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    hold = true;
+    document.getElementById('prompt').style.opacity = 0;
+  }
+});
+window.addEventListener('keyup', function (e) {
+  if (e.code === 'Space') hold = false;
+});
+var frames = 0, lastF = performance.now(), flashed = false;
+size();
+function frame(t) {
+  requestAnimationFrame(frame);
+  var dt = Math.min(.05, (t - t0) / 1000);
+  t0 = t;
+  if (autopilot) {
+    target = .55 + .45 * Math.sin(t / 4000);
+    target = Math.max(.25, target);
+  } else {
+    target = hold ? 1 : 0;
+  }
+  var rate = target > speed ? 2.2 : .9;
+  speed += (target - speed) * (1 - Math.exp(-dt * rate));
+  if (speed > .75 && !reduced) shake = Math.random() * 6 * ((speed - .75) / .25);
+  else shake = 0;
+  dist += speed * dt * 2.4;
+  var fade = trailsOn ? (.42 - speed * .3) : 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = 'rgba(0,0,0,' + fade.toFixed(3) + ')';
+  ctx.fillRect(0, 0, W, H);
+  var cx = W / 2 + (reduced ? 0 : (Math.random() - .5) * shake);
+  var cy = H / 2 + (reduced ? 0 : (Math.random() - .5) * shake);
+  var core = 40 + speed * 260;
+  var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, core);
+  g.addColorStop(0, 'rgba(244,248,255,' + (.12 + speed * .8).toFixed(3) + ')');
+  g.addColorStop(.4, 'rgba(127,196,255,.25)');
+  g.addColorStop(1, 'transparent');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(cx, cy, core, 0, 7);
+  ctx.fill();
+  ctx.globalCompositeOperation = 'lighter';
+  var zs = speed * speed * sens * 3 + 8;
+  var i, k;
+  for (i = 0; i < rings.length; i++) {
+    var r = rings[i];
+    r.z -= zs * dt * 8 + speed * 30;
+    r.a += dt * (.2 + speed * 2);
+    if (r.z < 50) r.z = 3000;
+    var s = FOCAL / r.z;
+    if (s <= 0 || s > 4) continue;
+    var R = Math.min(W, H) * .42 * s + .001;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(r.a);
+    ctx.strokeStyle = i % 2 ? 'rgba(138,92,255,.8)' : 'rgba(61,139,255,.8)';
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = '#3d8bff';
+    ctx.lineWidth = Math.max(.5, 2 * s);
+    ctx.beginPath();
+    for (k = 0; k <= 8; k++) {
+      var an = k / 8 * Math.PI * 2;
+      var px = Math.cos(an) * R, py = Math.sin(an) * R;
+      if (k) ctx.lineTo(px, py);
+      else ctx.moveTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(138,92,255,.35)';
+  ctx.lineWidth = 1;
+  for (i = 0; i < rings.length - 1; i += 2) {
+    var A = rings[i], B = rings[i + 1];
+    var sa = FOCAL / A.z, sb = FOCAL / B.z;
+    for (k = 0; k < 8; k += 2) {
+      var aa = k / 8 * Math.PI * 2 + A.a;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(aa) * Math.min(W, H) * .42 * sa, cy + Math.sin(aa) * Math.min(W, H) * .42 * sa);
+      ctx.lineTo(cx + Math.cos(aa) * Math.min(W, H) * .42 * sb, cy + Math.sin(aa) * Math.min(W, H) * .42 * sb);
+      ctx.stroke();
+    }
+  }
+  for (i = 0; i < stars.length; i++) {
+    var st = stars[i];
+    st.z -= zs;
+    if (st.z < 60) {
+      st.z = 3000;
+      st.x = (Math.random() - .5) * W * 2.2;
+      st.y = (Math.random() - .5) * H * 2.2;
+    }
+    var sx = cx + st.x * FOCAL / st.z;
+    var sy = cy + st.y * FOCAL / st.z;
+    var back = st.z + zs * 2.2;
+    var bx = cx + st.x * FOCAL / back;
+    var by = cy + st.y * FOCAL / back;
+    var w = Math.max(.4, 2.4 * (1 - st.z / 3000) + speed * 2);
+    ctx.lineCap = 'round';
+    ctx.lineWidth = w;
+    var chrom = (speed > .75 && !reduced) ? Math.min(6, (speed - .75) * 24 * (FOCAL / st.z) / 3) : 0;
+    if (chrom > 0) {
+      ctx.strokeStyle = 'rgba(255,60,80,.7)';
+      ctx.beginPath(); ctx.moveTo(sx - chrom, sy); ctx.lineTo(bx - chrom, by); ctx.stroke();
+      ctx.strokeStyle = 'rgba(80,160,255,.7)';
+      ctx.beginPath(); ctx.moveTo(sx + chrom, sy); ctx.lineTo(bx + chrom, by); ctx.stroke();
+    }
+    ctx.strokeStyle = st.c;
+    ctx.globalAlpha = Math.min(1, .3 + speed * 1.2);
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  document.getElementById('num').textContent = (speed * 9.99).toFixed(2) + ' c';
+  document.getElementById('num').classList.toggle('max', speed >= .97);
+  document.getElementById('fill').style.width = (speed * 100) + '%';
+  document.getElementById('stage').textContent = speed < .2 ? 'SUBLIGHT' : speed < .5 ? 'WARP ENTRY' : speed < .8 ? 'HYPERSPACE' : 'THRESHOLD';
+  document.getElementById('drive').textContent = speed > .97 ? 'MAX' : (hold || autopilot) ? 'BURN' : speed > .15 ? 'COAST' : 'IDLE';
+  document.getElementById('dist').textContent = dist.toFixed(2);
+  document.getElementById('el').textContent = ((t - tStart) / 1000).toFixed(1);
+  document.getElementById('shk').textContent = shake.toFixed(1);
+  document.getElementById('hull').textContent = (100 - speed * 4).toFixed(1) + '%';
+  document.getElementById('core').textContent = speed > .93 ? 'CRITICAL' : speed > .6 ? 'HOT' : 'STABLE';
+  if (speed > .93 && !flashed) {
+    flashed = true;
+    var f = document.getElementById('flash');
+    f.style.transition = 'none';
+    f.style.opacity = .9;
+    requestAnimationFrame(function () {
+      f.style.transition = 'opacity .5s';
+      f.style.opacity = 0;
+    });
+    setTimeout(function () { flashed = false; }, 1500);
+  }
+  frames++;
+  if (t - lastF > 500) {
+    document.getElementById('fps').textContent = Math.round(frames * 1000 / (t - lastF));
+    frames = 0;
+    lastF = t;
+  }
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

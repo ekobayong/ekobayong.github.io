@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Northern Lights — Lake Inari, 68.9° N</title>
+<style>
+*{margin:0;
+padding:0;
+box-sizing:border-box}
+html,body{height:100%;
+overflow:hidden;
+background:#02030a;
+color:rgba(226,236,255,.72);
+font-family:system-ui,sans-serif}
+#sky{position:fixed;
+inset:0;
+width:100%;
+height:100%;
+display:block}
+.vig{position:fixed;
+inset:0;
+pointer-events:none;
+background:radial-gradient(120% 100% at 50% 45%,transparent 55%,rgba(0,0,0,.55))}
+.ui{position:fixed;
+inset:0;
+pointer-events:none;
+display:flex;
+flex-direction:column;
+justify-content:space-between;
+padding:20px}
+.top{display:flex;
+justify-content:space-between;
+align-items:flex-start}
+.eyebrow{font-family:ui-monospace,monospace;
+font-size:11px;
+letter-spacing:.22em;
+text-transform:uppercase;
+display:flex;
+gap:8px;
+align-items:center}
+.pulse{width:9px;
+height:9px;
+border-radius:50%;
+background:#3cf5a0;
+box-shadow:0 0 12px #3cf5a0;
+animation:pl 1.8s infinite}
+@keyframes pl{50%{opacity:.4}}
+#clock{font-family:ui-monospace,monospace;
+font-size:12px}
+.caption{max-width:430px;
+pointer-events:auto;
+animation:up 1.2s both .3s}
+@keyframes up{from{opacity:0;
+transform:translateY(16px)}}
+.caption h1{font-family:Georgia,"Iowan Old Style",Palatino,serif;
+font-weight:400;
+font-size:clamp(26px,4vw,44px);
+line-height:1.1;
+color:#eef4ff}.caption h1 em{color:#c8ffe4}
+.caption p{font-size:13px;
+margin-top:10px;
+line-height:1.6}
+.meta{font-family:ui-monospace,monospace;
+font-size:10px;
+letter-spacing:.14em;
+margin-top:10px;
+color:#c8ffe4}
+.bottom{display:flex;
+justify-content:space-between;
+align-items:flex-end;
+gap:14px;
+flex-wrap:wrap}
+.controls{pointer-events:auto;
+display:flex;
+gap:12px;
+align-items:center;
+background:rgba(6,12,24,.55);
+backdrop-filter:blur(12px);
+border:1px solid rgba(200,255,228,.25);
+border-radius:999px;
+padding:10px 18px;
+transition:.25s}
+.controls:hover{transform:translateY(-2px)}
+.controls label{font-family:ui-monospace,monospace;
+font-size:11px;
+letter-spacing:.15em;
+display:flex;
+gap:10px;
+align-items:center}
+input[type=range]{appearance:none;
+width:130px;
+height:6px;
+border-radius:99px;
+background:linear-gradient(90deg,#c8ffe4,#3cf5a0,#a86bff);
+outline:none}
+input[type=range]::-webkit-slider-thumb{appearance:none;
+width:18px;
+height:18px;
+border-radius:50%;
+background:#fff;
+box-shadow:0 0 12px #3cf5a0;
+cursor:pointer;
+transition:.15s}input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.3)}
+#snowB{background:none;
+border:1px solid rgba(200,255,228,.4);
+color:#c8ffe4;
+border-radius:999px;
+padding:6px 14px;
+font:inherit;
+font-size:11px;
+cursor:pointer;
+font-family:ui-monospace,monospace}
+#snowB[aria-pressed="true"]{background:#c8ffe4;
+color:#061021}
+.legend{font-family:ui-monospace,monospace;
+font-size:10px;
+text-align:right;
+line-height:1.8}
+.legend i{display:inline-block;
+width:22px;
+height:6px;
+border-radius:3px;
+margin-left:8px;
+vertical-align:middle}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}.caption{animation:none;
+opacity:1}}
+</style>
+</head>
+<body>
+<canvas id="sky"></canvas><div class="vig"></div>
+<div class="ui"><div class="top"><span class="eyebrow"><span class="pulse"></span>Field observation · Kp 5</span><span id="clock">00:00:00</span></div>
+<div class="caption"><h1>The sky breathing <em>over Lake Inari</em></h1><p>Oxygen glows green at 100 km;
+ nitrogen and high-altitude oxygen fringe violet and pink at the curtain tops. Tonight the solar wind is calm and the ice holds still.</p><div class="meta">68.9° N 27.0° E · −23 °C · WIND CALM · CLOUD 0/8</div></div>
+<div class="bottom"><div class="controls"><label>Intensity <input type="range" id="inten" min="0" max="100" value="62"><b id="ival" style="color:#fff">62</b></label><button id="snowB" aria-pressed="true">Snow</button></div><div class="legend">Oxygen 557.7 nm <i style="background:#3cf5a0"></i><br>Nitrogen 427.8 nm <i style="background:#7fd1ff"></i></div></div>
+</div>
+<script>
+const cv=document.getElementById('sky'),ctx=cv.getContext('2d');
+
+const off=document.createElement('canvas'),ox=off.getContext('2d');
+
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let W,H,DPR,intensity=.62,showSnow=true,stars=[],snow=[],pines=[],shoot=null,nextShoot=performance.now()+4000;
+
+function hash(n){return (Math.sin(n*127.1)*43758.5)%1}
+function noise(x){const i=Math.floor(x),f=x-i,u=f*f*(3-2*f);
+return hash(i)* (1-u)+hash(i+1)*u}
+function fbm(x,t){let v=0,a=.5,f=1;
+for(let o=0;
+o<4;
+o++){v+=a*noise(x*f+t*f*.3+o*7);
+a*=.5;
+f*=2}return v}
+const curts=[{h:152,s:90,sp:.14,hgt:.5,al:.8,fq:.012},{h:158,s:85,sp:-.1,hgt:.42,al:.6,fq:.02},{h:285,s:80,sp:.07,hgt:.6,al:.45,fq:.008},{h:330,s:85,sp:-.05,hgt:.55,al:.35,fq:.015}];
+
+function build(){DPR=Math.min(2,devicePixelRatio||1);
+W=innerWidth;
+H=innerHeight;
+cv.width=W*DPR;
+cv.height=H*DPR;
+ctx.setTransform(DPR,0,0,DPR,0,0);
+
+off.width=Math.ceil(W/3);
+off.height=Math.ceil(H*.7);
+
+stars=Array.from({length:Math.floor(W*H/4500)},()=>({x:Math.random()*W,y:Math.random()*H*.62,r:Math.random()<.08?1.8:.8,warm:Math.random()<.2,ph:Math.random()*7}));
+
+snow=Array.from({length:90},()=>({x:Math.random()*W,y:Math.random()*H,r:.6+Math.random()*1.6,s:12+Math.random()*26,ph:Math.random()*7}));
+
+pines=[];
+let x=0;
+while(x<W){const h=18+noise(x*.02)*30;
+pines.push({x,h,w:10+noise(x*.05)*14});
+x+=8+noise(x*.01)*18}}
+build();
+let rT;
+addEventListener('resize',()=>{clearTimeout(rT);
+setTimeout(build,200)});
+
+document.getElementById('inten').oninput=e=>{intensity=e.target.value/100;
+document.getElementById('ival').textContent=e.target.value};
+
+document.getElementById('snowB').onclick=e=>{showSnow=!showSnow;
+e.target.setAttribute('aria-pressed',showSnow)};
+
+setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleTimeString()},1000);
+
+function drawPines(g,base,mirror){g.fillStyle=mirror?'#050a14':'#02040a';
+pines.forEach(p=>{const y=base;
+g.fillRect(p.x-1,y-p.h*.3,2,p.h*.3);
+for(let k=0;
+k<4;
+k++){const w=p.w*(1-k*.2),yy=y-p.h*.3-k*p.h*.2;
+g.beginPath();
+g.moveTo(p.x-w/2,yy);
+g.lineTo(p.x,yy-p.h*.28);
+g.lineTo(p.x+w/2,yy);
+g.fill()}})}
+let t0=performance.now();
+
+function frame(now){requestAnimationFrame(frame);
+const t=(now-t0)/1000;
+const horizon=H*.7;
+
+if(RM&&frame.done)return;
+if(RM)frame.done=true;
+
+const sky=ctx.createLinearGradient(0,0,0,horizon);
+sky.addColorStop(0,'#02030a');
+sky.addColorStop(.6,'#061021');
+sky.addColorStop(1,'#0b1a30');
+ctx.fillStyle=sky;
+ctx.fillRect(0,0,W,horizon+1);
+
+stars.forEach(s=>{const tw=.5+.5*Math.sin(t*2+s.ph);
+ctx.globalAlpha=tw*(1-intensity*.25);
+ctx.fillStyle=s.warm?'#ffe7c4':'#dfe9ff';
+ctx.beginPath();
+ctx.arc(s.x,s.y,s.r,0,7);
+ctx.fill()});
+ctx.globalAlpha=1;
+
+if(!RM&&now>nextShoot){shoot={x:Math.random()*W*.7,y:30+Math.random()*120,vx:420,vy:120,life:1};
+nextShoot=now+8000+Math.random()*6000}
+if(shoot){shoot.x+=shoot.vx*.016;
+shoot.y+=shoot.vy*.016;
+shoot.life-=.016;
+const g=ctx.createLinearGradient(shoot.x,shoot.y,shoot.x-90,shoot.y-24);
+g.addColorStop(0,'rgba(255,255,255,.9)');
+g.addColorStop(1,'transparent');
+ctx.strokeStyle=g;
+ctx.lineWidth=2;
+ctx.beginPath();
+ctx.moveTo(shoot.x,shoot.y);
+ctx.lineTo(shoot.x-90,shoot.y-24);
+ctx.stroke();
+if(shoot.life<=0)shoot=null}
+ox.clearRect(0,0,off.width,off.height);
+ox.globalCompositeOperation='lighter';
+
+curts.forEach(c=>{for(let px=0;
+px<off.width;
+px+=1){const nx=px*c.fq*3;
+let b=fbm(nx,t*c.sp*2)+.4*Math.sin(px*.02+t*c.sp)+.3*Math.sin(px*.005-t*.1);
+b=Math.pow(Math.max(0,b*.62),1.8)*c.al*(0.25+intensity);
+
+const bot=horizon/H*off.height*(0.68+0.06*Math.sin(px*.01+t*.3));
+const top=bot-off.height*c.hgt*(0.4+b);
+const g=ox.createLinearGradient(0,top,0,bot);
+const col=`hsla(${c.h},${c.s}%,60%,`;
+g.addColorStop(0,col+'0)');
+g.addColorStop(.55,col+(b*.5)+')');
+g.addColorStop(.88,col+Math.min(1,b+ .2)+')');
+g.addColorStop(1,col+'0)');
+ox.fillStyle=g;
+ox.fillRect(px,top,1.6,bot-top)}});
+
+ox.globalCompositeOperation='source-over';
+
+ctx.globalCompositeOperation='screen';
+ctx.imageSmoothingEnabled=true;
+ctx.drawImage(off,0,0,W,horizon);
+ctx.globalCompositeOperation='source-over';
+
+const gg=ctx.createLinearGradient(0,horizon-40,0,horizon+30);
+gg.addColorStop(0,'rgba(60,245,160,0)');
+gg.addColorStop(1,`rgba(60,245,160,${.12+intensity*.15})`);
+ctx.fillStyle=gg;
+ctx.fillRect(0,horizon-40,W,70);
+
+const wg=ctx.createLinearGradient(0,horizon,0,H);
+wg.addColorStop(0,'#08121f');
+wg.addColorStop(1,'#020409');
+ctx.fillStyle=wg;
+ctx.fillRect(0,horizon,W,H-horizon);
+
+for(let y=0;
+y<H-horizon;
+y+=4){const depth=y/(H-horizon);
+const sy=horizon-(y/1.3);
+const dx=Math.sin(y*.08+t*.8)* (2+depth*8)+Math.sin(y*.03-t*.5)*4;
+ctx.globalAlpha=(1-depth)*.7;
+ctx.drawImage(off,0,Math.max(0,sy),off.width,1.6,dx+depth*4,horizon+y,W,4)}ctx.globalAlpha=1;
+
+drawPines(ctx,horizon,false);
+
+for(let i=0;
+i<12;
+i++){ctx.strokeStyle=`rgba(200,255,228,${.06+.08*Math.sin(t+i)})`;
+const y=horizon+10+((i*37+t*8)%(H-horizon-20));
+ctx.beginPath();
+ctx.moveTo(W*.2+Math.sin(t*.5+i)*30,y);
+ctx.lineTo(W*.2+80+Math.sin(t*.5+i)*30,y);
+ctx.stroke()}
+if(showSnow&&!RM){ctx.fillStyle='#fff';
+snow.forEach(s=>{s.y+=s.s*.016;
+s.x+=Math.sin(t+s.ph)*.4;
+if(s.y>H){s.y=-4;
+s.x=Math.random()*W}ctx.globalAlpha=.7;
+ctx.beginPath();
+ctx.arc(s.x,s.y,s.r,0,7);
+ctx.fill()});
+ctx.globalAlpha=1}
+}
+requestAnimationFrame(frame);
+
+</script>
+</body>
+</html>

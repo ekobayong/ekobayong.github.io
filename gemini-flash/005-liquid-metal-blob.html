@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mercury — Liquid Metal Study · 05</title>
+  <style>
+    /* ==========================================================================
+       RESET & BASE SETUP
+       ========================================================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #101113;
+      color: #fafafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* ==========================================================================
+       BACKGROUND & TEXTURE OVERLAYS
+       ========================================================================== */
+    body {
+      /* Dark charcoal radial gradient (#232428 centre, #1b1c1f mid, #101113 edges)
+         with subtle darker floor gradient over the bottom 38% */
+      background-image:
+        linear-gradient(to top, rgba(12, 13, 16, 0.95) 0%, rgba(14, 15, 18, 0.6) 24%, rgba(16, 17, 19, 0) 38%),
+        radial-gradient(ellipse 95% 85% at 50% 48%, #232428 0%, #1b1c1f 56%, #101113 100%);
+      background-repeat: no-repeat;
+      background-size: cover;
+      position: relative;
+    }
+
+    /* 7% opacity SVG feTurbulence grain overlay from a data URI in overlay blend mode */
+    .grain-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.07;
+      mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      background-repeat: repeat;
+      z-index: 2;
+    }
+
+    /* ==========================================================================
+       MAIN CANVAS
+       ========================================================================== */
+    #canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      z-index: 1;
+      cursor: crosshair;
+    }
+
+    /* ==========================================================================
+       TYPOGRAPHY & UI OVERLAY (pointer-events: none)
+       ========================================================================== */
+    .ui-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 32px 36px;
+    }
+
+    /* Top row */
+    .top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+
+    .meta-label {
+      font-family: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, Menlo, monospace;
+      font-size: 11px;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.55);
+      line-height: 1.4;
+    }
+
+    /* Centered Title & Interactive Hint */
+    .center-container {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .title {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-weight: 200;
+      font-size: clamp(48px, 13.5vw, 300px);
+      letter-spacing: 0.05em;
+      color: #ffffff;
+      mix-blend-mode: difference;
+      line-height: 0.88;
+      text-transform: uppercase;
+      text-align: center;
+      will-change: transform, filter, opacity, letter-spacing;
+      animation: titleEntrance 2.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes titleEntrance {
+      0% {
+        opacity: 0;
+        filter: blur(24px);
+        letter-spacing: 0.35em;
+        transform: scale(1.04);
+      }
+      100% {
+        opacity: 1;
+        filter: blur(0px);
+        letter-spacing: 0.05em;
+        transform: scale(1.0);
+      }
+    }
+
+    .hint {
+      margin-top: 24px;
+      font-family: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+      font-size: 11px;
+      letter-spacing: 0.26em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.42);
+      transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1), transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+      transform: translateY(0);
+    }
+
+    .hint.fade-out {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+
+    /* Footer row */
+    .footer-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      width: 100%;
+      gap: 32px;
+    }
+
+    .footer-desc {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 13px;
+      font-weight: 300;
+      line-height: 1.55;
+      color: rgba(255, 255, 255, 0.48);
+      max-width: 520px;
+    }
+
+    .footer-desc em {
+      font-style: normal;
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    .footer-stats {
+      font-family: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      color: rgba(255, 255, 255, 0.65);
+      white-space: nowrap;
+      text-transform: uppercase;
+    }
+
+    /* ==========================================================================
+       RESPONSIVE DESIGN (360px - 4K)
+       ========================================================================== */
+    @media (max-width: 639px) {
+      .ui-layer {
+        padding: 20px 22px;
+      }
+      .top-label-right {
+        display: none;
+      }
+      .footer-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 14px;
+      }
+      .footer-desc {
+        max-width: 100%;
+        font-size: 12px;
+      }
+      .hint {
+        font-size: 10px;
+        letter-spacing: 0.18em;
+      }
+    }
+
+    /* ==========================================================================
+       PREFERS-REDUCED-MOTION
+       ========================================================================== */
+    @media (prefers-reduced-motion: reduce) {
+      .title {
+        animation: none !important;
+        opacity: 1 !important;
+        filter: none !important;
+        letter-spacing: 0.05em !important;
+        transform: none !important;
+      }
+      .hint {
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Liquid Chrome Main Canvas -->
+  <canvas id="canvas"></canvas>
+
+  <!-- SVG feTurbulence Grain Overlay -->
+  <div class="grain-overlay" aria-hidden="true"></div>
+
+  <!-- Non-blocking UI & Typography Overlay -->
+  <div class="ui-layer">
+    <div class="top-row">
+      <span class="meta-label">Liquid metal study · 05</span>
+      <span class="meta-label top-label-right">Metaball field · environment mapped</span>
+    </div>
+
+    <div class="center-container">
+      <h1 class="title">MERCURY</h1>
+      <p class="hint" id="hint">Move to attract · click to add</p>
+    </div>
+
+    <div class="footer-row">
+      <p class="footer-desc">
+        Closed-form analytic gradient field evaluation with adaptive normal reconstruction. 
+        Shaded via a 256-stop horizon reflection LUT, left-to-right studio falloff, and high-exponent key lighting. 
+        <em>[R] Reseed · [Space] Pause</em>
+      </p>
+      <div class="footer-stats" id="stats">FPS: -- · BODIES: 7 · BUFFER: 50%</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      /* ==========================================================================
+         CANVAS & RESOLUTION MANAGEMENT
+         ========================================================================== */
+      const mainCanvas = document.getElementById('canvas');
+      const ctx = mainCanvas.getContext('2d');
+      const statsEl = document.getElementById('stats');
+      const hintEl = document.getElementById('hint');
+
+      // Check system endianness for 32-bit Uint32 packing
+      const isLittleEndian = (function () {
+        const buf = new ArrayBuffer(2);
+        new DataView(buf).setInt16(0, 256, true);
+        return new Int16Array(buf)[0] === 256;
+      })();
+
+      // Reduced motion detection
+      const prefersReducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      let prefersReducedMotion = prefersReducedMotionQuery.matches;
+
+      // Adaptive buffer scaling state
+      let bufferScale = 0.50; // default half resolution
+      const MIN_SCALE = 0.28;
+      const MAX_SCALE = 0.60;
+      const MAX_FIELD_PIXELS = 420000; // capped for smooth 4K
+
+      let cssWidth = window.innerWidth;
+      let cssHeight = window.innerHeight;
+      let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      let bufWidth = 0;
+      let bufHeight = 0;
+
+      // Offscreen buffer for fast rasterization
+      const offscreenCanvas = document.createElement('canvas');
+      let offscreenCtx = null;
+      let offscreenImageData = null;
+      let uint32View = null;
+
+      // Frame timing & adaptive scale regulation
+      let slowFrameCount = 0;
+      let fastFrameCount = 0;
+      let isPaused = false;
+      let hasInteracted = false;
+
+      function resizeBuffers() {
+        cssWidth = window.innerWidth;
+        cssHeight = window.innerHeight;
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        // DPR-aware main canvas
+        mainCanvas.width = Math.round(cssWidth * dpr);
+        mainCanvas.height = Math.round(cssHeight * dpr);
+        mainCanvas.style.width = cssWidth + 'px';
+        mainCanvas.style.height = cssHeight + 'px';
+
+        // Compute offscreen field buffer dimensions with pixel cap
+        let targetW = Math.round(cssWidth * bufferScale);
+        let targetH = Math.round(cssHeight * bufferScale);
+        const pixelCount = targetW * targetH;
+
+        if (pixelCount > MAX_FIELD_PIXELS) {
+          const factor = Math.sqrt(MAX_FIELD_PIXELS / pixelCount);
+          targetW = Math.round(targetW * factor);
+          targetH = Math.round(targetH * factor);
+        }
+
+        bufWidth = Math.max(64, targetW);
+        bufHeight = Math.max(64, targetH);
+
+        offscreenCanvas.width = bufWidth;
+        offscreenCanvas.height = bufHeight;
+        offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+        offscreenImageData = offscreenCtx.createImageData(bufWidth, bufHeight);
+        uint32View = new Uint32Array(offscreenImageData.data.buffer);
+      }
+
+      /* ==========================================================================
+         ENVIRONMENT LOOKUP TABLE (LUT) GENERATION
+         ==========================================================================
+         A chrome horizon:
+         - near-black ground (#0e0f12)
+         - rising through dark greys (#282a30, #585a60)
+         - razor-thin bright horizon band (#d2d0cc to #fafafc at 49.5–50.5%)
+         - cool grey-blue sky (#bec4ce, #808996, #484e5a)
+         - darkening to #1a1c22 at the top
+         - smoothstep interpolation between stops
+      */
+      const STOPS = [
+        { pos: 0.000, r: 14,  g: 15,  b: 18  }, // #0e0f12 near-black ground
+        { pos: 0.220, r: 40,  g: 42,  b: 48  }, // #282a30
+        { pos: 0.460, r: 88,  g: 90,  b: 96  }, // #585a60
+        { pos: 0.495, r: 210, g: 208, b: 204 }, // #d2d0cc horizon band start
+        { pos: 0.500, r: 250, g: 250, b: 252 }, // #fafafc horizon line peak
+        { pos: 0.505, r: 210, g: 208, b: 204 }, // #d2d0cc horizon band end
+        { pos: 0.550, r: 190, g: 196, b: 206 }, // #bec4ce cool grey-blue sky
+        { pos: 0.700, r: 128, g: 137, b: 150 }, // #808996
+        { pos: 0.860, r: 72,  g: 78,  b: 90  }, // #484e5a
+        { pos: 1.000, r: 26,  g: 28,  b: 34  }  // #1a1c22 top dark sky
+      ];
+
+      function smoothstep(a, b, x) {
+        const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+        return t * t * (3 - 2 * t);
+      }
+
+      const lutR = new Uint8Array(256);
+      const lutG = new Uint8Array(256);
+      const lutB = new Uint8Array(256);
+
+      (function generateLUT() {
+        for (let i = 0; i < 256; i++) {
+          const t = i / 255.0;
+          let s = 0;
+          while (s < STOPS.length - 2 && STOPS[s + 1].pos < t) {
+            s++;
+          }
+          const s0 = STOPS[s];
+          const s1 = STOPS[s + 1];
+          const factor = smoothstep(s0.pos, s1.pos, t);
+          lutR[i] = Math.round(s0.r + (s1.r - s0.r) * factor);
+          lutG[i] = Math.round(s0.g + (s1.g - s0.g) * factor);
+          lutB[i] = Math.round(s0.b + (s1.b - s0.b) * factor);
+        }
+      })();
+
+      /* ==========================================================================
+         METABALL BODIES & SIMULATION
+         ========================================================================== */
+      let bodies = [];
+
+      function createBody(x, y, targetRadius, seed) {
+        return {
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * 1.6,
+          vy: (Math.random() - 0.5) * 1.6,
+          r: targetRadius,
+          targetRadius: targetRadius,
+          seed: seed !== undefined ? seed : Math.random() * 1000.0,
+          spawnTime: 0,
+          duration: 0
+        };
+      }
+
+      function initBodies() {
+        bodies = [];
+        const count = window.innerWidth < 600 ? 5 : 7;
+        const shorter = Math.min(cssWidth, cssHeight);
+
+        for (let i = 0; i < count; i++) {
+          // Radius between 9% and 19% of shorter viewport side
+          const radius = shorter * (0.09 + Math.random() * 0.10);
+          const angle = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+          const dist = shorter * 0.20 * (0.5 + Math.random() * 0.5);
+          const x = cssWidth * 0.5 + Math.cos(angle) * dist;
+          const y = cssHeight * 0.46 + Math.sin(angle) * dist;
+          bodies.push(createBody(x, y, radius));
+        }
+      }
+
+      /* ==========================================================================
+         INTERACTION HANDLING
+         ========================================================================== */
+      let pointerActive = false;
+      let pointerX = cssWidth * 0.5;
+      let pointerY = cssHeight * 0.5;
+      let smoothedPointerStrength = 0.0;
+      let pointerInactivityTimer = null;
+
+      function triggerFirstInteraction() {
+        if (!hasInteracted) {
+          hasInteracted = true;
+          hintEl.classList.add('fade-out');
+        }
+      }
+
+      window.addEventListener('pointermove', function (e) {
+        triggerFirstInteraction();
+        pointerActive = true;
+        pointerX = e.clientX;
+        pointerY = e.clientY;
+
+        clearTimeout(pointerInactivityTimer);
+        pointerInactivityTimer = setTimeout(function () {
+          pointerActive = false;
+        }, 1200);
+
+        if (prefersReducedMotion) {
+          stepPhysics(1 / 60, true);
+          renderFrame();
+        }
+      });
+
+      window.addEventListener('pointerdown', function (e) {
+        triggerFirstInteraction();
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+        pointerActive = true;
+        pointerX = e.clientX;
+        pointerY = e.clientY;
+
+        // Pointer down adds a new body at cursor, swelling in over 900ms, up to 12 max
+        const shorter = Math.min(cssWidth, cssHeight);
+        const targetRadius = shorter * (0.09 + Math.random() * 0.10);
+        const newBody = createBody(pointerX, pointerY, 0, Math.random() * 1000.0);
+        newBody.targetRadius = targetRadius;
+        newBody.spawnTime = performance.now();
+        newBody.duration = 900;
+
+        if (bodies.length >= 12) {
+          bodies.shift(); // remove oldest
+        }
+        bodies.push(newBody);
+
+        if (prefersReducedMotion) {
+          newBody.r = targetRadius;
+          delete newBody.spawnTime;
+          renderFrame();
+        }
+      });
+
+      window.addEventListener('pointerleave', function () {
+        pointerActive = false;
+      });
+
+      window.addEventListener('pointercancel', function () {
+        pointerActive = false;
+      });
+
+      window.addEventListener('keydown', function (e) {
+        triggerFirstInteraction();
+        if (e.key === 'r' || e.key === 'R') {
+          initBodies();
+          if (prefersReducedMotion) {
+            settleOffline(4.0);
+            renderFrame();
+          }
+        } else if (e.key === ' ') {
+          e.preventDefault();
+          isPaused = !isPaused;
+        }
+      });
+
+      window.addEventListener('resize', function () {
+        const oldW = cssWidth;
+        const oldH = cssHeight;
+        resizeBuffers();
+
+        // Reposition bodies proportionally to stay in viewport
+        const scaleX = cssWidth / oldW;
+        const scaleY = cssHeight / oldH;
+        const shorter = Math.min(cssWidth, cssHeight);
+
+        for (let i = 0; i < bodies.length; i++) {
+          const b = bodies[i];
+          b.x *= scaleX;
+          b.y *= scaleY;
+          b.targetRadius = shorter * (0.09 + ((b.seed % 100) / 100) * 0.10);
+          if (!b.spawnTime) {
+            b.r = b.targetRadius;
+          }
+        }
+
+        if (prefersReducedMotion) {
+          renderFrame();
+        }
+      });
+
+      prefersReducedMotionQuery.addEventListener('change', function (e) {
+        prefersReducedMotion = e.matches;
+        if (prefersReducedMotion) {
+          settleOffline(4.0);
+          renderFrame();
+        } else {
+          requestAnimationFrame(animationLoop);
+        }
+      });
+
+      /* ==========================================================================
+         PHYSICS UPDATE
+         ========================================================================== */
+      let simTime = 0.0;
+
+      function stepPhysics(dt, allowInteraction) {
+        simTime += dt;
+        const now = performance.now();
+        const shorter = Math.min(cssWidth, cssHeight);
+
+        // Smooth pointer attraction strength easing in/out
+        const targetStrength = (pointerActive && allowInteraction) ? 1.0 : 0.0;
+        smoothedPointerStrength += (targetStrength - smoothedPointerStrength) * 0.085;
+
+        // Viewport center spring target
+        const cx = cssWidth * 0.5;
+        const cy = cssHeight * 0.46;
+
+        const count = bodies.length;
+
+        // 1. Swelling animation for new bodies
+        for (let i = 0; i < count; i++) {
+          const b = bodies[i];
+          if (b.spawnTime) {
+            const elapsed = now - b.spawnTime;
+            if (elapsed < b.duration) {
+              const p = elapsed / b.duration;
+              b.r = b.targetRadius * (p * p * (3.0 - 2.0 * p)); // smoothstep
+            } else {
+              b.r = b.targetRadius;
+              delete b.spawnTime;
+            }
+          }
+        }
+
+        // 2. Body acceleration: wander, center spring, pointer attraction
+        for (let i = 0; i < count; i++) {
+          const b = bodies[i];
+          const s = b.seed;
+
+          // Layered sines of time and seed for organic wander
+          const wanderX = Math.sin(simTime * 0.76 + s) * 0.36 +
+                          Math.sin(simTime * 1.54 + s * 2.1) * 0.20 +
+                          Math.sin(simTime * 0.38 + s * 4.3) * 0.12;
+
+          const wanderY = Math.cos(simTime * 0.72 + s * 1.3) * 0.36 +
+                          Math.cos(simTime * 1.48 + s * 2.9) * 0.20 +
+                          Math.cos(simTime * 0.34 + s * 5.1) * 0.12;
+
+          b.vx += wanderX;
+          b.vy += wanderY;
+
+          // Weak spring toward viewport centre
+          b.vx += (cx - b.x) * 0.00020;
+          b.vy += (cy - b.y) * 0.00020;
+
+          // Pointer attraction with distance falloff
+          if (smoothedPointerStrength > 0.001) {
+            const pdx = pointerX - b.x;
+            const pdy = pointerY - b.y;
+            const pdist = Math.hypot(pdx, pdy) || 1.0;
+            const force = (smoothedPointerStrength * 480.0) / (pdist + 130.0);
+            b.vx += (pdx / pdist) * force * 0.045;
+            b.vy += (pdy / pdist) * force * 0.045;
+          }
+        }
+
+        // 3. Soft pairwise repulsion when closer than 85% of summed radii
+        for (let i = 0; i < count; i++) {
+          for (let j = i + 1; j < count; j++) {
+            const b1 = bodies[i];
+            const b2 = bodies[j];
+            const dx = b2.x - b1.x;
+            const dy = b2.y - b1.y;
+            const dist = Math.hypot(dx, dy) || 0.001;
+            const minDist = (b1.r + b2.r) * 0.85;
+
+            if (dist < minDist) {
+              const overlap = (minDist - dist) / minDist; // 0 to 1
+              const repulse = overlap * overlap * 0.50; // smooth soft breathing repulsion
+              const nx = dx / dist;
+              const ny = dy / dist;
+              b1.vx -= nx * repulse;
+              b1.vy -= ny * repulse;
+              b2.vx += nx * repulse;
+              b2.vy += ny * repulse;
+            }
+          }
+        }
+
+        // 4. Damping & viewport boundary clamping with bounce
+        for (let i = 0; i < count; i++) {
+          const b = bodies[i];
+          b.vx *= 0.985;
+          b.vy *= 0.985;
+          b.x += b.vx;
+          b.y += b.vy;
+
+          const margin = b.r * 0.45;
+          const bounceDamping = 0.75;
+
+          if (b.x < margin) {
+            b.x = margin;
+            b.vx = Math.abs(b.vx) * bounceDamping;
+          } else if (b.x > cssWidth - margin) {
+            b.x = cssWidth - margin;
+            b.vx = -Math.abs(b.vx) * bounceDamping;
+          }
+
+          if (b.y < margin) {
+            b.y = margin;
+            b.vy = Math.abs(b.vy) * bounceDamping;
+          } else if (b.y > cssHeight - margin) {
+            b.y = cssHeight - margin;
+            b.vy = -Math.abs(b.vy) * bounceDamping;
+          }
+        }
+      }
+
+      function settleOffline(seconds) {
+        const steps = Math.round(seconds * 60);
+        const dt = 1 / 60;
+        for (let i = 0; i < steps; i++) {
+          stepPhysics(dt, false);
+        }
+      }
+
+      /* ==========================================================================
+         METABALL FIELD EVALUATION & LIQUID CHROME RENDER PIPELINE
+         ========================================================================== */
+      // Flat typed arrays for cache-aligned rasterization
+      const MAX_BODIES = 16;
+      const b_x = new Float32Array(MAX_BODIES);
+      const b_y = new Float32Array(MAX_BODIES);
+      const b_r2 = new Float32Array(MAX_BODIES);
+      const dy_arr = new Float32Array(MAX_BODIES);
+      const dy2_arr = new Float32Array(MAX_BODIES);
+
+      function renderFrame() {
+        const numBodies = bodies.length;
+        const scaleX = bufWidth / cssWidth;
+        const scaleY = bufHeight / cssHeight;
+
+        // Map bodies into buffer pixel coordinate space
+        for (let i = 0; i < numBodies; i++) {
+          const b = bodies[i];
+          b_x[i] = b.x * scaleX;
+          b_y[i] = b.y * scaleY;
+          const rBuf = b.r * scaleX;
+          b_r2[i] = rBuf * rBuf;
+        }
+
+        // 1. Clear offscreen Uint32 buffer (fully transparent)
+        uint32View.fill(0);
+
+        // Pre-computed key light direction: normalised (−0.45, −0.62, 0.64)
+        const LX = -0.45;
+        const LY = -0.62;
+        const LZ = 0.64;
+
+        // 2. Fast field rasterization loop
+        for (let y = 0; y < bufHeight; y++) {
+          for (let i = 0; i < numBodies; i++) {
+            const dy = y - b_y[i];
+            dy_arr[i] = dy;
+            dy2_arr[i] = dy * dy + 0.0001;
+          }
+
+          const rowOffset = y * bufWidth;
+
+          for (let x = 0; x < bufWidth; x++) {
+            let f = 0.0;
+            let gx = 0.0;
+            let gy = 0.0;
+
+            for (let i = 0; i < numBodies; i++) {
+              const dx = x - b_x[i];
+              const d2 = dx * dx + dy2_arr[i];
+              const r2 = b_r2[i];
+              const fi = r2 / d2;
+              f += fi;
+
+              const w = fi / d2;
+              gx -= dx * w;
+              gy -= dy_arr[i] * w;
+            }
+
+            // Outside field optimization: threshold is f = 1
+            if (f <= 0.40) {
+              continue;
+            }
+
+            gx *= 2.0;
+            gy *= 2.0;
+
+            const gradLen = Math.hypot(gx, gy);
+
+            // Anti-alias edge: alpha = (f - 1)/|∇f| + 0.5 clamped to 0–1 (1 buffer pixel wide)
+            const alpha = (f - 1.0) / (gradLen + 1e-6) + 0.5;
+            if (alpha <= 0.0) {
+              continue;
+            }
+            const clampedAlpha = alpha >= 1.0 ? 1.0 : alpha;
+
+            // Surface normal from normalised gradient direction
+            const invGrad = 1.0 / (gradLen + 1e-6);
+            const ux = -gx * invGrad;
+            const uy = -gy * invGrad;
+
+            // Tilt magnitude (1/f)^1.6: edges (f ≈ 1) have horizontal normals, deep interiors face viewer
+            const invF = 1.0 / Math.max(1.0, f);
+            const tilt = Math.min(1.0, Math.pow(invF, 1.6));
+
+            const Nx = tilt * ux;
+            const Ny = tilt * uy;
+            const Nz = Math.sqrt(Math.max(0.0, 1.0 - tilt * tilt));
+
+            // Reflect view vector (0, 0, 1) about normal: R = 2(N·V)N - V
+            const twoNz = 2.0 * Nz;
+            const Rx = twoNz * Nx;
+            const Ry = twoNz * Ny;
+            const Rz = twoNz * Nz - 1.0;
+
+            // Sample 256-entry environment LUT by reflected Y component
+            // Screen Y is down (overhead sky is Ry < 0 -> tLut > 0.5; floor is Ry > 0 -> tLut < 0.5)
+            const tLut = 0.5 - 0.5 * Ry;
+            let lutIdx = (tLut * 255.0 + 0.5) | 0;
+            if (lutIdx < 0) lutIdx = 0;
+            else if (lutIdx > 255) lutIdx = 255;
+
+            const baseR = lutR[lutIdx];
+            const baseG = lutG[lutIdx];
+            const baseB = lutB[lutIdx];
+
+            // 1. Slight left-to-right studio falloff based on reflected X
+            const falloff = 0.88 + 0.24 * (Rx * 0.5 + 0.5);
+
+            // 2. Cool-tinted Fresnel rim proportional to tilt³
+            const tilt3 = tilt * tilt * tilt;
+            const rimR = 150.0 * tilt3;
+            const rimG = 185.0 * tilt3;
+            const rimB = 230.0 * tilt3;
+
+            // 3. Hard specular highlight from key light at (-0.45, -0.62, 0.64) raised to 48th power
+            const rDotL = Rx * LX + Ry * LY + Rz * LZ;
+            let specVal = 0.0;
+            if (rDotL > 0.0) {
+              const s2 = rDotL * rDotL;
+              const s4 = s2 * s2;
+              const s8 = s4 * s4;
+              const s16 = s8 * s8;
+              const s32 = s16 * s16;
+              const s48 = s32 * s16; // 48th power via binary exponentiation
+              specVal = s48 * 255.0;
+            }
+
+            // 4. Faint diffuse term
+            const nDotL = Nx * LX + Ny * LY + Nz * LZ;
+            const diff = nDotL > 0.0 ? nDotL * 20.0 : 0.0;
+
+            // Composite pixel color
+            let r = baseR * falloff + rimR + specVal + diff;
+            let g = baseG * falloff + rimG + specVal + diff;
+            let b = baseB * falloff + rimB + specVal + diff;
+
+            if (r > 255.0) r = 255.0;
+            if (g > 255.0) g = 255.0;
+            if (b > 255.0) b = 255.0;
+
+            const a = (clampedAlpha * 255.0 + 0.5) | 0;
+            const pIdx = rowOffset + x;
+
+            if (isLittleEndian) {
+              uint32View[pIdx] = (a << 24) | (((b | 0) & 0xff) << 16) | (((g | 0) & 0xff) << 8) | ((r | 0) & 0xff);
+            } else {
+              uint32View[pIdx] = (((r | 0) & 0xff) << 24) | (((g | 0) & 0xff) << 16) | (((b | 0) & 0xff) << 8) | a;
+            }
+          }
+        }
+
+        offscreenCtx.putImageData(offscreenImageData, 0, 0);
+
+        // 3. Composite onto DPR-aware main canvas
+        ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+        ctx.save();
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        // Paint soft radial contact shadow beneath each body so metal rests above the floor
+        for (let i = 0; i < numBodies; i++) {
+          const b = bodies[i];
+          if (b.r <= 2) continue;
+
+          const sx = b.x + b.r * 0.16;
+          const sy = b.y + b.r * 0.70;
+          const rx = b.r * 1.25;
+          const ry = b.r * 0.36;
+
+          const shadowGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, rx);
+          shadowGrad.addColorStop(0.0, 'rgba(8, 9, 12, 0.72)');
+          shadowGrad.addColorStop(0.45, 'rgba(10, 11, 14, 0.38)');
+          shadowGrad.addColorStop(1.0, 'rgba(12, 13, 16, 0.0)');
+
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.scale(1.0, ry / rx);
+          ctx.fillStyle = shadowGrad;
+          ctx.beginPath();
+          ctx.arc(0, 0, rx, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Upscale chrome buffer with imageSmoothingEnabled and high quality
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(offscreenCanvas, 0, 0, cssWidth, cssHeight);
+        ctx.restore();
+      }
+
+      /* ==========================================================================
+         FRAME TIMING, ADAPTIVE SCALE & ANIMATION LOOP
+         ========================================================================== */
+      let lastTimestamp = performance.now();
+      let lastStatsUpdate = performance.now();
+      let framesCounted = 0;
+      let displayFps = 60;
+
+      function animationLoop(timestamp) {
+        if (prefersReducedMotion) return;
+
+        const frameStart = performance.now();
+        const delta = Math.min((timestamp - lastTimestamp) / 1000.0, 0.1);
+        lastTimestamp = timestamp;
+
+        if (!isPaused) {
+          stepPhysics(delta, true);
+        }
+
+        renderFrame();
+
+        const frameDuration = performance.now() - frameStart;
+
+        // Dynamic scale regulation:
+        // Exceeds 26ms for 20 frames -> reduce buffer scale by 15%
+        // Stays under 14ms for 240 frames -> raise buffer scale by 10%
+        if (frameDuration > 26.0) {
+          slowFrameCount++;
+          fastFrameCount = 0;
+          if (slowFrameCount >= 20) {
+            slowFrameCount = 0;
+            const newScale = Math.max(MIN_SCALE, bufferScale * 0.85);
+            if (Math.abs(newScale - bufferScale) > 0.005) {
+              bufferScale = newScale;
+              resizeBuffers();
+            }
+          }
+        } else if (frameDuration < 14.0) {
+          fastFrameCount++;
+          slowFrameCount = 0;
+          if (fastFrameCount >= 240) {
+            fastFrameCount = 0;
+            const newScale = Math.min(MAX_SCALE, bufferScale * 1.10);
+            if (Math.abs(newScale - bufferScale) > 0.005) {
+              bufferScale = newScale;
+              resizeBuffers();
+            }
+          }
+        } else {
+          slowFrameCount = 0;
+          fastFrameCount = 0;
+        }
+
+        // Live stats readout update every 250ms
+        framesCounted++;
+        if (frameStart - lastStatsUpdate >= 250.0) {
+          displayFps = Math.round((framesCounted * 1000.0) / (frameStart - lastStatsUpdate));
+          framesCounted = 0;
+          lastStatsUpdate = frameStart;
+
+          const scalePercent = Math.round(bufferScale * 100);
+          statsEl.textContent = 'FPS: ' + displayFps + ' · BODIES: ' + bodies.length + ' · BUFFER: ' + scalePercent + '%';
+        }
+
+        requestAnimationFrame(animationLoop);
+      }
+
+      /* ==========================================================================
+         INITIALIZATION
+         ========================================================================== */
+      resizeBuffers();
+      initBodies();
+
+      if (prefersReducedMotion) {
+        settleOffline(4.0);
+        renderFrame();
+        const scalePercent = Math.round(bufferScale * 100);
+        statsEl.textContent = 'STILL · BODIES: ' + bodies.length + ' · BUFFER: ' + scalePercent + '%';
+      } else {
+        requestAnimationFrame(animationLoop);
+      }
+
+    })();
+  </script>
+</body>
+</html>

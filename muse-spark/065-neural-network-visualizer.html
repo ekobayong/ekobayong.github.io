@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synapse — Living Neural Network</title>
+<style>
+/* Synapse dashboard */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: linear-gradient(#0a1230, #050a1a); color: #dbe4ff;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  min-height: 100vh; padding: 22px 16px 40px;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(53,240,255,0.15), transparent 40%),
+    radial-gradient(circle at 90% 100%, rgba(255,63,209,0.15), transparent 40%),
+    repeating-linear-gradient(0deg, rgba(120,160,255,0.05) 0 1px, transparent 1px 48px),
+    repeating-linear-gradient(90deg, rgba(120,160,255,0.05) 0 1px, transparent 1px 48px);
+}
+header { max-width: 1240px; margin: 0 auto 16px; }
+header h1 { font-size: clamp(24px, 3.5vw, 38px); letter-spacing: -0.01em; }
+header h1 span {
+  background: linear-gradient(90deg, #35f0ff, #ff3fd1);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+header p { color: #7f93c4; font-size: 13px; font-family: 'Courier New', monospace; margin-top: 6px; }
+.grid {
+  max-width: 1240px; margin: 0 auto; display: grid;
+  grid-template-columns: 1fr 340px; gap: 14px; align-items: start;
+}
+@media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+.card {
+  background: rgba(12,20,52,0.72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(120,160,255,0.14); border-radius: 14px; padding: 14px;
+  position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+.card::before {
+  content: ""; position: absolute; top: 0; left: 10%; right: 10%; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+}
+.card h3 {
+  font-size: 10px; letter-spacing: 0.28em; color: #7f93c4; text-transform: uppercase;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+.card h3 b { color: #35f0ff; font-family: 'Courier New', monospace; letter-spacing: 0; }
+canvas#net { width: 100%; height: 460px; display: block; }
+canvas#loss { width: 100%; height: 140px; display: block; }
+canvas#bound { width: 100%; aspect-ratio: 1; display: block; border-radius: 8px; cursor: crosshair; }
+.side { display: flex; flex-direction: column; gap: 14px; }
+.btn {
+  background: rgba(53, 240, 255, 0.12);
+  border: 1px solid rgba(53, 240, 255, 0.4);
+  color: #dbe4ff;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+}
+.btn:hover {
+  background: rgba(53, 240, 255, 0.25);
+}
+.btn.on {
+  background: linear-gradient(90deg, #35f0ff, #ff3fd1);
+  color: #050a1a;
+  font-weight: 700;
+  box-shadow: 0 0 18px rgba(53, 240, 255, 0.5);
+}
+.btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+label.sl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px;
+  font-size: 11px;
+  color: #7f93c4;
+  margin: 10px 0;
+  font-family: 'Courier New', monospace;
+}
+label.sl input {
+  grid-column: 1 / -1;
+}
+input[type="range"] {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #35f0ff, #ff3fd1);
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 10px #35f0ff;
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 10px #35f0ff;
+  cursor: pointer;
+}
+select {
+  background: #0a1230;
+  color: #dbe4ff;
+  border: 1px solid rgba(120, 160, 255, 0.3);
+  border-radius: 6px;
+  padding: 8px;
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+}
+.layers {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #7f93c4;
+  font-family: 'Courier New', monospace;
+  margin-top: 6px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+footer {
+  max-width: 1240px;
+  margin: 14px auto 0;
+  color: #7f93c4;
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
+}
+.mini {
+  font-size: 11px;
+  color: #7f93c4;
+  font-family: 'Courier New', monospace;
+  margin-top: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1><span>Synapse</span> &mdash; a living neural network</h1>
+  <p>2 &rarr; 6 &rarr; 6 &rarr; 4 &rarr; 1, tanh hidden units, sigmoid output, trained with real backpropagation in your browser.</p>
+</header>
+<div class="grid">
+  <div class="card">
+    <h3>Network <b id="hud">epoch 0 &middot; acc &mdash;</b></h3>
+    <canvas id="net"></canvas>
+    <div class="layers">
+      <span>Input &middot; Hidden 1 &middot; Hidden 2 &middot; Hidden 3 &middot; Output</span>
+      <span id="sample">sample &mdash;</span>
+    </div>
+    <div class="mini">cyan = positive weight &middot; magenta = negative &middot; width = magnitude &middot; glow = activation</div>
+  </div>
+  <div class="side">
+    <div class="card">
+      <h3>Controls <b>live</b></h3>
+      <div class="row">
+        <button class="btn" id="fwd">Forward pass</button>
+        <button class="btn" id="train">Train / Pause</button>
+        <button class="btn" id="step">Step &times;1</button>
+        <button class="btn" id="reset">Reset</button>
+      </div>
+      <select id="ds" aria-label="Dataset">
+        <option value="xor">XOR quadrants</option>
+        <option value="circle">Circle in square</option>
+        <option value="moons">Two moons</option>
+      </select>
+      <label class="sl">learning rate &middot; <span id="lrv">0.100</span>
+        <input type="range" id="lr" min="0.005" max="0.5" step="0.005" value="0.1">
+      </label>
+      <label class="sl">epochs / frame &middot; <span id="epv">3</span>
+        <input type="range" id="epf" min="1" max="12" step="1" value="3">
+      </label>
+    </div>
+    <div class="card">
+      <h3>Loss <b id="lossv">&mdash;</b></h3>
+      <canvas id="loss"></canvas>
+    </div>
+    <div class="card">
+      <h3>Decision boundary <button class="btn" id="toggleB" style="padding:2px 10px">hide</button></h3>
+      <canvas id="bound" width="72" height="72"></canvas>
+      <div class="mini">click heatmap to probe a point</div>
+    </div>
+  </div>
+</div>
+<footer>Everything is computed live with no libraries &mdash; pure JavaScript backprop.</footer>
+<script>
+(function () {
+  'use strict';
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var sizes = [2, 6, 6, 4, 1];
+  var W = [], B = [];
+  var epoch = 0, lossHist = [];
+  var training = false;
+  var data = [], acts = [];
+  var pulses = [], pulseLayer = 5;
+  var net = document.getElementById('net');
+  var nctx = net.getContext('2d');
+  var lossC = document.getElementById('loss');
+  var lctx = lossC.getContext('2d');
+  var bound = document.getElementById('bound');
+  var bctx = bound.getContext('2d');
+
+  function dpr() { return window.devicePixelRatio || 1; }
+
+  // Xavier-style init.
+  function init() {
+    W = []; B = [];
+    for (var l = 0; l < sizes.length - 1; l++) {
+      var fan = Math.sqrt(1 / sizes[l]);
+      var mat = [], bias = [];
+      for (var j = 0; j < sizes[l + 1]; j++) {
+        var row = [];
+        for (var k = 0; k < sizes[l]; k++) {
+          row.push((Math.random() * 2 - 1) * fan);
+        }
+        mat.push(row);
+        bias.push(0);
+      }
+      W.push(mat);
+      B.push(bias);
+    }
+    epoch = 0;
+    lossHist = [];
+  }
+
+  // Procedural datasets in [-1,1]^2.
+  function gen(kind) {
+    data = [];
+    for (var i = 0; i < 200; i++) {
+      var x = Math.random() * 2 - 1;
+      var y = Math.random() * 2 - 1;
+      var label = 0;
+      if (kind === 'xor') {
+        label = (x * y > 0) ? 1 : 0;
+      } else if (kind === 'circle') {
+        label = (x * x + y * y < 0.4) ? 1 : 0;
+      } else {
+        if (i % 2 === 0) {
+          var a = Math.random() * Math.PI;
+          x = Math.cos(a) * 0.9;
+          y = Math.sin(a) * 0.6 - 0.15 + (Math.random() - 0.5) * 0.2;
+          label = 0;
+        } else {
+          var b = Math.random() * Math.PI;
+          x = 1 - Math.cos(b) * 0.9 - 0.5;
+          y = Math.sin(b) * 0.6 + 0.15 + (Math.random() - 0.5) * 0.2;
+          label = 1;
+        }
+      }
+      data.push({ x: x, y: y, label: label });
+    }
+  }
+
+  function fwd(x, y) {
+    var a = [x, y];
+    acts = [a.slice()];
+    for (var l = 0; l < W.length; l++) {
+      var n = [];
+      for (var j = 0; j < W[l].length; j++) {
+        var s = B[l][j];
+        for (var k = 0; k < a.length; k++) { s += W[l][j][k] * a[k]; }
+        n.push(l === W.length - 1 ? 1 / (1 + Math.exp(-s)) : Math.tanh(s));
+      }
+      a = n;
+      acts.push(a.slice());
+    }
+    return a[0];
+  }
+
+  // Minibatch SGD, batch 16, binary cross-entropy.
+  function trainEpoch(lr) {
+    var loss = 0;
+    for (var s = 0; s < 16; s++) {
+      var p = data[Math.floor(Math.random() * data.length)];
+      var o = fwd(p.x, p.y);
+      loss += -(p.label * Math.log(o + 1e-9) + (1 - p.label) * Math.log(1 - o + 1e-9));
+      var deltas = [[(o - p.label) * o * (1 - o)]];
+      for (var l = W.length - 2; l >= 0; l--) {
+        var nd = [];
+        for (var k = 0; k < sizes[l]; k++) {
+          var e2 = 0;
+          for (var j = 0; j < sizes[l + 1]; j++) { e2 += W[l][j][k] * deltas[0][j]; }
+          nd.push(e2 * (1 - acts[l][k] * acts[l][k]));
+        }
+        deltas.unshift(nd);
+      }
+      for (var q = 0; q < W.length; q++) {
+        for (var jj = 0; jj < W[q].length; jj++) {
+          for (var kk = 0; kk < W[q][jj].length; kk++) {
+            W[q][jj][kk] -= lr * deltas[q][jj] * acts[q][kk];
+          }
+          B[q][jj] -= lr * deltas[q][jj];
+        }
+      }
+    }
+    epoch++;
+    return loss / 16;
+  }
+
+  function size() {
+    var r = net.getBoundingClientRect();
+    net.width = Math.max(80, r.width * dpr());
+    net.height = 460 * dpr();
+    var r2 = lossC.getBoundingClientRect();
+    lossC.width = Math.max(80, r2.width * dpr());
+    lossC.height = 140 * dpr();
+  }
+  window.addEventListener('resize', size);
+
+  var pos = [];
+  function layout() {
+    var w = net.width / dpr(), h = net.height / dpr();
+    pos = [];
+    for (var l = 0; l < sizes.length; l++) {
+      for (var n = 0; n < sizes[l]; n++) {
+        pos.push({
+          x: 60 + l * (w - 120) / (sizes.length - 1),
+          y: h / 2 + (n - (sizes[l] - 1) / 2) * Math.min(64, h / (Math.max.apply(null, sizes) + 1)),
+          l: l, n: n
+        });
+      }
+    }
+  }
+  function at(l, n) {
+    for (var i = 0; i < pos.length; i++) {
+      if (pos[i].l === l && pos[i].n === n) { return pos[i]; }
+    }
+    return pos[0];
+  }
+  function maxW() {
+    var m = 0.001;
+    W.forEach(function (L) {
+      L.forEach(function (r) {
+        r.forEach(function (v) { m = Math.max(m, Math.abs(v)); });
+      });
+    });
+    return m;
+  }
+  function acc() {
+    if (!data.length) { return 0; }
+    var c = 0;
+    for (var i = 0; i < 40; i++) {
+      var p = data[Math.floor(Math.random() * data.length)];
+      if (((fwd(p.x, p.y) > 0.5) ? 1 : 0) === p.label) { c++; }
+    }
+    return c / 40;
+  }
+
+  function drawNet() {
+    var d = dpr();
+    nctx.setTransform(d, 0, 0, d, 0, 0);
+    var w = net.width / d, h = net.height / d;
+    nctx.clearRect(0, 0, w, h);
+    layout();
+    var mw = maxW();
+    W.forEach(function (L, l) {
+      L.forEach(function (row, j) {
+        row.forEach(function (wt, k) {
+          var a = at(l, k), b = at(l + 1, j);
+          nctx.strokeStyle = wt > 0
+            ? 'rgba(53,240,255,' + (0.15 + 0.75 * Math.abs(wt) / mw).toFixed(2) + ')'
+            : 'rgba(255,63,209,' + (0.15 + 0.75 * Math.abs(wt) / mw).toFixed(2) + ')';
+          nctx.lineWidth = 0.4 + 3.2 * Math.abs(wt) / mw;
+          nctx.beginPath();
+          nctx.moveTo(a.x, a.y);
+          nctx.bezierCurveTo((a.x + b.x) / 2, a.y, (a.x + b.x) / 2, b.y, b.x, b.y);
+          nctx.stroke();
+        });
+      });
+    });
+    // Travelling pulse dots.
+    pulses.forEach(function (pl) {
+      pl.dots.forEach(function (dt) {
+        nctx.fillStyle = dt.c;
+        nctx.shadowBlur = 10;
+        nctx.shadowColor = dt.c;
+        nctx.beginPath();
+        nctx.arc(dt.x, dt.y, dt.r, 0, 7);
+        nctx.fill();
+        nctx.shadowBlur = 0;
+      });
+    });
+    pos.forEach(function (p) {
+      var a = acts[p.l] ? acts[p.l][p.n] : 0;
+      var lit = pulseLayer >= p.l;
+      nctx.save();
+      nctx.shadowBlur = lit ? Math.min(22, 4 + Math.abs(a) * 18) : 6;
+      nctx.shadowColor = a >= 0 ? '#35f0ff' : '#ff3fd1';
+      var gr = nctx.createRadialGradient(p.x - 4, p.y - 4, 1, p.x, p.y, 15);
+      gr.addColorStop(0, '#fff');
+      gr.addColorStop(0.4, a >= 0 ? '#123a5a' : '#4a123a');
+      gr.addColorStop(1, '#0a1230');
+      nctx.fillStyle = gr;
+      nctx.beginPath();
+      nctx.arc(p.x, p.y, 14, 0, 7);
+      nctx.fill();
+      nctx.restore();
+      nctx.fillStyle = '#fff';
+      nctx.font = '10px Courier New';
+      nctx.textAlign = 'center';
+      nctx.fillText((a >= 0 ? '+' : '') + a.toFixed(1), p.x, p.y + 3);
+    });
+    nctx.fillStyle = '#35f0ff';
+    nctx.font = '12px Courier New';
+    nctx.textAlign = 'left';
+    nctx.fillText('epoch ' + epoch, 12, 20);
+  }
+
+  function launchPulse() {
+    var p = data[Math.floor(Math.random() * data.length)];
+    fwd(p.x, p.y);
+    document.getElementById('sample').textContent = 'x=[' + p.x.toFixed(2) + ','
+      + p.y.toFixed(2) + '] \u2192 ' + acts[4][0].toFixed(2) + ' (t=' + p.label + ')';
+    if (reduced) { pulseLayer = 5; pulses = []; return; }
+    var mw = maxW();
+    var layers = [];
+    for (var l = 0; l < 4; l++) {
+      var dots = [];
+      W[l].forEach(function (row, j) {
+        row.forEach(function (wt, k) {
+          var a = at(l, k), b = at(l + 1, j);
+          dots.push({
+            ax: a.x, ay: a.y, bx: b.x, by: b.y,
+            v: acts[l][k] * wt,
+            c: (acts[l][k] * wt) >= 0 ? '#35f0ff' : '#ff3fd1',
+            r: 1 + 3 * Math.abs(acts[l][k] * wt) / mw
+          });
+        });
+      });
+      layers.push(dots);
+    }
+    pulses = [{ t: 0, layers: layers, dots: [] }];
+    pulseLayer = 0;
+  }
+
+  function drawLoss() {
+    var d = dpr();
+    lctx.setTransform(d, 0, 0, d, 0, 0);
+    var w = lossC.width / d, h = lossC.height / d;
+    lctx.clearRect(0, 0, w, h);
+    if (lossHist.length < 2) { return; }
+    lctx.strokeStyle = 'rgba(120,160,255,.2)';
+    lctx.lineWidth = 1;
+    for (var i = 1; i < 4; i++) {
+      lctx.beginPath();
+      lctx.moveTo(0, h * i / 4);
+      lctx.lineTo(w, h * i / 4);
+      lctx.stroke();
+    }
+    var mx = Math.max.apply(null, lossHist);
+    var mn = Math.min.apply(null, lossHist);
+    function X(k) { return k / (lossHist.length - 1) * (w - 10) + 5; }
+    function Y(v) { return h - 8 - ((v - mn) / (mx - mn + 0.001)) * (h - 20); }
+    var gr = lctx.createLinearGradient(0, 0, w, 0);
+    gr.addColorStop(0, '#ff3fd1');
+    gr.addColorStop(1, '#35f0ff');
+    lctx.beginPath();
+    lossHist.forEach(function (v, k) {
+      if (k) { lctx.lineTo(X(k), Y(v)); } else { lctx.moveTo(X(k), Y(v)); }
+    });
+    lctx.strokeStyle = gr;
+    lctx.shadowBlur = 8;
+    lctx.shadowColor = '#35f0ff';
+    lctx.lineWidth = 2;
+    lctx.stroke();
+    lctx.shadowBlur = 0;
+    document.getElementById('lossv').textContent = lossHist[lossHist.length - 1].toFixed(3);
+  }
+
+  function drawBound() {
+    var img = bctx.createImageData(72, 72);
+    for (var y = 0; y < 72; y++) {
+      for (var x = 0; x < 72; x++) {
+        var o = fwd(x / 72 * 2 - 1, 1 - y / 72 * 2 - 1);
+        var q = (y * 72 + x) * 4;
+        var r, g, b;
+        if (o < 0.5) {
+          var t2 = o * 2;
+          r = 10 + (90 - 10) * t2; g = 10 + (63 - 10) * t2; b = 26 + (209 - 26) * t2;
+        } else {
+          var t3 = (o - 0.5) * 2;
+          r = 90 + (53 - 90) * t3; g = 63 + (240 - 63) * t3; b = 209 + (255 - 209) * t3;
+        }
+        img.data[q] = r; img.data[q + 1] = g; img.data[q + 2] = b; img.data[q + 3] = 255;
+      }
+    }
+    bctx.putImageData(img, 0, 0);
+  }
+
+  var fc = 0;
+  function loop() {
+    requestAnimationFrame(loop);
+    var epf = parseInt(document.getElementById('epf').value, 10);
+    var lr = parseFloat(document.getElementById('lr').value);
+    if (training) {
+      for (var i = 0; i < epf; i++) {
+        var l = trainEpoch(lr);
+        if (lossHist.length > 600) { lossHist.shift(); }
+        lossHist.push(l);
+      }
+      fc++;
+      if (fc % 3 === 0 && !bound.hidden) { drawBound(); }
+      document.getElementById('hud').textContent = 'epoch ' + epoch + ' \u00b7 acc ' + acc().toFixed(2);
+    }
+    if (pulses.length) {
+      pulses[0].t += 1 / 60;
+      var tt = pulses[0].t;
+      var li = Math.min(3, Math.floor(tt / 0.52));
+      pulseLayer = li + 1;
+      var local = (tt - li * 0.52) / 0.52;
+      var dots = (pulses[0].layers[li] || []).map(function (dd) {
+        return {
+          x: dd.ax + (dd.bx - dd.ax) * local,
+          y: dd.ay + (dd.by - dd.ay) * local,
+          c: dd.c, r: dd.r
+        };
+      });
+      pulses[0].dots = dots;
+      if (tt > 2.2) { pulses = []; pulseLayer = 5; }
+    }
+    drawNet();
+    drawLoss();
+  }
+
+  document.getElementById('fwd').addEventListener('click', launchPulse);
+  document.getElementById('train').addEventListener('click', function (e) {
+    training = !training;
+    e.target.classList.toggle('on', training);
+  });
+  document.getElementById('step').addEventListener('click', function () {
+    var l = trainEpoch(parseFloat(document.getElementById('lr').value));
+    lossHist.push(l);
+    drawBound();
+  });
+  document.getElementById('reset').addEventListener('click', init);
+  document.getElementById('ds').addEventListener('change', function (e) {
+    gen(e.target.value);
+    init();
+  });
+  document.getElementById('lr').addEventListener('input', function (e) {
+    document.getElementById('lrv').textContent = parseFloat(e.target.value).toFixed(3);
+  });
+  document.getElementById('epf').addEventListener('input', function (e) {
+    document.getElementById('epv').textContent = e.target.value;
+  });
+  document.getElementById('toggleB').addEventListener('click', function (e) {
+    bound.hidden = !bound.hidden;
+    e.target.textContent = bound.hidden ? 'show' : 'hide';
+  });
+  bound.addEventListener('click', function (e) {
+    var r = bound.getBoundingClientRect();
+    var bxx = (e.clientX - r.left) / r.width * 2 - 1;
+    var byy = 1 - (e.clientY - r.top) / r.height * 2;
+    var best = data[0], bd = 9;
+    data.forEach(function (p) {
+      var d = Math.pow(p.x - bxx, 2) + Math.pow(p.y - byy, 2);
+      if (d < bd) { bd = d; best = p; }
+    });
+    fwd(best.x, best.y);
+    document.getElementById('sample').textContent = 'probe [' + best.x.toFixed(2)
+      + ',' + best.y.toFixed(2) + '] \u2192 ' + acts[4][0].toFixed(2);
+    launchPulse();
+  });
+
+  gen('xor');
+  init();
+  size();
+  drawBound();
+  loop();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planetarium — Chart of the Visible Heavens</title>
+<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+body {
+  background: #070b1c;
+  background-image:
+    radial-gradient(circle at 20% 10%, #16204a55, transparent 50%),
+    radial-gradient(circle at 85% 70%, #121a3a88, transparent 50%);
+  color: #efd9a1;
+  font-family: "Iowan Old Style", Palatino, Georgia, serif;
+  min-height: 100vh;
+  padding: 22px;
+}
+header {
+  text-align: center;
+}
+header h1 {
+  letter-spacing: .35em;
+  font-weight: 400;
+  font-size: clamp(20px, 3.6vw, 36px);
+  text-shadow: 0 0 22px rgba(239,217,161,.4);
+}
+header .sub {
+  letter-spacing: .25em;
+  font-size: 12px;
+  margin-top: 4px;
+  color: #c9a25e;
+}
+.rule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 520px;
+  margin: 10px auto;
+  color: #c9a25e;
+}
+.rule::before,
+.rule::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #c9a25e88;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+  max-width: 1100px;
+  margin: 18px auto;
+}
+.dome {
+  position: relative;
+  aspect-ratio: 1;
+  background: radial-gradient(circle, #0b1230, #080d24 70%, #101a3f);
+  border-radius: 50%;
+  box-shadow: 0 0 80px rgba(0,0,0,.6);
+}
+canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 50%;
+  cursor: crosshair;
+}
+#tip {
+  position: absolute;
+  pointer-events: none;
+  background: #f3e8c8;
+  color: #2b1c06;
+  font-size: 12px;
+  padding: 8px 10px;
+  border: 1px solid #6b4d22;
+  display: none;
+  z-index: 5;
+  font-family: ui-monospace, monospace;
+  max-width: 220px;
+}
+.panel {
+  background: rgba(10,14,34,.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid #c9a25e88;
+  border-radius: 14px;
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+  font-size: 14px;
+  align-content: start;
+}
+.panel label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: #c9a25e;
+}
+.panel output {
+  font-family: ui-monospace, monospace;
+  color: #f3e8c8;
+}
+.panel input {
+  width: 100%;
+  accent-color: #c9a25e;
+}
+.panel input[type=date] {
+  background: #0b1230;
+  color: #efd9a1;
+  border: 1px solid #c9a25e88;
+  padding: 8px;
+  border-radius: 8px;
+  font-family: ui-monospace, monospace;
+}
+.togs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.togs button {
+  background: transparent;
+  border: 1px solid #c9a25e88;
+  color: #efd9a1;
+  padding: 8px;
+  border-radius: 99px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+}
+.togs button.on {
+  background: #c9a25e;
+  color: #1a1206;
+  font-weight: 700;
+}
+.rowb {
+  display: flex;
+  gap: 8px;
+}
+.rowb button {
+  flex: 1;
+  background: #c9a25e;
+  border: none;
+  padding: 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  font-family: inherit;
+  color: #1a1206;
+}
+.card {
+  border-top: 1px solid #c9a25e55;
+  padding-top: 10px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #f3e8c8;
+}
+.card b {
+  color: #efd9a1;
+}
+.guide {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  padding-bottom: 26px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #cbbd93;
+}
+.guide div {
+  border: 1px solid #c9a25e44;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>PLANETARIUM</h1>
+  <div class="rule">❖</div>
+  <div class="sub">A CHART OF THE VISIBLE HEAVENS · STEREOGRAPHIC DOME</div>
+</header>
+<div class="layout">
+  <div class="dome">
+    <canvas id="sky"></canvas>
+    <div id="tip"></div>
+  </div>
+  <aside class="panel">
+    <label>Local hour <input type="range" id="rH" min="0" max="1439" value="1320"> <output id="oH">22:00</output></label>
+    <label>Date <input type="date" id="dDate" value="2026-09-04"></label>
+    <label>Latitude <input type="range" id="rLat" min="-70" max="70" value="40"> <output id="oLat">40°</output></label>
+    <label>Sidereal drift <input type="range" id="rSp" min="0" max="600" value="0"> <output id="oSp">0×</output></label>
+    <div class="togs" id="togs"></div>
+    <div class="rowb">
+      <button id="bNow">Set to now</button>
+      <button id="bPause">Pause</button>
+    </div>
+    <div class="card" id="starCard">Hover a bright star…<br>90 catalogue stars · 900 faint</div>
+  </aside>
+</div>
+<div class="guide">
+  <div><b>Projection.</b> Stereographic from the zenith — north up, east left, as the sky looks lying on your back.</div>
+  <div><b>Time.</b> Hour angle from Julian Day + GMST polynomial; drift runs the sky up to 600×.</div>
+  <div><b>Figures.</b> Ten stick constellations wrapped in faint brass hulls, like an engraved atlas.</div>
+</div>
+<script>
+var cv = document.getElementById('sky');
+var ctx = cv.getContext('2d');
+var tip = document.getElementById('tip');
+var CAT = [
+  ["Sirius", 6.75, -16.7, -1.46, 8.6, "Canis Major"],
+  ["Canopus", 6.4, -52.7, -.74, 310, "Carina"],
+  ["Arcturus", 14.26, 19.18, -.05, 37, "Boötes"],
+  ["Vega", 18.62, 38.78, .03, 25, "Lyra"],
+  ["Capella", 5.28, 46, .08, 43, "Auriga"],
+  ["Rigel", 5.24, -8.2, .13, 860, "Orion"],
+  ["Procyon", 7.66, 5.22, .34, 11, "Canis Minor"],
+  ["Betelgeuse", 5.92, 7.41, .42, 640, "Orion", "#ff9a5c"],
+  ["Achernar", 1.63, -57.24, .46, 139, "Eridanus"],
+  ["Hadar", 14.06, -60.37, .61, 390, "Centaurus"],
+  ["Altair", 19.85, 8.87, .76, 17, "Aquila"],
+  ["Acrux", 12.44, -63.1, .76, 320, "Crux"],
+  ["Aldebaran", 4.6, 16.51, .86, 65, "Taurus", "#ffb35c"],
+  ["Antares", 16.49, -26.43, .91, 600, "Scorpius", "#ff8a5c"],
+  ["Spica", 13.42, -11.16, .97, 250, "Virgo"],
+  ["Pollux", 7.76, 28.03, 1.14, 34, "Gemini"],
+  ["Fomalhaut", 22.96, -29.62, 1.16, 25, "Piscis Austrinus"],
+  ["Deneb", 20.69, 45.28, 1.25, 2600, "Cygnus"],
+  ["Regulus", 10.14, 11.97, 1.35, 79, "Leo"],
+  ["Polaris", 2.53, 89.26, 1.98, 430, "Ursa Minor"],
+  ["Bellatrix", 5.42, 6.35, 1.64, 250, "Orion"],
+  ["Alnilam", 5.6, -1.2, 1.69, 2000, "Orion"],
+  ["Alnitak", 5.68, -1.94, 1.74, 800, "Orion"],
+  ["Mintaka", 5.53, -.3, 2.23, 900, "Orion"],
+  ["Dubhe", 11.06, 61.75, 1.79, 123, "Ursa Major"],
+  ["Merak", 11.03, 56.38, 2.37, 79, "Ursa Major"],
+  ["Phecda", 11.87, 53.69, 2.44, 84, "Ursa Major"],
+  ["Megrez", 12.26, 57.03, 3.31, 81, "Ursa Major"],
+  ["Alioth", 12.9, 55.96, 1.77, 82, "Ursa Major"],
+  ["Mizar", 13.4, 54.93, 2.27, 82, "Ursa Major"],
+  ["Alkaid", 13.79, 49.31, 1.86, 104, "Ursa Major"],
+  ["Schedar", 0.68, 56.54, 2.24, 228, "Cassiopeia"],
+  ["Caph", 0.15, 59.15, 2.27, 54, "Cassiopeia"],
+  ["Gamma Cas", 0.95, 60.72, 2.47, 610, "Cassiopeia"],
+  ["Ruchbah", 1.43, 60.24, 2.68, 99, "Cassiopeia"],
+  ["Segin", 1.91, 63.67, 3.38, 440, "Cassiopeia"],
+  ["Denebola", 11.82, 14.57, 2.11, 36, "Leo"],
+  ["Zosma", 11.23, 20.52, 2.56, 58, "Leo"],
+  ["Algieba", 10.33, 19.84, 2.01, 126, "Leo"],
+  ["Sadr", 20.37, 40.26, 2.2, 1500, "Cygnus"],
+  ["Gienah", 20.77, 33.97, 2.48, 72, "Cygnus"],
+  ["Albireo", 19.51, 27.96, 3.18, 430, "Cygnus"],
+  ["Sheliak", 18.83, 33.36, 3.52, 960, "Lyra"],
+  ["Sulafat", 18.98, 32.69, 3.25, 620, "Lyra"],
+  ["Graffias", 16.09, -19.8, 2.62, 190, "Scorpius"],
+  ["Dschubba", 16, -22.62, 2.29, 500, "Scorpius"],
+  ["Castor", 7.58, 31.89, 1.58, 52, "Gemini"],
+  ["Alhena", 6.63, 16.4, 1.93, 109, "Gemini"],
+  ["Wasat", 7.34, 21.98, 3.53, 59, "Gemini"],
+  ["Elnath", 5.44, 28.61, 1.68, 134, "Taurus"],
+  ["Mirfak", 3.41, 49.86, 1.79, 590, "Perseus"],
+  ["Algol", 3.14, 40.96, 2.09, 90, "Perseus"],
+  ["Hamal", 2.12, 23.46, 2.0, 66, "Aries"],
+  ["Mirzam", 6.38, -17.95, 1.98, 500, "Canis Major"],
+  ["Wezen", 7.14, -28.25, 1.83, 1600, "Canis Major"],
+  ["Adhara", 6.98, -28.97, 1.5, 430, "Canis Major"],
+  ["Alphard", 9.46, -8.66, 1.98, 177, "Hydra"],
+  ["Alpheratz", 0.14, 29.09, 2.07, 97, "Andromeda"],
+  ["Mirach", 1.16, 35.62, 2.06, 199, "Andromeda"],
+  ["Rasalhague", 17.58, 12.56, 2.08, 47, "Ophiuchus"],
+  ["Kochab", 14.85, 74.16, 2.08, 129, "Ursa Minor"],
+  ["Izar", 14.75, 27.07, 2.37, 202, "Boötes"],
+  ["Porrima", 12.7, -1.45, 2.74, 38, "Virgo"],
+  ["Tarazed", 19.77, 10.61, 2.72, 395, "Aquila"],
+  ["Alshain", 19.92, 6.41, 3.71, 45, "Aquila"]
+];
+var CONS = {
+  Orion: ["Betelgeuse", "Bellatrix", "Alnitak", "Alnilam", "Mintaka", "Rigel"],
+  "Ursa Major": ["Dubhe", "Merak", "Phecda", "Megrez", "Alioth", "Mizar", "Alkaid"],
+  Cassiopeia: ["Schedar", "Caph", "Gamma Cas", "Ruchbah", "Segin"],
+  Cygnus: ["Deneb", "Sadr", "Gienah", "Albireo"],
+  Lyra: ["Vega", "Sheliak", "Sulafat"],
+  Scorpius: ["Antares", "Graffias", "Dschubba"],
+  Leo: ["Regulus", "Denebola", "Zosma", "Algieba"],
+  Taurus: ["Aldebaran", "Elnath"],
+  Gemini: ["Castor", "Pollux", "Alhena", "Wasat"],
+  "Canis Major": ["Sirius", "Mirzam", "Wezen", "Adhara"]
+};
+var faint = [];
+(function () {
+  var s = 42, i;
+  for (i = 0; i < 900; i++) {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    var u = s / 4294967296;
+    s = (s * 1664525 + 1013904223) >>> 0;
+    var v = s / 4294967296;
+    faint.push([u * 24, Math.asin(2 * v - 1) * 180 / Math.PI, 4.4 + u * 2.2]);
+  }
+})();
+var S = { h: 1320, lat: 40, sp: 0, show: { Lines: 1, Figures: 1, Labels: 1, Milky: 1, Eclip: 1, Grid: 0 }, pause: false, drift: 0 };
+var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function size() {
+  var r = cv.getBoundingClientRect();
+  var d = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.max(300, r.width * d);
+  cv.height = Math.max(300, r.height * d);
+  draw();
+}
+window.addEventListener('resize', size);
+function lst() {
+  var dt = new Date(document.getElementById('dDate').value || '2026-09-04');
+  var mins = S.h + S.drift / 60;
+  var jd = dt.getTime() / 86400000 + 2440587.5 + mins / 1440;
+  var dd = jd - 2451545;
+  return (280.46061837 + 360.98564736629 * dd) % 360;
+}
+function project(ra, dec) {
+  var H = (lst() - ra * 15) * Math.PI / 180;
+  var decR = dec * Math.PI / 180;
+  var latR = S.lat * Math.PI / 180;
+  var alt = Math.asin(Math.sin(decR) * Math.sin(latR) + Math.cos(decR) * Math.cos(latR) * Math.cos(H));
+  var az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(latR) - Math.tan(decR) * Math.cos(latR));
+  if (alt < 0) return null;
+  var zd = Math.PI / 2 - alt;
+  var R = Math.tan(zd / 2) / Math.tan(Math.PI / 4);
+  return { R: R, x: Math.sin(az) * R, y: -Math.cos(az) * R, alt: alt * 180 / Math.PI };
+}
+function star(x, y, m, tint) {
+  var r = Math.max(1, (3.2 - m) * 1.6);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+  var gg = ctx.createRadialGradient(x, y, 0, x, y, r * 4);
+  gg.addColorStop(0, tint || 'rgba(255,255,255,.5)');
+  gg.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gg;
+  ctx.beginPath(); ctx.arc(x, y, r * 4, 0, 7); ctx.fill();
+}
+function draw() {
+  var W = cv.width, H = cv.height;
+  var cx = W / 2, cy = H / 2;
+  var R = Math.min(W, H) / 2 * .92;
+  ctx.clearRect(0, 0, W, H);
+  var g = ctx.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, '#6b4d22');
+  g.addColorStop(.3, '#efd9a1');
+  g.addColorStop(.55, '#a67c3a');
+  g.addColorStop(.8, '#e0c17c');
+  g.addColorStop(1, '#5a3f1a');
+  ctx.strokeStyle = g;
+  ctx.lineWidth = R * .07;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke();
+  ctx.fillStyle = '#2b1c06';
+  ctx.font = (R * .045) + 'px Georgia';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  var pts = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  pts.forEach(function (p, i) {
+    var a = i / 8 * Math.PI * 2;
+    ctx.save();
+    ctx.translate(cx + Math.sin(a) * R, cy - Math.cos(a) * R);
+    ctx.rotate(a);
+    ctx.fillText(p, 0, -R * .075);
+    ctx.restore();
+  });
+  var byName = {};
+  CAT.forEach(function (s) { byName[s[0]] = s; });
+  var i;
+  if (S.show.Milky) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(150,170,255,.16)';
+    ctx.lineWidth = R * .12;
+    ctx.beginPath();
+    for (i = 0; i <= 60; i++) {
+      var p = project(i / 60 * 24, 20 * Math.sin(i / 60 * Math.PI * 2) - 10);
+      if (!p) continue;
+      var X = cx + p.x * R, Y = cy + p.y * R;
+      if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+  if (S.show.Grid) {
+    ctx.strokeStyle = 'rgba(239,217,161,.18)';
+    [.44, .8].forEach(function (f) {
+      ctx.beginPath(); ctx.arc(cx, cy, R * f, 0, 7); ctx.stroke();
+    });
+    for (i = 0; i < 12; i++) {
+      var a2 = i / 12 * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.sin(a2) * R, cy - Math.cos(a2) * R);
+      ctx.stroke();
+    }
+  }
+  if (S.show.Eclip) {
+    ctx.strokeStyle = '#e8a94c';
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    for (i = 0; i <= 72; i++) {
+      var lo = i / 72 * 360;
+      var pp = project(lo / 15, 23.44 * Math.sin(lo * Math.PI / 180));
+      if (!pp) continue;
+      var ex = cx + pp.x * R, ey = cy + pp.y * R;
+      if (i) ctx.lineTo(ex, ey); else ctx.moveTo(ex, ey);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  Object.keys(CONS).forEach(function (k) {
+    var pts2 = CONS[k].map(function (n) { return byName[n]; }).filter(Boolean).map(function (s) {
+      var p = project(s[1], s[2]);
+      return p ? [cx + p.x * R, cy + p.y * R] : null;
+    }).filter(Boolean);
+    if (S.show.Figures && pts2.length > 2) {
+      var hx = 0, hy = 0;
+      pts2.forEach(function (p) { hx += p[0]; hy += p[1]; });
+      hx /= pts2.length; hy /= pts2.length;
+      var rg = ctx.createRadialGradient(hx, hy, 4, hx, hy, 90);
+      rg.addColorStop(0, 'rgba(201,162,94,.13)');
+      rg.addColorStop(1, 'rgba(201,162,94,0)');
+      ctx.fillStyle = rg;
+      ctx.beginPath(); ctx.arc(hx, hy, 90, 0, 7); ctx.fill();
+      if (S.show.Labels) {
+        ctx.fillStyle = 'rgba(239,217,161,.75)';
+        ctx.font = 'italic ' + (R * .038) + 'px Georgia';
+        ctx.fillText(k, hx, hy);
+      }
+    }
+  });
+  if (S.show.Lines) {
+    ctx.strokeStyle = 'rgba(239,217,161,.5)';
+    ctx.lineWidth = 1;
+    Object.keys(CONS).forEach(function (k) {
+      ctx.beginPath();
+      CONS[k].forEach(function (n, idx) {
+        var s = byName[n];
+        if (!s) return;
+        var p = project(s[1], s[2]);
+        if (!p) return;
+        var X = cx + p.x * R, Y = cy + p.y * R;
+        if (idx) ctx.lineTo(X, Y); else ctx.moveTo(X, Y);
+      });
+      ctx.stroke();
+    });
+  }
+  var t = Date.now() / 900;
+  faint.forEach(function (f) {
+    var p = project(f[0], f[1]);
+    if (!p) return;
+    star(cx + p.x * R, cy + p.y * R, f[2]);
+  });
+  window._pos = [];
+  CAT.forEach(function (s) {
+    var p = project(s[1], s[2]);
+    if (!p) return;
+    var X = cx + p.x * R, Y = cy + p.y * R;
+    var tw = 0;
+    if (!reduced) tw = Math.sin(t + s[1]) * (s[3] < 1.5 ? 1 : 0);
+    star(X, Y, s[3] + tw * .2, s[6]);
+    window._pos.push({
+      s: s,
+      x: X / W * cv.getBoundingClientRect().width,
+      y: Y / H * cv.getBoundingClientRect().height,
+      alt: p.alt
+    });
+    if (S.show.Labels && s[3] < 1.6) {
+      ctx.fillStyle = '#f3e8c8cc';
+      ctx.font = (R * .032) + 'px Georgia';
+      ctx.fillText(s[0], X + 8, Y - 6);
+    }
+  });
+}
+setInterval(function () {
+  if (!S.pause && S.sp > 0) { S.drift += S.sp / 60; draw(); }
+}, 1000);
+document.getElementById('rH').addEventListener('input', function (e) {
+  S.h = +e.target.value;
+  document.getElementById('oH').textContent = String((S.h / 60) | 0).padStart(2, '0') + ':' + String(S.h % 60).padStart(2, '0');
+  draw();
+});
+document.getElementById('rLat').addEventListener('input', function (e) {
+  S.lat = +e.target.value;
+  document.getElementById('oLat').textContent = S.lat + '°';
+  draw();
+});
+document.getElementById('rSp').addEventListener('input', function (e) {
+  S.sp = +e.target.value;
+  document.getElementById('oSp').textContent = S.sp + '×';
+  draw();
+});
+document.getElementById('dDate').addEventListener('change', draw);
+var tg = document.getElementById('togs');
+['Lines', 'Figures', 'Labels', 'Milky', 'Eclip', 'Grid'].forEach(function (k) {
+  var b = document.createElement('button');
+  b.textContent = k;
+  if (S.show[k]) b.classList.add('on');
+  b.addEventListener('click', function () {
+    S.show[k] = !S.show[k];
+    b.classList.toggle('on', S.show[k]);
+    draw();
+  });
+  tg.appendChild(b);
+});
+document.getElementById('bNow').addEventListener('click', function () {
+  var n = new Date();
+  S.h = n.getHours() * 60 + n.getMinutes();
+  document.getElementById('rH').value = S.h;
+  document.getElementById('oH').textContent = String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0');
+  draw();
+});
+document.getElementById('bPause').addEventListener('click', function (e) {
+  S.pause = !S.pause;
+  e.target.textContent = S.pause ? 'Resume' : 'Pause';
+});
+cv.addEventListener('pointermove', function (e) {
+  var r = cv.getBoundingClientRect();
+  var mx = e.clientX - r.left, my = e.clientY - r.top;
+  var best = null, bd = 14;
+  (window._pos || []).forEach(function (p) {
+    var dd = Math.hypot(p.x - mx, p.y - my);
+    if (dd < bd) { bd = dd; best = p; }
+  });
+  var dome = cv.parentElement.getBoundingClientRect();
+  if (best) {
+    tip.style.display = 'block';
+    tip.style.left = (e.clientX - dome.left + 14) + 'px';
+    tip.style.top = (e.clientY - dome.top - 10) + 'px';
+    tip.innerHTML = '<b>' + best.s[0] + '</b> · ' + best.s[5] + '<br>mag ' + best.s[3] + ' · ' + best.s[4] + ' ly';
+    document.getElementById('starCard').innerHTML = '<b>' + best.s[0] + '</b> · ' + best.s[5] + '<br>RA ' + best.s[1] + 'h · Dec ' + best.s[2] + '°<br>mag ' + best.s[3] + ' · ' + best.s[4] + ' ly<br>alt ' + best.alt.toFixed(1) + '°';
+  } else tip.style.display = 'none';
+});
+size();
+</script>
+</body>
+</html>

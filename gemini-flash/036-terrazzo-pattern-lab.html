@@ -1,0 +1,1909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terrazzo Pattern Lab — Composite Stone Studio</title>
+  <style>
+    /* -------------------------------------------------------------------------
+       DESIGN TOKENS & SYSTEM TYPOGRAPHY
+       ------------------------------------------------------------------------- */
+    :root {
+      --bg-paper: #f4efe6;
+      --ink-charcoal: #2b2620;
+      --ink-secondary: #6b625a;
+      --ink-tertiary: #8f857b;
+      --terracotta: #c4674a;
+      --ochre: #d2a34a;
+      --sage: #8a9a7b;
+      --blush: #e8b9a8;
+      --card-bg: rgba(254, 252, 248, 0.82);
+      --card-border: rgba(43, 38, 32, 0.08);
+      --card-shadow: 0 16px 40px -10px rgba(43, 38, 32, 0.09), 0 4px 12px -2px rgba(43, 38, 32, 0.04);
+      --font-serif: Georgia, 'Iowan Old Style', Palatino, ui-serif, serif;
+      --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+      --tile-url: none;
+    }
+
+    /* Reset & Base */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      background-color: var(--bg-paper);
+      color: var(--ink-charcoal);
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      min-height: 100vh;
+      background-color: var(--bg-paper);
+      color: var(--ink-charcoal);
+      font-family: var(--font-sans);
+      position: relative;
+      overflow-x: hidden;
+      line-height: 1.5;
+    }
+
+    /* Soft ambient washes of blush (top-left) and sage (bottom-right) */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -12vw;
+      left: -12vw;
+      width: 58vw;
+      height: 58vw;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 40%, rgba(232, 185, 168, 0.42) 0%, rgba(244, 239, 230, 0) 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      bottom: -15vw;
+      right: -12vw;
+      width: 62vw;
+      height: 62vw;
+      border-radius: 50%;
+      background: radial-gradient(circle at 60% 60%, rgba(138, 154, 123, 0.36) 0%, rgba(244, 239, 230, 0) 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Faint SVG turbulence grain overlay multiplied on top */
+    .grain-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 999;
+      opacity: 0.28;
+      mix-blend-mode: multiply;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    /* Container */
+    .page-container {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 44px 28px 72px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* -------------------------------------------------------------------------
+       HEADER
+       ------------------------------------------------------------------------- */
+    header.lab-header {
+      margin-bottom: 36px;
+      animation: cardEnter 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.05s backwards;
+    }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--ink-secondary);
+      font-weight: 600;
+      margin-bottom: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .eyebrow::before {
+      content: '';
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--terracotta);
+    }
+
+    .page-title {
+      font-family: var(--font-serif);
+      font-size: clamp(2.3rem, 4.4vw, 3.4rem);
+      font-weight: 400;
+      line-height: 1.1;
+      letter-spacing: -0.025em;
+      color: var(--ink-charcoal);
+      margin-bottom: 12px;
+    }
+
+    .page-title em {
+      font-style: italic;
+      color: var(--terracotta);
+      font-family: inherit;
+    }
+
+    .lede {
+      font-size: 1.05rem;
+      line-height: 1.6;
+      color: var(--ink-secondary);
+      max-width: 660px;
+    }
+
+    /* -------------------------------------------------------------------------
+       CARDS & GRID
+       ------------------------------------------------------------------------- */
+    .two-column-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.08fr;
+      gap: 32px;
+      margin-bottom: 36px;
+      align-items: stretch;
+    }
+
+    @media (max-width: 960px) {
+      .two-column-grid {
+        grid-template-columns: 1fr;
+        gap: 28px;
+      }
+    }
+
+    .lab-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 22px;
+      padding: 30px;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .card-slab {
+      animation: cardEnter 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.12s backwards;
+    }
+
+    .card-formula {
+      animation: cardEnter 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.22s backwards;
+    }
+
+    .card-objects {
+      animation: cardEnter 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.32s backwards;
+      margin-top: 4px;
+    }
+
+    @keyframes cardEnter {
+      from {
+        opacity: 0;
+        transform: translateY(22px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 22px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid rgba(43, 38, 32, 0.07);
+    }
+
+    .card-title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .card-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-secondary);
+      font-weight: 600;
+    }
+
+    .card-title {
+      font-family: var(--font-serif);
+      font-size: 1.45rem;
+      font-weight: 400;
+      letter-spacing: -0.015em;
+      color: var(--ink-charcoal);
+    }
+
+    .seed-pill {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      background: rgba(43, 38, 32, 0.05);
+      border: 1px solid rgba(43, 38, 32, 0.09);
+      padding: 5px 12px;
+      border-radius: 9999px;
+      color: var(--ink-charcoal);
+      font-weight: 600;
+      white-space: nowrap;
+      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.6);
+      user-select: none;
+    }
+
+    /* -------------------------------------------------------------------------
+       LEFT CARD: THE SLAB
+       ------------------------------------------------------------------------- */
+    .slab-stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+    }
+
+    .slab-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      aspect-ratio: 1 / 1;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.55),
+        inset 0 1.5px 3px rgba(255, 255, 255, 0.8),
+        0 24px 50px -10px rgba(43, 38, 32, 0.24),
+        0 8px 18px -4px rgba(43, 38, 32, 0.12);
+      transition: transform 0.3s ease, filter 0.4s ease;
+      background-color: #efe7db;
+    }
+
+    .slab-wrapper.is-flashing {
+      animation: pourFlash 0.55s ease-out forwards;
+    }
+
+    @keyframes pourFlash {
+      0% {
+        filter: brightness(1.35) contrast(1.08);
+        transform: scale(0.995);
+      }
+      50% {
+        filter: brightness(1.15);
+      }
+      100% {
+        filter: brightness(1) contrast(1);
+        transform: scale(1);
+      }
+    }
+
+    #slabCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: contain;
+    }
+
+    /* Soft-light diagonal gloss overlay */
+    .slab-gloss {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.35) 0%,
+        rgba(255, 255, 255, 0.08) 32%,
+        transparent 55%,
+        rgba(255, 255, 255, 0.12) 100%
+      );
+      mix-blend-mode: soft-light;
+      z-index: 2;
+    }
+
+    /* Small frosted pill badge */
+    .slab-frosted-pill {
+      position: absolute;
+      bottom: 14px;
+      left: 14px;
+      z-index: 3;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(244, 239, 230, 0.78);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.75);
+      padding: 5px 12px;
+      border-radius: 9999px;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-charcoal);
+      font-weight: 600;
+      box-shadow: 0 4px 14px rgba(43, 38, 32, 0.12);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .pill-indicator-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--sage);
+      box-shadow: 0 0 6px rgba(138, 154, 123, 0.7);
+    }
+
+    .slab-footer-meta {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-tertiary);
+      padding: 0 4px;
+    }
+
+    /* -------------------------------------------------------------------------
+       RIGHT CARD: MIX FORMULA CONTROLS
+       ------------------------------------------------------------------------- */
+    .controls-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Sliders Section */
+    .sliders-group {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .slider-row {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .slider-label-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .slider-label {
+      font-family: var(--font-sans);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--ink-charcoal);
+      letter-spacing: 0.02em;
+    }
+
+    .slider-val-readout {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--ink-secondary);
+    }
+
+    /* Custom range sliders */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 7px;
+      border-radius: 9999px;
+      background: linear-gradient(to right, var(--terracotta) 0%, var(--ochre) 50%, var(--sage) 100%);
+      outline: none;
+      cursor: pointer;
+      margin: 4px 0;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #faf7f2;
+      border: 2.5px solid var(--ink-charcoal);
+      box-shadow: 0 2px 6px rgba(43, 38, 32, 0.25);
+      cursor: grab;
+      transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.22);
+      box-shadow: 0 4px 10px rgba(43, 38, 32, 0.3);
+    }
+
+    input[type="range"]::-webkit-slider-thumb:active {
+      transform: scale(1.36);
+      cursor: grabbing;
+      box-shadow: 0 5px 14px rgba(43, 38, 32, 0.38);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #faf7f2;
+      border: 2.5px solid var(--ink-charcoal);
+      box-shadow: 0 2px 6px rgba(43, 38, 32, 0.25);
+      cursor: grab;
+      transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease;
+    }
+
+    input[type="range"]::-moz-range-thumb:hover {
+      transform: scale(1.22);
+      box-shadow: 0 4px 10px rgba(43, 38, 32, 0.3);
+    }
+
+    input[type="range"]::-moz-range-thumb:active {
+      transform: scale(1.36);
+      cursor: grabbing;
+      box-shadow: 0 5px 14px rgba(43, 38, 32, 0.38);
+    }
+
+    /* Palette 2x2 Grid */
+    .palette-section {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-secondary);
+      font-weight: 600;
+    }
+
+    .palette-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .palette-btn {
+      background: rgba(255, 255, 255, 0.6);
+      border: 1.5px solid rgba(43, 38, 32, 0.12);
+      border-radius: 14px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+
+    .palette-btn:hover {
+      background: rgba(255, 255, 255, 0.9);
+      border-color: rgba(43, 38, 32, 0.24);
+      transform: translateY(-1px);
+    }
+
+    .palette-btn[aria-pressed="true"] {
+      background: #f7f1e6;
+      border-color: var(--ink-charcoal);
+      box-shadow: 0 4px 12px rgba(43, 38, 32, 0.08);
+    }
+
+    .palette-btn[aria-pressed="true"]::after {
+      content: '';
+      position: absolute;
+      top: 9px;
+      right: 9px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--terracotta);
+    }
+
+    .palette-chips-row {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .palette-chip {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+      flex-shrink: 0;
+    }
+
+    .palette-name {
+      font-family: var(--font-serif);
+      font-size: 0.98rem;
+      font-weight: 600;
+      color: var(--ink-charcoal);
+      line-height: 1.2;
+    }
+
+    .palette-desc {
+      font-size: 0.71rem;
+      color: var(--ink-secondary);
+      line-height: 1.35;
+    }
+
+    /* Base Binder Pill Row */
+    .binder-section {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding-top: 4px;
+    }
+
+    .binder-pill-box {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1.5px solid rgba(43, 38, 32, 0.14);
+      padding: 4px 14px 4px 6px;
+      border-radius: 9999px;
+      box-shadow: 0 2px 6px rgba(43, 38, 32, 0.04);
+    }
+
+    .color-picker-wrapper {
+      position: relative;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+      border: 1.5px solid rgba(255, 255, 255, 0.9);
+      cursor: pointer;
+    }
+
+    #baseColorInput {
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      cursor: pointer;
+      opacity: 0;
+    }
+
+    .color-swatch-view {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background-color: #efe7db;
+    }
+
+    .binder-hex-display {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--ink-charcoal);
+      user-select: all;
+    }
+
+    .btn-palette-default {
+      background: transparent;
+      border: 1px solid rgba(43, 38, 32, 0.16);
+      border-radius: 9999px;
+      padding: 6px 13px;
+      font-family: var(--font-sans);
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--ink-secondary);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.18s ease;
+    }
+
+    .btn-palette-default:hover {
+      border-color: var(--ink-charcoal);
+      color: var(--ink-charcoal);
+      background: rgba(255, 255, 255, 0.6);
+    }
+
+    /* Action Buttons (Regenerate & Download) */
+    .action-buttons-group {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 12px;
+      padding-top: 6px;
+    }
+
+    @media (max-width: 480px) {
+      .action-buttons-group {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .btn-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 18px;
+      border-radius: 9999px;
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      user-select: none;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .btn-pill:active {
+      transform: scale(0.98);
+    }
+
+    /* Sliding sheen highlight on hover */
+    .btn-pill::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -130%;
+      width: 50%;
+      height: 200%;
+      transform: skewX(-24deg);
+      pointer-events: none;
+      transition: left 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-pill-ink {
+      background: var(--ink-charcoal);
+      color: #fbf9f5;
+      border: 1.5px solid var(--ink-charcoal);
+      box-shadow: 0 4px 14px rgba(43, 38, 32, 0.2);
+    }
+
+    .btn-pill-ink::after {
+      background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.32) 50%,
+        rgba(255, 255, 255, 0) 100%
+      );
+    }
+
+    .btn-pill-ink:hover {
+      box-shadow: 0 6px 20px rgba(43, 38, 32, 0.28);
+      transform: translateY(-1px);
+    }
+
+    .btn-pill-ink:hover::after {
+      left: 170%;
+    }
+
+    .btn-pill-ghost {
+      background: transparent;
+      color: var(--ink-charcoal);
+      border: 1.5px solid var(--ink-charcoal);
+    }
+
+    .btn-pill-ghost::after {
+      background: linear-gradient(
+        90deg,
+        rgba(43, 38, 32, 0) 0%,
+        rgba(43, 38, 32, 0.12) 50%,
+        rgba(43, 38, 32, 0) 100%
+      );
+    }
+
+    .btn-pill-ghost:hover {
+      background: rgba(43, 38, 32, 0.04);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(43, 38, 32, 0.08);
+    }
+
+    .btn-pill-ghost:hover::after {
+      left: 170%;
+    }
+
+    .kbd-shortcut {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      padding: 2px 5px;
+      border-radius: 4px;
+      border: 1px solid currentColor;
+      opacity: 0.65;
+      line-height: 1;
+    }
+
+    /* -------------------------------------------------------------------------
+       BOTTOM FULL-WIDTH CARD: APPLIED TO OBJECTS
+       ------------------------------------------------------------------------- */
+    .applied-header {
+      margin-bottom: 24px;
+    }
+
+    .mockups-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+    }
+
+    @media (max-width: 860px) {
+      .mockups-grid {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+    }
+
+    /* Cream Gradient Plinths */
+    .plinth-pod {
+      position: relative;
+      background: linear-gradient(180deg, #fdfbf7 0%, #ede5d7 100%);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      border-radius: 20px;
+      height: 330px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 24px 16px;
+      box-shadow: 0 10px 24px -6px rgba(43, 38, 32, 0.06);
+      cursor: default;
+      perspective: 700px;
+    }
+
+    /* Blurred shadow ellipses */
+    .plinth-shadow-ellipse {
+      position: absolute;
+      bottom: 66px;
+      width: 140px;
+      height: 22px;
+      border-radius: 50%;
+      background: radial-gradient(ellipse at center, rgba(43, 38, 32, 0.28) 0%, rgba(43, 38, 32, 0) 72%);
+      filter: blur(4.5px);
+      pointer-events: none;
+      transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.45s ease, filter 0.45s ease;
+    }
+
+    /* Mockups Stage (lift and tilt on hover) */
+    .mockup-item-stage {
+      position: relative;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-origin: center bottom;
+      transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 2;
+    }
+
+    .plinth-pod:hover .mockup-item-stage {
+      transform: translateY(-8px) rotate(1.8deg);
+    }
+
+    .plinth-pod:hover .plinth-shadow-ellipse {
+      transform: scale(0.88) translateY(5px);
+      opacity: 0.65;
+      filter: blur(6px);
+    }
+
+    /* Plinth Metadata */
+    .plinth-meta {
+      text-align: center;
+      position: relative;
+      z-index: 3;
+    }
+
+    .plinth-item-title {
+      font-family: var(--font-serif);
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--ink-charcoal);
+      margin-bottom: 2px;
+    }
+
+    .plinth-item-spec {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-secondary);
+    }
+
+    /* -------------------------------------------------------------------------
+       OBJECT 1: STONEWARE MUG
+       ------------------------------------------------------------------------- */
+    .mug-assembly {
+      position: relative;
+      width: 114px;
+      height: 142px;
+    }
+
+    /* Mug body */
+    .mug-cylinder {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 114px;
+      height: 128px;
+      border-radius: 4px 4px 28px 28px;
+      background-image: var(--tile-url);
+      background-size: 190px 190px;
+      background-repeat: repeat;
+      box-shadow: 0 14px 28px -6px rgba(43, 38, 32, 0.22);
+      overflow: hidden;
+    }
+
+    /* Shading overlay on mug body */
+    .mug-cylinder::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(
+        90deg,
+        rgba(0, 0, 0, 0.32) 0%,
+        rgba(255, 255, 255, 0.3) 18%,
+        rgba(255, 255, 255, 0) 46%,
+        rgba(0, 0, 0, 0.16) 82%,
+        rgba(0, 0, 0, 0.36) 100%
+      );
+      pointer-events: none;
+    }
+
+    /* Elliptical rim with dark coffee interior */
+    .mug-rim-aperture {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 114px;
+      height: 28px;
+      border-radius: 50%;
+      border: 3.5px solid rgba(235, 227, 215, 0.95);
+      background: radial-gradient(ellipse at 35% 35%, #462516 0%, #1e0d06 68%);
+      box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.72);
+      z-index: 3;
+      overflow: hidden;
+    }
+
+    /* Liquid coffee glint */
+    .mug-rim-aperture::before {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 16px;
+      width: 36px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.28);
+      filter: blur(1.5px);
+      transform: rotate(-12deg);
+    }
+
+    /* Handle built from a masked border */
+    .mug-masked-handle {
+      position: absolute;
+      right: -32px;
+      top: 24px;
+      width: 44px;
+      height: 80px;
+      border: 11px solid transparent;
+      border-left: none;
+      border-radius: 0 34px 44px 0;
+      background-image: var(--tile-url);
+      background-size: 190px 190px;
+      background-repeat: repeat;
+      background-origin: border-box;
+      background-clip: border-box;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) padding-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask:
+        linear-gradient(#fff 0 0) padding-box,
+        linear-gradient(#fff 0 0);
+      mask-composite: exclude;
+      filter: drop-shadow(3px 4px 6px rgba(43, 38, 32, 0.22));
+      z-index: 1;
+    }
+
+    /* -------------------------------------------------------------------------
+       OBJECT 2: PHONE CASE
+       ------------------------------------------------------------------------- */
+    .case-shell {
+      position: relative;
+      width: 116px;
+      height: 216px;
+      border-radius: 34px;
+      background-image: var(--tile-url);
+      background-size: 190px 190px;
+      background-repeat: repeat;
+      box-shadow:
+        inset 0 0 0 2px rgba(255, 255, 255, 0.45),
+        inset 0 2px 4px rgba(255, 255, 255, 0.5),
+        inset 0 -2px 4px rgba(0, 0, 0, 0.3),
+        0 16px 36px -6px rgba(43, 38, 32, 0.22);
+      overflow: hidden;
+    }
+
+    /* Diagonal glossy glint overlay */
+    .case-shell::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.32) 0%,
+        rgba(255, 255, 255, 0.08) 35%,
+        transparent 55%,
+        rgba(255, 255, 255, 0.06) 100%
+      );
+      pointer-events: none;
+    }
+
+    /* Side button */
+    .case-side-button {
+      position: absolute;
+      right: -3px;
+      top: 60px;
+      width: 3.5px;
+      height: 26px;
+      border-radius: 2px;
+      background: #6b625a;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      z-index: 10;
+    }
+
+    /* Inset camera island */
+    .camera-island-inset {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: rgba(43, 38, 32, 0.16);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      box-shadow:
+        inset 0 1.5px 3px rgba(0, 0, 0, 0.32),
+        0 2px 6px rgba(0, 0, 0, 0.12);
+      z-index: 4;
+    }
+
+    /* Two camera lenses */
+    .camera-optic {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      left: 7px;
+      background: radial-gradient(circle at 35% 35%, #38bdf8 0%, #0f172a 60%);
+      border: 1.5px solid #48413a;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+
+    .optic-top {
+      top: 6px;
+    }
+
+    .optic-bottom {
+      top: 23px;
+    }
+
+    /* Camera flash LED */
+    .camera-flash-dot {
+      position: absolute;
+      top: 15px;
+      right: 7px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #fef08a;
+      box-shadow: 0 0 4px #fef08a;
+    }
+
+    /* -------------------------------------------------------------------------
+       OBJECT 3: CANVAS TOTE
+       ------------------------------------------------------------------------- */
+    .tote-ensemble {
+      position: relative;
+      width: 148px;
+      height: 218px;
+    }
+
+    /* Arched straps */
+    .tote-arched-straps {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 82px;
+      height: 60px;
+      border: 9px solid #d4c8b6;
+      border-bottom: none;
+      border-radius: 40px 40px 0 0;
+      box-shadow: 0 -2px 6px rgba(43, 38, 32, 0.08);
+      z-index: 1;
+    }
+
+    .tote-arched-straps::after {
+      content: '';
+      position: absolute;
+      top: -9px;
+      left: 6px;
+      right: 6px;
+      bottom: 0;
+      border: 4px solid #b8ab96;
+      border-bottom: none;
+      border-radius: 34px 34px 0 0;
+      opacity: 0.55;
+    }
+
+    /* Bag body */
+    .tote-bag-body {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 148px;
+      height: 164px;
+      border-radius: 2px 2px 14px 14px;
+      background-image: var(--tile-url);
+      background-size: 190px 190px;
+      background-repeat: repeat;
+      box-shadow: 0 14px 32px -6px rgba(43, 38, 32, 0.2);
+      z-index: 2;
+      overflow: hidden;
+    }
+
+    /* Textile fold shading */
+    .tote-bag-body::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(
+        90deg,
+        rgba(0, 0, 0, 0.14) 0%,
+        transparent 14%,
+        rgba(255, 255, 255, 0.14) 48%,
+        rgba(0, 0, 0, 0.08) 52%,
+        transparent 86%,
+        rgba(0, 0, 0, 0.16) 100%
+      );
+      pointer-events: none;
+    }
+
+    /* Top hem fold */
+    .tote-top-hem {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 13px;
+      border-bottom: 1px dashed rgba(80, 70, 60, 0.38);
+      background: rgba(225, 215, 200, 0.35);
+      z-index: 3;
+    }
+
+    /* Italic 'studio' label */
+    .tote-patch-label {
+      position: absolute;
+      top: 52%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #f3edd9;
+      border: 1px dashed #9c8e79;
+      border-radius: 3px;
+      padding: 4px 12px;
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: 11px;
+      color: #524739;
+      letter-spacing: 0.06em;
+      box-shadow: 0 2px 5px rgba(43, 38, 32, 0.1);
+      z-index: 4;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    /* -------------------------------------------------------------------------
+       ACCESSIBILITY & PREFERS-REDUCED-MOTION
+       ------------------------------------------------------------------------- */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Grain overlay -->
+  <div class="grain-overlay" aria-hidden="true"></div>
+
+  <div class="page-container">
+    <!-- Header -->
+    <header class="lab-header">
+      <div class="eyebrow">Composite stone studio · No. 036</div>
+      <h1 class="page-title">Terrazzo <em>Pattern</em> Lab</h1>
+      <p class="lede">
+        A generative material studio for precision composite aggregate stones. Cast mineral chips into tinted binders, tune aggregate scales, and inspect seamless architectural slabs in situ.
+      </p>
+    </header>
+
+    <!-- Two-Column Studio Grid -->
+    <main class="two-column-grid">
+      <!-- Left Card: The Slab -->
+      <section class="lab-card card-slab" aria-labelledby="slabTitle">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="card-eyebrow">MONOLITHIC SPECIMEN</span>
+            <h2 class="card-title" id="slabTitle">The Slab</h2>
+          </div>
+          <div class="seed-pill" id="seedDisplay">seed 4821</div>
+        </div>
+
+        <div class="slab-stage">
+          <div class="slab-wrapper" id="slabWrapper">
+            <canvas id="slabCanvas" width="512" height="512" aria-label="Seamless terrazzo slab pattern"></canvas>
+            <div class="slab-gloss" aria-hidden="true"></div>
+            <div class="slab-frosted-pill">
+              <span class="pill-indicator-dot"></span>
+              seamless · wraps on all edges
+            </div>
+          </div>
+
+          <div class="slab-footer-meta">
+            <span>512 × 512 px master cast</span>
+            <span>Toroidal 9-fold wrap</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Card: Mix Formula -->
+      <section class="lab-card card-formula" aria-labelledby="formulaTitle">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="card-eyebrow">RECIPE SPECIFICATION</span>
+            <h2 class="card-title" id="formulaTitle">Mix Formula</h2>
+          </div>
+          <div class="seed-pill" id="paletteBadge">Milano</div>
+        </div>
+
+        <div class="controls-stack">
+          <!-- Range Sliders -->
+          <div class="sliders-group">
+            <div class="slider-row">
+              <div class="slider-label-bar">
+                <label for="densitySlider" class="slider-label">Chip Density</label>
+                <span class="slider-val-readout" id="densityVal">180 chips</span>
+              </div>
+              <input type="range" id="densitySlider" min="30" max="420" value="180" step="1">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-label-bar">
+                <label for="sizeSlider" class="slider-label">Chip Size</label>
+                <span class="slider-val-readout" id="sizeVal">1.00×</span>
+              </div>
+              <input type="range" id="sizeSlider" min="0.4" max="2.2" value="1.0" step="0.05">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-label-bar">
+                <label for="speckleSlider" class="slider-label">Speckle</label>
+                <span class="slider-val-readout" id="speckleVal">45%</span>
+              </div>
+              <input type="range" id="speckleSlider" min="0" max="100" value="45" step="1">
+            </div>
+          </div>
+
+          <!-- 2x2 Mineral Palette Grid -->
+          <div class="palette-section">
+            <span class="section-label">MINERAL PALETTE</span>
+            <div class="palette-grid" role="group" aria-label="Terrazzo mineral palettes">
+              <!-- Milano -->
+              <button type="button" class="palette-btn" data-palette="milano" aria-pressed="true">
+                <div class="palette-chips-row">
+                  <span class="palette-chip" style="background: #c4674a"></span>
+                  <span class="palette-chip" style="background: #8a9a7b"></span>
+                  <span class="palette-chip" style="background: #d2a34a"></span>
+                  <span class="palette-chip" style="background: #2b2620"></span>
+                  <span class="palette-chip" style="background: #e8b9a8"></span>
+                </div>
+                <div class="palette-name">Milano</div>
+                <div class="palette-desc">Warm Italian terracotta, sage &amp; amber marble in cream binder.</div>
+              </button>
+
+              <!-- Nordic -->
+              <button type="button" class="palette-btn" data-palette="nordic" aria-pressed="false">
+                <div class="palette-chips-row">
+                  <span class="palette-chip" style="background: #2e383f"></span>
+                  <span class="palette-chip" style="background: #566573"></span>
+                  <span class="palette-chip" style="background: #85929e"></span>
+                  <span class="palette-chip" style="background: #abb2b9"></span>
+                  <span class="palette-chip" style="background: #3d5a6c"></span>
+                </div>
+                <div class="palette-name">Nordic</div>
+                <div class="palette-desc">Cool slate, basalt &amp; fjord mist in pale stone binder.</div>
+              </button>
+
+              <!-- Tokyo -->
+              <button type="button" class="palette-btn" data-palette="tokyo" aria-pressed="false">
+                <div class="palette-chips-row">
+                  <span class="palette-chip" style="background: #b52f2f"></span>
+                  <span class="palette-chip" style="background: #1c1c1e"></span>
+                  <span class="palette-chip" style="background: #d9c7a3"></span>
+                  <span class="palette-chip" style="background: #e0857f"></span>
+                  <span class="palette-chip" style="background: #6a7f6a"></span>
+                </div>
+                <div class="palette-name">Tokyo</div>
+                <div class="palette-desc">Vermilion lacquer, sumi ink &amp; tatami straw in warm ivory.</div>
+              </button>
+
+              <!-- Bold -->
+              <button type="button" class="palette-btn" data-palette="bold" aria-pressed="false">
+                <div class="palette-chips-row">
+                  <span class="palette-chip" style="background: #ff6b4a"></span>
+                  <span class="palette-chip" style="background: #ffd23f"></span>
+                  <span class="palette-chip" style="background: #2ec4b6"></span>
+                  <span class="palette-chip" style="background: #e05297"></span>
+                  <span class="palette-chip" style="background: #7a5cff"></span>
+                </div>
+                <div class="palette-name">Bold</div>
+                <div class="palette-desc">Midnight charcoal with electric coral, teal, violet &amp; gold.</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Base Binder Colour Picker -->
+          <div class="binder-section">
+            <div class="binder-pill-box">
+              <div class="color-picker-wrapper" title="Pick base binder color">
+                <div class="color-swatch-view" id="baseColorSwatch"></div>
+                <input type="color" id="baseColorInput" value="#efe7db" aria-label="Base binder color picker">
+              </div>
+              <span class="binder-hex-display" id="baseHexDisplay">#EFE7DB</span>
+            </div>
+
+            <button type="button" class="btn-palette-default" id="resetBaseBtn" title="Reset base color to palette default">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
+              <span>Palette default</span>
+            </button>
+          </div>
+
+          <!-- Actions: Regenerate Pour & Download PNG -->
+          <div class="action-buttons-group">
+            <button type="button" class="btn-pill btn-pill-ink" id="regenerateBtn" title="Regenerate pour with new seed (Shortcut: R)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"/>
+              </svg>
+              <span>Regenerate pour</span>
+              <kbd class="kbd-shortcut">R</kbd>
+            </button>
+
+            <button type="button" class="btn-pill btn-pill-ghost" id="downloadBtn" title="Download tile PNG (Shortcut: S)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+              </svg>
+              <span>Download PNG</span>
+              <kbd class="kbd-shortcut">S</kbd>
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Full-Width Card: Applied to Objects -->
+    <section class="lab-card card-objects" aria-labelledby="appliedTitle">
+      <div class="card-header applied-header">
+        <div class="card-title-group">
+          <span class="card-eyebrow">PHYSICAL CASTING PROJECTIONS</span>
+          <h2 class="card-title" id="appliedTitle">Applied to Objects</h2>
+        </div>
+        <div class="seed-pill">190px Seamless Pitch</div>
+      </div>
+
+      <div class="mockups-grid">
+        <!-- Object 1: Stoneware Mug -->
+        <div class="plinth-pod" id="podMug">
+          <div class="plinth-shadow-ellipse"></div>
+          <div class="mockup-item-stage">
+            <div class="mug-assembly">
+              <div class="mug-masked-handle"></div>
+              <div class="mug-cylinder"></div>
+              <div class="mug-rim-aperture"></div>
+            </div>
+          </div>
+          <div class="plinth-meta">
+            <div class="plinth-item-title">Stoneware Mug</div>
+            <div class="plinth-item-spec">Glazed Aggregate Ceramic · 340 ml</div>
+          </div>
+        </div>
+
+        <!-- Object 2: Phone Case -->
+        <div class="plinth-pod" id="podCase">
+          <div class="plinth-shadow-ellipse"></div>
+          <div class="mockup-item-stage">
+            <div class="case-shell">
+              <div class="case-side-button"></div>
+              <div class="camera-island-inset">
+                <div class="camera-optic optic-top"></div>
+                <div class="camera-optic optic-bottom"></div>
+                <div class="camera-flash-dot"></div>
+              </div>
+            </div>
+          </div>
+          <div class="plinth-meta">
+            <div class="plinth-item-title">Phone Case</div>
+            <div class="plinth-item-spec">Molded Resin Composite · Slim Fit</div>
+          </div>
+        </div>
+
+        <!-- Object 3: Canvas Tote -->
+        <div class="plinth-pod" id="podTote">
+          <div class="plinth-shadow-ellipse"></div>
+          <div class="mockup-item-stage">
+            <div class="tote-ensemble">
+              <div class="tote-arched-straps"></div>
+              <div class="tote-bag-body">
+                <div class="tote-top-hem"></div>
+                <div class="tote-patch-label">studio</div>
+              </div>
+            </div>
+          </div>
+          <div class="plinth-meta">
+            <div class="plinth-item-title">Canvas Tote</div>
+            <div class="plinth-item-spec">Screenprinted Raw Cotton · 18 L</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- -----------------------------------------------------------------------
+       GENERATION ALGORITHM & INTERACTIVE SCRIPT
+       ----------------------------------------------------------------------- -->
+  <script>
+    // Palettes definition exactly conforming to specification
+    const PALETTES = {
+      milano: {
+        name: 'Milano',
+        base: '#efe7db',
+        chips: ['#c4674a', '#8a9a7b', '#d2a34a', '#2b2620', '#e8b9a8', '#f6f1e7']
+      },
+      nordic: {
+        name: 'Nordic',
+        base: '#e6e8e4',
+        chips: ['#2e383f', '#566573', '#85929e', '#abb2b9', '#d5dbdb', '#f2f4f4', '#3d5a6c']
+      },
+      tokyo: {
+        name: 'Tokyo',
+        base: '#f3ece4',
+        chips: ['#b52f2f', '#1c1c1e', '#d9c7a3', '#e0857f', '#6a7f6a', '#eedbc9']
+      },
+      bold: {
+        name: 'Bold',
+        base: '#12100e',
+        chips: ['#ff6b4a', '#ffd23f', '#2ec4b6', '#e05297', '#f2f0ea', '#7a5cff']
+      }
+    };
+
+    // State
+    let currentPaletteKey = 'milano';
+    let currentSeed = 4821;
+    let currentBaseColor = PALETTES.milano.base;
+
+    // DOM Elements
+    const canvas = document.getElementById('slabCanvas');
+    const ctx = canvas.getContext('2d');
+    const slabWrapper = document.getElementById('slabWrapper');
+    const seedDisplay = document.getElementById('seedDisplay');
+    const paletteBadge = document.getElementById('paletteBadge');
+
+    const densitySlider = document.getElementById('densitySlider');
+    const densityVal = document.getElementById('densityVal');
+    const sizeSlider = document.getElementById('sizeSlider');
+    const sizeVal = document.getElementById('sizeVal');
+    const speckleSlider = document.getElementById('speckleSlider');
+    const speckleVal = document.getElementById('speckleVal');
+
+    const baseColorInput = document.getElementById('baseColorInput');
+    const baseColorSwatch = document.getElementById('baseColorSwatch');
+    const baseHexDisplay = document.getElementById('baseHexDisplay');
+    const resetBaseBtn = document.getElementById('resetBaseBtn');
+
+    const regenerateBtn = document.getElementById('regenerateBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const paletteBtns = document.querySelectorAll('.palette-btn');
+
+    // -------------------------------------------------------------------------
+    // Mulberry32 PRNG (Seeded, Reproducible)
+    // -------------------------------------------------------------------------
+    function mulberry32(a) {
+      return function() {
+        let t = (a += 0x6D2B79F5);
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    // Color Helpers
+    function hexToRgb(hex) {
+      let clean = hex.replace('#', '');
+      if (clean.length === 3) {
+        clean = clean.split('').map(c => c + c).join('');
+      }
+      const num = parseInt(clean, 16);
+      return {
+        r: (num >> 16) & 255,
+        g: (num >> 8) & 255,
+        b: num & 255
+      };
+    }
+
+    function adjustColor(hex, percent) {
+      const { r, g, b } = hexToRgb(hex);
+      const delta = Math.round(255 * (percent / 100));
+      const nr = Math.min(255, Math.max(0, r + delta));
+      const ng = Math.min(255, Math.max(0, g + delta));
+      const nb = Math.min(255, Math.max(0, b + delta));
+      return '#' + ((1 << 24) + (nr << 16) + (ng << 8) + nb).toString(16).slice(1);
+    }
+
+    function getLuminance(hex) {
+      const { r, g, b } = hexToRgb(hex);
+      return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    }
+
+    // Toroidal Distance calculation across W x H
+    function toroidalDist(x1, y1, x2, y2, W, H) {
+      let dx = Math.abs(x1 - x2);
+      if (dx > W / 2) dx = W - dx;
+      let dy = Math.abs(y1 - y2);
+      if (dy > H / 2) dy = H - dy;
+      return Math.hypot(dx, dy);
+    }
+
+    // -------------------------------------------------------------------------
+    // GENERATION ALGORITHM
+    // -------------------------------------------------------------------------
+    function generateTerrazzo() {
+      const W = 512;
+      const H = 512;
+      const rand = mulberry32(currentSeed);
+
+      const targetDensity = parseInt(densitySlider.value, 10);
+      const chipScale = parseFloat(sizeSlider.value);
+      const specklePercent = parseInt(speckleSlider.value, 10);
+      const palette = PALETTES[currentPaletteKey];
+
+      // 1. Fill base binder colour
+      ctx.fillStyle = currentBaseColor;
+      ctx.fillRect(0, 0, W, H);
+
+      // 2. Add 40 faint radial mottling blobs
+      const WRAP_OFFSETS = [
+        [0, 0], [-W, 0], [W, 0], [0, -H], [0, H],
+        [-W, -H], [W, -H], [-W, H], [W, H]
+      ];
+
+      for (let i = 0; i < 40; i++) {
+        const mx = rand() * W;
+        const my = rand() * H;
+        const mr = 32 + rand() * 64;
+        const isLighter = rand() > 0.45;
+        const blobHex = isLighter ? adjustColor(currentBaseColor, 7 + rand() * 8) : adjustColor(currentBaseColor, -(7 + rand() * 8));
+        const { r: br, g: bg, b: bb } = hexToRgb(blobHex);
+
+        for (let j = 0; j < WRAP_OFFSETS.length; j++) {
+          const ox = WRAP_OFFSETS[j][0];
+          const oy = WRAP_OFFSETS[j][1];
+          const px = mx + ox;
+          const py = my + oy;
+          if (px + mr >= 0 && px - mr <= W && py + mr >= 0 && py - mr <= H) {
+            const radGrad = ctx.createRadialGradient(px, py, mr * 0.1, px, py, mr);
+            radGrad.addColorStop(0, `rgba(${br}, ${bg}, ${bb}, 0.07)`);
+            radGrad.addColorStop(1, `rgba(${br}, ${bg}, ${bb}, 0)`);
+            ctx.fillStyle = radGrad;
+            ctx.beginPath();
+            ctx.arc(px, py, mr, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+
+      // 3. Scatter chips using rejection sampling with toroidal distance
+      const cellSize = 64;
+      const gridW = Math.ceil(W / cellSize);
+      const gridH = Math.ceil(H / cellSize);
+      const grid = Array.from({ length: gridW * gridH }, () => []);
+      const chips = [];
+
+      for (let i = 0; i < targetDensity; i++) {
+        const rTier = rand();
+        // Tiered aggregate sizes: statement chips, medium stones, smaller gravel
+        let baseR;
+        if (rTier < 0.08) {
+          baseR = 20 + rand() * 16;
+        } else if (rTier < 0.38) {
+          baseR = 10 + rand() * 9;
+        } else {
+          baseR = 3.8 + rand() * 5.5;
+        }
+        let R = baseR * chipScale;
+        let placed = false;
+        let cx = 0, cy = 0;
+
+        for (let attempt = 0; attempt < 24; attempt++) {
+          cx = rand() * W;
+          cy = rand() * H;
+          const gx = Math.floor(cx / cellSize);
+          const gy = Math.floor(cy / cellSize);
+          let collision = false;
+
+          for (let ox = -1; ox <= 1 && !collision; ox++) {
+            for (let oy = -1; oy <= 1 && !collision; oy++) {
+              const nGx = (gx + ox + gridW) % gridW;
+              const nGy = (gy + oy + gridH) % gridH;
+              const bucket = grid[nGy * gridW + nGx];
+              for (let k = 0; k < bucket.length; k++) {
+                const other = bucket[k];
+                if (toroidalDist(cx, cy, other.x, other.y, W, H) < (R + other.r) * 0.67) {
+                  collision = true;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (!collision) {
+            placed = true;
+            break;
+          }
+        }
+
+        // If crowded, fit as compact pebble
+        if (!placed) {
+          cx = rand() * W;
+          cy = rand() * H;
+          R = Math.max(2.8, R * 0.55);
+        }
+
+        // 4. Irregular 5-8 sided polygon with random squash and rotation
+        const numSides = 5 + Math.floor(rand() * 4); // 5, 6, 7, or 8
+        const squashX = 0.72 + rand() * 0.28;
+        const squashY = 0.72 + rand() * 0.28;
+        const rotAngle = rand() * Math.PI * 2;
+        const vertices = [];
+
+        for (let s = 0; s < numSides; s++) {
+          const baseAng = (s / numSides) * Math.PI * 2 + (rand() - 0.5) * (Math.PI * 2 / numSides) * 0.55;
+          const vertexRad = R * (1 + (rand() - 0.5) * 0.42);
+          const px = vertexRad * Math.cos(baseAng) * squashX;
+          const py = vertexRad * Math.sin(baseAng) * squashY;
+          // Rotated coords
+          vertices.push({
+            x: px * Math.cos(rotAngle) - py * Math.sin(rotAngle),
+            y: px * Math.sin(rotAngle) + py * Math.cos(rotAngle)
+          });
+        }
+
+        // Color and gradient
+        const chipColor = palette.chips[Math.floor(rand() * palette.chips.length)];
+        const lightShade = adjustColor(chipColor, 18);
+        const darkShade = adjustColor(chipColor, -18);
+        const gradAngle = rand() * Math.PI * 2;
+        const isLight = getLuminance(chipColor) > 0.46;
+
+        // Translucent white vein curve for larger chips
+        let vein = null;
+        if (R > 13.5 * chipScale && rand() < 0.65) {
+          const vStartIdx = 0;
+          const vEndIdx = Math.floor(numSides / 2);
+          const p1 = vertices[vStartIdx];
+          const p2 = vertices[vEndIdx];
+          vein = {
+            x1: p1.x * 0.85,
+            y1: p1.y * 0.85,
+            cx: (p1.x + p2.x) * 0.5 + (rand() - 0.5) * R * 0.5,
+            cy: (p1.y + p2.y) * 0.5 + (rand() - 0.5) * R * 0.5,
+            x2: p2.x * 0.85,
+            y2: p2.y * 0.85,
+            width: 0.9 + rand() * 0.9
+          };
+        }
+
+        const chipData = {
+          x: cx,
+          y: cy,
+          r: R,
+          vertices,
+          chipColor,
+          lightShade,
+          darkShade,
+          gradAngle,
+          isLight,
+          vein
+        };
+
+        chips.push(chipData);
+        const gx = Math.floor(cx / cellSize);
+        const gy = Math.floor(cy / cellSize);
+        grid[gy * gridW + gx].push(chipData);
+      }
+
+      // 5. Paint chips 9 times (centre plus eight neighbours offset by ±W/±H) for seamless wrap
+      // Pass A: Soft offset shadows
+      ctx.fillStyle = 'rgba(26, 18, 12, 0.14)';
+      const shadowOffsetX = 1.3;
+      const shadowOffsetY = 1.8;
+
+      for (let i = 0; i < chips.length; i++) {
+        const c = chips[i];
+        for (let j = 0; j < WRAP_OFFSETS.length; j++) {
+          const px = c.x + WRAP_OFFSETS[j][0];
+          const py = c.y + WRAP_OFFSETS[j][1];
+          if (px + c.r >= -20 && px - c.r <= W + 20 && py + c.r >= -20 && py - c.r <= H + 20) {
+            ctx.beginPath();
+            ctx.moveTo(px + shadowOffsetX + c.vertices[0].x, py + shadowOffsetY + c.vertices[0].y);
+            for (let v = 1; v < c.vertices.length; v++) {
+              ctx.lineTo(px + shadowOffsetX + c.vertices[v].x, py + shadowOffsetY + c.vertices[v].y);
+            }
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+      }
+
+      // Pass B: Chip bodies, linear gradient, hairline stroke & marble veins
+      for (let i = 0; i < chips.length; i++) {
+        const c = chips[i];
+        for (let j = 0; j < WRAP_OFFSETS.length; j++) {
+          const px = c.x + WRAP_OFFSETS[j][0];
+          const py = c.y + WRAP_OFFSETS[j][1];
+          if (px + c.r >= -20 && px - c.r <= W + 20 && py + c.r >= -20 && py - c.r <= H + 20) {
+            ctx.beginPath();
+            ctx.moveTo(px + c.vertices[0].x, py + c.vertices[0].y);
+            for (let v = 1; v < c.vertices.length; v++) {
+              ctx.lineTo(px + c.vertices[v].x, py + c.vertices[v].y);
+            }
+            ctx.closePath();
+
+            // Linear gradient across chip
+            const dx = Math.cos(c.gradAngle) * c.r;
+            const dy = Math.sin(c.gradAngle) * c.r;
+            const grad = ctx.createLinearGradient(px - dx, py - dy, px + dx, py + dy);
+            grad.addColorStop(0, c.lightShade);
+            grad.addColorStop(1, c.darkShade);
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // Hairline stroke
+            ctx.strokeStyle = c.isLight ? 'rgba(38, 30, 22, 0.13)' : 'rgba(255, 255, 255, 0.18)';
+            ctx.lineWidth = 0.75;
+            ctx.stroke();
+
+            // Translucent white vein curve for larger chips
+            if (c.vein) {
+              ctx.save();
+              ctx.clip();
+              ctx.beginPath();
+              ctx.moveTo(px + c.vein.x1, py + c.vein.y1);
+              ctx.quadraticCurveTo(px + c.vein.cx, py + c.vein.cy, px + c.vein.x2, py + c.vein.y2);
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.44)';
+              ctx.lineWidth = c.vein.width;
+              ctx.lineCap = 'round';
+              ctx.stroke();
+              ctx.restore();
+            }
+          }
+        }
+      }
+
+      // 6. Speckle: adds up to ~2,600 tiny grains in chip colours plus black and white
+      const totalSpeckles = Math.round(2600 * (specklePercent / 100));
+      for (let s = 0; s < totalSpeckles; s++) {
+        const sx = rand() * W;
+        const sy = rand() * H;
+        const sr = 0.55 + rand() * 1.15;
+        const colorType = rand();
+
+        let speckColor;
+        if (colorType < 0.6) {
+          speckColor = palette.chips[Math.floor(rand() * palette.chips.length)];
+        } else if (colorType < 0.8) {
+          speckColor = '#ffffff';
+        } else {
+          speckColor = '#1e1b18';
+        }
+
+        ctx.fillStyle = speckColor;
+        for (let j = 0; j < WRAP_OFFSETS.length; j++) {
+          const px = sx + WRAP_OFFSETS[j][0];
+          const py = sy + WRAP_OFFSETS[j][1];
+          if (px + sr >= 0 && px - sr <= W && py + sr >= 0 && py - sr <= H) {
+            ctx.beginPath();
+            ctx.arc(px, py, sr, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+
+      // 7. Finish with diagonal polish sheen gradient
+      const sheen = ctx.createLinearGradient(0, 0, W, H);
+      sheen.addColorStop(0, 'rgba(255, 255, 255, 0.10)');
+      sheen.addColorStop(0.38, 'rgba(255, 255, 255, 0.02)');
+      sheen.addColorStop(0.72, 'rgba(0, 0, 0, 0.0)');
+      sheen.addColorStop(1, 'rgba(0, 0, 0, 0.035)');
+      ctx.fillStyle = sheen;
+      ctx.fillRect(0, 0, W, H);
+
+      // 8. Update live CSS custom property --tile-url for mockups
+      const dataUrl = canvas.toDataURL('image/png');
+      document.documentElement.style.setProperty('--tile-url', `url("${dataUrl}")`);
+    }
+
+    // -------------------------------------------------------------------------
+    // INTERACTION HANDLERS
+    // -------------------------------------------------------------------------
+    function triggerTileFlash() {
+      slabWrapper.classList.remove('is-flashing');
+      void slabWrapper.offsetWidth; // Force reflow
+      slabWrapper.classList.add('is-flashing');
+    }
+
+    function rePour(newSeed = true) {
+      if (newSeed) {
+        currentSeed = Math.floor(Math.random() * 90000) + 10000;
+        seedDisplay.textContent = `seed ${currentSeed.toString().padStart(4, '0')}`;
+      }
+      triggerTileFlash();
+      generateTerrazzo();
+    }
+
+    function updateBaseColorUI(color) {
+      currentBaseColor = color;
+      baseColorInput.value = color;
+      baseColorSwatch.style.backgroundColor = color;
+      baseHexDisplay.textContent = color.toUpperCase();
+    }
+
+    function selectPalette(paletteKey) {
+      currentPaletteKey = paletteKey;
+      const palette = PALETTES[paletteKey];
+      paletteBadge.textContent = palette.name;
+
+      paletteBtns.forEach(btn => {
+        const isMatch = btn.getAttribute('data-palette') === paletteKey;
+        btn.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+      });
+
+      // Choosing a palette also resets the base colour
+      updateBaseColorUI(palette.base);
+      triggerTileFlash();
+      generateTerrazzo();
+    }
+
+    function downloadPNG() {
+      const link = document.createElement('a');
+      const padSeed = currentSeed.toString().padStart(4, '0');
+      link.download = `terrazzo-${currentPaletteKey}-${padSeed}.png`;
+      link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Event Listeners: Sliders
+    densitySlider.addEventListener('input', () => {
+      densityVal.textContent = `${densitySlider.value} chips`;
+      generateTerrazzo();
+    });
+
+    sizeSlider.addEventListener('input', () => {
+      sizeVal.textContent = `${parseFloat(sizeSlider.value).toFixed(2)}×`;
+      generateTerrazzo();
+    });
+
+    speckleSlider.addEventListener('input', () => {
+      speckleVal.textContent = `${speckleSlider.value}%`;
+      generateTerrazzo();
+    });
+
+    // Event Listeners: Base Color
+    baseColorInput.addEventListener('input', (e) => {
+      updateBaseColorUI(e.target.value);
+      generateTerrazzo();
+    });
+
+    resetBaseBtn.addEventListener('click', () => {
+      const defaultBase = PALETTES[currentPaletteKey].base;
+      updateBaseColorUI(defaultBase);
+      triggerTileFlash();
+      generateTerrazzo();
+    });
+
+    // Event Listeners: Palette Selection
+    paletteBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-palette');
+        selectPalette(key);
+      });
+    });
+
+    // Event Listeners: Action Buttons
+    regenerateBtn.addEventListener('click', () => {
+      rePour(true);
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      downloadPNG();
+    });
+
+    // Keyboard Shortcuts: R for re-pour, S for download
+    window.addEventListener('keydown', (e) => {
+      // Ignore if inside text input
+      if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        rePour(true);
+      } else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        downloadPNG();
+      }
+    });
+
+    // Initial boot
+    updateBaseColorUI(currentBaseColor);
+    seedDisplay.textContent = `seed ${currentSeed.toString().padStart(4, '0')}`;
+    generateTerrazzo();
+  </script>
+</body>
+</html>

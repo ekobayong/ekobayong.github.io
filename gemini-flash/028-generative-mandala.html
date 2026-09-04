@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>KALEIDO — Symmetric Mandala Studio</title>
+  <style>
+    /* ==========================================================================
+       Reset & Base Variables
+       ========================================================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --bg-center: #1a1b1e;
+      --bg-edges: #0d0e10;
+      --amber: #f0b35a;
+      --amber-glow: rgba(240, 179, 90, 0.45);
+      --amber-dim: rgba(240, 179, 90, 0.16);
+      --text-muted: #8b8c91;
+      --text-light: #f3f4f6;
+      --glass-fill: rgba(255, 255, 255, 0.06);
+      --glass-border: rgba(255, 255, 255, 0.14);
+      --glass-popover: rgba(18, 20, 25, 0.88);
+      --glass-blur: blur(18px);
+      --deep-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.72), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+      --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 50%, var(--bg-center) 0%, var(--bg-edges) 100%);
+      font-family: var(--font-sans);
+      color: var(--text-light);
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    /* Fixed Canvases covering viewport */
+    #mainCanvas, #cursorCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #mainCanvas {
+      z-index: 1;
+      cursor: crosshair;
+    }
+
+    #cursorCanvas {
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /* CSS Vignette overlay darkening corners by 55% */
+    .vignette-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 3;
+      background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.55) 100%);
+    }
+
+    /* ==========================================================================
+       Top Branding & Status Displays
+       ========================================================================== */
+    .brand-block {
+      position: fixed;
+      top: 26px;
+      left: 30px;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .brand-title {
+      font-weight: 300;
+      font-size: 21px;
+      letter-spacing: 0.32em;
+      color: #ffffff;
+      text-shadow: 0 2px 12px rgba(0, 0, 0, 0.65);
+    }
+
+    .brand-subtitle {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.22em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      padding-left: 2px;
+    }
+
+    /* Status readout block */
+    .status-block {
+      position: fixed;
+      top: 26px;
+      right: 30px;
+      z-index: 10;
+      pointer-events: none;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      line-height: 1.7;
+      color: var(--text-muted);
+      background: rgba(14, 16, 20, 0.55);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 9px 15px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      min-width: 140px;
+    }
+
+    .status-lbl {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .status-val.amber {
+      color: var(--amber);
+      font-weight: 600;
+      text-shadow: 0 0 10px var(--amber-glow);
+    }
+
+    /* Hint toast */
+    .hint-toast {
+      position: fixed;
+      top: 96px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      pointer-events: none;
+      font-size: 11.5px;
+      font-family: var(--font-sans);
+      letter-spacing: 0.04em;
+      color: rgba(255, 255, 255, 0.65);
+      background: rgba(15, 17, 21, 0.6);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      padding: 6px 14px;
+      border-radius: 20px;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    .hint-toast.visible {
+      opacity: 1;
+    }
+
+    /* ==========================================================================
+       Floating Frosted Pill Dock & Controls
+       ========================================================================== */
+    .dock-container {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 40;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .pill-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      border-radius: 9999px;
+      background: var(--glass-fill);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--deep-shadow);
+      position: relative;
+    }
+
+    .tool-btn {
+      appearance: none;
+      background: transparent;
+      border: 1px solid transparent;
+      color: rgba(255, 255, 255, 0.82);
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      padding: 7px 13px;
+      border-radius: 9999px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      white-space: nowrap;
+      outline: none;
+      position: relative;
+    }
+
+    .tool-btn:hover {
+      background: rgba(255, 255, 255, 0.09);
+      color: #ffffff;
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .tool-btn:active {
+      transform: scale(0.96);
+    }
+
+    .tool-icon {
+      width: 15px;
+      height: 15px;
+      stroke-width: 1.9;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+    }
+
+    .chevron-icon {
+      width: 10px;
+      height: 10px;
+      opacity: 0.55;
+      margin-left: -2px;
+      transition: transform 0.2s ease;
+    }
+
+    .popover-open .chevron-icon {
+      transform: rotate(180deg);
+    }
+
+    .tool-sep {
+      width: 1px;
+      height: 18px;
+      background: rgba(255, 255, 255, 0.12);
+      margin: 0 2px;
+    }
+
+    .shortcut-kbd {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      opacity: 0.45;
+      padding: 1px 4px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      margin-left: 2px;
+    }
+
+    /* Auto-Draw Toggle Active State: Turns amber */
+    .tool-btn.btn-autodraw.active {
+      background: var(--amber-dim);
+      border-color: rgba(240, 179, 90, 0.5);
+      color: var(--amber);
+      box-shadow: 0 0 20px var(--amber-glow), inset 0 0 10px rgba(240, 179, 90, 0.2);
+    }
+
+    .tool-btn.btn-autodraw.active .tool-icon {
+      filter: drop-shadow(0 0 5px var(--amber));
+      animation: pulseSparkle 1.8s infinite alternate ease-in-out;
+    }
+
+    @keyframes pulseSparkle {
+      0% { transform: scale(1) rotate(0deg); }
+      100% { transform: scale(1.15) rotate(8deg); }
+    }
+
+    /* Mirror active dot indicator */
+    .indicator-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #4b5563;
+      transition: all 0.2s ease;
+    }
+
+    .indicator-dot.active {
+      background: var(--amber);
+      box-shadow: 0 0 8px var(--amber);
+    }
+
+    /* Palette mini swatch indicator */
+    .palette-circle-preview {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      flex-shrink: 0;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    }
+
+    /* ==========================================================================
+       Popovers: Translate-and-fade rise transition
+       ========================================================================== */
+    .popover {
+      position: absolute;
+      bottom: calc(100% + 14px);
+      left: 50%;
+      transform: translateX(-50%) translateY(10px) scale(0.96);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      background: var(--glass-popover);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--glass-border);
+      border-radius: 18px;
+      box-shadow: 0 24px 50px rgba(0, 0, 0, 0.7), 0 0 1px 1px rgba(255, 255, 255, 0.08);
+      padding: 14px 16px;
+      z-index: 50;
+      min-width: 240px;
+    }
+
+    .popover.open {
+      transform: translateX(-50%) translateY(0) scale(1);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .popover-header {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 11px;
+      padding-left: 2px;
+    }
+
+    /* Symmetry Chips */
+    .chips-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 7px;
+    }
+
+    .chip-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      color: rgba(255, 255, 255, 0.8);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 8px 0;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      outline: none;
+    }
+
+    .chip-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.22);
+      color: #fff;
+    }
+
+    .chip-btn.active {
+      background: var(--amber-dim);
+      border-color: var(--amber);
+      color: var(--amber);
+      font-weight: 700;
+      box-shadow: 0 0 12px rgba(240, 179, 90, 0.3);
+    }
+
+    /* Palette Options List */
+    .palette-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 230px;
+    }
+
+    .palette-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 7px 10px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: left;
+      outline: none;
+    }
+
+    .palette-item:hover {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .palette-item.active {
+      background: rgba(240, 179, 90, 0.12);
+      border-color: rgba(240, 179, 90, 0.45);
+    }
+
+    .palette-preview-bar {
+      width: 44px;
+      height: 20px;
+      border-radius: 6px;
+      flex-shrink: 0;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .palette-preview-bar.conic-drift {
+      background: conic-gradient(from 0deg, #ff4e50, #f9d423, #00e676, #00b0ff, #d500f9, #ff4e50);
+    }
+
+    .palette-preview-bar.swatch-ember {
+      background: linear-gradient(90deg, #ffb347, #ff7a3a, #ff5e3a, #e0335a, #c81d5a);
+    }
+
+    .palette-preview-bar.swatch-lagoon {
+      background: linear-gradient(90deg, #a7f3d0, #5eead4, #22d3ee, #3b82f6, #1e3a8a);
+    }
+
+    .palette-preview-bar.swatch-gilded {
+      background: linear-gradient(90deg, #fff6d5, #f7dd9a, #f0b35a, #c98a2c, #7a4b12);
+    }
+
+    .palette-preview-bar.swatch-ivory {
+      background: linear-gradient(90deg, #ffffff, #f7f6f2, #ede8df, #dcd5c9, #a8a29e);
+    }
+
+    .palette-text {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .palette-title {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: #fff;
+    }
+
+    .palette-item.active .palette-title {
+      color: var(--amber);
+    }
+
+    .palette-desc {
+      font-size: 9.5px;
+      color: var(--text-muted);
+    }
+
+    /* ==========================================================================
+       Responsive: Narrow screens collapse labels to icons only
+       ========================================================================== */
+    @media (max-width: 768px) {
+      .brand-block {
+        top: 16px;
+        left: 18px;
+      }
+      .brand-title {
+        font-size: 17px;
+        letter-spacing: 0.28em;
+      }
+      .brand-subtitle {
+        font-size: 8px;
+      }
+      .status-block {
+        top: 16px;
+        right: 18px;
+        font-size: 10px;
+        padding: 6px 11px;
+      }
+      .status-row {
+        gap: 10px;
+        min-width: 110px;
+      }
+      .dock-container {
+        bottom: 18px;
+      }
+      .btn-label, .shortcut-kbd, .chevron-icon {
+        display: none !important;
+      }
+      .tool-btn {
+        padding: 8px 11px;
+      }
+      .pill-toolbar {
+        padding: 5px 8px;
+        gap: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Mandala Rendering Canvas -->
+  <canvas id="mainCanvas"></canvas>
+
+  <!-- Interactive Symmetry Guide & Hover Cursor Canvas -->
+  <canvas id="cursorCanvas"></canvas>
+
+  <!-- CSS Vignette Overlay (Darkening corners by 55%) -->
+  <div class="vignette-overlay"></div>
+
+  <!-- Brand Block Top-Left -->
+  <header class="brand-block">
+    <h1 class="brand-title">KALEIDO</h1>
+    <div class="brand-subtitle">MANDALA GENERATIVE STUDIO</div>
+  </header>
+
+  <!-- Monospace Status Block Top-Right -->
+  <div class="status-block" id="statusBlock">
+    <div class="status-row">
+      <span class="status-lbl">SYM</span>
+      <span class="status-val amber" id="statusSym">8-FOLD</span>
+    </div>
+    <div class="status-row">
+      <span class="status-lbl">MIRROR</span>
+      <span class="status-val amber" id="statusMirror">ON</span>
+    </div>
+    <div class="status-row">
+      <span class="status-lbl">STROKES</span>
+      <span class="status-val amber" id="statusStrokes">0</span>
+    </div>
+    <div class="status-row">
+      <span class="status-lbl">PALETTE</span>
+      <span class="status-val amber" id="statusPalette">DRIFT</span>
+    </div>
+  </div>
+
+  <!-- Dynamic Hint Toast -->
+  <div class="hint-toast" id="hintToast">Draw freely on the canvas or tap Auto-Draw [A]</div>
+
+  <!-- Floating Dock Container -->
+  <nav class="dock-container" id="dockContainer">
+
+    <!-- Popover 1: Symmetry Selection -->
+    <div class="popover" id="popoverSymmetry">
+      <div class="popover-header">RADIAL SYMMETRY</div>
+      <div class="chips-grid">
+        <button class="chip-btn" data-sym="6">6</button>
+        <button class="chip-btn active" data-sym="8">8</button>
+        <button class="chip-btn" data-sym="12">12</button>
+        <button class="chip-btn" data-sym="16">16</button>
+      </div>
+    </div>
+
+    <!-- Popover 2: Palette Selection -->
+    <div class="popover" id="popoverPalette">
+      <div class="popover-header">COLOR HARMONY</div>
+      <div class="palette-list">
+        <button class="palette-item active" data-palette="drift">
+          <div class="palette-preview-bar conic-drift"></div>
+          <div class="palette-text">
+            <span class="palette-title">Drift</span>
+            <span class="palette-desc">Dynamic HSL rainbow wave</span>
+          </div>
+        </button>
+        <button class="palette-item" data-palette="ember">
+          <div class="palette-preview-bar swatch-ember"></div>
+          <div class="palette-text">
+            <span class="palette-title">Ember</span>
+            <span class="palette-desc">Crimson, flame & marigold</span>
+          </div>
+        </button>
+        <button class="palette-item" data-palette="lagoon">
+          <div class="palette-preview-bar swatch-lagoon"></div>
+          <div class="palette-text">
+            <span class="palette-title">Lagoon</span>
+            <span class="palette-desc">Teal, turquoise & deep azure</span>
+          </div>
+        </button>
+        <button class="palette-item" data-palette="gilded">
+          <div class="palette-preview-bar swatch-gilded"></div>
+          <div class="palette-text">
+            <span class="palette-title">Gilded</span>
+            <span class="palette-desc">Sunlit gold & bronze ochre</span>
+          </div>
+        </button>
+        <button class="palette-item" data-palette="ivory">
+          <div class="palette-preview-bar swatch-ivory"></div>
+          <div class="palette-text">
+            <span class="palette-title">Ivory</span>
+            <span class="palette-desc">Pearl whites & warm minerals</span>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Frosted Pill Toolbar -->
+    <div class="pill-toolbar" id="pillToolbar">
+
+      <!-- Clear Canvas -->
+      <button class="tool-btn" id="btnClear" title="Clear Canvas (C)">
+        <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        </svg>
+        <span class="btn-label">Clear</span>
+        <kbd class="shortcut-kbd">C</kbd>
+      </button>
+
+      <!-- Undo -->
+      <button class="tool-btn" id="btnUndo" title="Undo Stroke (Z)">
+        <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M3 9h12a5 5 0 0 1 5 5 5 5 0 0 1-5 5H9m-6-10 4-4m-4 4 4 4"/>
+        </svg>
+        <span class="btn-label">Undo</span>
+        <kbd class="shortcut-kbd">Z</kbd>
+      </button>
+
+      <div class="tool-sep"></div>
+
+      <!-- Symmetry Popover Trigger -->
+      <button class="tool-btn popover-trigger" id="btnSymmetryTrigger" title="Symmetry (6, 8, 12, 16)">
+        <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/>
+        </svg>
+        <span class="btn-label" id="lblSymmetry">8-Fold</span>
+        <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="m6 9 6 6 6-6"/>
+        </svg>
+      </button>
+
+      <!-- Mirror Toggle -->
+      <button class="tool-btn" id="btnMirrorToggle" title="Mirror Bilateral Symmetry (M)">
+        <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="m12 2v20M5 7l7 5-7 5V7Zm14 0-7 5 7 5V7Z"/>
+        </svg>
+        <span class="btn-label">Mirror</span>
+        <span class="indicator-dot active" id="mirrorDot"></span>
+        <kbd class="shortcut-kbd">M</kbd>
+      </button>
+
+      <!-- Palette Popover Trigger -->
+      <button class="tool-btn popover-trigger" id="btnPaletteTrigger" title="Color Harmony Palette">
+        <span class="palette-circle-preview conic-drift" id="paletteBtnSwatch"></span>
+        <span class="btn-label" id="lblPalette">Drift</span>
+        <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="m6 9 6 6 6-6"/>
+        </svg>
+      </button>
+
+      <div class="tool-sep"></div>
+
+      <!-- Auto-Draw Mode Toggle -->
+      <button class="tool-btn btn-autodraw" id="btnAutoDraw" title="Autonomous Filigree Generator (A)">
+        <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="m15 4 2 2m0 0 2 2m-2-2-4 4m6-6 1-1m-7 7L4 20a1 1 0 0 0 0 1.4l.6.6a1 1 0 0 0 1.4 0l11-11m-3-3 2 2"/>
+          <path d="M19 14v2m0 4v2m-2-4h4M7 4v2M7 8v2M5 6h4"/>
+        </svg>
+        <span class="btn-label">Auto-Draw</span>
+        <kbd class="shortcut-kbd">A</kbd>
+      </button>
+
+      <!-- Save PNG -->
+      <button class="tool-btn" id="btnSavePNG" title="Export High-Res PNG (S)">
+        <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5m0 0 5-5m-5 5V3"/>
+        </svg>
+        <span class="btn-label">Save PNG</span>
+        <kbd class="shortcut-kbd">S</kbd>
+      </button>
+
+    </div>
+  </nav>
+
+  <script>
+    (function () {
+      'use strict';
+
+      /* ==========================================================================
+         Color Palettes Definition
+         ========================================================================== */
+      const PALETTES = {
+        drift: null, // Dynamic HSL drifting hue
+        ember: ['#ffb347', '#ff7a3a', '#ff5e3a', '#e0335a', '#c81d5a'],
+        lagoon: ['#a7f3d0', '#5eead4', '#22d3ee', '#3b82f6', '#1e3a8a'],
+        gilded: ['#fff6d5', '#f7dd9a', '#f0b35a', '#c98a2c', '#7a4b12'],
+        ivory: ['#ffffff', '#f7f6f2', '#ede8df', '#dcd5c9', '#a8a29e']
+      };
+
+      function hexToRgb(hex) {
+        const c = hex.replace('#', '');
+        const bigint = parseInt(c, 16);
+        return {
+          r: (bigint >> 16) & 255,
+          g: (bigint >> 8) & 255,
+          b: bigint & 255
+        };
+      }
+
+      function getInterpolatedPaletteColor(paletteKey, step) {
+        if (paletteKey === 'drift') {
+          // Slowly drifting hue in HSL (85% saturation, 62% lightness)
+          const hue = (step * 2.2) % 360;
+          return `hsl(${hue.toFixed(1)}, 85%, 62%)`;
+        }
+        const colors = PALETTES[paletteKey];
+        if (!colors) return '#ffffff';
+        const len = colors.length;
+        const wrapped = (step * 0.05) % len;
+        const i0 = Math.floor(wrapped);
+        const i1 = (i0 + 1) % len;
+        const f = wrapped - i0;
+        const c0 = hexToRgb(colors[i0]);
+        const c1 = hexToRgb(colors[i1]);
+        const r = Math.round(c0.r + (c1.r - c0.r) * f);
+        const g = Math.round(c0.g + (c1.g - c0.g) * f);
+        const b = Math.round(c0.b + (c1.b - c0.b) * f);
+        return `rgb(${r}, ${g}, ${b})`;
+      }
+
+      /* ==========================================================================
+         Application State
+         ========================================================================== */
+      let currentSymmetry = 8;
+      let currentMirror = true;
+      let currentPalette = 'drift';
+      let isAutoDrawing = false;
+      let globalSampleCounter = 0;
+
+      // Stroke repository for undo, resize preservation, and PNG compositing
+      // Stroke: { symmetry, mirror, points: [ { dx, dy, w, color } ] }
+      const strokes = [];
+      let activeStroke = null;
+
+      // Filtered brush width state
+      let currentFilteredWidth = 7.0;
+      let lastPointerX = 0;
+      let lastPointerY = 0;
+      let lastPointerTime = 0;
+      let isPointerDown = false;
+
+      /* ==========================================================================
+         DOM & Canvas Setup
+         ========================================================================== */
+      const mainCanvas = document.getElementById('mainCanvas');
+      const mainCtx = mainCanvas.getContext('2d', { alpha: true });
+
+      const cursorCanvas = document.getElementById('cursorCanvas');
+      const cursorCtx = cursorCanvas.getContext('2d', { alpha: true });
+
+      let width = window.innerWidth;
+      let height = window.innerHeight;
+      let cx = width / 2;
+      let cy = height / 2;
+      let dpr = 1;
+
+      function resizeCanvases() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        cx = width / 2;
+        cy = height / 2;
+        dpr = Math.min(window.devicePixelRatio || 1, 3);
+
+        mainCanvas.width = Math.round(width * dpr);
+        mainCanvas.height = Math.round(height * dpr);
+        mainCanvas.style.width = width + 'px';
+        mainCanvas.style.height = height + 'px';
+
+        cursorCanvas.width = Math.round(width * dpr);
+        cursorCanvas.height = Math.round(height * dpr);
+        cursorCanvas.style.width = width + 'px';
+        cursorCanvas.style.height = height + 'px';
+
+        mainCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        cursorCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        redrawAllStrokes();
+      }
+
+      window.addEventListener('resize', resizeCanvases);
+
+      /* ==========================================================================
+         Symmetric Math & Rendering Core
+         ========================================================================== */
+      function getSymmetricPoints(dx, dy, symmetry, mirror, center_x, center_y) {
+        const r = Math.hypot(dx, dy);
+        const phi = Math.atan2(dy, dx);
+        const step = (Math.PI * 2) / symmetry;
+        const pts = [];
+
+        for (let k = 0; k < symmetry; k++) {
+          const angle1 = phi + k * step;
+          pts.push({
+            x: center_x + r * Math.cos(angle1),
+            y: center_y + r * Math.sin(angle1)
+          });
+
+          if (mirror) {
+            // Bilateral reflection across the sector ray
+            const angle2 = -phi + k * step;
+            pts.push({
+              x: center_x + r * Math.cos(angle2),
+              y: center_y + r * Math.sin(angle2)
+            });
+          }
+        }
+        return pts;
+      }
+
+      /**
+       * Renders a single spline segment between successive midpoints.
+       * Uses quadratic curves with control point at actual sample for silky smooth interpolation.
+       */
+      function renderSegment(targetCtx, startPt, endPt, ctrlPt, width, color, symmetry, mirror, center_x, center_y) {
+        const startSym = getSymmetricPoints(startPt.dx, startPt.dy, symmetry, mirror, center_x, center_y);
+        const endSym = getSymmetricPoints(endPt.dx, endPt.dy, symmetry, mirror, center_x, center_y);
+        const ctrlSym = ctrlPt ? getSymmetricPoints(ctrlPt.dx, ctrlPt.dy, symmetry, mirror, center_x, center_y) : null;
+
+        targetCtx.save();
+        targetCtx.lineCap = 'round';
+        targetCtx.lineJoin = 'round';
+        targetCtx.globalAlpha = 0.92;
+        targetCtx.lineWidth = width;
+        targetCtx.strokeStyle = color;
+        targetCtx.shadowColor = color;
+        targetCtx.shadowBlur = Math.max(3, width * 1.15);
+
+        targetCtx.beginPath();
+        const count = startSym.length;
+        for (let j = 0; j < count; j++) {
+          targetCtx.moveTo(startSym[j].x, startSym[j].y);
+          if (ctrlSym) {
+            targetCtx.quadraticCurveTo(ctrlSym[j].x, ctrlSym[j].y, endSym[j].x, endSym[j].y);
+          } else {
+            targetCtx.lineTo(endSym[j].x, endSym[j].y);
+          }
+        }
+        targetCtx.stroke();
+        targetCtx.restore();
+      }
+
+      /**
+       * Redraws an entire stored stroke from its point array.
+       */
+      function drawCompleteStroke(targetCtx, stroke, center_x, center_y) {
+        const pts = stroke.points;
+        if (!pts || pts.length === 0) return;
+        const sym = stroke.symmetry;
+        const mir = stroke.mirror;
+
+        if (pts.length === 1) {
+          const p = pts[0];
+          const symPts = getSymmetricPoints(p.dx, p.dy, sym, mir, center_x, center_y);
+          targetCtx.save();
+          targetCtx.fillStyle = p.color;
+          targetCtx.shadowColor = p.color;
+          targetCtx.shadowBlur = Math.max(3, p.w * 1.15);
+          targetCtx.globalAlpha = 0.92;
+          targetCtx.beginPath();
+          const r = Math.max(0.9, p.w / 2);
+          for (const sp of symPts) {
+            targetCtx.moveTo(sp.x + r, sp.y);
+            targetCtx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+          }
+          targetCtx.fill();
+          targetCtx.restore();
+          return;
+        }
+
+        // Segment 1: start point to first midpoint
+        const p0 = pts[0];
+        const p1 = pts[1];
+        const m0 = { dx: (p0.dx + p1.dx) / 2, dy: (p0.dy + p1.dy) / 2 };
+        renderSegment(targetCtx, p0, m0, null, p0.w, p0.color, sym, mir, center_x, center_y);
+
+        // Intermediate segments: quadratic curve from M_{i-2} to M_{i-1} with control at P_{i-1}
+        for (let i = 2; i < pts.length; i++) {
+          const pPrev2 = pts[i - 2];
+          const pPrev1 = pts[i - 1];
+          const pCurr = pts[i];
+          const mPrev = { dx: (pPrev2.dx + pPrev1.dx) / 2, dy: (pPrev2.dy + pPrev1.dy) / 2 };
+          const mCurr = { dx: (pPrev1.dx + pCurr.dx) / 2, dy: (pCurr.dx + pCurr.dy) / 2 };
+          renderSegment(targetCtx, mPrev, mCurr, pPrev1, pPrev1.w, pPrev1.color, sym, mir, center_x, center_y);
+        }
+
+        // Final segment: last midpoint to end point
+        const pLast1 = pts[pts.length - 2];
+        const pLast = pts[pts.length - 1];
+        const mLast = { dx: (pLast1.dx + pLast.dx) / 2, dy: (pLast1.dy + pLast.dy) / 2 };
+        renderSegment(targetCtx, mLast, pLast, null, pLast.w, pLast.color, sym, mir, center_x, center_y);
+      }
+
+      function redrawAllStrokes() {
+        mainCtx.clearRect(0, 0, width, height);
+        for (let i = 0; i < strokes.length; i++) {
+          drawCompleteStroke(mainCtx, strokes[i], cx, cy);
+        }
+      }
+
+      /* ==========================================================================
+         Low-Pass Filtered Velocity Dynamics
+         ========================================================================== */
+      function updateBrushWidth(dist, dt) {
+        // Speed in px per millisecond
+        const speed = dt > 0 ? (dist / dt) : 0;
+        // Map speed: slow strokes (~0.05 px/ms) -> 14px; fast flicks (~2.4 px/ms) -> 1.2px
+        const norm = Math.min(Math.max((speed - 0.04) / 2.3, 0), 1);
+        const targetWidth = 14.0 - norm * (14.0 - 1.2);
+        // Low-pass filter (exponential moving average) for graceful, buttery transitions
+        currentFilteredWidth = currentFilteredWidth * 0.74 + targetWidth * 0.26;
+        return currentFilteredWidth;
+      }
+
+      /* ==========================================================================
+         Interactive Pointer Event Handling
+         ========================================================================== */
+      function onPointerDown(e) {
+        // If auto-draw is running, pause it while user draws manually
+        if (isAutoDrawing) {
+          pauseAutoDrawForUser();
+        }
+
+        mainCanvas.setPointerCapture(e.pointerId);
+        isPointerDown = true;
+        closeAllPopovers();
+
+        const x = e.clientX;
+        const y = e.clientY;
+        lastPointerX = x;
+        lastPointerY = y;
+        lastPointerTime = performance.now();
+        currentFilteredWidth = 7.0;
+
+        globalSampleCounter++;
+        const sampleColor = getInterpolatedPaletteColor(currentPalette, globalSampleCounter);
+
+        activeStroke = {
+          symmetry: currentSymmetry,
+          mirror: currentMirror,
+          palette: currentPalette,
+          points: [
+            {
+              dx: x - cx,
+              dy: y - cy,
+              w: currentFilteredWidth,
+              color: sampleColor
+            }
+          ]
+        };
+
+        // Clear cursor guides while drawing
+        cursorCtx.clearRect(0, 0, width, height);
+      }
+
+      function onPointerMove(e) {
+        if (!isPointerDown) {
+          renderCursorOverlay(e.clientX, e.clientY);
+          return;
+        }
+
+        const x = e.clientX;
+        const y = e.clientY;
+        const now = performance.now();
+        const dt = Math.max(1, now - lastPointerTime);
+        const dist = Math.hypot(x - lastPointerX, y - lastPointerY);
+
+        // Discard identical or micro-jitter samples
+        if (dist < 2.0 && dt < 12) return;
+
+        lastPointerX = x;
+        lastPointerY = y;
+        lastPointerTime = now;
+
+        const w = updateBrushWidth(dist, dt);
+        globalSampleCounter++;
+        const sampleColor = getInterpolatedPaletteColor(currentPalette, globalSampleCounter);
+
+        const currentPt = {
+          dx: x - cx,
+          dy: y - cy,
+          w: w,
+          color: sampleColor
+        };
+
+        activeStroke.points.push(currentPt);
+        const pts = activeStroke.points;
+        const m = pts.length - 1;
+
+        if (m === 1) {
+          // Draw first segment from P0 to midpoint M0
+          const p0 = pts[0];
+          const m0 = { dx: (p0.dx + currentPt.dx) / 2, dy: (p0.dy + currentPt.dy) / 2 };
+          renderSegment(mainCtx, p0, m0, null, p0.w, p0.color, activeStroke.symmetry, activeStroke.mirror, cx, cy);
+        } else if (m >= 2) {
+          // Draw quadratic curve between successive midpoints
+          const pPrev2 = pts[m - 2];
+          const pPrev1 = pts[m - 1];
+          const mPrev = { dx: (pPrev2.dx + pPrev1.dx) / 2, dy: (pPrev2.dy + pPrev1.dy) / 2 };
+          const mCurr = { dx: (pPrev1.dx + currentPt.dx) / 2, dy: (pPrev1.dy + currentPt.dy) / 2 };
+          renderSegment(mainCtx, mPrev, mCurr, pPrev1, pPrev1.w, pPrev1.color, activeStroke.symmetry, activeStroke.mirror, cx, cy);
+        }
+      }
+
+      function onPointerUp(e) {
+        if (!isPointerDown) return;
+        isPointerDown = false;
+        try {
+          mainCanvas.releasePointerCapture(e.pointerId);
+        } catch (_) {}
+
+        if (activeStroke && activeStroke.points.length > 0) {
+          const pts = activeStroke.points;
+          if (pts.length === 1) {
+            // Render single tap dot
+            const p = pts[0];
+            const symPts = getSymmetricPoints(p.dx, p.dy, activeStroke.symmetry, activeStroke.mirror, cx, cy);
+            mainCtx.save();
+            mainCtx.fillStyle = p.color;
+            mainCtx.shadowColor = p.color;
+            mainCtx.shadowBlur = Math.max(3, p.w * 1.15);
+            mainCtx.globalAlpha = 0.92;
+            mainCtx.beginPath();
+            const r = Math.max(0.9, p.w / 2);
+            for (const sp of symPts) {
+              mainCtx.moveTo(sp.x + r, sp.y);
+              mainCtx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+            }
+            mainCtx.fill();
+            mainCtx.restore();
+          } else {
+            // Draw closing segment to final point
+            const pLast1 = pts[pts.length - 2];
+            const pLast = pts[pts.length - 1];
+            const mLast = { dx: (pLast1.dx + pLast.dx) / 2, dy: (pLast1.dy + pLast.dy) / 2 };
+            renderSegment(mainCtx, mLast, pLast, null, pLast.w, pLast.color, activeStroke.symmetry, activeStroke.mirror, cx, cy);
+          }
+
+          strokes.push(activeStroke);
+          updateStatusReadout();
+        }
+
+        activeStroke = null;
+        resumeAutoDrawAfterUser();
+      }
+
+      mainCanvas.addEventListener('pointerdown', onPointerDown);
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointercancel', onPointerUp);
+
+      /* ==========================================================================
+         Cursor & Geometric Symmetry Spokes Overlay
+         ========================================================================== */
+      function renderCursorOverlay(mouseX, mouseY) {
+        cursorCtx.clearRect(0, 0, width, height);
+
+        const dx = mouseX - cx;
+        const dy = mouseY - cy;
+        const r = Math.hypot(dx, dy);
+
+        // Faint radial spoke guidelines
+        cursorCtx.save();
+        cursorCtx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+        cursorCtx.lineWidth = 1;
+        cursorCtx.beginPath();
+        const maxLen = Math.max(width, height) * 0.8;
+        const angleStep = (Math.PI * 2) / currentSymmetry;
+        for (let i = 0; i < currentSymmetry; i++) {
+          const a = i * angleStep;
+          cursorCtx.moveTo(cx, cy);
+          cursorCtx.lineTo(cx + maxLen * Math.cos(a), cy + maxLen * Math.sin(a));
+        }
+        cursorCtx.stroke();
+
+        // Faint concentric reference circle
+        if (r > 10) {
+          cursorCtx.beginPath();
+          cursorCtx.arc(cx, cy, r, 0, Math.PI * 2);
+          cursorCtx.strokeStyle = 'rgba(240, 179, 90, 0.05)';
+          cursorCtx.stroke();
+        }
+
+        // Symmetrical cursor preview dots
+        const symPts = getSymmetricPoints(dx, dy, currentSymmetry, currentMirror, cx, cy);
+        cursorCtx.fillStyle = 'rgba(240, 179, 90, 0.75)';
+        cursorCtx.shadowColor = 'rgba(240, 179, 90, 0.6)';
+        cursorCtx.shadowBlur = 6;
+        cursorCtx.beginPath();
+        for (const pt of symPts) {
+          cursorCtx.moveTo(pt.x + 2.5, pt.y);
+          cursorCtx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
+        }
+        cursorCtx.fill();
+        cursorCtx.restore();
+      }
+
+      window.addEventListener('pointerleave', () => {
+        cursorCtx.clearRect(0, 0, width, height);
+      });
+
+      /* ==========================================================================
+         Auto-Draw Mode: Generative Value-Noise Filigree Accumulator
+         ========================================================================== */
+      // 1D cubic Hermite value-noise generator
+      function pseudoHash(n) {
+        const sinVal = Math.sin(n * 127.1 + 311.7) * 43758.5453123;
+        return sinVal - Math.floor(sinVal);
+      }
+
+      function smoothValueNoise(t) {
+        const i = Math.floor(t);
+        const f = t - i;
+        const u = f * f * (3.0 - 2.0 * f);
+        return pseudoHash(i) * (1.0 - u) + pseudoHash(i + 1) * u;
+      }
+
+      function octaveNoise(t) {
+        return smoothValueNoise(t) * 0.7 + smoothValueNoise(t * 2.31 + 4.1) * 0.3;
+      }
+
+      let autoStroke = null;
+      let autoRingIndex = 0;
+      let autoCurrentSample = 0;
+      let autoTargetSamples = 180;
+      let autoDirection = 1;
+      let autoBaseRadius = 150;
+      let autoBaseWidth = 4.0;
+      let autoSpread = 30;
+      let autoBaseAngleSpeed = 0.012;
+      let autoCurrentAngle = 0;
+      let autoSeedAngle = 0;
+      let autoSeedRad = 0;
+      let autoSeedWidth = 0;
+      let autoRafId = null;
+      let autoPausedByUser = false;
+
+      function getFiveRingRadii() {
+        const minDim = Math.min(width, height) * 0.5;
+        // 5 ring radii distributing filigree across the mandala
+        return [0.16, 0.32, 0.48, 0.65, 0.82].map(scale => scale * minDim);
+      }
+
+      function initNewAutoStroke() {
+        const radii = getFiveRingRadii();
+        autoBaseRadius = radii[autoRingIndex % 5];
+        autoRingIndex = (autoRingIndex + 1) % 5;
+
+        // Each stroke lives 120-280 samples
+        autoTargetSamples = 120 + Math.floor(Math.random() * 161);
+        autoCurrentSample = 0;
+        autoDirection = Math.random() < 0.5 ? 1 : -1;
+        autoBaseWidth = 2.4 + Math.random() * 5.2;
+        autoSpread = 16 + Math.random() * 32;
+        autoBaseAngleSpeed = (0.009 + Math.random() * 0.009) * autoDirection;
+
+        autoSeedAngle = Math.random() * 10000;
+        autoSeedRad = Math.random() * 10000;
+        autoSeedWidth = Math.random() * 10000;
+
+        autoStroke = {
+          symmetry: currentSymmetry,
+          mirror: currentMirror,
+          palette: currentPalette,
+          points: []
+        };
+      }
+
+      function stepAutoDraw() {
+        if (!isAutoDrawing || isPointerDown) return;
+
+        // Advance 2 samples per animation frame for smooth, brisk filigree weaving
+        for (let step = 0; step < 2; step++) {
+          if (!autoStroke || autoCurrentSample >= autoTargetSamples) {
+            if (autoStroke && autoStroke.points.length > 1) {
+              strokes.push(autoStroke);
+              updateStatusReadout();
+            }
+            initNewAutoStroke();
+          }
+
+          const s = autoCurrentSample;
+          // Angular velocity driven by value noise
+          const angNoise = octaveNoise(autoSeedAngle + s * 0.032);
+          autoCurrentAngle += autoBaseAngleSpeed * (0.6 + angNoise * 0.8);
+
+          // Radial wobble driven by value noise
+          const radNoise = octaveNoise(autoSeedRad + s * 0.038);
+          const r = Math.max(12, autoBaseRadius + (radNoise - 0.5) * 2.0 * autoSpread);
+
+          const sampleDx = r * Math.cos(autoCurrentAngle);
+          const sampleDy = r * Math.sin(autoCurrentAngle);
+
+          // Width driven gracefully
+          const wNoise = octaveNoise(autoSeedWidth + s * 0.045);
+          const sampleW = Math.max(1.2, Math.min(14, autoBaseWidth * (0.55 + 0.9 * wNoise)));
+
+          globalSampleCounter++;
+          const sampleCol = getInterpolatedPaletteColor(currentPalette, globalSampleCounter);
+
+          const samplePt = {
+            dx: sampleDx,
+            dy: sampleDy,
+            w: sampleW,
+            color: sampleCol
+          };
+
+          autoStroke.points.push(samplePt);
+          const pts = autoStroke.points;
+          const m = pts.length - 1;
+
+          if (m === 1) {
+            const p0 = pts[0];
+            const m0 = { dx: (p0.dx + samplePt.dx) / 2, dy: (p0.dy + samplePt.dy) / 2 };
+            renderSegment(mainCtx, p0, m0, null, p0.w, p0.color, autoStroke.symmetry, autoStroke.mirror, cx, cy);
+          } else if (m >= 2) {
+            const pPrev2 = pts[m - 2];
+            const pPrev1 = pts[m - 1];
+            const mPrev = { dx: (pPrev2.dx + pPrev1.dx) / 2, dy: (pPrev2.dy + pPrev1.dy) / 2 };
+            const mCurr = { dx: (pPrev1.dx + samplePt.dx) / 2, dy: (pPrev1.dy + samplePt.dy) / 2 };
+            renderSegment(mainCtx, mPrev, mCurr, pPrev1, pPrev1.w, pPrev1.color, autoStroke.symmetry, autoStroke.mirror, cx, cy);
+          }
+
+          autoCurrentSample++;
+        }
+
+        autoRafId = requestAnimationFrame(stepAutoDraw);
+      }
+
+      function toggleAutoDraw() {
+        isAutoDrawing = !isAutoDrawing;
+        const btn = document.getElementById('btnAutoDraw');
+        if (isAutoDrawing) {
+          btn.classList.add('active');
+          initNewAutoStroke();
+          cancelAnimationFrame(autoRafId);
+          autoRafId = requestAnimationFrame(stepAutoDraw);
+          showToast('Auto-Draw Engaged [A]');
+        } else {
+          btn.classList.remove('active');
+          cancelAnimationFrame(autoRafId);
+          if (autoStroke && autoStroke.points.length > 1) {
+            strokes.push(autoStroke);
+            updateStatusReadout();
+          }
+          autoStroke = null;
+          showToast('Auto-Draw Paused');
+        }
+      }
+
+      function pauseAutoDrawForUser() {
+        autoPausedByUser = true;
+        cancelAnimationFrame(autoRafId);
+      }
+
+      function resumeAutoDrawAfterUser() {
+        if (autoPausedByUser && isAutoDrawing) {
+          autoPausedByUser = false;
+          initNewAutoStroke();
+          cancelAnimationFrame(autoRafId);
+          autoRafId = requestAnimationFrame(stepAutoDraw);
+        }
+      }
+
+      /* ==========================================================================
+         Save PNG Composite Exporter
+         ========================================================================== */
+      function exportMandalaPNG() {
+        const exportDpr = Math.min(window.devicePixelRatio || 1, 3);
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = Math.round(width * exportDpr);
+        offCanvas.height = Math.round(height * exportDpr);
+        const offCtx = offCanvas.getContext('2d', { alpha: false });
+
+        offCtx.scale(exportDpr, exportDpr);
+
+        // 1. Charcoal radial gradient (#1a1b1e center to #0d0e10 edges)
+        const center_x = width / 2;
+        const center_y = height / 2;
+        const maxDist = Math.hypot(center_x, center_y);
+        const bgGrad = offCtx.createRadialGradient(center_x, center_y, 0, center_x, center_y, maxDist);
+        bgGrad.addColorStop(0, '#1a1b1e');
+        bgGrad.addColorStop(1, '#0d0e10');
+        offCtx.fillStyle = bgGrad;
+        offCtx.fillRect(0, 0, width, height);
+
+        // 2. Vignette overlay darkening corners by 55%
+        const vigGrad = offCtx.createRadialGradient(center_x, center_y, Math.min(width, height) * 0.3, center_x, center_y, maxDist);
+        vigGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        vigGrad.addColorStop(1, 'rgba(0, 0, 0, 0.55)');
+        offCtx.fillStyle = vigGrad;
+        offCtx.fillRect(0, 0, width, height);
+
+        // 3. Composite the mandala artwork onto the background
+        offCtx.setTransform(1, 0, 0, 1, 0, 0);
+        offCtx.drawImage(mainCanvas, 0, 0);
+
+        // 4. Download file
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const link = document.createElement('a');
+        link.download = `kaleido-mandala-${timestamp}.png`;
+        link.href = offCanvas.toDataURL('image/png');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showToast('High-Res Mandala Saved [S]');
+      }
+
+      /* ==========================================================================
+         UI Controls, Status Updates & Popovers
+         ========================================================================== */
+      const statusSymEl = document.getElementById('statusSym');
+      const statusMirrorEl = document.getElementById('statusMirror');
+      const statusStrokesEl = document.getElementById('statusStrokes');
+      const statusPaletteEl = document.getElementById('statusPalette');
+
+      const lblSymmetryEl = document.getElementById('lblSymmetry');
+      const lblPaletteEl = document.getElementById('lblPalette');
+      const mirrorDotEl = document.getElementById('mirrorDot');
+      const paletteBtnSwatchEl = document.getElementById('paletteBtnSwatch');
+
+      const popoverSymmetry = document.getElementById('popoverSymmetry');
+      const popoverPalette = document.getElementById('popoverPalette');
+      const btnSymmetryTrigger = document.getElementById('btnSymmetryTrigger');
+      const btnPaletteTrigger = document.getElementById('btnPaletteTrigger');
+      const hintToast = document.getElementById('hintToast');
+
+      let toastTimer = null;
+      function showToast(text) {
+        hintToast.textContent = text;
+        hintToast.classList.add('visible');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          hintToast.classList.remove('visible');
+        }, 2200);
+      }
+
+      function updateStatusReadout() {
+        statusSymEl.textContent = `${currentSymmetry}-FOLD`;
+        statusMirrorEl.textContent = currentMirror ? 'ON' : 'OFF';
+        statusStrokesEl.textContent = strokes.length.toString();
+        statusPaletteEl.textContent = currentPalette.toUpperCase();
+
+        lblSymmetryEl.textContent = `${currentSymmetry}-Fold`;
+        lblPaletteEl.textContent = currentPalette.charAt(0).toUpperCase() + currentPalette.slice(1);
+
+        if (currentMirror) {
+          mirrorDotEl.classList.add('active');
+        } else {
+          mirrorDotEl.classList.remove('active');
+        }
+
+        // Update mini swatch on toolbar button
+        paletteBtnSwatchEl.className = 'palette-circle-preview';
+        if (currentPalette === 'drift') {
+          paletteBtnSwatchEl.classList.add('conic-drift');
+        } else {
+          paletteBtnSwatchEl.classList.add(`swatch-${currentPalette}`);
+        }
+      }
+
+      function closeAllPopovers() {
+        popoverSymmetry.classList.remove('open');
+        popoverPalette.classList.remove('open');
+        btnSymmetryTrigger.classList.remove('popover-open');
+        btnPaletteTrigger.classList.remove('popover-open');
+      }
+
+      function togglePopover(targetPopover, triggerBtn) {
+        const isOpen = targetPopover.classList.contains('open');
+        closeAllPopovers();
+        if (!isOpen) {
+          targetPopover.classList.add('open');
+          triggerBtn.classList.add('popover-open');
+        }
+      }
+
+      // Popover Triggers
+      btnSymmetryTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePopover(popoverSymmetry, btnSymmetryTrigger);
+      });
+
+      btnPaletteTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePopover(popoverPalette, btnPaletteTrigger);
+      });
+
+      // Close popovers on click outside
+      window.addEventListener('click', (e) => {
+        if (!popoverSymmetry.contains(e.target) && !popoverPalette.contains(e.target)) {
+          closeAllPopovers();
+        }
+      });
+
+      // Symmetry Chip Buttons
+      document.querySelectorAll('.chip-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentSymmetry = parseInt(btn.getAttribute('data-sym'), 10);
+          updateStatusReadout();
+          closeAllPopovers();
+          showToast(`Symmetry: ${currentSymmetry}-Fold`);
+        });
+      });
+
+      // Palette Items
+      document.querySelectorAll('.palette-item').forEach(item => {
+        item.addEventListener('click', () => {
+          document.querySelectorAll('.palette-item').forEach(it => it.classList.remove('active'));
+          item.classList.add('active');
+          currentPalette = item.getAttribute('data-palette');
+          updateStatusReadout();
+          closeAllPopovers();
+          showToast(`Palette: ${currentPalette.toUpperCase()}`);
+        });
+      });
+
+      // Mirror Toggle
+      function toggleMirror() {
+        currentMirror = !currentMirror;
+        updateStatusReadout();
+        showToast(`Mirror: ${currentMirror ? 'ON (2N Copies)' : 'OFF'}`);
+      }
+      document.getElementById('btnMirrorToggle').addEventListener('click', toggleMirror);
+
+      // Clear Canvas
+      function clearCanvas() {
+        strokes.length = 0;
+        if (autoStroke) {
+          autoStroke.points.length = 0;
+        }
+        mainCtx.clearRect(0, 0, width, height);
+        updateStatusReadout();
+        showToast('Canvas Cleared [C]');
+      }
+      document.getElementById('btnClear').addEventListener('click', clearCanvas);
+
+      // Undo Last Stroke
+      function undoStroke() {
+        if (strokes.length > 0) {
+          strokes.pop();
+          redrawAllStrokes();
+          updateStatusReadout();
+          showToast('Stroke Undone [Z]');
+        }
+      }
+      document.getElementById('btnUndo').addEventListener('click', undoStroke);
+
+      // Auto-Draw Toggle
+      document.getElementById('btnAutoDraw').addEventListener('click', toggleAutoDraw);
+
+      // Save PNG
+      document.getElementById('btnSavePNG').addEventListener('click', exportMandalaPNG);
+
+      /* ==========================================================================
+         Keyboard Shortcuts
+         ========================================================================== */
+      window.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+        const key = e.key.toLowerCase();
+        if (e.key === 'Escape') {
+          closeAllPopovers();
+        } else if (key === 'a') {
+          e.preventDefault();
+          toggleAutoDraw();
+        } else if (key === 'c') {
+          e.preventDefault();
+          clearCanvas();
+        } else if (key === 'z' || ((e.ctrlKey || e.metaKey) && key === 'z')) {
+          e.preventDefault();
+          undoStroke();
+        } else if (key === 's' || ((e.ctrlKey || e.metaKey) && key === 's')) {
+          e.preventDefault();
+          exportMandalaPNG();
+        } else if (key === 'm') {
+          e.preventDefault();
+          toggleMirror();
+        }
+      });
+
+      /* ==========================================================================
+         Initialization
+         ========================================================================== */
+      resizeCanvases();
+      updateStatusReadout();
+
+      // Start auto-draw on launch so the user is immediately greeted by mesmerizing filigree
+      setTimeout(() => {
+        toggleAutoDraw();
+        showToast('Welcome to Kaleido — Drag to Draw');
+      }, 500);
+
+    })();
+  </script>
+</body>
+</html>

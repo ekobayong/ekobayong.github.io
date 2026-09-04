@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tension — Generative String Art Loom</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #efe7d8;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(0,0,0,.03) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.03) 0 1px, transparent 1px 4px),
+    radial-gradient(circle at 50% 20%, #fff9, transparent 60%);
+  color: #22201c;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  min-height: 100vh;
+  padding: 20px;
+}
+header {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+h1 { font-family: Georgia, "Iowan Old Style", serif; font-weight: 400; font-size: clamp(30px, 5vw, 52px); }
+h1 em { color: #2f4a3e; }
+.counter {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  background: #2f4a3e;
+  color: #e2b862;
+  padding: 8px 14px;
+  border-radius: 99px;
+}
+.layout {
+  max-width: 1100px;
+  margin: 18px auto;
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+}
+.boardwrap {
+  background: #fff;
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 30px 60px rgba(60,40,20,.25);
+}
+.board { position: relative; width: 100%; aspect-ratio: 1; border-radius: 12px; overflow: hidden; }
+.board canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#cOver { cursor: crosshair; }
+.badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: #22201c;
+  color: #fff;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 99px;
+}
+#tip {
+  position: absolute;
+  pointer-events: none;
+  background: #22201c;
+  color: #fff;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: none;
+  z-index: 5;
+}
+.panel {
+  background: #2f4a3e;
+  color: #f2ecdd;
+  border-radius: 18px;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  font-size: 13px;
+  align-content: start;
+}
+.panel h3 {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-style: italic;
+  color: #e2b862;
+  font-size: 20px;
+}
+.panel label {
+  display: grid;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: #cbbf9f;
+}
+.panel input[type=range] { width: 100%; accent-color: #e2b862; }
+.panel output { font-family: ui-monospace, monospace; color: #fff; }
+.seg {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.seg button {
+  flex: 1;
+  background: transparent;
+  border: 1px solid #b98a3a;
+  color: #e2b862;
+  padding: 8px 6px;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: inherit;
+}
+.seg button.on { background: #e2b862; color: #2f4a3e; font-weight: 700; }
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.swatches button { aspect-ratio: 1; border-radius: 50%; border: 2px solid #e2b862; cursor: pointer; }
+.swatches button.on { outline: 3px solid #fff; }
+.rowbtns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rowbtns button {
+  background: #e2b862;
+  border: none;
+  color: #2f4a3e;
+  font-weight: 800;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+}
+.rowbtns button.ghost { background: transparent; border: 1px solid #b98a3a; color: #e2b862; }
+.thumb {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #b98a3a;
+  image-rendering: pixelated;
+  display: block;
+}
+.keys { font-family: ui-monospace, monospace; font-size: 11px; opacity: .8; }
+.essays {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  padding-bottom: 30px;
+}
+.essays div {
+  background: #fffdf6;
+  border: 1px solid #d8cdb4;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.essays b { font-family: Georgia, serif; font-weight: 400; font-style: italic; font-size: 16px; }
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Tension — <em>ten thousand straight lines make a curve</em></h1>
+  <div class="counter" id="counter">0 threads · 0 nails</div>
+</header>
+<div class="layout">
+  <div class="boardwrap">
+    <div class="board" id="board">
+      <canvas id="cWood"></canvas>
+      <canvas id="cThread"></canvas>
+      <canvas id="cOver"></canvas>
+      <span class="badge" id="badge">weaving…</span>
+      <div id="tip"></div>
+    </div>
+  </div>
+  <aside class="panel">
+    <h3>The Loom</h3>
+    <label>Target
+      <span class="seg" id="tSeg">
+        <button data-t="portrait" class="on">Portrait</button>
+        <button data-t="orb">Orb</button>
+        <button data-t="rings">Rings</button>
+      </span>
+    </label>
+    <label>Frame
+      <span class="seg" id="fSeg">
+        <button data-f="circle" class="on">Circle</button>
+        <button data-f="square">Square</button>
+        <button data-f="heart">Heart</button>
+      </span>
+    </label>
+    <label>Thread / board
+      <div class="swatches" id="thSw"></div>
+    </label>
+    <label>Nails <input type="range" id="rNail" min="60" max="320" value="180"> <output id="oNail">180</output></label>
+    <label>Threads <input type="range" id="rThread" min="400" max="7000" step="100" value="2500"> <output id="oThread">2500</output></label>
+    <label>Speed <input type="range" id="rSpeed" min="2" max="80" value="30"> <output id="oSpeed">30 / frame</output></label>
+    <div class="rowbtns">
+      <button id="bManual">Manual mode</button>
+      <button id="bClear" class="ghost">Clear</button>
+      <button id="bDl" class="ghost">PNG</button>
+    </div>
+    <img class="thumb" id="thumb" alt="target preview" width="256" height="256">
+    <div class="keys">Click a nail for manual · Space pause · Esc release</div>
+  </aside>
+</div>
+<div class="essays">
+  <div><b>The greedy stitch.</b><br>From each nail we test every reachable nail, scoring the darkness still needed along the line. The darkest line wins; its ink is subtracted. Repeat thousands of times.</div>
+  <div><b>Why lines read as shade.</b><br>Dense crossings build tone like hatching in engraving. Curves emerge though no thread ever bends — the envelope does the drawing.</div>
+  <div><b>Build it for real.</b><br>60 cm board, nails every 2 cm, one continuous thread. Our metre estimate assumes your board — wrap, don't cut.</div>
+</div>
+<script>
+var W = 640;
+var wood = document.getElementById('cWood');
+var thr = document.getElementById('cThread');
+var over = document.getElementById('cOver');
+wood.width = W; wood.height = W;
+thr.width = W; thr.height = W;
+over.width = W; over.height = W;
+var wx = wood.getContext('2d');
+var tx = thr.getContext('2d');
+var ox = over.getContext('2d');
+var THREADS = [
+  { n: 'birch', t: '#1a1714', b: '#e9dcbf' },
+  { n: 'charcoal', t: '#f4efe4', b: '#2b2926' },
+  { n: 'crimson', t: '#a3122a', b: '#d9bb8a' },
+  { n: 'gold', t: '#e0b04a', b: '#3a281c' }
+];
+var S = { target: 'portrait', frame: 'circle', th: 0, nails: 180, want: 2500, speed: 30, manual: false, pause: false };
+var nails = [], seq = [], resid = null, cur = 0, drawn = 0, hover = -1, sel = -1;
+var seed = 7;
+function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+var sw = document.getElementById('thSw');
+THREADS.forEach(function (p, i) {
+  var b = document.createElement('button');
+  b.title = p.n;
+  b.style.background = 'linear-gradient(90deg,' + p.b + ' 50%,' + p.t + ' 50%)';
+  if (i === 0) b.classList.add('on');
+  b.addEventListener('click', function () {
+    S.th = i;
+    Array.prototype.forEach.call(sw.children, function (x) { x.classList.remove('on'); });
+    b.classList.add('on');
+    restart();
+  });
+  sw.appendChild(b);
+});
+function paintWood() {
+  var p = THREADS[S.th];
+  wx.fillStyle = p.b;
+  wx.fillRect(0, 0, W, W);
+  seed = 7;
+  var i;
+  for (i = 0; i < 160; i++) {
+    wx.strokeStyle = 'rgba(90,60,30,' + (.05 + rnd() * .08).toFixed(3) + ')';
+    wx.lineWidth = 1 + rnd() * 2;
+    wx.beginPath();
+    var y = rnd() * W;
+    wx.moveTo(0, y);
+    var x;
+    for (x = 0; x <= W; x += 40) wx.lineTo(x, y + Math.sin(x * .02 + i) * 8);
+    wx.stroke();
+  }
+  wx.fillStyle = 'rgba(80,50,25,.25)';
+  wx.beginPath(); wx.ellipse(W * .3, W * .6, 40, 22, .4, 0, 7); wx.fill();
+  wx.beginPath(); wx.ellipse(W * .75, W * .3, 30, 16, -.3, 0, 7); wx.fill();
+  var v = wx.createRadialGradient(W / 2, W / 2, W * .3, W / 2, W / 2, W * .75);
+  v.addColorStop(0, 'rgba(0,0,0,0)');
+  v.addColorStop(1, 'rgba(0,0,0,.35)');
+  wx.fillStyle = v;
+  wx.fillRect(0, 0, W, W);
+  wx.fillStyle = 'rgba(255,255,255,.12)';
+  wx.save();
+  wx.translate(W / 2, W / 2);
+  wx.rotate(-.6);
+  wx.fillRect(-W, -W * .45, W * 2, W * .12);
+  wx.restore();
+}
+function targetMap() {
+  var off = document.createElement('canvas');
+  off.width = 256; off.height = 256;
+  var o = off.getContext('2d');
+  var i;
+  if (S.target === 'portrait') {
+    o.fillStyle = '#c9c9c9'; o.fillRect(0, 0, 256, 256);
+    o.fillStyle = '#222222';
+    o.beginPath(); o.ellipse(128, 105, 70, 72, 0, 0, 7); o.fill();
+    o.fillStyle = '#e8e8e8';
+    o.beginPath(); o.ellipse(128, 130, 50, 58, 0, 0, 7); o.fill();
+    o.fillStyle = '#333333';
+    o.fillRect(105, 120, 14, 8);
+    o.fillRect(137, 120, 14, 8);
+    o.strokeStyle = '#444444';
+    o.beginPath(); o.moveTo(128, 132); o.lineTo(124, 150); o.stroke();
+    o.fillStyle = '#555555';
+    o.beginPath(); o.ellipse(128, 165, 16, 7, 0, 0, 7); o.fill();
+    o.fillStyle = '#777777';
+    o.fillRect(90, 200, 76, 56);
+  } else if (S.target === 'orb') {
+    o.fillStyle = '#dddddd'; o.fillRect(0, 0, 256, 256);
+    var r = o.createRadialGradient(100, 90, 10, 128, 128, 90);
+    r.addColorStop(0, '#ffffff'); r.addColorStop(.6, '#888888'); r.addColorStop(1, '#222222');
+    o.fillStyle = r;
+    o.beginPath(); o.arc(128, 128, 80, 0, 7); o.fill();
+    o.fillStyle = 'rgba(0,0,0,.25)';
+    o.fillRect(40, 205, 176, 14);
+  } else {
+    o.fillStyle = '#eeeeee'; o.fillRect(0, 0, 256, 256);
+    var r2;
+    for (r2 = 120; r2 > 0; r2 -= 12) {
+      o.fillStyle = ((r2 / 12) | 0) % 2 ? '#222222' : '#eeeeee';
+      o.beginPath(); o.arc(128, 128, r2, 0, 7); o.fill();
+    }
+    var f = o.createLinearGradient(0, 0, 256, 256);
+    f.addColorStop(0, 'rgba(255,255,255,.7)');
+    f.addColorStop(1, 'rgba(0,0,0,.5)');
+    o.fillStyle = f;
+    o.fillRect(0, 0, 256, 256);
+  }
+  var dd = o.getImageData(0, 0, 256, 256).data;
+  var light = THREADS[S.th].t === '#f4efe4';
+  resid = new Float32Array(256 * 256);
+  for (i = 0; i < 256 * 256; i++) {
+    var lum = (dd[i * 4] + dd[i * 4 + 1] + dd[i * 4 + 2]) / 765;
+    resid[i] = light ? lum : 1 - lum;
+  }
+  document.getElementById('thumb').src = off.toDataURL();
+}
+function layout() {
+  nails = [];
+  var cx = W / 2, cy = W / 2, R = W * .42;
+  var i;
+  if (S.frame === 'circle') {
+    for (i = 0; i < S.nails; i++) {
+      var a = i / S.nails * Math.PI * 2;
+      nails.push([cx + Math.cos(a) * R, cy + Math.sin(a) * R, a]);
+    }
+  } else if (S.frame === 'square') {
+    for (i = 0; i < S.nails; i++) {
+      var p = i / S.nails * 4, s = Math.floor(p), t = p - s, x, y;
+      if (s === 0) { x = W * .08 + t * W * .84; y = W * .08; }
+      else if (s === 1) { x = W * .92; y = W * .08 + t * W * .84; }
+      else if (s === 2) { x = W * .92 - t * W * .84; y = W * .92; }
+      else { x = W * .08; y = W * .92 - t * W * .84; }
+      nails.push([x, y, Math.atan2(y - cy, x - cx)]);
+    }
+  } else {
+    var pts = [];
+    for (i = 0; i < 400; i++) {
+      var tt = i / 400 * Math.PI * 2;
+      pts.push([16 * Math.pow(Math.sin(tt), 3), 13 * Math.cos(tt) - 5 * Math.cos(2 * tt) - 2 * Math.cos(3 * tt) - Math.cos(4 * tt)]);
+    }
+    for (i = 0; i < S.nails; i++) {
+      var q = pts[Math.floor(i / S.nails * 400)];
+      nails.push([cx + q[0] * R / 17, cy - q[1] * R / 17 - 20, 0]);
+    }
+  }
+}
+function score(a, b) {
+  var s = 0, n = 0;
+  var dx = b[0] - a[0], dy = b[1] - a[1];
+  var len = Math.hypot(dx, dy);
+  var steps = Math.min(60, Math.max(8, (len / 8) | 0));
+  var i;
+  for (i = 0; i <= steps; i++) {
+    var x = ((a[0] + dx * i / steps) / W * 255) | 0;
+    var y = ((a[1] + dy * i / steps) / W * 255) | 0;
+    if (x < 0 || y < 0 || x > 255 || y > 255) continue;
+    s += resid[y * 256 + x];
+    n++;
+  }
+  return n ? s / n : 0;
+}
+function weave() {
+  if (S.pause || S.manual) return;
+  var n = S.speed, guard = 0;
+  while (n-- > 0 && drawn < S.want && guard++ < 200) {
+    var best = -1, bs = -1;
+    var A = nails[cur];
+    var j;
+    for (j = 0; j < nails.length; j++) {
+      if (j === cur) continue;
+      var da = Math.abs(nails[j][2] - A[2]);
+      if (S.frame === 'circle' && da < .25) continue;
+      var sc = score(A, nails[j]);
+      if (sc > bs) { bs = sc; best = j; }
+    }
+    if (best < 0 || bs < .015) break;
+    drawThread(cur, best);
+    darken(nails[cur], nails[best]);
+    seq.push(cur + '-' + best);
+    cur = best;
+    drawn++;
+  }
+  drawNails();
+  updateHUD();
+  if (drawn < S.want && !S.manual) requestAnimationFrame(weave);
+  else document.getElementById('badge').textContent = 'done · ' + drawn + ' threads';
+}
+function drawThread(a, b) {
+  var p = THREADS[S.th];
+  tx.strokeStyle = p.t + 'cc';
+  tx.lineWidth = 1;
+  tx.beginPath();
+  tx.moveTo(nails[a][0], nails[a][1]);
+  tx.lineTo(nails[b][0], nails[b][1]);
+  tx.stroke();
+  tx.strokeStyle = 'rgba(0,0,0,.25)';
+  tx.beginPath();
+  tx.moveTo(nails[a][0] + 1, nails[a][1] + 1.5);
+  tx.lineTo(nails[b][0] + 1, nails[b][1] + 1.5);
+  tx.stroke();
+}
+function darken(a, b) {
+  var dx = b[0] - a[0], dy = b[1] - a[1];
+  var len = Math.hypot(dx, dy);
+  var steps = Math.min(60, Math.max(8, (len / 8) | 0));
+  var i;
+  for (i = 0; i <= steps; i++) {
+    var x = ((a[0] + dx * i / steps) / W * 255) | 0;
+    var y = ((a[1] + dy * i / steps) / W * 255) | 0;
+    if (x < 0 || y < 0 || x > 255 || y > 255) continue;
+    resid[y * 256 + x] = Math.max(0, resid[y * 256 + x] - .13);
+  }
+}
+function drawNails() {
+  ox.clearRect(0, 0, W, W);
+  nails.forEach(function (p, i) {
+    var g = ox.createRadialGradient(p[0] - 1, p[1] - 1, .5, p[0], p[1], 6);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(.5, '#999999');
+    g.addColorStop(1, '#333333');
+    ox.fillStyle = g;
+    ox.beginPath(); ox.arc(p[0], p[1], 5, 0, 7); ox.fill();
+    if (i === hover) {
+      ox.strokeStyle = '#ffffff'; ox.lineWidth = 2;
+      ox.beginPath(); ox.arc(p[0], p[1], 9, 0, 7); ox.stroke();
+    }
+    if (i === sel) {
+      ox.strokeStyle = '#e2b862'; ox.lineWidth = 2.5;
+      ox.setLineDash([5, 4]);
+      ox.beginPath(); ox.arc(p[0], p[1], 10, 0, 7); ox.stroke();
+      ox.setLineDash([]);
+    }
+  });
+}
+function updateHUD() {
+  document.getElementById('counter').textContent = drawn + ' threads · ' + S.nails + ' nails · ' + (drawn * 2.1).toFixed(0) + ' m on 60cm board';
+  document.getElementById('badge').textContent = S.manual ? 'manual — click nails' : ('weaving ' + drawn + '/' + S.want);
+}
+function restart() {
+  tx.clearRect(0, 0, W, W);
+  seq = []; drawn = 0; cur = 0; sel = -1;
+  paintWood();
+  targetMap();
+  layout();
+  drawNails();
+  updateHUD();
+  if (!S.manual) requestAnimationFrame(weave);
+}
+document.getElementById('rNail').addEventListener('input', function (e) {
+  S.nails = +e.target.value;
+  document.getElementById('oNail').textContent = S.nails;
+  restart();
+});
+document.getElementById('rThread').addEventListener('input', function (e) {
+  S.want = +e.target.value;
+  document.getElementById('oThread').textContent = S.want;
+  if (S.want > drawn && !S.manual) { S.manual = false; requestAnimationFrame(weave); }
+  updateHUD();
+});
+document.getElementById('rSpeed').addEventListener('input', function (e) {
+  S.speed = +e.target.value;
+  document.getElementById('oSpeed').textContent = S.speed + ' / frame';
+});
+document.querySelectorAll('#tSeg button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    document.querySelectorAll('#tSeg button').forEach(function (x) { x.classList.remove('on'); });
+    b.classList.add('on');
+    S.target = b.dataset.t;
+    S.manual = false;
+    restart();
+  });
+});
+document.querySelectorAll('#fSeg button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    document.querySelectorAll('#fSeg button').forEach(function (x) { x.classList.remove('on'); });
+    b.classList.add('on');
+    S.frame = b.dataset.f;
+    restart();
+  });
+});
+document.getElementById('bManual').addEventListener('click', function () {
+  S.manual = !S.manual;
+  document.getElementById('bManual').textContent = S.manual ? 'Resume weaver' : 'Manual mode';
+  updateHUD();
+  if (!S.manual) requestAnimationFrame(weave);
+});
+document.getElementById('bClear').addEventListener('click', function () {
+  tx.clearRect(0, 0, W, W);
+  seq = []; drawn = 0;
+  updateHUD();
+});
+document.getElementById('bDl').addEventListener('click', function () {
+  var c = document.createElement('canvas');
+  c.width = W; c.height = W;
+  var g = c.getContext('2d');
+  g.drawImage(wood, 0, 0);
+  g.drawImage(thr, 0, 0);
+  g.drawImage(over, 0, 0);
+  var a = document.createElement('a');
+  a.download = 'tension.png';
+  a.href = c.toDataURL();
+  a.click();
+});
+function nailAt(mx, my) {
+  var r = over.getBoundingClientRect();
+  var x = (mx - r.left) / r.width * W;
+  var y = (my - r.top) / r.height * W;
+  var bi = -1, bd = 20;
+  nails.forEach(function (p, i) {
+    var dd = Math.hypot(p[0] - x, p[1] - y);
+    if (dd < bd) { bd = dd; bi = i; }
+  });
+  return bi;
+}
+over.addEventListener('pointermove', function (e) {
+  hover = nailAt(e.clientX, e.clientY);
+  drawNails();
+  var tip = document.getElementById('tip');
+  var board = document.getElementById('board').getBoundingClientRect();
+  if (hover >= 0) {
+    tip.style.display = 'block';
+    tip.style.left = (e.clientX - board.left + 12) + 'px';
+    tip.style.top = (e.clientY - board.top - 8) + 'px';
+    tip.textContent = 'nail ' + String(hover).padStart(3, '0') + ' · ' + Math.round(nails[hover][2] * 180 / Math.PI) + '°';
+  } else tip.style.display = 'none';
+  if (sel >= 0 && hover >= 0) {
+    drawNails();
+    ox.strokeStyle = '#e2b862';
+    ox.setLineDash([6, 5]);
+    ox.beginPath();
+    ox.moveTo(nails[sel][0], nails[sel][1]);
+    ox.lineTo(nails[hover][0], nails[hover][1]);
+    ox.stroke();
+    ox.setLineDash([]);
+  }
+});
+over.addEventListener('click', function (e) {
+  var i = nailAt(e.clientX, e.clientY);
+  if (i < 0) return;
+  if (!S.manual) {
+    S.manual = true;
+    document.getElementById('bManual').textContent = 'Resume weaver';
+    updateHUD();
+  }
+  if (sel < 0) sel = i;
+  else {
+    drawThread(sel, i);
+    seq.push(sel + '-' + i);
+    drawn++;
+    sel = i;
+    updateHUD();
+  }
+  drawNails();
+});
+window.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') sel = -1;
+  if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+    e.preventDefault();
+    S.pause = !S.pause;
+    if (!S.pause && !S.manual) requestAnimationFrame(weave);
+  }
+});
+restart();
+</script>
+</body>
+</html>

@@ -1,0 +1,1817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lumen — ambient light OS</title>
+  <style>
+    /* -------------------------------------------------------------
+       DESIGN SYSTEM TOKENS & RESET
+       ------------------------------------------------------------- */
+    :root {
+      --bg-dark: #070a1c;
+      --bg-lift: #101a48;
+      --violet: #8b7dff;
+      --teal: #4ee6c7;
+      --rose: #ff7ab6;
+      --amber: #ffc46b;
+      --ink: #eef0ff;
+      --ink-62: rgba(238, 240, 255, 0.62);
+      --ink-38: rgba(238, 240, 255, 0.38);
+
+      --glass-bg: rgba(255, 255, 255, 0.065);
+      --glass-bg-hover: rgba(255, 255, 255, 0.09);
+      --glass-border: rgba(255, 255, 255, 0.14);
+      --glass-border-hover: rgba(255, 255, 255, 0.28);
+      --glass-blur: 20px;
+      --glass-saturate: 150%;
+      --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 20px 40px -15px rgba(0, 4, 20, 0.6);
+
+      --font-stack: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      --container-max: 1240px;
+    }
+
+    @media (min-width: 1800px) {
+      :root {
+        --container-max: 1480px;
+      }
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      color-scheme: dark;
+      background-color: var(--bg-dark);
+      font-family: var(--font-stack);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      min-height: 100vh;
+      color: var(--ink);
+      background: radial-gradient(140% 100% at 50% 100%, var(--bg-lift) 0%, var(--bg-dark) 65%, #040612 100%);
+      background-attachment: fixed;
+      overflow-x: hidden;
+      position: relative;
+      line-height: 1.5;
+    }
+
+    /* -------------------------------------------------------------
+       STATIC STARFIELD & GRAIN OVERLAY
+       ------------------------------------------------------------- */
+    .starfield-container {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .stars-layer {
+      position: absolute;
+      inset: 0;
+      background-repeat: repeat;
+    }
+
+    .stars-1 {
+      background-image:
+        radial-gradient(1.2px 1.2px at 45px 80px, #ffffff 100%, transparent),
+        radial-gradient(1.5px 1.5px at 170px 240px, rgba(238, 240, 255, 0.95) 100%, transparent),
+        radial-gradient(1px 1px at 310px 120px, rgba(78, 230, 199, 0.85) 100%, transparent),
+        radial-gradient(1.4px 1.4px at 460px 330px, rgba(255, 255, 255, 0.9) 100%, transparent),
+        radial-gradient(1px 1px at 620px 75px, rgba(139, 125, 255, 0.8) 100%, transparent),
+        radial-gradient(1.8px 1.8px at 780px 270px, rgba(255, 255, 255, 1) 100%, transparent),
+        radial-gradient(1px 1px at 940px 190px, rgba(238, 240, 255, 0.8) 100%, transparent),
+        radial-gradient(1.3px 1.3px at 1100px 90px, rgba(255, 196, 107, 0.85) 100%, transparent),
+        radial-gradient(1px 1px at 1260px 310px, rgba(255, 255, 255, 0.8) 100%, transparent);
+      background-size: 1380px 480px;
+      animation: starTwinkle 5s ease-in-out infinite alternate;
+    }
+
+    .stars-2 {
+      background-image:
+        radial-gradient(1px 1px at 95px 180px, rgba(255, 255, 255, 0.8) 100%, transparent),
+        radial-gradient(1.5px 1.5px at 240px 50px, rgba(139, 125, 255, 0.9) 100%, transparent),
+        radial-gradient(1px 1px at 390px 260px, rgba(255, 255, 255, 0.8) 100%, transparent),
+        radial-gradient(1.3px 1.3px at 540px 150px, rgba(78, 230, 199, 0.85) 100%, transparent),
+        radial-gradient(1px 1px at 700px 35px, rgba(255, 122, 182, 0.8) 100%, transparent),
+        radial-gradient(1.6px 1.6px at 860px 320px, rgba(255, 255, 255, 0.9) 100%, transparent),
+        radial-gradient(1px 1px at 1020px 220px, rgba(238, 240, 255, 0.75) 100%, transparent),
+        radial-gradient(1.4px 1.4px at 1180px 130px, rgba(255, 196, 107, 0.8) 100%, transparent);
+      background-size: 1320px 440px;
+      animation: starTwinkle 7.5s ease-in-out infinite alternate-reverse;
+    }
+
+    @keyframes starTwinkle {
+      0% { opacity: 0.35; }
+      50% { opacity: 0.9; }
+      100% { opacity: 0.45; }
+    }
+
+    .noise-overlay {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.06;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+      background-repeat: repeat;
+    }
+
+    /* -------------------------------------------------------------
+       CSS AURORA RIBBONS
+       ------------------------------------------------------------- */
+    .aurora-viewport {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 0;
+    }
+
+    /* Ribbon 1: Huge conic disc with transparent gaps rotating 48s linear */
+    .aurora-ribbon-disc {
+      position: absolute;
+      top: -35vw;
+      left: -20vw;
+      width: 105vw;
+      height: 105vw;
+      min-width: 880px;
+      min-height: 880px;
+      border-radius: 50%;
+      background: conic-gradient(
+        from 0deg at 50% 50%,
+        transparent 0deg,
+        rgba(78, 230, 199, 0.6) 45deg,
+        transparent 95deg,
+        rgba(139, 125, 255, 0.7) 160deg,
+        transparent 215deg,
+        rgba(255, 122, 182, 0.55) 275deg,
+        transparent 330deg,
+        rgba(78, 230, 199, 0.6) 360deg
+      );
+      filter: blur(66px);
+      mix-blend-mode: screen;
+      opacity: 0.48;
+      animation: rotateAurora 48s linear infinite;
+      will-change: transform;
+    }
+
+    @keyframes rotateAurora {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Ribbon 2: Radial cloud translating and rotating back & forth with hue rotation */
+    .aurora-ribbon-cloud {
+      position: absolute;
+      top: 10vh;
+      right: -15vw;
+      width: 75vw;
+      height: 65vw;
+      min-width: 650px;
+      min-height: 580px;
+      border-radius: 50%;
+      background: radial-gradient(
+        ellipse at 50% 50%,
+        rgba(78, 230, 199, 0.7) 0%,
+        rgba(139, 125, 255, 0.6) 38%,
+        rgba(255, 122, 182, 0.35) 65%,
+        transparent 80%
+      );
+      filter: blur(68px);
+      mix-blend-mode: screen;
+      opacity: 0.50;
+      animation: driftAuroraCloud 62s ease-in-out infinite alternate;
+      will-change: transform, filter;
+    }
+
+    @keyframes driftAuroraCloud {
+      0% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+        filter: blur(68px) hue-rotate(0deg);
+      }
+      50% {
+        transform: translate3d(-14vw, 12vh, 0) rotate(180deg);
+        filter: blur(72px) hue-rotate(180deg);
+      }
+      100% {
+        transform: translate3d(8vw, -10vh, 0) rotate(360deg);
+        filter: blur(65px) hue-rotate(360deg);
+      }
+    }
+
+    /* Ribbon 3: Elongated streak in amber and rose (#ffc46b, #ff7ab6) */
+    .aurora-ribbon-streak {
+      position: absolute;
+      top: 38%;
+      left: -25vw;
+      width: 140vw;
+      height: 310px;
+      min-width: 1100px;
+      background: linear-gradient(
+        102deg,
+        transparent 0%,
+        rgba(255, 196, 107, 0) 15%,
+        rgba(255, 196, 107, 0.62) 42%,
+        rgba(255, 122, 182, 0.72) 64%,
+        rgba(139, 125, 255, 0.4) 86%,
+        transparent 100%
+      );
+      transform: rotate(-19deg) scaleY(0.8);
+      filter: blur(64px);
+      mix-blend-mode: screen;
+      opacity: 0.52;
+      animation: driftAuroraStreak 42s ease-in-out infinite alternate;
+      will-change: transform;
+    }
+
+    @keyframes driftAuroraStreak {
+      0% {
+        transform: translate3d(0, 0, 0) rotate(-19deg) scaleY(0.8);
+      }
+      100% {
+        transform: translate3d(6vw, -45px, 0) rotate(-14deg) scaleY(1.05);
+      }
+    }
+
+    /* -------------------------------------------------------------
+       LAYOUT & CONTAINER
+       ------------------------------------------------------------- */
+    .page-wrapper {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .container {
+      width: 100%;
+      max-width: var(--container-max);
+      margin: 0 auto;
+      padding-left: clamp(1.25rem, 3.5vw, 3rem);
+      padding-right: clamp(1.25rem, 3.5vw, 3rem);
+    }
+
+    /* -------------------------------------------------------------
+       GLASS SURFACES COMMON
+       ------------------------------------------------------------- */
+    .glass-surface {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      box-shadow: var(--glass-shadow);
+      border-radius: 20px;
+    }
+
+    /* -------------------------------------------------------------
+       NAVIGATION BAR
+       ------------------------------------------------------------- */
+    .site-header {
+      padding-top: 1.75rem;
+      padding-bottom: 1.25rem;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      background: linear-gradient(180deg, rgba(7, 10, 28, 0.7) 0%, rgba(7, 10, 28, 0) 100%);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+    }
+
+    /* Brand */
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--ink);
+    }
+
+    .brand-icon-wrap {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .brand-icon {
+      width: 100%;
+      height: 100%;
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      color: var(--ink);
+    }
+
+    .brand-tagline {
+      font-size: 0.8125rem;
+      color: var(--ink-38);
+      font-weight: 400;
+      margin-left: 0.35rem;
+      display: none;
+    }
+
+    @media (min-width: 480px) {
+      .brand-tagline {
+        display: inline;
+      }
+    }
+
+    /* Center Nav Links Pill */
+    .nav-center-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.375rem 0.6rem;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    }
+
+    .nav-link {
+      color: var(--ink-62);
+      font-size: 0.875rem;
+      font-weight: 500;
+      padding: 0.45rem 0.95rem;
+      border-radius: 9999px;
+      text-decoration: none;
+      transition: color 0.2s ease, background-color 0.2s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--ink);
+      background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    /* Hide Center Links under 640px per prompt */
+    @media (max-width: 640px) {
+      .nav-center-pill {
+        display: none;
+      }
+    }
+
+    /* Request Access Outlined Pill */
+    .btn-access-outline {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--ink);
+      text-decoration: none;
+      padding: 0.55rem 1.25rem;
+      border-radius: 9999px;
+      border: 1px solid var(--glass-border);
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      transition: border-color 0.25s, background-color 0.25s, box-shadow 0.25s, transform 0.25s;
+    }
+
+    .btn-access-outline:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.35);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 16px rgba(139, 125, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    /* -------------------------------------------------------------
+       HERO SECTION
+       ------------------------------------------------------------- */
+    .hero-section {
+      padding-top: clamp(2.5rem, 5vw, 4.5rem);
+      padding-bottom: clamp(4rem, 8vw, 7rem);
+      position: relative;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.12fr 0.88fr;
+      gap: clamp(2.5rem, 4.5vw, 5rem);
+      align-items: center;
+    }
+
+    @media (max-width: 960px) {
+      .hero-grid {
+        grid-template-columns: 1fr;
+        gap: 3.5rem;
+      }
+    }
+
+    /* Hero Left Column */
+    .hero-content {
+      position: relative;
+      z-index: 10;
+    }
+
+    /* Pill eyebrow with pulsing teal LED dot */
+    .eyebrow-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.38rem 0.95rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: rgba(238, 240, 255, 0.92);
+      letter-spacing: 0.015em;
+      margin-bottom: 1.5rem;
+    }
+
+    .led-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--teal);
+      box-shadow: 0 0 8px var(--teal), 0 0 14px rgba(78, 230, 199, 0.7);
+      animation: ledPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes ledPulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.45;
+        transform: scale(0.85);
+      }
+    }
+
+    /* Headline: clamp(42px, 6.4vw, 88px), weight 600, letter-spacing -0.035em, line-height 0.98 */
+    .hero-headline {
+      font-size: clamp(42px, 6.4vw, 88px);
+      font-weight: 600;
+      letter-spacing: -0.035em;
+      line-height: 0.98;
+      color: var(--ink);
+      margin-bottom: 1.5rem;
+    }
+
+    /* Shimmer cycling white -> violet -> teal -> rose */
+    .shimmer-word {
+      background: linear-gradient(
+        90deg,
+        #ffffff 0%,
+        var(--violet) 26%,
+        var(--teal) 52%,
+        var(--rose) 76%,
+        #ffffff 100%
+      );
+      background-size: 240% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmerFlow 7s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes shimmerFlow {
+      0% { background-position: 0% center; }
+      100% { background-position: 240% center; }
+    }
+
+    /* Lede paragraph */
+    .hero-lede {
+      font-size: clamp(1.05rem, 1.3vw, 1.22rem);
+      line-height: 1.62;
+      color: var(--ink-62);
+      max-width: 530px;
+      margin-bottom: 2.25rem;
+      font-weight: 400;
+    }
+
+    /* Two CTA Buttons */
+    .hero-cta-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1.15rem;
+    }
+
+    /* Primary gradient pill: violet -> teal, dark ink text, blurred glow pseudo-element */
+    .btn-primary-pill {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.9rem 1.85rem;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, var(--violet) 0%, var(--teal) 100%);
+      color: #070a1c;
+      font-weight: 600;
+      font-size: 0.95rem;
+      letter-spacing: -0.015em;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      isolation: isolate;
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-primary-pill::after {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      background: linear-gradient(135deg, var(--violet) 0%, var(--teal) 100%);
+      filter: blur(14px);
+      opacity: 0.55;
+      z-index: -1;
+      transition: opacity 0.3s ease, filter 0.3s ease;
+    }
+
+    .btn-primary-pill:hover {
+      transform: translateY(-2px);
+    }
+
+    .btn-primary-pill:hover::after {
+      opacity: 0.95;
+      filter: blur(20px);
+    }
+
+    /* Ghost glass pill with sliding arrow icon on hover */
+    .btn-ghost-pill {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.65rem;
+      padding: 0.9rem 1.65rem;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(18px) saturate(140%);
+      -webkit-backdrop-filter: blur(18px) saturate(140%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      color: var(--ink);
+      font-weight: 500;
+      font-size: 0.95rem;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background-color 0.25s, border-color 0.25s, transform 0.25s;
+    }
+
+    .btn-ghost-pill:hover {
+      background-color: var(--glass-bg-hover);
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-2px);
+    }
+
+    .btn-ghost-pill .arrow-icon {
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-ghost-pill:hover .arrow-icon {
+      transform: translateX(4px);
+    }
+
+    /* -------------------------------------------------------------
+       HERO RIGHT STAGE: FLOATING FROSTED PANELS
+       ------------------------------------------------------------- */
+    .hero-stage {
+      position: relative;
+      width: 100%;
+      min-height: 560px;
+      perspective: 1200px;
+    }
+
+    @media (max-width: 960px) {
+      .hero-stage {
+        min-height: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        align-items: center;
+        margin-top: 1rem;
+      }
+    }
+
+    .parallax-panel {
+      transition: transform 0.08s ease-out;
+      will-change: transform;
+    }
+
+    /* Glowing Teal-Violet Orb */
+    .stage-orb-wrap {
+      position: absolute;
+      top: 10%;
+      right: 20%;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .stage-orb {
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 32%, var(--teal) 0%, var(--violet) 52%, rgba(139, 125, 255, 0.05) 75%);
+      box-shadow: 0 0 50px rgba(78, 230, 199, 0.45), 0 0 90px rgba(139, 125, 255, 0.35);
+      filter: blur(1px);
+      animation: orbBreathe 8s ease-in-out infinite alternate;
+    }
+
+    @keyframes orbBreathe {
+      0% { transform: scale(1) translate3d(0, 0, 0); }
+      100% { transform: scale(1.08) translate3d(-10px, 12px, 0); }
+    }
+
+    /* Panel 1: Large "Now Playing" Card */
+    .card-now-playing {
+      position: absolute;
+      top: 16%;
+      left: 2%;
+      width: 345px;
+      padding: 1.6rem;
+      z-index: 3;
+    }
+
+    @media (max-width: 960px) {
+      .card-now-playing {
+        position: relative;
+        top: auto;
+        left: auto;
+        width: 100%;
+        max-width: 380px;
+      }
+    }
+
+    .np-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.35rem;
+    }
+
+    .np-tag {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-38);
+    }
+
+    .np-live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      color: var(--teal);
+      background: rgba(78, 230, 199, 0.1);
+      border: 1px solid rgba(78, 230, 199, 0.25);
+      padding: 0.2rem 0.55rem;
+      border-radius: 9999px;
+    }
+
+    .np-live-badge::before {
+      content: '';
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--teal);
+      box-shadow: 0 0 6px var(--teal);
+    }
+
+    .np-main-row {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+
+    /* Spinning conic colour ring */
+    .conic-ring-wrap {
+      position: relative;
+      width: 76px;
+      height: 76px;
+      flex-shrink: 0;
+    }
+
+    .conic-ring {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: conic-gradient(
+        from 0deg,
+        var(--amber) 0deg,
+        var(--rose) 90deg,
+        var(--violet) 180deg,
+        var(--teal) 270deg,
+        var(--amber) 360deg
+      );
+      animation: spinRing 24s linear infinite;
+      box-shadow: 0 0 20px rgba(139, 125, 255, 0.35);
+    }
+
+    @keyframes spinRing {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .conic-ring-core {
+      position: absolute;
+      inset: 8px;
+      border-radius: 50%;
+      background: #0b112c;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    .core-sun-icon {
+      width: 24px;
+      height: 24px;
+      color: var(--amber);
+    }
+
+    .np-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .np-scene-name {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+      margin-bottom: 0.25rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .np-scene-sub {
+      font-size: 0.8125rem;
+      color: var(--ink-62);
+      margin-bottom: 0.4rem;
+    }
+
+    /* Sound/Light Wave Indicator */
+    .np-wave-bars {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      height: 14px;
+    }
+
+    .wave-bar {
+      width: 3px;
+      height: 100%;
+      background: var(--teal);
+      border-radius: 2px;
+      animation: wavePulse 1.8s ease-in-out infinite alternate;
+      transform-origin: bottom;
+    }
+
+    .wave-bar:nth-child(2) { animation-delay: 0.25s; height: 75%; }
+    .wave-bar:nth-child(3) { animation-delay: 0.5s; height: 100%; }
+    .wave-bar:nth-child(4) { animation-delay: 0.75s; height: 60%; }
+    .wave-bar:nth-child(5) { animation-delay: 0.15s; height: 85%; }
+
+    @keyframes wavePulse {
+      0% { transform: scaleY(0.3); opacity: 0.4; }
+      100% { transform: scaleY(1); opacity: 0.95; }
+    }
+
+    .np-footer-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 0.9rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 0.75rem;
+      color: var(--ink-38);
+    }
+
+    .np-footer-bar strong {
+      color: var(--ink-62);
+      font-weight: 500;
+    }
+
+    /* Panel 2: Small Colour-Temperature Card */
+    .card-temperature {
+      position: absolute;
+      top: 4%;
+      right: 2%;
+      width: 250px;
+      padding: 1.35rem;
+      z-index: 5;
+    }
+
+    @media (max-width: 960px) {
+      .card-temperature {
+        position: relative;
+        top: auto;
+        right: auto;
+        width: 100%;
+        max-width: 380px;
+      }
+    }
+
+    .temp-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.85rem;
+    }
+
+    .temp-tag {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-38);
+    }
+
+    .temp-kelvin-val {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 0.9rem;
+      display: flex;
+      align-items: baseline;
+      gap: 0.25rem;
+    }
+
+    .temp-kelvin-val .k-unit {
+      font-size: 0.875rem;
+      color: var(--teal);
+      font-weight: 500;
+    }
+
+    /* Warm-to-cool bar with white thumb */
+    .temp-track-wrap {
+      position: relative;
+      margin-bottom: 0.65rem;
+    }
+
+    .temp-bar-track {
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #ff9e42 0%, var(--amber) 25%, #eef0ff 65%, #9bc2ff 100%);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .temp-bar-thumb {
+      position: absolute;
+      top: 50%;
+      left: var(--kelvin-thumb-pct, 50%);
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #ffffff;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.8), 0 2px 5px rgba(0, 0, 0, 0.5);
+      border: 2px solid #070a1c;
+      transition: left 0.4s ease;
+    }
+
+    .temp-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.6875rem;
+      color: var(--ink-38);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Panel 3: Schedule Card */
+    .card-schedule {
+      position: absolute;
+      bottom: 4%;
+      right: 6%;
+      width: 320px;
+      padding: 1.45rem;
+      z-index: 4;
+    }
+
+    @media (max-width: 960px) {
+      .card-schedule {
+        position: relative;
+        bottom: auto;
+        right: auto;
+        width: 100%;
+        max-width: 380px;
+      }
+    }
+
+    .sched-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.15rem;
+    }
+
+    .sched-tag {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-38);
+    }
+
+    .sched-subtitle {
+      font-size: 0.75rem;
+      color: var(--ink-62);
+    }
+
+    .sched-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      list-style: none;
+    }
+
+    .sched-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.6rem 0.75rem;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      transition: background-color 0.2s;
+    }
+
+    .sched-item.active-scene {
+      background: rgba(78, 230, 199, 0.08);
+      border-color: rgba(78, 230, 199, 0.22);
+    }
+
+    .sched-item-left {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    .sched-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--ink-38);
+      flex-shrink: 0;
+    }
+
+    .active-scene .sched-dot {
+      background: var(--teal);
+      box-shadow: 0 0 6px var(--teal);
+    }
+
+    .sched-time {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .sched-name {
+      font-size: 0.8125rem;
+      color: var(--ink-62);
+      font-weight: 400;
+    }
+
+    .active-scene .sched-name {
+      color: var(--ink);
+      font-weight: 500;
+    }
+
+    .sched-temp {
+      font-size: 0.75rem;
+      color: var(--amber);
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* -------------------------------------------------------------
+       THREE IDEAS BEHIND LUMEN SECTION
+       ------------------------------------------------------------- */
+    .features-section {
+      padding-top: clamp(3.5rem, 6vw, 6rem);
+      padding-bottom: clamp(4.5rem, 8vw, 7.5rem);
+      position: relative;
+    }
+
+    .features-header {
+      text-align: center;
+      max-width: 680px;
+      margin: 0 auto clamp(2.5rem, 4.5vw, 4rem) auto;
+    }
+
+    .features-eyebrow {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--violet);
+      margin-bottom: 0.75rem;
+    }
+
+    .features-title {
+      font-size: clamp(2rem, 3.2vw, 3.2rem);
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      color: var(--ink);
+      line-height: 1.1;
+      margin-bottom: 1rem;
+    }
+
+    .features-desc {
+      font-size: 1.05rem;
+      color: var(--ink-62);
+      line-height: 1.6;
+    }
+
+    /* Cards Grid: 3 cols -> 2 cols -> 1 col */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.75rem;
+    }
+
+    @media (max-width: 900px) {
+      .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .features-grid > .feature-card:last-child {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+      .features-grid > .feature-card:last-child {
+        grid-column: auto;
+      }
+    }
+
+    /* Individual Glass Feature Card with cursor-following radial spotlight */
+    .feature-card {
+      position: relative;
+      border-radius: 22px;
+      padding: clamp(1.75rem, 2.5vw, 2.4rem);
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      box-shadow: var(--glass-shadow);
+      overflow: hidden;
+      transition: border-color 0.3s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* Radial Spotlight layer via CSS variables --mx/--my */
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(
+        420px circle at var(--mx, -500px) var(--my, -500px),
+        rgba(255, 255, 255, 0.12),
+        transparent 75%
+      );
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .feature-card:hover::before {
+      opacity: 1;
+    }
+
+    .feature-card:hover {
+      border-color: var(--glass-border-hover);
+      transform: translateY(-4px);
+    }
+
+    .card-top-bar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 2.25rem;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* Glass icon tile with inline SVG that lifts and tilts on hover */
+    .card-icon-tile {
+      width: 54px;
+      height: 54px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.075);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+      color: var(--teal);
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.3s, border-color 0.3s, color 0.3s;
+    }
+
+    .feature-card:hover .card-icon-tile {
+      transform: translateY(-5px) rotate(-6deg) scale(1.08);
+      background-color: rgba(255, 255, 255, 0.14);
+      border-color: rgba(139, 125, 255, 0.45);
+      color: var(--violet);
+    }
+
+    .card-icon-tile svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    /* Top-right uppercase tag */
+    .card-tag {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-38);
+      padding: 0.25rem 0.65rem;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .card-body {
+      position: relative;
+      z-index: 2;
+    }
+
+    .card-title {
+      font-size: 1.35rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      margin-bottom: 0.75rem;
+    }
+
+    .card-text {
+      font-size: 0.95rem;
+      line-height: 1.62;
+      color: var(--ink-62);
+      font-weight: 400;
+    }
+
+    /* -------------------------------------------------------------
+       FOOTER
+       ------------------------------------------------------------- */
+    .site-footer {
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 2rem;
+      padding-bottom: 2.5rem;
+      position: relative;
+      z-index: 10;
+      font-size: 0.8125rem;
+      color: var(--ink-38);
+    }
+
+    .footer-inner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.25rem;
+    }
+
+    .footer-left {
+      color: var(--ink-62);
+    }
+
+    .footer-local-light {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--ink);
+    }
+
+    .spectrum-status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 8px var(--amber);
+      transition: background-color 1s, box-shadow 1s;
+    }
+
+    .local-kelvin-val {
+      font-weight: 600;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .local-clock-val {
+      color: var(--ink-62);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* -------------------------------------------------------------
+       PREFERS-REDUCED-MOTION & ACCESSIBILITY
+       ------------------------------------------------------------- */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+
+      .aurora-ribbon-disc,
+      .aurora-ribbon-cloud,
+      .aurora-ribbon-streak {
+        animation: none !important;
+        opacity: 0.2 !important;
+      }
+
+      .stars-1,
+      .stars-2 {
+        animation: none !important;
+        opacity: 0.4 !important;
+      }
+
+      .shimmer-word {
+        animation: none !important;
+        background: var(--ink);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .parallax-panel {
+        transform: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Starfield Layer -->
+  <div class="starfield-container" aria-hidden="true">
+    <div class="stars-layer stars-1"></div>
+    <div class="stars-layer stars-2"></div>
+  </div>
+
+  <!-- SVG Grain Overlay at 6% opacity via data URI -->
+  <div class="noise-overlay" aria-hidden="true"></div>
+
+  <!-- Pure CSS Aurora Ribbons -->
+  <div class="aurora-viewport" aria-hidden="true">
+    <!-- Ribbon 1: Huge conic-gradient disc (48s linear) -->
+    <div class="aurora-ribbon-disc"></div>
+    <!-- Ribbon 2: Radial cloud translating and rotating (62s alternate + hue rotate) -->
+    <div class="aurora-ribbon-cloud"></div>
+    <!-- Ribbon 3: Elongated linear-gradient streak in amber & rose -->
+    <div class="aurora-ribbon-streak"></div>
+  </div>
+
+  <div class="page-wrapper">
+
+    <!-- Navigation Header -->
+    <header class="site-header">
+      <div class="container">
+        <div class="nav-inner">
+
+          <!-- Left: Brand mark (inline SVG sun with gradient core) -->
+          <a href="#" class="brand" aria-label="Lumen Home">
+            <div class="brand-icon-wrap">
+              <svg class="brand-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="brandSunCoreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#4ee6c7" />
+                    <stop offset="50%" stop-color="#8b7dff" />
+                    <stop offset="100%" stop-color="#ff7ab6" />
+                  </linearGradient>
+                </defs>
+                <!-- Outer delicate aura -->
+                <circle cx="18" cy="18" r="16.5" stroke="rgba(238, 240, 255, 0.12)" stroke-width="0.75" />
+                <!-- Concentric ray indicators -->
+                <circle cx="18" cy="18" r="12" stroke="rgba(238, 240, 255, 0.28)" stroke-width="1.2" stroke-dasharray="2.5 3.5" />
+                <!-- Sun gradient core -->
+                <circle cx="18" cy="18" r="7" fill="url(#brandSunCoreGrad)" />
+              </svg>
+            </div>
+            <span class="brand-title">Lumen</span>
+            <span class="brand-tagline">ambient light OS</span>
+          </a>
+
+          <!-- Centre: Frosted pill containing 4 links (hidden under 640px) -->
+          <nav class="nav-center-pill" aria-label="Primary navigation">
+            <a href="#features" class="nav-link">Features</a>
+            <a href="#scenes" class="nav-link">Scenes</a>
+            <a href="#hardware" class="nav-link">Hardware</a>
+            <a href="#journal" class="nav-link">Journal</a>
+          </nav>
+
+          <!-- Right: Request access outlined pill -->
+          <div class="nav-right">
+            <a href="#access" class="btn-access-outline">Request access</a>
+          </div>
+
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Hero Content -->
+    <main>
+      <section class="hero-section">
+        <div class="container">
+          <div class="hero-grid">
+
+            <!-- Left Column: Hero Content & CTAs -->
+            <div class="hero-content">
+
+              <!-- Pill Eyebrow with pulsing teal LED dot -->
+              <div class="eyebrow-pill">
+                <span class="led-dot" aria-hidden="true"></span>
+                <span>Lumen OS 3 · Now in private beta</span>
+              </div>
+
+              <!-- Headline -->
+              <h1 class="hero-headline">
+                Light that <span class="shimmer-word">listens</span> to the room.
+              </h1>
+
+              <!-- Lede Paragraph -->
+              <p class="hero-lede">
+                An ambient operating system that tunes every luminaire to the celestial clock. Seamless circadian shifts, acoustic room sensing, and astronomical twilight gradients—computed entirely on-device with zero cloud latency.
+              </p>
+
+              <!-- Two CTA Buttons -->
+              <div class="hero-cta-group">
+                <!-- Primary gradient pill (violet->teal, dark ink text, blurred glow pseudo-element) -->
+                <a href="#access" class="btn-primary-pill">
+                  <span>Experience OS 3</span>
+                </a>
+
+                <!-- Ghost glass pill whose arrow icon slides right on hover -->
+                <a href="#scenes" class="btn-ghost-pill">
+                  <span>Explore Scenes</span>
+                  <svg class="arrow-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3.333 8h9.334M8.667 4l4 4-4 4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </a>
+              </div>
+
+            </div>
+
+            <!-- Right Column: Hero Stage with 4 Floating Frosted Panels -->
+            <div class="hero-stage" id="hero-stage">
+
+              <!-- Panel 4: Glowing Teal-Violet Orb (data-depth 0.18) -->
+              <div class="parallax-panel stage-orb-wrap" data-depth="0.18">
+                <div class="stage-orb" aria-hidden="true"></div>
+              </div>
+
+              <!-- Panel 2: Small Colour-Temperature Card (data-depth 0.14) -->
+              <div class="parallax-panel card-temperature glass-surface" data-depth="0.14">
+                <div class="temp-header">
+                  <span class="temp-tag">SPECTRUM REGULATION</span>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--teal)" stroke-width="1.5">
+                    <circle cx="8" cy="8" r="6.5"/>
+                    <path d="M8 4v4l2.5 2.5"/>
+                  </svg>
+                </div>
+                <div class="temp-kelvin-val">
+                  <span id="stage-kelvin-num">3 840</span>
+                  <span class="k-unit">K</span>
+                </div>
+                <div class="temp-track-wrap">
+                  <div class="temp-bar-track"></div>
+                  <div class="temp-bar-thumb" id="stage-kelvin-thumb"></div>
+                </div>
+                <div class="temp-labels">
+                  <span>1 900 K · Warm</span>
+                  <span>5 600 K · Glacial</span>
+                </div>
+              </div>
+
+              <!-- Panel 1: Large "Now Playing" Card (data-depth 0.08) -->
+              <div class="parallax-panel card-now-playing glass-surface" data-depth="0.08">
+                <div class="np-header">
+                  <span class="np-tag">NOW PLAYING</span>
+                  <span class="np-live-badge">Mesh Synced</span>
+                </div>
+
+                <div class="np-main-row">
+                  <!-- Spinning Conic Colour Ring -->
+                  <div class="conic-ring-wrap">
+                    <div class="conic-ring"></div>
+                    <div class="conic-ring-core">
+                      <svg class="core-sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="4"/>
+                        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div class="np-details">
+                    <div class="np-scene-name" id="stage-scene-title">Golden Twilight</div>
+                    <div class="np-scene-sub" id="stage-scene-sub">Living Room & Studio Arc</div>
+                    <div class="np-wave-bars" aria-hidden="true">
+                      <div class="wave-bar"></div>
+                      <div class="wave-bar"></div>
+                      <div class="wave-bar"></div>
+                      <div class="wave-bar"></div>
+                      <div class="wave-bar"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="np-footer-bar">
+                  <span>8 fixtures active</span>
+                  <strong>460 lm flux · 100% stable</strong>
+                </div>
+              </div>
+
+              <!-- Panel 3: Tonight's Schedule Card (data-depth 0.10) -->
+              <div class="parallax-panel card-schedule glass-surface" data-depth="0.10">
+                <div class="sched-header">
+                  <span class="sched-tag">TONIGHT'S ARC</span>
+                  <span class="sched-subtitle">Continuous Curve</span>
+                </div>
+
+                <ul class="sched-list">
+                  <li class="sched-item active-scene">
+                    <div class="sched-item-left">
+                      <span class="sched-dot"></span>
+                      <span class="sched-time">18:30</span>
+                      <span class="sched-name">Golden Dusk</span>
+                    </div>
+                    <span class="sched-temp">2 700 K</span>
+                  </li>
+
+                  <li class="sched-item">
+                    <div class="sched-item-left">
+                      <span class="sched-dot"></span>
+                      <span class="sched-time">21:15</span>
+                      <span class="sched-name">Blue Hour Hearth</span>
+                    </div>
+                    <span class="sched-temp">2 200 K</span>
+                  </li>
+
+                  <li class="sched-item">
+                    <div class="sched-item-left">
+                      <span class="sched-dot"></span>
+                      <span class="sched-time">23:00</span>
+                      <span class="sched-name">Candela Slumber</span>
+                    </div>
+                    <span class="sched-temp">1 900 K</span>
+                  </li>
+                </ul>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- Three Ideas Behind Lumen Section -->
+      <section class="features-section" id="features">
+        <div class="container">
+
+          <div class="features-header">
+            <span class="features-eyebrow">PHILOSOPHY & FOUNDATIONS</span>
+            <h2 class="features-title">Three ideas behind Lumen</h2>
+            <p class="features-desc">
+              Light fixtures shouldn't be binary switches on a wall. They should operate like living organs of your architecture, breathing in harmony with solar time.
+            </p>
+          </div>
+
+          <div class="features-grid">
+
+            <!-- Card 1: Circadian by default -->
+            <article class="feature-card">
+              <div class="card-top-bar">
+                <!-- Glass icon tile with inline SVG that lifts & tilts -->
+                <div class="card-icon-tile">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="4"/>
+                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+                    <path d="M2 18c4-4 8-4 12 0s8 4 8 0" stroke="var(--teal)" stroke-dasharray="2 2" stroke-width="1.2"/>
+                  </svg>
+                </div>
+                <span class="card-tag">01 / BIOLOGY</span>
+              </div>
+              <div class="card-body">
+                <h3 class="card-title">Circadian by default</h3>
+                <p class="card-text">
+                  Direct retinal synchronization. Morning sunlight spikes melanopsin-stimulating frequencies to awaken cognition, smoothly decaying into low-CCT amber and candle spectrums as dusk draws in.
+                </p>
+              </div>
+            </article>
+
+            <!-- Card 2: Scenes that blend -->
+            <article class="feature-card">
+              <div class="card-top-bar">
+                <div class="card-icon-tile">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M17 12c0-2.76-2.24-5-5-5" stroke="var(--rose)"/>
+                  </svg>
+                </div>
+                <span class="card-tag">02 / FLUIDITY</span>
+              </div>
+              <div class="card-body">
+                <h3 class="card-title">Scenes that blend</h3>
+                <p class="card-text">
+                  Zero jarring steps or sudden switch clicks. Every lighting transition unfolds across 45-minute continuous logarithmic curves, mirroring the imperceptible dissolution of daylight into astronomical night.
+                </p>
+              </div>
+            </article>
+
+            <!-- Card 3: Local silent yours -->
+            <article class="feature-card">
+              <div class="card-top-bar">
+                <div class="card-icon-tile">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="4" width="16" height="16" rx="3"/>
+                    <path d="M9 9h6v6H9z"/>
+                    <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
+                  </svg>
+                </div>
+                <span class="card-tag">03 / PRIVACY</span>
+              </div>
+              <div class="card-body">
+                <h3 class="card-title">Local silent yours</h3>
+                <p class="card-text">
+                  Every calculation runs on a dedicated 2-watt neural controller plugged into your home distribution board. No internet dependency, zero outbound telemetry, and 100% operational autonomy.
+                </p>
+              </div>
+            </article>
+
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Thin Footer with Live "Local Light" Kelvin Readout -->
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-inner">
+          <div class="footer-left">
+            © 2026 Lumen Systems, Inc. Ambient Light Operating System.
+          </div>
+
+          <div class="footer-local-light" title="Computed live from your local astronomical clock">
+            <span class="spectrum-status-dot" id="footer-spectrum-dot" aria-hidden="true"></span>
+            <span>Local light: <strong class="local-kelvin-val" id="footer-kelvin-val">3 840 K</strong> (<span id="footer-phase-name">Solar Descent</span>)</span>
+            <span class="local-clock-val" id="footer-clock-val">12:00:00</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Interactive Scripts -->
+  <script>
+    (function () {
+      'use strict';
+
+      /* -----------------------------------------------------------
+         1. LIVE CIRCADIAN KELVIN ENGINE
+         Peaking at 5 600 K near 13:00 and bottoming at 1 900 K near 23:00
+         Using a piecewise C1-continuous cosine curve
+         ----------------------------------------------------------- */
+      function computeCircadianKelvin(date) {
+        const now = date || new Date();
+        const h = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+
+        let cosFactor;
+        if (h >= 13 && h <= 23) {
+          // Daytime/Evening decay: 13:00 -> angle 0 (cos=1), 23:00 -> angle PI (cos=-1)
+          const angle = ((h - 13) / 10) * Math.PI;
+          cosFactor = Math.cos(angle);
+        } else {
+          // Night/Morning rise: 23:00 -> angle PI (cos=-1), 13:00 -> angle 2*PI (cos=1)
+          const normH = h < 13 ? h + 24 : h; // 23 to 37
+          const angle = Math.PI + ((normH - 23) / 14) * Math.PI;
+          cosFactor = Math.cos(angle);
+        }
+
+        // Normalize [-1, 1] to [0, 1]
+        const norm01 = (cosFactor + 1) / 2;
+        const kelvin = Math.round(1900 + norm01 * (5600 - 1900));
+
+        // Format with space thousands separator
+        const formattedK = kelvin.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+        // Determine phase description
+        let phase = "Twilight Balance";
+        let sceneName = "Golden Twilight";
+        let sceneSub = "Living Room & Studio Arc";
+
+        if (h >= 5 && h < 8.5) {
+          phase = "Dawn Awakening";
+          sceneName = "Amber Dawn";
+          sceneSub = "Melatonin Clearance";
+        } else if (h >= 8.5 && h < 12) {
+          phase = "Morning Radiance";
+          sceneName = "Glacial Morning";
+          sceneSub = "High-Focus Daylight Arc";
+        } else if (h >= 12 && h < 14.5) {
+          phase = "Solar Zenith";
+          sceneName = "Zenith Sky";
+          sceneSub = "Peak Cognitive Lux";
+        } else if (h >= 14.5 && h < 18) {
+          phase = "Afternoon Descent";
+          sceneName = "Warm Diffuse";
+          sceneSub = "Soft Transition Stream";
+        } else if (h >= 18 && h < 21) {
+          phase = "Golden Dusk";
+          sceneName = "Golden Twilight";
+          sceneSub = "Living Room & Studio Arc";
+        } else if (h >= 21 && h < 23) {
+          phase = "Blue Hour Hearth";
+          sceneName = "Hearth Calm";
+          sceneSub = "Melatonin Induction";
+        } else {
+          phase = "Candela Slumber";
+          sceneName = "Nocturne Drift";
+          sceneSub = "Low-Intensity Amber Mesh";
+        }
+
+        // Thumb percentage on slider (0% at 1900K, 100% at 5600K)
+        const pct = Math.min(Math.max(norm01 * 100, 0), 100);
+
+        // Dot color interpolation
+        let dotColor = "#ffc46b";
+        if (norm01 > 0.65) {
+          dotColor = "#8bc2ff";
+        } else if (norm01 > 0.35) {
+          dotColor = "#4ee6c7";
+        }
+
+        const timeStr = now.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
+
+        return {
+          kelvin,
+          formattedK,
+          norm01,
+          pct,
+          dotColor,
+          phase,
+          sceneName,
+          sceneSub,
+          timeStr
+        };
+      }
+
+      function updateLiveReadouts() {
+        const data = computeCircadianKelvin();
+
+        // Footer elements
+        const footerKelvin = document.getElementById('footer-kelvin-val');
+        const footerPhase = document.getElementById('footer-phase-name');
+        const footerClock = document.getElementById('footer-clock-val');
+        const footerDot = document.getElementById('footer-spectrum-dot');
+
+        if (footerKelvin) footerKelvin.textContent = data.formattedK + ' K';
+        if (footerPhase) footerPhase.textContent = data.phase;
+        if (footerClock) footerClock.textContent = data.timeStr;
+        if (footerDot) {
+          footerDot.style.backgroundColor = data.dotColor;
+          footerDot.style.boxShadow = '0 0 8px ' + data.dotColor;
+        }
+
+        // Hero Stage elements
+        const stageKelvin = document.getElementById('stage-kelvin-num');
+        const stageThumb = document.getElementById('stage-kelvin-thumb');
+        const stageTitle = document.getElementById('stage-scene-title');
+        const stageSub = document.getElementById('stage-scene-sub');
+
+        if (stageKelvin) stageKelvin.textContent = data.formattedK;
+        if (stageThumb) stageThumb.style.left = data.pct.toFixed(1) + '%';
+        if (stageTitle) stageTitle.textContent = data.sceneName;
+        if (stageSub) stageSub.textContent = data.sceneSub;
+      }
+
+      // Initial run & recurring 1-second interval
+      updateLiveReadouts();
+      setInterval(updateLiveReadouts, 1000);
+
+      /* -----------------------------------------------------------
+         2. LAYERED PARALLAX ON HERO FLOATING STAGE PANELS
+         Eases each panel toward an offset proportional to data-depth
+         Lerp factor 0.08 inside requestAnimationFrame
+         Disabled for coarse pointers and prefers-reduced-motion
+         ----------------------------------------------------------- */
+      const stage = document.getElementById('hero-stage');
+      const panels = document.querySelectorAll('.parallax-panel');
+
+      const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+      const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (!isCoarse && !prefersReduced && panels.length > 0) {
+        let mouseX = 0;
+        let mouseY = 0;
+        let targetX = 0;
+        let targetY = 0;
+        let currentX = 0;
+        let currentY = 0;
+        const LERP = 0.08;
+
+        window.addEventListener('pointermove', function (e) {
+          const cx = window.innerWidth / 2;
+          const cy = window.innerHeight / 2;
+          targetX = (e.clientX - cx);
+          targetY = (e.clientY - cy);
+        }, { passive: true });
+
+        function parallaxLoop() {
+          currentX += (targetX - currentX) * LERP;
+          currentY += (targetY - currentY) * LERP;
+
+          for (let i = 0; i < panels.length; i++) {
+            const panel = panels[i];
+            const depth = parseFloat(panel.getAttribute('data-depth') || '0.08');
+            const offsetX = currentX * depth * 0.42;
+            const offsetY = currentY * depth * 0.42;
+
+            panel.style.transform = 'translate3d(' + offsetX.toFixed(2) + 'px, ' + offsetY.toFixed(2) + 'px, 0)';
+          }
+
+          requestAnimationFrame(parallaxLoop);
+        }
+
+        requestAnimationFrame(parallaxLoop);
+      }
+
+      /* -----------------------------------------------------------
+         3. CURSOR-FOLLOWING RADIAL SPOTLIGHT ON FEATURE CARDS
+         Sets CSS variables --mx and --my on pointer movement
+         ----------------------------------------------------------- */
+      const featureCards = document.querySelectorAll('.feature-card');
+      featureCards.forEach(function (card) {
+        card.addEventListener('pointermove', function (e) {
+          const rect = card.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+          card.style.setProperty('--mx', x + 'px');
+          card.style.setProperty('--my', y + 'px');
+        });
+
+        card.addEventListener('pointerleave', function () {
+          // Reset spotlight far away smoothly
+          card.style.setProperty('--mx', '-500px');
+          card.style.setProperty('--my', '-500px');
+        });
+      });
+
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Still Water — Moonlit Ripple Reflection</title>
+<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+body {
+  background: #05071a;
+  font-family: "Iowan Old Style", Palatino, Georgia, serif;
+  color: #d9dff0;
+  overflow: hidden;
+  height: 100vh;
+}
+canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+}
+.title {
+  position: fixed;
+  left: 20px;
+  top: 16px;
+  font-size: 11px;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: #ffb35c;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  text-shadow: 0 2px 10px #000;
+}
+.panel {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  background: rgba(20,26,60,.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(217,223,240,.35);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+  font-size: 12px;
+  width: 230px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.panel b {
+  font-size: 10px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: #ffb35c;
+  font-weight: 700;
+}
+.panel label {
+  display: grid;
+  gap: 5px;
+  color: #c5cde8;
+}
+.panel input[type=range] {
+  width: 100%;
+  accent-color: #ffb35c;
+}
+.panel output {
+  color: #ffb35c;
+  font-style: italic;
+  font-family: Georgia, serif;
+}
+.tog {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.knob {
+  width: 40px;
+  height: 22px;
+  border-radius: 99px;
+  background: #ffffff2a;
+  border: 1px solid #ffffff55;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.knob::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffb35c;
+  transition: left .25s;
+}
+.knob.off::after {
+  left: 20px;
+  background: #888;
+}
+.rowb {
+  display: flex;
+  gap: 8px;
+}
+.rowb button {
+  flex: 1;
+  background: transparent;
+  border: 1px solid rgba(217,223,240,.4);
+  color: #d9dff0;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.rowb button:hover {
+  background: rgba(255,179,92,.2);
+}
+.hint {
+  opacity: .7;
+  line-height: 1.5;
+}
+.caption {
+  position: fixed;
+  left: 20px;
+  bottom: 18px;
+  font-style: italic;
+  font-size: clamp(14px, 2.4vw, 20px);
+  color: #d9dff0cc;
+  text-shadow: 0 2px 12px #000;
+  max-width: 60ch;
+}
+.caption small {
+  display: block;
+  font-style: normal;
+  font-family: ui-sans-serif, sans-serif;
+  font-size: 10px;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: #ffb35c;
+  margin-bottom: 6px;
+}
+@media (max-width: 640px) {
+  .panel {
+    width: 200px;
+    font-size: 11px;
+  }
+  .caption {
+    max-width: 52ch;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div class="title">Still Water · Nocturne N°3</div>
+<div class="panel">
+  <b>Lake controls</b>
+  <label>Restlessness — <output id="oW">calm</output>
+    <input type="range" id="rW" min="0" max="100" value="30">
+  </label>
+  <div class="tog"><span>Lanterns on shore</span><div class="knob" id="kL" role="switch" aria-checked="true" tabindex="0"></div></div>
+  <div class="tog"><span>Random raindrops</span><div class="knob off" id="kR" role="switch" aria-checked="false" tabindex="0"></div></div>
+  <div class="rowb">
+    <button id="bStone">Throw a stone</button>
+    <button id="bCalm">Let it settle</button>
+  </div>
+  <div class="hint">Click / drag the water · breeze stirs above half restlessness.</div>
+</div>
+<div class="caption">
+  <small>Moonlit lake · live height-field</small>
+  “The lake keeps whatever the sky gives it, and gives it back a little softer.”
+</div>
+<script>
+var cv = document.getElementById('cv');
+var ctx = cv.getContext('2d');
+var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var W = 0, H = 0, skyH = 0, SW = 0, SH = 0;
+var h1 = null, h2 = null;
+var scene = null, sceneCtx = null, sceneLow = null, slowCtx = null;
+var lanterns = [], flies = [];
+var damp = .967, rest = 30, showL = true, rain = false;
+function words(w) {
+  if (w < 20) return 'glass';
+  if (w < 45) return 'calm';
+  if (w < 65) return 'stirring';
+  if (w < 85) return 'restless';
+  return 'brooding';
+}
+function seedRnd(s) {
+  return function () {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+function build() {
+  var d = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  cv.width = W * d;
+  cv.height = H * d;
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  skyH = Math.round(H * .56);
+  var div = W > 1400 ? 4 : 3;
+  SW = Math.max(120, (W / div) | 0);
+  SH = Math.max(60, ((H - skyH) / div * 2) | 0);
+  h1 = new Float32Array(SW * SH);
+  h2 = new Float32Array(SW * SH);
+  scene = document.createElement('canvas');
+  scene.width = W;
+  scene.height = skyH;
+  sceneCtx = scene.getContext('2d');
+  sceneLow = document.createElement('canvas');
+  sceneLow.width = SW;
+  sceneLow.height = Math.ceil(skyH / div);
+  sceneLow._div = div;
+  slowCtx = sceneLow.getContext('2d');
+  var R = seedRnd(9);
+  lanterns = [];
+  var i;
+  for (i = 0; i < 7; i++) {
+    lanterns.push({ x: (.15 + R() * .7) * W, big: i < 3, ph: R() * 7, sp: .1 + R() * .25 });
+  }
+  flies = [];
+  for (i = 0; i < 24; i++) {
+    flies.push({ x: R() * W, y: skyH + 20 + R() * (H - skyH - 60), ph: R() * 7 });
+  }
+  paintScene(sceneCtx, W, skyH, 1);
+  paintScene(slowCtx, SW, sceneLow.height, 1 / div);
+}
+function paintScene(g, w, h, s) {
+  var sky = g.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, '#05071a');
+  sky.addColorStop(.6, '#0c1236');
+  sky.addColorStop(1, '#1a2352');
+  g.fillStyle = sky;
+  g.fillRect(0, 0, w, h);
+  var R = seedRnd(5);
+  g.fillStyle = '#ffffff';
+  var i;
+  for (i = 0; i < 260; i++) {
+    var x = R() * w, y = R() * h * .7, a = .3 + R() * .7;
+    g.globalAlpha = a * (1 - y / (h * .8));
+    g.fillRect(x, y, s, s);
+  }
+  g.globalAlpha = 1;
+  var mx = w * .68, my = h * .32, mr = Math.max(18, w * .035);
+  var halo = g.createRadialGradient(mx, my, mr, mx, my, mr * 7);
+  halo.addColorStop(0, 'rgba(210,220,255,.5)');
+  halo.addColorStop(1, 'rgba(210,220,255,0)');
+  g.fillStyle = halo;
+  g.fillRect(mx - mr * 7, my - mr * 7, mr * 14, mr * 14);
+  var mg = g.createLinearGradient(mx - mr, my - mr, mx + mr, my + mr);
+  mg.addColorStop(0, '#ffffff');
+  mg.addColorStop(1, '#c5cde8');
+  g.fillStyle = mg;
+  g.beginPath(); g.arc(mx, my, mr, 0, 7); g.fill();
+  g.fillStyle = 'rgba(150,160,200,.4)';
+  g.beginPath(); g.arc(mx - mr * .3, my - mr * .2, mr * .22, 0, 7); g.fill();
+  g.beginPath(); g.arc(mx + mr * .25, my + mr * .3, mr * .14, 0, 7); g.fill();
+  g.fillStyle = '#0d1338';
+  g.beginPath();
+  g.moveTo(0, h);
+  var xx;
+  for (xx = 0; xx <= w; xx += 8) {
+    var ry = h * .78 + Math.sin(xx * .008) * h * .05 + Math.sin(xx * .03) * h * .015;
+    g.lineTo(xx, ry);
+  }
+  g.lineTo(w, h);
+  g.fill();
+  g.fillStyle = '#05071c';
+  g.beginPath();
+  g.moveTo(0, h);
+  for (xx = 0; xx <= w; xx += 6) {
+    g.lineTo(xx, h * .86 + ((xx * 7919) % 13) * s * .9);
+  }
+  g.lineTo(w, h);
+  g.fill();
+  var mist = g.createLinearGradient(0, h * .9, 0, h);
+  mist.addColorStop(0, 'rgba(200,210,255,0)');
+  mist.addColorStop(1, 'rgba(200,210,255,.18)');
+  g.fillStyle = mist;
+  g.fillRect(0, h * .9, w, h * .1);
+}
+function drawLanterns(g, s) {
+  if (!showL) return;
+  var t = Date.now() / 1000;
+  lanterns.forEach(function (L) {
+    L.x += L.sp * .3;
+    if (L.x > W) L.x = 0;
+    var y = skyH - 14 + Math.sin(t * .6 + L.ph) * 3;
+    var yy = (g === slowCtx) ? sceneLow.height - 4 : y;
+    var r = (L.big ? 7 : 4.5) * s;
+    var p = .7 + .3 * Math.sin(t * 2 + L.ph);
+    g.fillStyle = 'rgba(255,179,92,' + (.9 * p).toFixed(2) + ')';
+    g.beginPath(); g.arc(L.x * s, yy, r, 0, 7); g.fill();
+  });
+}
+function stepWater() {
+  var n = reduced ? 1 : 2, s, x, y;
+  for (s = 0; s < n; s++) {
+    for (y = 1; y < SH - 1; y++) {
+      for (x = 1; x < SW - 1; x++) {
+        var i = y * SW + x;
+        h2[i] = ((h1[i - 1] + h1[i + 1] + h1[i - SW] + h1[i + SW]) / 2 - h2[i]) * damp;
+      }
+    }
+    if (rest > 50 && !reduced) {
+      var k;
+      for (k = 0; k < 4; k++) h2[(Math.random() * SW * SH) | 0] += (Math.random() - .5) * 2;
+    }
+    if (rain) {
+      var j;
+      for (j = 0; j < rest / 22; j++) {
+        var rx = (Math.random() * SW) | 0, ry = (Math.random() * SH) | 0;
+        h2[ry * SW + rx] += 6;
+      }
+    }
+    var tmp = h1; h1 = h2; h2 = tmp;
+  }
+}
+function drop(x, y, big) {
+  var gx = (x / W * SW) | 0;
+  var gy = ((y - skyH) / (H - skyH) * SH) | 0;
+  if (gy < 0) return;
+  var j, i;
+  for (j = -3; j <= 3; j++) {
+    for (i = -3; i <= 3; i++) {
+      var xx = gx + i, yy = gy + j;
+      if (xx < 1 || yy < 1 || xx >= SW - 1 || yy >= SH - 1) continue;
+      h1[yy * SW + xx] += (big ? 90 : 40) * Math.exp(-(i * i + j * j) / 3);
+    }
+  }
+}
+var tmpC = document.createElement('canvas');
+function frame() {
+  paintScene(sceneCtx, W, skyH, 1);
+  paintScene(slowCtx, SW, sceneLow.height, 1 / sceneLow._div);
+  drawLanterns(sceneCtx, 1);
+  drawLanterns(slowCtx, 1 / sceneLow._div);
+  ctx.drawImage(scene, 0, 0, W, skyH);
+  stepWater();
+  var low = slowCtx.getImageData(0, 0, SW, sceneLow.height).data;
+  var wh = H - skyH;
+  var img = ctx.createImageData(W, wh);
+  var moonX = W * .68;
+  var t = Date.now() / 1000;
+  var y, x;
+  for (y = 0; y < wh; y++) {
+    for (x = 0; x < W; x++) {
+      var gx = Math.min(SW - 2, Math.max(1, x / W * (SW - 1)));
+      var gy = Math.min(SH - 2, Math.max(1, y / wh * (SH - 1)));
+      var x0 = gx | 0, y0 = gy | 0, fx = gx - x0, fy = gy - y0;
+      var ii = y0 * SW + x0;
+      var gxH = (h1[ii + 1] - h1[ii - 1]) * .5;
+      var gyH = (h1[ii + SW] - h1[ii - SW]) * .5;
+      var k = 26;
+      var sxx = Math.min(SW - 1, Math.max(0, (x + gxH * k) | 0));
+      var syy = Math.min(sceneLow.height - 1, Math.max(0, ((y / wh * sceneLow.height * .8 + gyH * 1.6 * k * .4)) | 0));
+      var o = (syy * SW + sxx) * 4;
+      var r = low[o], g = low[o + 1], b = low[o + 2];
+      var dim = 1 - y / wh * .45;
+      r = (r * .75 + 20 * (1 - y / wh)) * dim;
+      g = (g * .78 + 22 * (1 - y / wh)) * dim;
+      b = (b * .9 + 40 * (1 - y / wh)) * dim;
+      var spec = Math.max(0, gyH) * 14 * Math.exp(-Math.pow(x - moonX, 2) / (2 * 120 * 120)) * (0.6 + 0.4 * Math.sin(t * 2 + x * .02));
+      var o2 = (y * W + x) * 4;
+      img.data[o2] = Math.min(255, r + spec);
+      img.data[o2 + 1] = Math.min(255, g + spec);
+      img.data[o2 + 2] = Math.min(255, b + spec * 1.1);
+      img.data[o2 + 3] = 255;
+    }
+  }
+  tmpC.width = W;
+  tmpC.height = wh;
+  tmpC.getContext('2d').putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(tmpC, 0, skyH, W, wh);
+  ctx.fillStyle = 'rgba(3,5,16,.7)';
+  ctx.fillRect(0, H - 26, W, 26);
+  ctx.strokeStyle = '#0a1a12';
+  ctx.lineWidth = 3;
+  var sway = reduced ? 0 : Math.sin(t * .8) * 6;
+  var ri;
+  for (ri = 0; ri < 7; ri++) {
+    var rx2 = ri * 26 + sway * (ri % 2 ? 1 : -1);
+    ctx.beginPath();
+    ctx.moveTo(rx2, H);
+    ctx.quadraticCurveTo(rx2 + 8, H - 50, rx2 + sway, H - 70);
+    ctx.stroke();
+  }
+  if (showL && !reduced) {
+    flies.forEach(function (f) {
+      var a = Math.pow(Math.max(0, Math.sin(t * 1.4 + f.ph)), 3);
+      if (a > .05) {
+        ctx.fillStyle = 'rgba(255,220,120,' + a.toFixed(2) + ')';
+        ctx.beginPath();
+        ctx.arc(f.x, f.y + Math.sin(t + f.ph) * 4, 2.2, 0, 7);
+        ctx.fill();
+      }
+    });
+  }
+  ctx.fillStyle = 'rgba(217,223,240,.35)';
+  ctx.fillRect(0, skyH - 1, W, 1);
+  requestAnimationFrame(frame);
+}
+var drag = false, last = 0;
+cv.addEventListener('pointerdown', function (e) {
+  if (e.clientY < skyH) return;
+  drag = true;
+  drop(e.clientX, e.clientY, true);
+});
+window.addEventListener('pointermove', function (e) {
+  if (drag && e.clientY > skyH && Date.now() - last > 28) {
+    last = Date.now();
+    drop(e.clientX, e.clientY, false);
+  }
+});
+window.addEventListener('pointerup', function () { drag = false; });
+document.getElementById('bStone').addEventListener('click', function () {
+  drop(W * (.3 + Math.random() * .4), skyH + (H - skyH) * .4, true);
+});
+document.getElementById('bCalm').addEventListener('click', function () {
+  h1.fill(0); h2.fill(0);
+});
+document.getElementById('rW').addEventListener('input', function (e) {
+  rest = +e.target.value;
+  damp = .955 + rest / 100 * .042;
+  document.getElementById('oW').textContent = words(rest);
+});
+function flipKnob(el, on) {
+  el.classList.toggle('off', !on);
+  el.setAttribute('aria-checked', on ? 'true' : 'false');
+}
+document.getElementById('kL').addEventListener('click', function (e) {
+  showL = !showL;
+  flipKnob(e.target, showL);
+});
+document.getElementById('kR').addEventListener('click', function (e) {
+  rain = !rain;
+  flipKnob(e.target, rain);
+});
+damp = .955 + 30 / 100 * .042;
+build();
+window.addEventListener('resize', build);
+frame();
+</script>
+</body>
+</html>

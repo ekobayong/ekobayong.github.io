@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>JUMPGATE // Hyperspace Warp Tunnel</title>
+  <style>
+    /* ==========================================================================
+       DESIGN SYSTEM & CSS VARIABLES
+       Palette:
+         Pure Black:    #000000
+         Electric Blue: #3d8bff
+         Pale Ice Blue: #7fc4ff
+         Near-White:    #f4f8ff
+         Violet Accent: #8a5cff
+       ========================================================================== */
+    :root {
+      --color-black: #000000;
+      --color-electric-blue: #3d8bff;
+      --color-ice-blue: #7fc4ff;
+      --color-white: #f4f8ff;
+      --color-violet: #8a5cff;
+
+      --hud-font: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --hud-text-glow: 0 0 8px rgba(61, 139, 255, 0.75), 0 0 18px rgba(61, 139, 255, 0.35);
+      --letterbox-height: 6vh;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--color-black);
+      font-family: var(--hud-font);
+      color: var(--color-ice-blue);
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Fullscreen hyperspace canvas */
+    #warpCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      display: block;
+      background-color: var(--color-black);
+      touch-action: none;
+    }
+
+    /* ==========================================================================
+       CINEMATIC LETTERBOX & FILM OVERLAYS
+       ========================================================================== */
+    /* Letterbox bars of 6vh top and bottom */
+    .letterbox {
+      position: fixed;
+      left: 0;
+      right: 0;
+      height: var(--letterbox-height);
+      background-color: var(--color-black);
+      z-index: 100;
+      pointer-events: none;
+    }
+    .letterbox-top {
+      top: 0;
+      border-bottom: 1px solid rgba(61, 139, 255, 0.18);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.9);
+    }
+    .letterbox-bottom {
+      bottom: 0;
+      border-top: 1px solid rgba(61, 139, 255, 0.18);
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.9);
+    }
+
+    /* Radial vignette that darkens edges */
+    .vignette-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      pointer-events: none;
+      background: radial-gradient(
+        ellipse at center,
+        transparent 35%,
+        rgba(0, 0, 0, 0.45) 65%,
+        rgba(0, 0, 0, 0.92) 100%
+      );
+    }
+
+    /* Faint 1px scanline pattern in overlay blend mode */
+    .scanline-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 55;
+      pointer-events: none;
+      mix-blend-mode: overlay;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.08) 0px,
+        rgba(255, 255, 255, 0.08) 1px,
+        transparent 1px,
+        transparent 2px
+      );
+      opacity: 0.65;
+    }
+
+    /* White Flash Screen */
+    #flashOverlay {
+      position: fixed;
+      inset: 0;
+      background-color: var(--color-white);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 70;
+      transition: opacity 0.05s ease-out;
+    }
+
+    /* ==========================================================================
+       HUD CONTAINER & TELEMETRY
+       ========================================================================== */
+    .hud-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: calc(var(--letterbox-height) + 16px) 24px calc(var(--letterbox-height) + 14px) 24px;
+      color: var(--color-ice-blue);
+      text-shadow: var(--hud-text-glow);
+    }
+
+    /* Interactive elements in HUD */
+    .hud-interactive {
+      pointer-events: auto;
+    }
+
+    /* Top HUD Header: Title and Engaging Prompt */
+    .hud-header {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      width: 100%;
+    }
+
+    .jumpgate-title {
+      font-size: clamp(1.2rem, 2.2vw, 1.7rem);
+      font-weight: 200;
+      letter-spacing: 0.5em;
+      text-transform: uppercase;
+      color: var(--color-white);
+      text-shadow: 0 0 12px rgba(244, 248, 255, 0.8), 0 0 24px rgba(61, 139, 255, 0.5);
+      margin-left: 0.5em; /* Optical centering compensation for letter-spacing */
+    }
+
+    .jumpgate-subline {
+      font-size: 0.68rem;
+      letter-spacing: 0.3em;
+      color: rgba(127, 196, 255, 0.7);
+      margin-top: 4px;
+      text-transform: uppercase;
+    }
+
+    .jumpgate-prompt {
+      margin-top: 10px;
+      font-size: clamp(0.68rem, 1.2vw, 0.82rem);
+      letter-spacing: 0.28em;
+      color: var(--color-ice-blue);
+      border: 1px solid rgba(61, 139, 255, 0.4);
+      background: rgba(0, 0, 0, 0.45);
+      padding: 6px 18px;
+      border-radius: 2px;
+      box-shadow: 0 0 14px rgba(61, 139, 255, 0.2), inset 0 0 8px rgba(61, 139, 255, 0.1);
+      transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s ease;
+      animation: promptBlink 2.4s ease-in-out infinite alternate;
+    }
+
+    @keyframes promptBlink {
+      0% { opacity: 0.85; border-color: rgba(61, 139, 255, 0.4); }
+      100% { opacity: 0.45; border-color: rgba(138, 92, 255, 0.4); }
+    }
+
+    .jumpgate-prompt.engaged {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.96);
+      pointer-events: none;
+    }
+
+    /* Corners Telemetry Panels */
+    .telemetry-corners {
+      position: absolute;
+      inset: calc(var(--letterbox-height) + 16px) 24px calc(var(--letterbox-height) + 20px) 24px;
+      pointer-events: none;
+    }
+
+    .corner-panel {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.76rem;
+      letter-spacing: 0.15em;
+      line-height: 1.45;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 10px 14px;
+      border: 1px solid rgba(61, 139, 255, 0.15);
+      border-radius: 3px;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+    }
+
+    .corner-top-left {
+      top: 0;
+      left: 0;
+      border-left: 2px solid var(--color-electric-blue);
+    }
+
+    .corner-top-right {
+      top: 0;
+      right: 0;
+      text-align: right;
+      border-right: 2px solid var(--color-electric-blue);
+    }
+
+    .corner-bottom-left {
+      bottom: 0;
+      left: 0;
+      border-left: 2px solid var(--color-violet);
+    }
+
+    .corner-bottom-right {
+      bottom: 0;
+      right: 0;
+      text-align: right;
+      border-right: 2px solid var(--color-violet);
+    }
+
+    .telemetry-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .corner-top-right .telemetry-row,
+    .corner-bottom-right .telemetry-row {
+      justify-content: flex-end;
+    }
+
+    .lbl {
+      color: rgba(127, 196, 255, 0.65);
+      font-weight: 300;
+    }
+
+    .val {
+      color: var(--color-white);
+      font-weight: 500;
+    }
+
+    .val-state {
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      padding: 1px 6px;
+      border-radius: 2px;
+      display: inline-block;
+      min-width: 54px;
+      text-align: center;
+    }
+
+    .state-idle {
+      color: var(--color-ice-blue);
+      background: rgba(61, 139, 255, 0.15);
+      border: 1px solid rgba(61, 139, 255, 0.3);
+    }
+    .state-burn {
+      color: #ffaa33;
+      background: rgba(255, 170, 51, 0.18);
+      border: 1px solid rgba(255, 170, 51, 0.45);
+      box-shadow: 0 0 10px rgba(255, 170, 51, 0.3);
+    }
+    .state-coast {
+      color: var(--color-ice-blue);
+      background: rgba(127, 196, 255, 0.15);
+      border: 1px solid rgba(127, 196, 255, 0.35);
+    }
+    .state-max {
+      color: var(--color-white);
+      background: rgba(138, 92, 255, 0.28);
+      border: 1px solid var(--color-white);
+      box-shadow: 0 0 14px rgba(244, 248, 255, 0.6), 0 0 24px rgba(138, 92, 255, 0.5);
+      animation: maxPulse 0.4s ease-in-out infinite alternate;
+    }
+
+    @keyframes maxPulse {
+      0% { opacity: 0.85; }
+      100% { opacity: 1; }
+    }
+
+    /* Sound and UI Controls in Header Bar */
+    .hud-controls {
+      position: absolute;
+      top: 14px;
+      right: 24px;
+      z-index: 110;
+      display: flex;
+      gap: 12px;
+    }
+
+    .hud-btn {
+      background: rgba(0, 0, 0, 0.6);
+      color: var(--color-ice-blue);
+      font-family: var(--hud-font);
+      font-size: 0.68rem;
+      letter-spacing: 0.15em;
+      border: 1px solid rgba(61, 139, 255, 0.35);
+      border-radius: 2px;
+      padding: 5px 12px;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      text-shadow: var(--hud-text-glow);
+    }
+    .hud-btn:hover {
+      background: rgba(61, 139, 255, 0.2);
+      border-color: var(--color-ice-blue);
+      color: var(--color-white);
+    }
+    .hud-btn.active {
+      border-color: var(--color-white);
+      background: rgba(138, 92, 255, 0.3);
+      color: var(--color-white);
+    }
+
+    /* ==========================================================================
+       CENTERED RETICLE (SVG)
+       ========================================================================== */
+    .reticle-container {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 280px;
+      height: 280px;
+      z-index: 60;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .reticle-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    /* Counter-rotating dashed rings (14s and 22s) */
+    .ring-outer {
+      transform-origin: 140px 140px;
+      animation: rotateRingCW 22s linear infinite;
+    }
+
+    .ring-inner {
+      transform-origin: 140px 140px;
+      animation: rotateRingCCW 14s linear infinite;
+    }
+
+    @keyframes rotateRingCW {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes rotateRingCCW {
+      0% { transform: rotate(360deg); }
+      100% { transform: rotate(0deg); }
+    }
+
+    .reticle-center-dot {
+      animation: reticleDotPulse 1.8s ease-in-out infinite alternate;
+      transform-origin: 140px 140px;
+    }
+
+    @keyframes reticleDotPulse {
+      0% { transform: scale(0.85); opacity: 0.6; }
+      100% { transform: scale(1.25); opacity: 1; }
+    }
+
+    /* ==========================================================================
+       CENTER BOTTOM SPEED READOUT & GAUGE
+       ========================================================================== */
+    .hud-footer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      margin-bottom: 4px;
+    }
+
+    .speed-gauge-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .speed-display {
+      font-size: clamp(3.2rem, 7.5vw, 5.2rem);
+      font-weight: 200;
+      line-height: 0.95;
+      letter-spacing: -0.02em;
+      color: var(--color-ice-blue);
+      text-shadow: 0 0 10px rgba(61, 139, 255, 0.75), 0 0 25px rgba(61, 139, 255, 0.4);
+      transition: color 0.15s ease, text-shadow 0.15s ease;
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+    }
+
+    .speed-c-unit {
+      font-size: clamp(1.2rem, 2.5vw, 1.9rem);
+      font-weight: 200;
+      letter-spacing: 0.1em;
+      margin-left: 8px;
+      color: rgba(127, 196, 255, 0.7);
+    }
+
+    /* White glow at 97%+ speed */
+    .speed-display.hyper-glow {
+      color: var(--color-white);
+      text-shadow:
+        0 0 15px #ffffff,
+        0 0 30px #ffffff,
+        0 0 60px var(--color-ice-blue),
+        0 0 100px var(--color-electric-blue);
+    }
+    .speed-display.hyper-glow .speed-c-unit {
+      color: var(--color-white);
+      text-shadow: 0 0 15px #ffffff;
+    }
+
+    /* Gradient Progress Bar */
+    .progress-bar-container {
+      width: clamp(240px, 45vw, 420px);
+      height: 6px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(61, 139, 255, 0.35);
+      border-radius: 3px;
+      padding: 1px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 12px rgba(61, 139, 255, 0.2);
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 2px;
+      background: linear-gradient(
+        90deg,
+        var(--color-electric-blue) 0%,
+        var(--color-ice-blue) 45%,
+        var(--color-violet) 80%,
+        var(--color-white) 100%
+      );
+      box-shadow: 0 0 12px rgba(61, 139, 255, 0.8), 0 0 20px rgba(138, 92, 255, 0.6);
+      transition: width 0.05s linear;
+    }
+
+    .stage-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--color-ice-blue);
+      margin-top: 4px;
+      min-height: 1.2em;
+      text-align: center;
+      transition: color 0.2s ease, text-shadow 0.2s ease;
+    }
+
+    .stage-sublight {
+      color: rgba(127, 196, 255, 0.7);
+    }
+    .stage-entry {
+      color: var(--color-electric-blue);
+      text-shadow: 0 0 10px rgba(61, 139, 255, 0.8);
+    }
+    .stage-hyperspace {
+      color: var(--color-violet);
+      text-shadow: 0 0 12px rgba(138, 92, 255, 0.9);
+    }
+    .stage-threshold {
+      color: var(--color-white);
+      text-shadow: 0 0 14px #ffffff, 0 0 28px var(--color-ice-blue);
+      animation: thresholdBlink 0.35s ease-in-out infinite alternate;
+    }
+
+    @keyframes thresholdBlink {
+      0% { opacity: 0.8; }
+      100% { opacity: 1; }
+    }
+
+    /* Mobile Adaptations */
+    @media (max-width: 768px) {
+      .hud-layer {
+        padding: calc(var(--letterbox-height) + 8px) 12px calc(var(--letterbox-height) + 8px) 12px;
+      }
+      .telemetry-corners {
+        inset: calc(var(--letterbox-height) + 8px) 12px calc(var(--letterbox-height) + 12px) 12px;
+      }
+      .corner-panel {
+        font-size: 0.65rem;
+        padding: 6px 8px;
+        gap: 3px;
+      }
+      .corner-top-left { max-width: 48%; }
+      .corner-top-right { max-width: 48%; }
+      .corner-bottom-left { max-width: 48%; }
+      .corner-bottom-right { max-width: 48%; }
+      .reticle-container {
+        width: 200px;
+        height: 200px;
+      }
+    }
+
+    /* Reduced-motion accessibility */
+    @media (prefers-reduced-motion: reduce) {
+      .ring-outer,
+      .ring-inner,
+      .reticle-center-dot,
+      .state-max,
+      .stage-threshold,
+      .jumpgate-prompt {
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fullscreen Hyperspace Canvas -->
+  <canvas id="warpCanvas"></canvas>
+
+  <!-- Letterbox Bars (6vh) -->
+  <div class="letterbox letterbox-top" aria-hidden="true"></div>
+  <div class="letterbox letterbox-bottom" aria-hidden="true"></div>
+
+  <!-- Film Overlays: Radial Vignette & Scanlines -->
+  <div class="vignette-overlay" aria-hidden="true"></div>
+  <div class="scanline-overlay" aria-hidden="true"></div>
+
+  <!-- Brief White Flash Screen (at 93% Speed) -->
+  <div id="flashOverlay" aria-hidden="true"></div>
+
+  <!-- HUD Overlay Layer -->
+  <div class="hud-layer">
+    <!-- Top Header -->
+    <header class="hud-header">
+      <h1 class="jumpgate-title">JUMPGATE</h1>
+      <div class="jumpgate-subline">FTL TRANSIT TUNNEL // VECTOR STABILIZED</div>
+      <div class="jumpgate-prompt" id="hudPrompt">HOLD SPACEBAR OR PRIMARY TOUCH TO ENGAGE</div>
+    </header>
+
+    <!-- Centered SVG Reticle -->
+    <div class="reticle-container" aria-hidden="true">
+      <svg class="reticle-svg" viewBox="0 0 280 280" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- Subtle glow filter for reticle elements -->
+          <filter id="reticleGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <!-- Outer Ring (22s Rotation) -->
+        <g class="ring-outer">
+          <circle cx="140" cy="140" r="115" stroke="#3d8bff" stroke-width="1.2" stroke-dasharray="8 14" opacity="0.65" />
+          <circle cx="140" cy="140" r="122" stroke="#3d8bff" stroke-width="0.75" stroke-dasharray="2 20" opacity="0.4" />
+          <!-- Outer Tick marks -->
+          <line x1="140" y1="12" x2="140" y2="22" stroke="#7fc4ff" stroke-width="1.5" opacity="0.8" />
+          <line x1="140" y1="258" x2="140" y2="268" stroke="#7fc4ff" stroke-width="1.5" opacity="0.8" />
+          <line x1="12" y1="140" x2="22" y2="140" stroke="#7fc4ff" stroke-width="1.5" opacity="0.8" />
+          <line x1="258" y1="140" x2="268" y2="140" stroke="#7fc4ff" stroke-width="1.5" opacity="0.8" />
+        </g>
+
+        <!-- Inner Ring (14s Counter-Rotation) -->
+        <g class="ring-inner">
+          <circle cx="140" cy="140" r="76" stroke="#7fc4ff" stroke-width="1.4" stroke-dasharray="12 8" opacity="0.8" />
+          <circle cx="140" cy="140" r="82" stroke="#8a5cff" stroke-width="0.8" stroke-dasharray="4 16" opacity="0.55" />
+          <!-- 45-degree corner ticks -->
+          <line x1="194" y1="86" x2="201" y2="79" stroke="#7fc4ff" stroke-width="1.2" opacity="0.7" />
+          <line x1="86" y1="194" x2="79" y2="201" stroke="#7fc4ff" stroke-width="1.2" opacity="0.7" />
+          <line x1="86" y1="86" x2="79" y2="79" stroke="#7fc4ff" stroke-width="1.2" opacity="0.7" />
+          <line x1="194" y1="194" x2="201" y2="201" stroke="#7fc4ff" stroke-width="1.2" opacity="0.7" />
+        </g>
+
+        <!-- Stationary Crosshair Ticks -->
+        <g opacity="0.75" filter="url(#reticleGlow)">
+          <line x1="140" y1="105" x2="140" y2="120" stroke="#f4f8ff" stroke-width="1.2" />
+          <line x1="140" y1="160" x2="140" y2="175" stroke="#f4f8ff" stroke-width="1.2" />
+          <line x1="105" y1="140" x2="120" y2="140" stroke="#f4f8ff" stroke-width="1.2" />
+          <line x1="160" y1="140" x2="175" y2="140" stroke="#f4f8ff" stroke-width="1.2" />
+        </g>
+
+        <!-- Pulsing Center Dot -->
+        <circle class="reticle-center-dot" cx="140" cy="140" r="2.8" fill="#f4f8ff" filter="url(#reticleGlow)" />
+      </svg>
+    </div>
+
+    <!-- Telemetry Panels in Corners -->
+    <div class="telemetry-corners">
+      <!-- Top Left: Vector, Gate ID, Drive State -->
+      <div class="corner-panel corner-top-left">
+        <div class="telemetry-row">
+          <span class="lbl">VEC:</span>
+          <span class="val" id="valVector">[ +0.00, +0.00, +1.00 ] c</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="lbl">GATE ID:</span>
+          <span class="val">JG-8849 // T-CYGNI</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="lbl">DRIVE:</span>
+          <span class="val-state state-idle" id="valDriveState">IDLE</span>
+        </div>
+      </div>
+
+      <!-- Top Right: Live FPS, Star Count, Elapsed Time -->
+      <div class="corner-panel corner-top-right">
+        <div class="telemetry-row">
+          <span class="lbl">FPS:</span>
+          <span class="val" id="valFPS">60</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="lbl">STARS:</span>
+          <span class="val" id="valStarCount">850</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="lbl">TIME:</span>
+          <span class="val" id="valTime">00:00.0</span>
+        </div>
+      </div>
+
+      <!-- Bottom Left: Hull Integrity, Shake Magnitude -->
+      <div class="corner-panel corner-bottom-left">
+        <div class="telemetry-row">
+          <span class="lbl">HULL:</span>
+          <span class="val" id="valHull">100.0%</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="lbl">SHAKE:</span>
+          <span class="val" id="valShake">0.00 px</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="lbl">FIELD:</span>
+          <span class="val" id="valField">NOMINAL</span>
+        </div>
+      </div>
+
+      <!-- Bottom Right: Distance Travelled -->
+      <div class="corner-panel corner-bottom-right">
+        <div class="telemetry-row">
+          <span class="lbl">DIST:</span>
+          <span class="val" id="valDistance">000.000 LY</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="lbl">CHRONO:</span>
+          <span class="val" id="valDilation">+0.0000 c-DIL</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="lbl">GATE CH:</span>
+          <span class="val">TUNNEL 029</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center Bottom: Speed Readout, Progress Bar, Stage Label -->
+    <footer class="hud-footer">
+      <div class="speed-gauge-wrap">
+        <div class="speed-display" id="speedDisplay">
+          <span id="speedValue">0.00</span>
+          <span class="speed-c-unit">c</span>
+        </div>
+
+        <div class="progress-bar-container" aria-label="Speed progress indicator">
+          <div class="progress-bar-fill" id="progressBar"></div>
+        </div>
+
+        <div class="stage-label stage-sublight" id="stageLabel">SUBLIGHT</div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Audio Toggle Control in Top Right (HUD Level) -->
+  <div class="hud-controls">
+    <button class="hud-btn" id="audioToggle" title="Toggle Synthesized Hyperspace Audio">
+      <span id="audioIcon">🔇</span> AUDIO: <span id="audioStatus">OFF</span>
+    </button>
+  </div>
+
+  <!-- ==========================================================================
+       SIMULATION SCRIPT: 3D FIELD, TUNNEL, PHYSICS & HUD
+       ========================================================================== -->
+  <script>
+    (function () {
+      'use strict';
+
+      // -------------------------------------------------------------
+      // CONFIGURATION & CONSTANTS
+      // -------------------------------------------------------------
+      const FOCAL_LENGTH = 420;   // Specified focal length: 420px
+      const Z_MIN = 30;           // Near clip plane for projection
+      const Z_MAX = 3000;         // Far field depth
+      const TUNNEL_RINGS_COUNT = 14; // Specified 14 octagonal wireframe rings
+      const TUNNEL_RADIUS = 460;  // 3D world radius of the octagon tunnel
+      const BASE_Z_SPEED = 2.4;   // Idle space drift speed
+      const MAX_WARP_BOOST = 160; // Extra speed added at normalized speed = 1.0
+
+      // Color Palette constants
+      const COLOR_ELECTRIC_BLUE = '#3d8bff';
+      const COLOR_ICE_BLUE = '#7fc4ff';
+      const COLOR_WHITE = '#f4f8ff';
+      const COLOR_VIOLET = '#8a5cff';
+
+      // DOM Elements
+      const canvas = document.getElementById('warpCanvas');
+      const ctx = canvas.getContext('2d', { alpha: false });
+      const flashOverlay = document.getElementById('flashOverlay');
+      const hudPrompt = document.getElementById('hudPrompt');
+      const speedValueEl = document.getElementById('speedValue');
+      const speedDisplayEl = document.getElementById('speedDisplay');
+      const progressBarEl = document.getElementById('progressBar');
+      const stageLabelEl = document.getElementById('stageLabel');
+      const valDriveStateEl = document.getElementById('valDriveState');
+      const valVectorEl = document.getElementById('valVector');
+      const valFPSEl = document.getElementById('valFPS');
+      const valStarCountEl = document.getElementById('valStarCount');
+      const valTimeEl = document.getElementById('valTime');
+      const valHullEl = document.getElementById('valHull');
+      const valShakeEl = document.getElementById('valShake');
+      const valFieldEl = document.getElementById('valField');
+      const valDistanceEl = document.getElementById('valDistance');
+      const valDilationEl = document.getElementById('valDilation');
+      const audioToggleBtn = document.getElementById('audioToggle');
+      const audioIconEl = document.getElementById('audioIcon');
+      const audioStatusEl = document.getElementById('audioStatus');
+
+      // Accessibility: Check reduced motion
+      const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      let prefersReducedMotion = reducedMotionQuery.matches;
+      reducedMotionQuery.addEventListener('change', (e) => {
+        prefersReducedMotion = e.matches;
+      });
+
+      // -------------------------------------------------------------
+      // STATE VARIABLES
+      // -------------------------------------------------------------
+      let width = window.innerWidth;
+      let height = window.innerHeight;
+      let dpr = Math.min(window.devicePixelRatio || 1, 2);
+      let cx = width / 2;
+      let cy = height / 2;
+
+      // Speed physics
+      let currentSpeed = 0.0;     // Normalized: 0.00 to 1.00
+      let targetSpeed = 0.0;      // 0 or 1 based on user engagement
+      let prevSpeed = 0.0;
+      let isEngaged = false;
+      let hasEverEngaged = false;
+
+      // Screen shake
+      let currentShake = 0.0;     // 0 to 6px
+      let shakeX = 0.0;
+      let shakeY = 0.0;
+
+      // White flash at 93%
+      let flashAlpha = 0.0;
+
+      // Telemetry metrics
+      let totalDistanceLY = 0.0;
+      let startTime = performance.now();
+      let lastFrameTime = performance.now();
+      let frameCount = 0;
+      let fpsTimer = 0;
+      let currentFPS = 60;
+      let hullIntegrity = 100.0;
+
+      // Stars collection
+      let stars = [];
+      let starCount = 850;
+
+      // Tunnel collection
+      let tunnelRings = [];
+
+      // -------------------------------------------------------------
+      // PROCEDURAL AUDIO ENGINE (Web Audio API Synthesizer)
+      // -------------------------------------------------------------
+      let audioCtx = null;
+      let audioEnabled = false;
+      let masterGain = null;
+      let subOsc = null;
+      let subGain = null;
+      let noiseNode = null;
+      let noiseFilter = null;
+      let noiseGain = null;
+
+      function initAudio() {
+        if (audioCtx) return;
+        try {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContextClass();
+
+          masterGain = audioCtx.createGain();
+          masterGain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+          masterGain.connect(audioCtx.destination);
+
+          // Sub bass drone
+          subOsc = audioCtx.createOscillator();
+          subOsc.type = 'sawtooth';
+          subOsc.frequency.setValueAtTime(45, audioCtx.currentTime);
+
+          const subFilter = audioCtx.createBiquadFilter();
+          subFilter.type = 'lowpass';
+          subFilter.frequency.setValueAtTime(90, audioCtx.currentTime);
+
+          subGain = audioCtx.createGain();
+          subGain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+
+          subOsc.connect(subFilter);
+          subFilter.connect(subGain);
+          subGain.connect(masterGain);
+          subOsc.start();
+
+          // Noise generator for warp plasma hiss
+          const bufferSize = audioCtx.sampleRate * 2;
+          const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+          const output = noiseBuffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            output[i] = Math.random() * 2 - 1;
+          }
+
+          noiseNode = audioCtx.createBufferSource();
+          noiseNode.buffer = noiseBuffer;
+          noiseNode.loop = true;
+
+          noiseFilter = audioCtx.createBiquadFilter();
+          noiseFilter.type = 'bandpass';
+          noiseFilter.frequency.setValueAtTime(140, audioCtx.currentTime);
+          noiseFilter.Q.setValueAtTime(3.5, audioCtx.currentTime);
+
+          noiseGain = audioCtx.createGain();
+          noiseGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+
+          noiseNode.connect(noiseFilter);
+          noiseFilter.connect(noiseGain);
+          noiseGain.connect(masterGain);
+          noiseNode.start();
+        } catch (e) {
+          console.warn('AudioContext not supported or blocked:', e);
+        }
+      }
+
+      function updateAudio(speed, dt) {
+        if (!audioEnabled || !audioCtx || audioCtx.state !== 'running') return;
+        const now = audioCtx.currentTime;
+
+        // Sub bass pitch increases with speed
+        if (subOsc) {
+          const targetFreq = 42 + speed * 120 + (speed > 0.9 ? Math.sin(now * 30) * 12 : 0);
+          subOsc.frequency.setTargetAtTime(targetFreq, now, 0.05);
+        }
+
+        // Plasma noise cutoff opens up with speed
+        if (noiseFilter && noiseGain) {
+          const targetFilterFreq = 160 + Math.pow(speed, 2.2) * 4800;
+          noiseFilter.frequency.setTargetAtTime(targetFilterFreq, now, 0.05);
+
+          const targetNoiseGain = 0.04 + Math.pow(speed, 1.8) * 0.45;
+          noiseGain.gain.setTargetAtTime(targetNoiseGain, now, 0.05);
+        }
+      }
+
+      function playFlashAudioCue() {
+        if (!audioEnabled || !audioCtx || audioCtx.state !== 'running') return;
+        try {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(340, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.35);
+
+          gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+
+          osc.connect(gain);
+          gain.connect(masterGain);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.36);
+        } catch (e) {}
+      }
+
+      audioToggleBtn.addEventListener('click', () => {
+        if (!audioCtx) initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        audioEnabled = !audioEnabled;
+        if (audioEnabled) {
+          audioToggleBtn.classList.add('active');
+          audioIconEl.textContent = '🔊';
+          audioStatusEl.textContent = 'ON';
+          if (masterGain) masterGain.gain.setTargetAtTime(0.35, audioCtx.currentTime, 0.05);
+        } else {
+          audioToggleBtn.classList.remove('active');
+          audioIconEl.textContent = '🔇';
+          audioStatusEl.textContent = 'OFF';
+          if (masterGain) masterGain.gain.setTargetAtTime(0.00, audioCtx.currentTime, 0.05);
+        }
+      });
+
+      // -------------------------------------------------------------
+      // STARFIELD CREATION
+      // Scaled to viewport area: between 350 and 1400 points
+      // Palette: 12% violet, 55% blue, rest white
+      // -------------------------------------------------------------
+      function calculateStarCount() {
+        const area = width * height;
+        // Map from ~300k px (mobile) to ~2.5M px (desktop)
+        const count = Math.round(350 + (Math.max(0, area - 240000) / (2560 * 1440 - 240000)) * (1400 - 350));
+        return Math.floor(Math.min(1400, Math.max(350, count)));
+      }
+
+      function createStar(initialRandomZ = true) {
+        // Star color distribution:
+        // ~12% violet (#8a5cff), ~55% blue (#3d8bff / #7fc4ff), rest white (#f4f8ff)
+        const rand = Math.random();
+        let color, type;
+        if (rand < 0.12) {
+          color = COLOR_VIOLET;
+          type = 'violet';
+        } else if (rand < 0.67) {
+          color = Math.random() < 0.65 ? COLOR_ELECTRIC_BLUE : COLOR_ICE_BLUE;
+          type = 'blue';
+        } else {
+          color = COLOR_WHITE;
+          type = 'white';
+        }
+
+        const z = initialRandomZ ? (200 + Math.random() * (Z_MAX - 200)) : (Z_MAX - Math.random() * 80);
+
+        // Uniform distribution across the perspective view frustum
+        const angle = Math.random() * Math.PI * 2;
+        const spreadRadius = Math.sqrt(Math.random()); // Even circular distribution
+        const maxR = (Math.max(width, height) / FOCAL_LENGTH) * z * 0.95;
+
+        return {
+          x: Math.cos(angle) * spreadRadius * maxR,
+          y: Math.sin(angle) * spreadRadius * maxR,
+          z: z,
+          color: color,
+          type: type,
+          baseSize: 0.8 + Math.random() * 1.4
+        };
+      }
+
+      function initStars() {
+        starCount = calculateStarCount();
+        stars = [];
+        for (let i = 0; i < starCount; i++) {
+          stars.push(createStar(true));
+        }
+        valStarCountEl.textContent = starCount;
+      }
+
+      // -------------------------------------------------------------
+      // TUNNEL CREATION
+      // 14 octagonal wireframe rings spaced along z
+      // -------------------------------------------------------------
+      function initTunnel() {
+        tunnelRings = [];
+        const zSpan = Z_MAX - Z_MIN;
+        for (let i = 0; i < TUNNEL_RINGS_COUNT; i++) {
+          const z = Z_MIN + (i / TUNNEL_RINGS_COUNT) * zSpan;
+          tunnelRings.push({
+            z: z,
+            angle: (i * (Math.PI / 8)), // Initial spiral twist
+            spinDir: i % 2 === 0 ? 1 : -1,
+            index: i
+          });
+        }
+      }
+
+      // -------------------------------------------------------------
+      // RESIZE HANDLER
+      // -------------------------------------------------------------
+      function handleResize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // reset transform
+        ctx.scale(dpr, dpr);
+
+        cx = width / 2;
+        cy = height / 2;
+
+        const newStarCount = calculateStarCount();
+        if (Math.abs(newStarCount - stars.length) > 50) {
+          initStars();
+        }
+      }
+
+      window.addEventListener('resize', handleResize);
+
+      // -------------------------------------------------------------
+      // INPUT HANDLING
+      // Holding mouse button, touch, or Spacebar sets target speed to 1
+      // Releasing lets it coast down to 0
+      // -------------------------------------------------------------
+      function setEngagement(active) {
+        targetSpeed = active ? 1.0 : 0.0;
+        isEngaged = active;
+        if (active && !hasEverEngaged) {
+          hasEverEngaged = true;
+          hudPrompt.classList.add('engaged');
+          // Resume audio context if created but suspended by browser policy
+          if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+        }
+      }
+
+      // Pointer / Mouse events
+      window.addEventListener('pointerdown', (e) => {
+        // Do not engage if user clicked the audio toggle button
+        if (e.target.closest('#audioToggle')) return;
+        setEngagement(true);
+      });
+
+      window.addEventListener('pointerup', () => setEngagement(false));
+      window.addEventListener('pointercancel', () => setEngagement(false));
+      window.addEventListener('blur', () => setEngagement(false));
+
+      // Keyboard events (Spacebar)
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' || e.key === ' ') {
+          e.preventDefault();
+          if (!e.repeat) {
+            setEngagement(true);
+          }
+        }
+      });
+
+      window.addEventListener('keyup', (e) => {
+        if (e.code === 'Space' || e.key === ' ') {
+          e.preventDefault();
+          setEngagement(false);
+        }
+      });
+
+      // -------------------------------------------------------------
+      // PHYSICS & TELEMETRY UPDATE
+      // Easing with exponential approach (faster ramp up than decay)
+      // -------------------------------------------------------------
+      function updatePhysics(dt) {
+        prevSpeed = currentSpeed;
+
+        // Exponential approach: ramp up rate ~ 3.4 / sec, decay rate ~ 1.25 / sec
+        const rampFactor = 1.0 - Math.exp(-3.4 * dt);
+        const decayFactor = 1.0 - Math.exp(-1.25 * dt);
+
+        if (targetSpeed > currentSpeed) {
+          currentSpeed += (targetSpeed - currentSpeed) * rampFactor;
+        } else {
+          currentSpeed += (targetSpeed - currentSpeed) * decayFactor;
+        }
+
+        // Clamp to 0.00 .. 1.00 bounds
+        currentSpeed = Math.max(0.0, Math.min(1.0, currentSpeed));
+
+        // Screen Shake calculation above 75% speed
+        // Random per-frame screen shake grows to 6px
+        if (currentSpeed > 0.75 && !prefersReducedMotion) {
+          const shakeProgress = (currentSpeed - 0.75) / 0.25; // 0 to 1
+          currentShake = shakeProgress * 6.0;
+          shakeX = (Math.random() - 0.5) * 2.0 * currentShake;
+          shakeY = (Math.random() - 0.5) * 2.0 * currentShake;
+        } else {
+          currentShake = 0.0;
+          shakeX = 0.0;
+          shakeY = 0.0;
+        }
+
+        // Check for 93% speed crossing (triggers a brief white flash)
+        if (currentSpeed >= 0.93 && prevSpeed < 0.93) {
+          flashAlpha = 0.92;
+          playFlashAudioCue();
+        }
+
+        // Decay white flash
+        if (flashAlpha > 0.005) {
+          flashAlpha = Math.max(0, flashAlpha - dt * 2.6);
+          flashOverlay.style.opacity = flashAlpha.toFixed(3);
+        } else if (flashAlpha !== 0) {
+          flashAlpha = 0;
+          flashOverlay.style.opacity = '0';
+        }
+
+        // Distance in light-years: velocity grows quadratically with speed
+        // At speed = 1, advances rapidly
+        const lyRate = 0.02 + Math.pow(currentSpeed, 2.5) * 38.0;
+        totalDistanceLY += lyRate * dt;
+
+        // Hull integrity: drops slightly at max speed (100% -> ~94.2%)
+        if (currentSpeed > 0.70) {
+          const stress = (currentSpeed - 0.70) / 0.30;
+          const jitter = (Math.random() - 0.5) * 0.4 * stress;
+          hullIntegrity = Math.max(93.8, 100.0 - stress * 5.8 + jitter);
+        } else {
+          hullIntegrity = Math.min(100.0, hullIntegrity + dt * 4.0);
+        }
+
+        // Audio update
+        updateAudio(currentSpeed, dt);
+      }
+
+      // -------------------------------------------------------------
+      // HUD UI REFRESH
+      // -------------------------------------------------------------
+      function updateHUD(timeNow) {
+        // 1. Big speed number in "c" units (0.00–9.99)
+        const speedCVal = (currentSpeed * 9.99).toFixed(2);
+        speedValueEl.textContent = speedCVal;
+
+        // Speed readout gains a white glow at 97%+
+        if (currentSpeed >= 0.97) {
+          speedDisplayEl.classList.add('hyper-glow');
+        } else {
+          speedDisplayEl.classList.remove('hyper-glow');
+        }
+
+        // 2. Gradient progress bar
+        progressBarEl.style.width = (currentSpeed * 100).toFixed(1) + '%';
+
+        // 3. Stage label: sublight / warp entry / hyperspace / threshold
+        let stageName = 'SUBLIGHT';
+        let stageClass = 'stage-sublight';
+
+        if (currentSpeed >= 0.93) {
+          stageName = 'THRESHOLD';
+          stageClass = 'stage-threshold';
+        } else if (currentSpeed >= 0.70) {
+          stageName = 'HYPERSPACE';
+          stageClass = 'stage-hyperspace';
+        } else if (currentSpeed >= 0.25) {
+          stageName = 'WARP ENTRY';
+          stageClass = 'stage-entry';
+        }
+
+        stageLabelEl.textContent = stageName;
+        stageLabelEl.className = 'stage-label ' + stageClass;
+
+        // 4. Drive State: IDLE / BURN / COAST / MAX
+        let driveText = 'IDLE';
+        let driveClass = 'state-idle';
+
+        if (isEngaged) {
+          if (currentSpeed >= 0.98) {
+            driveText = 'MAX';
+            driveClass = 'state-max';
+          } else {
+            driveText = 'BURN';
+            driveClass = 'state-burn';
+          }
+        } else {
+          if (currentSpeed > 0.05) {
+            driveText = 'COAST';
+            driveClass = 'state-coast';
+          } else {
+            driveText = 'IDLE';
+            driveClass = 'state-idle';
+          }
+        }
+
+        valDriveStateEl.textContent = driveText;
+        valDriveStateEl.className = 'val-state ' + driveClass;
+
+        // 5. Vector micro-fluctuations
+        const vX = (Math.sin(timeNow * 0.001) * 0.03 * (1 + currentSpeed * 2)).toFixed(2);
+        const vY = (Math.cos(timeNow * 0.0013) * 0.03 * (1 + currentSpeed * 2)).toFixed(2);
+        const vZ = (1.00 + currentSpeed * 0.02).toFixed(2);
+        valVectorEl.textContent = `[ ${vX >= 0 ? '+' : ''}${vX}, ${vY >= 0 ? '+' : ''}${vY}, +${vZ} ] c`;
+
+        // 6. Hull integrity & Shake magnitude
+        valHullEl.textContent = hullIntegrity.toFixed(1) + '%';
+        valShakeEl.textContent = currentShake.toFixed(2) + ' px';
+        valFieldEl.textContent = currentSpeed > 0.93 ? 'WARP CRITICAL' : (currentSpeed > 0.7 ? 'HIGH STRESS' : 'NOMINAL');
+
+        // 7. Distance travelled
+        valDistanceEl.textContent = totalDistanceLY.toFixed(3).padStart(7, '0') + ' LY';
+
+        // 8. Time Dilation readout
+        const dilation = (currentSpeed * 0.8842).toFixed(4);
+        valDilationEl.textContent = `+${dilation} c-DIL`;
+
+        // 9. Elapsed Time
+        const elapsedSec = (timeNow - startTime) / 1000;
+        const mins = Math.floor(elapsedSec / 60).toString().padStart(2, '0');
+        const secs = (elapsedSec % 60).toFixed(1).padStart(4, '0');
+        valTimeEl.textContent = `${mins}:${secs}`;
+      }
+
+      // -------------------------------------------------------------
+      // RENDER PIPELINE
+      // Canvas is NOT cleared but faded with a translucent black rectangle
+      // whose opacity decreases as speed rises, leaving longer trails.
+      // All drawing uses "lighter" composite mode over a radial core glow.
+      // -------------------------------------------------------------
+      function render(dt) {
+        // 1. Trail Fading:
+        // Translucent black rectangle with opacity decreasing as speed rises
+        // Speed 0: alpha ~0.38 (quick fade, clean dots)
+        // Speed 1: alpha ~0.08 (slow fade, long persistent luminous trails)
+        const fadeAlpha = Math.max(0.08, 0.38 - Math.pow(currentSpeed, 1.4) * 0.30);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = `rgba(0, 0, 0, ${fadeAlpha.toFixed(3)})`;
+        ctx.fillRect(0, 0, width, height);
+
+        // 2. Switch to 'lighter' composite mode for luminous hyperspace drawing
+        ctx.globalCompositeOperation = 'lighter';
+
+        // Center vanishing point (with screen shake offset)
+        const vX = cx + shakeX;
+        const vY = cy + shakeY;
+
+        // 3. Radial Core Glow at the vanishing point:
+        // Swells from a faint 40px disc to a blinding white-blue bloom at maximum speed
+        const coreRadius = 40 + Math.pow(currentSpeed, 2.2) * 520;
+        const coreGradient = ctx.createRadialGradient(vX, vY, 0, vX, vY, coreRadius);
+
+        // Gradient colors: near-white core -> pale ice blue -> electric blue -> violet rim
+        const coreWhiteOpacity = (0.25 + currentSpeed * 0.75).toFixed(3);
+        const coreIceOpacity = (0.15 + currentSpeed * 0.65).toFixed(3);
+        const coreBlueOpacity = (0.10 + currentSpeed * 0.45).toFixed(3);
+        const coreVioletOpacity = (0.05 + currentSpeed * 0.35).toFixed(3);
+
+        coreGradient.addColorStop(0.0, `rgba(244, 248, 255, ${coreWhiteOpacity})`);
+        coreGradient.addColorStop(0.2, `rgba(127, 196, 255, ${coreIceOpacity})`);
+        coreGradient.addColorStop(0.55, `rgba(61, 139, 255, ${coreBlueOpacity})`);
+        coreGradient.addColorStop(0.85, `rgba(138, 92, 255, ${coreVioletOpacity})`);
+        coreGradient.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+
+        ctx.fillStyle = coreGradient;
+        ctx.beginPath();
+        ctx.arc(vX, vY, coreRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // -------------------------------------------------------------
+        // 4. TUNNEL WIREFRAME RINGS & VIOLET STRUTS
+        // 14 octagonal wireframe rings spaced along z
+        // -------------------------------------------------------------
+        // Advance rings along z
+        const tunnelZSpeed = BASE_Z_SPEED * 0.8 + MAX_WARP_BOOST * 0.75 * Math.pow(currentSpeed, 2.0);
+        const zSpan = Z_MAX - Z_MIN;
+
+        for (let i = 0; i < TUNNEL_RINGS_COUNT; i++) {
+          const ring = tunnelRings[i];
+          ring.z -= tunnelZSpeed * (dt * 60);
+
+          // Wrap to far end when passing camera
+          while (ring.z < Z_MIN) {
+            ring.z += zSpan;
+          }
+
+          // Spin faster at speed
+          const spinSpeed = 0.004 + 0.04 * Math.pow(currentSpeed, 1.8);
+          ring.angle += spinSpeed * (dt * 60);
+        }
+
+        // Sort rings by Z descending (far to near) for proper strut connection
+        const sortedRings = tunnelRings.slice().sort((a, b) => b.z - a.z);
+
+        // Precompute 2D projected octagon vertices for each ring
+        const ringVertices = [];
+        for (let i = 0; i < sortedRings.length; i++) {
+          const ring = sortedRings[i];
+          const verts = [];
+          const scale = FOCAL_LENGTH / Math.max(ring.z, Z_MIN);
+
+          for (let k = 0; k < 8; k++) {
+            const theta = ring.angle + (k * Math.PI) / 4;
+            const wx = Math.cos(theta) * TUNNEL_RADIUS;
+            const wy = Math.sin(theta) * TUNNEL_RADIUS;
+            verts.push({
+              x: vX + wx * scale,
+              y: vY + wy * scale
+            });
+          }
+          ringVertices.push(verts);
+        }
+
+        // Draw Violet Struts connecting every other ring to its neighbour
+        ctx.save();
+        ctx.strokeStyle = COLOR_VIOLET;
+        ctx.shadowColor = COLOR_VIOLET;
+        ctx.shadowBlur = Math.min(22, 6 + currentSpeed * 16);
+
+        for (let i = 0; i < sortedRings.length - 1; i += 2) {
+          const rA = sortedRings[i];
+          const rB = sortedRings[i + 1];
+          const avgZ = (rA.z + rB.z) * 0.5;
+          const strutWidth = Math.max(0.7, Math.min(2.8, (FOCAL_LENGTH / avgZ) * 1.5));
+          ctx.lineWidth = strutWidth;
+
+          const vertsA = ringVertices[i];
+          const vertsB = ringVertices[i + 1];
+
+          ctx.beginPath();
+          for (let k = 0; k < 8; k++) {
+            ctx.moveTo(vertsA[k].x, vertsA[k].y);
+            ctx.lineTo(vertsB[k].x, vertsB[k].y);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // Draw Octagonal Rings stroked in blue with shadowBlur glow
+        ctx.save();
+        ctx.strokeStyle = COLOR_ELECTRIC_BLUE;
+        ctx.shadowColor = COLOR_ELECTRIC_BLUE;
+        ctx.shadowBlur = Math.min(26, 8 + currentSpeed * 18);
+
+        for (let i = 0; i < sortedRings.length; i++) {
+          const ring = sortedRings[i];
+          if (ring.z <= Z_MIN + 5) continue;
+
+          const verts = ringVertices[i];
+          const ringWidth = Math.max(0.9, Math.min(3.6, (FOCAL_LENGTH / ring.z) * 2.0));
+          ctx.lineWidth = ringWidth;
+
+          ctx.beginPath();
+          ctx.moveTo(verts[0].x, verts[0].y);
+          for (let k = 1; k < 8; k++) {
+            ctx.lineTo(verts[k].x, verts[k].y);
+          }
+          ctx.closePath();
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // -------------------------------------------------------------
+        // 5. STARFIELD ADVANCE & STREAKS
+        // Advance by z-speed proportional to square of normalised speed
+        // Projected with 420px focal length as round-capped lines
+        // -------------------------------------------------------------
+        const zAdvance = BASE_Z_SPEED + MAX_WARP_BOOST * Math.pow(currentSpeed, 2.0);
+        // Streak length in world Z grows with velocity
+        const streakWorldZ = 2.0 + zAdvance * (2.8 + currentSpeed * 2.2);
+
+        // Chromatic split parameters above 75% speed
+        const hasChromaticSplit = currentSpeed > 0.75;
+        const splitRatio = hasChromaticSplit ? (currentSpeed - 0.75) / 0.25 : 0;
+
+        ctx.lineCap = 'round';
+
+        for (let i = 0; i < stars.length; i++) {
+          const star = stars[i];
+
+          // Advance toward camera
+          star.z -= zAdvance * (dt * 60);
+
+          // Wrap to far end when passing camera
+          if (star.z < Z_MIN) {
+            star.z += (Z_MAX - Z_MIN);
+            // Re-randomize angle & spread
+            const angle = Math.random() * Math.PI * 2;
+            const spreadRadius = Math.sqrt(Math.random());
+            const maxR = (Math.max(width, height) / FOCAL_LENGTH) * star.z * 0.95;
+            star.x = Math.cos(angle) * spreadRadius * maxR;
+            star.y = Math.sin(angle) * spreadRadius * maxR;
+          }
+
+          // Projection: 420px focal length
+          const frontScale = FOCAL_LENGTH / star.z;
+          const projX = vX + star.x * frontScale;
+          const projY = vY + star.y * frontScale;
+
+          // Back point along the same ray whose distance grows with speed
+          const backZ = star.z + streakWorldZ;
+          const backScale = FOCAL_LENGTH / backZ;
+          const backX = vX + star.x * backScale;
+          const backY = vY + star.y * backScale;
+
+          // Star streak line width
+          const strokeW = Math.max(1.0, Math.min(4.2, frontScale * star.baseSize * (1.1 + currentSpeed * 1.6)));
+
+          // Chromatic Split (Above 75% speed)
+          // Separate red- and blue-offset copies up to 6px scaled by projection depth
+          if (hasChromaticSplit) {
+            const splitOffset = 6.0 * splitRatio * (FOCAL_LENGTH / star.z);
+
+            // Compute lateral perpendicular vector
+            const dx = projX - vX;
+            const dy = projY - vY;
+            const len = Math.hypot(dx, dy) || 1;
+            const perpX = (-dy / len) * splitOffset;
+            const perpY = (dx / len) * splitOffset;
+
+            // Red-offset copy
+            ctx.lineWidth = strokeW * 0.85;
+            ctx.strokeStyle = `rgba(255, 65, 110, ${(0.7 * splitRatio).toFixed(2)})`;
+            ctx.beginPath();
+            ctx.moveTo(backX + perpX, backY + perpY);
+            ctx.lineTo(projX + perpX, projY + perpY);
+            ctx.stroke();
+
+            // Blue-offset copy
+            ctx.strokeStyle = `rgba(0, 220, 255, ${(0.7 * splitRatio).toFixed(2)})`;
+            ctx.beginPath();
+            ctx.moveTo(backX - perpX, backY - perpY);
+            ctx.lineTo(projX - perpX, projY - perpY);
+            ctx.stroke();
+          }
+
+          // Primary Streak
+          ctx.lineWidth = strokeW;
+          ctx.strokeStyle = star.color;
+          ctx.beginPath();
+          ctx.moveTo(backX, backY);
+          ctx.lineTo(projX, projY);
+          ctx.stroke();
+        }
+      }
+
+      // -------------------------------------------------------------
+      // MAIN ANIMATION LOOP
+      // -------------------------------------------------------------
+      function animate(timeNow) {
+        requestAnimationFrame(animate);
+
+        // Delta time calculation (capped to prevent big jumps when alt-tabbed)
+        const dtMs = timeNow - lastFrameTime;
+        lastFrameTime = timeNow;
+        const dt = Math.min(dtMs / 1000, 0.08);
+
+        // FPS calculation
+        frameCount++;
+        fpsTimer += dtMs;
+        if (fpsTimer >= 500) {
+          currentFPS = Math.round((frameCount * 1000) / fpsTimer);
+          valFPSEl.textContent = currentFPS;
+          frameCount = 0;
+          fpsTimer = 0;
+        }
+
+        // Update physics and state
+        updatePhysics(dt);
+
+        // Update HUD readouts
+        updateHUD(timeNow);
+
+        // Render full cinematic frame
+        render(dt);
+      }
+
+      // -------------------------------------------------------------
+      // INITIALIZATION
+      // -------------------------------------------------------------
+      handleResize();
+      initStars();
+      initTunnel();
+      requestAnimationFrame(animate);
+
+    })();
+  </script>
+</body>
+</html>

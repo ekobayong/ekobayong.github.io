@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Garden Automaton — Conway's Life as a Living Bed</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{background:radial-gradient(120% 100% at 50% 20%,#241911,#16100B 55%,#0C0805);color:#e9dcc3;font-family:"Iowan Old Style",Palatino,Georgia,serif}
+#bed{position:fixed;inset:0;display:block;cursor:crosshair}
+#bed::after{content:""}
+.grain{position:fixed;inset:0;pointer-events:none;opacity:.5;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E")}
+.vig{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,.7) 100%)}
+header{position:fixed;top:22px;left:26px;z-index:5;pointer-events:none;max-width:min(480px,86vw)}
+.plate{font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#a08c66}
+h1{font-size:clamp(26px,4vw,40px);font-weight:400;margin:6px 0}
+h1 em{color:#E7B95A;font-style:italic}
+.cap{font-style:italic;font-size:13px;color:#b7a586;line-height:1.55}
+.counts{position:fixed;top:22px;right:26px;text-align:right;z-index:5}
+.counts .n{font-size:30px;font-variant-numeric:tabular-nums;color:#f2e7cd}
+.counts label{display:block;font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.3em;color:#a08c66;text-transform:uppercase}
+.counts i{font-size:12px;color:#8a7a5c}
+.legend{position:fixed;left:26px;bottom:24px;font-style:italic;font-size:12.5px;color:#b7a586;z-index:5}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin:0 4px 0 10px;box-shadow:0 0 8px currentColor;vertical-align:middle}
+.controls{position:fixed;right:26px;bottom:22px;z-index:6;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.pill{border:1px solid rgba(231,185,90,.5);background:rgba(20,14,8,.7);backdrop-filter:blur(8px);color:#f2e7cd;border-radius:999px;padding:9px 18px;font-family:inherit;font-size:13px;cursor:pointer;transition:background .25s}
+.pill:hover{background:#E7B95A;color:#241911}
+.pill.primary{background:#E7B95A;color:#241911}
+.tempo{display:flex;align-items:center;gap:8px;background:rgba(20,14,8,.7);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:8px 14px}
+.tempo input{accent-color:#E7B95A;width:110px}
+.tempo span{font-family:ui-monospace,monospace;font-size:11px;color:#E7B95A}
+.drawer{position:fixed;right:26px;bottom:76px;width:330px;max-width:90vw;background:rgba(30,22,13,.85);backdrop-filter:blur(16px);border:1px solid rgba(231,185,90,.35);border-radius:16px;padding:18px;z-index:7;transform-origin:bottom right;transform:scale(.6);opacity:0;pointer-events:none;transition:transform .3s,opacity .3s}
+.drawer.open{transform:scale(1);opacity:1;pointer-events:auto}
+.drawer h3{font-size:15px;letter-spacing:.14em;text-transform:uppercase;font-family:ui-monospace,monospace;color:#E7B95A;margin-bottom:12px}
+.seeds{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seed{border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:12px 10px;background:rgba(255,255,255,.04);cursor:pointer;text-align:left;color:#f2e7cd;font-family:inherit;transition:border-color .2s,transform .2s}
+.seed:hover{border-color:#E7B95A;transform:translateY(-2px)}
+.seed b{display:block;font-size:13.5px}.seed i{font-size:11px;color:#a08c66}
+#hover{position:fixed;border:1.5px solid #f2e7cd;border-radius:50%;pointer-events:none;z-index:4;display:none;box-shadow:0 0 12px rgba(255,255,255,.5)}
+.census{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:5;
+display:flex;gap:22px;font-family:ui-monospace,monospace;font-size:10px;
+letter-spacing:.24em;text-transform:uppercase;color:#7a6a4e;pointer-events:none;
+background:rgba(15,10,6,.55);border:1px solid rgba(255,255,255,.08);
+border-radius:999px;padding:9px 22px;backdrop-filter:blur(8px)}
+.census b{color:#E7B95A;font-weight:500}
+.gazette{position:fixed;left:26px;top:50%;transform:translateY(-50%);z-index:5;
+max-width:210px;font-size:12px;font-style:italic;line-height:1.75;color:#8a7a5c;
+pointer-events:none}
+.gazette b{color:#c9b98f;font-style:normal}
+.gazette .rule{width:30px;height:1px;background:#4a3a24;margin:8px 0}
+.keys{position:fixed;right:26px;top:50%;transform:translateY(-50%);z-index:5;
+font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.22em;
+text-transform:uppercase;color:#6f6046;line-height:2.4;text-align:right;
+pointer-events:none}
+.keys kbd{border:1px solid #4a3a24;border-radius:5px;padding:1px 7px;color:#c9b98f}
+@media(max-width:1100px){.keys{display:none}}
+@media(max-width:640px){.legend{display:none}header{top:12px;left:14px}.counts{top:12px;right:14px}.controls{right:14px;left:14px;justify-content:center}.census{display:none}}
+@media(prefers-reduced-motion:reduce){.drawer,.pill{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="bed"></canvas>
+<div class="vig"></div><div class="grain"></div><div id="hover"></div>
+<header><div class="plate">Plate XIV · Cellular Horticulture</div>
+<h1>The Garden <em>Automaton</em></h1>
+<p class="cap">Loneliness starves a bloom, company wakes it, and crowding smothers it — three quiet rules tend this bed.</p></header>
+<div class="counts"><label>Generation</label><div class="n" id="gen">0</div><label style="margin-top:8px">Population</label><div class="n" id="pop">0</div><i>blooms</i></div>
+<div class="legend"><span class="dot" style="color:#7FB069;background:#7FB069"></span>seedling<span class="dot" style="color:#F28E7B;background:#F28E7B"></span>coral<span class="dot" style="color:#A687D1;background:#A687D1"></span>violet<span class="dot" style="color:#E7B95A;background:#E7B95A"></span>elder gold</div>
+<div class="controls">
+<div class="tempo"><span id="tVal">8/s</span><input id="tempo" type="range" min="1" max="30" value="8"></div>
+<button class="pill primary" id="bPlay">Pause</button>
+<button class="pill" id="bStep">Step</button>
+<button class="pill" id="bClear">Clear bed</button>
+<button class="pill" id="bWild">Wild scatter</button>
+<button class="pill" id="bDrawer">Seed drawer</button>
+</div>
+<div class="drawer" id="drawer"><h3>Seed packets</h3><div class="seeds" id="seeds"></div></div>
+<aside class="gazette">
+<div class="rule"></div>
+<b>Gun</b> — a fountain that never rests; first found by Gosper, 1970.
+<div class="rule"></div>
+<b>Pulsar</b> — a lantern beating every thirteen generations.
+<div class="rule"></div>
+<b>Acorn</b> — seven cells asleep; wakes into an oak of 633 blooms.
+<div class="rule"></div>
+<b>Diehard</b> — vanishes entirely, then returns from one spark.
+</aside>
+<div class="census"><span>bed <b id="cBed">—</b></span><span>elders <b id="cEld">0</b></span><span>stability <b id="cSt">—</b></span></div>
+<div class="keys"><kbd>space</kbd> grow / rest<br><kbd>esc</kbd> close drawer<br><kbd>2×click</kbd> plant pulsar<br>drag to sow seed</div>
+<script>
+(()=>{"use strict";
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const cv=document.getElementById('bed'),ctx=cv.getContext('2d');
+let W=0,H=0,cell=14,cols=0,rows=0,gen=0,running=true,tempo=RM?4:8;
+let age=null,nage=null,stain=null;
+const hover=document.getElementById('hover');
+function cellSize(){return innerWidth<560?11:innerWidth>2000?18:14;}
+function resize(){
+ W=innerWidth;H=innerHeight;cv.width=W;cv.height=H;cell=cellSize();
+ const nc=Math.ceil(W/cell),nr=Math.ceil(H/cell);
+ const oa=age,oc=cols,or_=rows;
+ cols=nc;rows=nr;age=new Uint16Array(cols*rows);nage=new Uint16Array(cols*rows);
+ if(!stain||stain.length!==cols*rows)stain=new Float32Array(cols*rows);
+ if(oa){for(let y=0;y<Math.min(or_,rows);y++)for(let x=0;x<Math.min(oc,cols);x++)age[y*cols+x]=oa[y*oc+x];}
+ hover.style.width=hover.style.height=cell+'px';
+}
+addEventListener('resize',resize);resize();
+// sprites
+function bloomSprite(){const s=document.createElement('canvas');s.width=s.height=64;return s;}
+const spr=bloomSprite(),sg=spr.getContext('2d');
+function paintSprite(base,elder){
+ sg.clearRect(0,0,64,64);
+ let g=sg.createRadialGradient(32,32,2,32,32,30);g.addColorStop(0,base);g.addColorStop(1,'rgba(0,0,0,0)');
+ sg.globalAlpha=0.35;sg.fillStyle=g;sg.fillRect(0,0,64,64);sg.globalAlpha=1;
+ sg.fillStyle=base;sg.beginPath();sg.arc(32,32,13,0,7);sg.fill();
+ sg.fillStyle='rgba(255,255,255,.85)';sg.beginPath();sg.arc(28,27,3.4,0,7);sg.fill();
+ if(elder){sg.globalAlpha=0.5;sg.fillStyle=base;for(let k=0;k<5;k++){const a=k/5*Math.PI*2;sg.beginPath();sg.arc(32+Math.cos(a)*17,32+Math.sin(a)*17,6,0,7);sg.fill();}sg.globalAlpha=1;}
+}
+function ageColor(a){
+ if(a<=2)return '#7FB069';if(a<=8)return '#F28E7B';if(a<=20)return '#A687D1';return '#E7B95A';
+}
+function seedRandom(){for(let i=0;i<cols*rows;i++)if(Math.random()<0.16){age[i]=1;}}
+function stamp(cells,cx,cy){cells.forEach(([x,y])=>{const X=((cx+x)%cols+cols)%cols,Y=((cy+y)%rows+rows)%rows;age[Y*cols+X]=1;});}
+function gosper(){const p=[[24,0],[22,1],[24,1],[12,2],[13,2],[20,2],[21,2],[34,2],[35,2],[11,3],[15,3],[20,3],[21,3],[34,3],[35,3],[0,4],[1,4],[10,4],[16,4],[20,4],[21,4],[0,5],[1,5],[10,5],[14,5],[16,5],[17,5],[22,5],[24,5],[10,6],[16,6],[24,6],[11,7],[15,7],[12,8],[13,8]];stamp(p,Math.floor(cols/2)-18,Math.floor(rows/2)-8);}
+function pulsar(){const P=[[2,0],[3,0],[4,0],[8,0],[9,0],[10,0],[0,2],[5,2],[7,2],[12,2],[0,3],[5,3],[7,3],[12,3],[0,4],[5,4],[7,4],[12,4],[2,5],[3,5],[4,5],[8,5],[9,5],[10,5],[2,7],[3,7],[4,7],[8,7],[9,7],[10,7],[0,7-0+7],[5,12-5+7],[7,12-5+7],[12,12-5+7],[0,8],[5,8],[7,8],[12,8],[0,9],[5,9],[7,9],[12,9],[0,10],[5,10],[7,10],[12,10],[2,12],[3,12],[4,12],[8,12],[9,12],[10,12]];stamp(P,Math.floor(cols/2)-6,Math.floor(rows/2)-6);}
+function rpento(){stamp([[1,0],[2,0],[0,1],[1,1],[1,2]],Math.floor(cols/2),Math.floor(rows/2));}
+function acorn(){stamp([[1,0],[3,1],[0,2],[1,2],[4,2],[5,2],[6,2]],Math.floor(cols/2)-3,Math.floor(rows/2)-1);}
+function diehard(){stamp([[6,0],[0,1],[1,1],[1,2],[5,2],[6,2],[7,2]],Math.floor(cols/2)-3,Math.floor(rows/2)-1);}
+const packets=[["Gosper's gun","a fountain that never rests",()=>{age.fill(0);gosper();}],["Pulsar","a lantern in thirteen beats",()=>{age.fill(0);pulsar();}],["R-pentomino","five seeds, a century of weather",()=>{age.fill(0);rpento();}],["Acorn","an oak asleep in seven cells",()=>{age.fill(0);acorn();}],["Wild garden","scattered at 30% rain",()=>{age.fill(0);seedRandom();}],["Diehard","vanishes, then returns",()=>{age.fill(0);diehard();}]];
+const seedBox=document.getElementById('seeds');
+packets.forEach(([n,t,fn])=>{const b=document.createElement('button');b.className='seed';b.innerHTML='<b>'+n+'</b><i>'+t+'</i>';b.onclick=()=>{fn();gen=0;running=true;syncPlay();drawer.classList.remove('open');};seedBox.appendChild(b);});
+seedRandom();gen=0;
+// stepping
+function step(){
+ for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+  const i=y*cols+x;let n=0;
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;n+=age[((y+dy+rows)%rows)*cols+((x+dx+cols)%cols)]?1:0;}
+  const alive=age[i]>0;
+  if(alive)nage[i]=(n===2||n===3)?Math.min(age[i]+1,60):0;
+  else nage[i]=n===3?1:0;
+ }
+ const t=age;age=nage;nage=t;gen++;
+ let p=0,eld=0;
+ for(let i=0;i<cols*rows;i++){if(age[i]){p++;if(age[i]>20)eld++;}}
+ document.getElementById('gen').textContent=gen;
+ document.getElementById('pop').textContent=p;
+ // census strip: bed size, elder share, still-life hint
+ document.getElementById('cBed').textContent=cols+'×'+rows;
+ document.getElementById('cEld').textContent=eld;
+ const prev=document.getElementById('cSt');
+ if(prev._p===p)prev.textContent='settling';
+ else if(p===0)prev.textContent='fallow';
+ else prev.textContent='growing';
+ prev._p=p;
+}
+let acc=0,last=performance.now();
+function frame(now){
+ const dt=Math.min(0.25,(now-last)/1000);last=now;
+ if(running){acc+=dt*tempo;let k=0;while(acc>=1&&k<8){step();acc--;k++;}}
+ // draw soil stains
+ ctx.fillStyle='#16100B';ctx.fillRect(0,0,W,H);
+ ctx.globalCompositeOperation='lighter';
+ const ox=(W-cols*cell)/2,oy=(H-rows*cell)/2;
+ for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+  const i=y*cols+x,a=age[i];
+  if(a===0){if(stain[i]>0.02){ctx.fillStyle='rgba(120,80,60,'+(stain[i]*0.5).toFixed(3)+')';ctx.fillRect(ox+x*cell,oy+y*cell,cell,cell);stain[i]*=0.93;}continue;}
+  stain[i]=0.5;
+  const newborn=a===1,scale=newborn?0.7:1;
+  paintSprite(ageColor(a),a>8);
+  const s=cell*2.4*scale;
+  ctx.drawImage(spr,ox+x*cell+s/2-cell/2-s/2,oy+y*cell-cell*0.7,s,s);
+ }
+ ctx.globalCompositeOperation='source-over';
+ requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+// paint
+let painting=false;
+function toggleAt(e){const ox=(W-cols*cell)/2,oy=(H-rows*cell)/2;const x=Math.floor((e.clientX-ox)/cell),y=Math.floor((e.clientY-oy)/cell);if(x<0||y<0||x>=cols||y>=rows)return;const i=y*cols+x;if(!painting._v)painting._v=age[i]?0:1;age[i]=painting._v?1:0;}
+cv.addEventListener('pointerdown',e=>{painting=true;painting._v=null;toggleAt(e);cv.setPointerCapture(e.pointerId);});
+cv.addEventListener('pointermove',e=>{
+ const ox=(W-cols*cell)/2,oy=(H-rows*cell)/2;const x=Math.floor((e.clientX-ox)/cell),y=Math.floor((e.clientY-oy)/cell);
+ if(x>=0&&y>=0&&x<cols&&y<rows){hover.style.display='block';hover.style.left=(ox+x*cell-2)+'px';hover.style.top=(oy+y*cell-2)+'px';}
+ else hover.style.display='none';
+ if(painting)toggleAt(e);
+});
+addEventListener('pointerup',()=>painting=false);
+const bPlay=document.getElementById('bPlay');
+function syncPlay(){bPlay.textContent=running?'Pause':'Grow';}
+bPlay.onclick=()=>{running=!running;syncPlay();};
+document.getElementById('bStep').onclick=()=>{running=false;syncPlay();step();};
+document.getElementById('bClear').onclick=()=>{age.fill(0);stain.fill(0);gen=0;document.getElementById('gen').textContent=0;document.getElementById('pop').textContent=0;};
+document.getElementById('bWild').onclick=()=>{
+ age.fill(0);stain.fill(0);gen=0;seedRandom();
+ running=true;syncPlay();
+};
+// double-click stamps a pulsar where the gardener points
+cv.addEventListener('dblclick',e=>{
+ const pup=[[2,0],[3,0],[4,0],[8,0],[9,0],[10,0],[0,2],[5,2],[7,2],[12,2],[0,3],[5,3],[7,3],[12,3],[0,4],[5,4],[7,4],[12,4],[2,5],[3,5],[4,5],[8,5],[9,5],[10,5]];
+ const ox=(W-cols*cell)/2,oy=(H-rows*cell)/2;
+ const cx=Math.floor((e.clientX-ox)/cell)-6,cy=Math.floor((e.clientY-oy)/cell)-6;
+ stamp(pup,cx,cy);
+});
+document.getElementById('tempo').oninput=e=>{tempo=+e.target.value;document.getElementById('tVal').textContent=tempo+'/s';};
+const drawer=document.getElementById('drawer');
+document.getElementById('bDrawer').onclick=()=>drawer.classList.toggle('open');
+addEventListener('keydown',e=>{if(e.code==='Space'&&e.target.tagName!=='INPUT'){e.preventDefault();running=!running;syncPlay();}if(e.key==='Escape')drawer.classList.remove('open');});
+})();
+</script>
+<style>
+#spark{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:5;
+background:rgba(15,10,6,.6);border:1px solid rgba(255,255,255,.1);
+border-radius:12px;padding:8px 12px 4px;backdrop-filter:blur(8px)}
+#spark small{display:block;font-family:ui-monospace,monospace;font-size:9px;
+letter-spacing:.28em;color:#7a6a4e;text-transform:uppercase;text-align:center}
+</style>
+<div id="spark"><small>population · last 90 generations</small><canvas id="sparkCv" width="220" height="44"></canvas></div>
+<script>
+(function(){
+ var cv=document.getElementById('sparkCv'),g=cv.getContext('2d'),hist=[],last='-1';
+ setInterval(function(){
+  var el=document.getElementById('pop');if(!el)return;
+  if(el.textContent===last&&hist.length)return;
+  last=el.textContent;hist.push(parseInt(last,10)||0);
+  if(hist.length>90)hist.shift();
+  var mx=Math.max.apply(null,hist.concat([1]));
+  g.clearRect(0,0,220,44);
+  g.strokeStyle='#E7B95A';g.lineWidth=1.5;g.beginPath();
+  hist.forEach(function(v,i){
+   var x=i/89*220,y=42-(v/mx)*38;
+   if(i===0)g.moveTo(x,y);else g.lineTo(x,y);
+  });
+  g.stroke();
+ },600);
+})();
+</script>
+<style>
+.rules{position:fixed;right:26px;bottom:120px;z-index:5;max-width:230px;
+background:rgba(15,10,6,.62);border:1px solid rgba(231,185,90,.3);border-radius:14px;
+padding:14px 16px;font-size:12px;font-style:italic;line-height:1.8;color:#b7a586}
+.rules b{display:block;font-style:normal;font-family:ui-monospace,monospace;font-size:9px;
+letter-spacing:.3em;color:#E7B95A;margin-bottom:4px}
+@media(max-width:1100px){.rules{display:none}}
+</style>
+<aside class="rules"><b>The three rules</b>1 · A bloom with one friend, or none, starves.<br>2 · A bloom with two or three friends thrives.<br>3 · A bloom with four or more suffocates.<br>Empty soil with exactly three neighbours wakes.
+Toroidal beds — gliders sail off one edge and return by the other.</aside>
+<style>
+.soil{position:fixed;left:26px;bottom:64px;z-index:5;max-width:230px;
+font-size:11.5px;font-style:italic;line-height:1.75;color:#6f6046}
+.soil b{color:#a08c66;font-style:normal}
+@media(max-width:1100px){.soil{display:none}}
+</style>
+<aside class="soil"><b>Soil report.</b> Dead blooms stain the earth brown and fade 7% a frame — read the trails to see where the gliders have been.</aside>
+</body>
+</html>
