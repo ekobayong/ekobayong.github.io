@@ -8,6 +8,8 @@ const { spawnSync } = require("child_process");
 
 const dir = path.resolve(__dirname, "..");
 const files = fs.readdirSync(dir).filter((f) => /^\d{3}-.+\.html$/.test(f));
+// index.html is generated too — check it alongside the numbered files
+if (fs.existsSync(path.join(dir, "index.html"))) files.push("index.html");
 if (!files.length) {
   console.error("no generated html files found");
   process.exit(1);
@@ -28,6 +30,33 @@ for (const f of files) {
       console.error("SYNTAX ERROR in " + f + " (script " + i + "):\n" + (r.stderr || r.stdout).trim().split("\n").slice(0, 4).join("\n"));
     }
   });
+  if (f === "index.html") {
+    // sanity: the embedded ITEMS array must parse and hold exactly 100 entries
+    const m = s.match(/ITEMS = (\[[\s\S]*?\]);/);
+    if (!m) {
+      bad++;
+      console.error("index.html: ITEMS array not found");
+    } else {
+      let arr;
+      try {
+        arr = JSON.parse(m[1]);
+      } catch (e) {
+        bad++;
+        console.error("index.html: ITEMS JSON parse failed: " + e.message);
+      }
+      if (arr && arr.length !== 100) {
+        bad++;
+        console.error("index.html: expected 100 items, got " + arr.length);
+      }
+      if (arr) for (const it of arr) {
+        if (!it.file || !it.txt || !it.prompt) {
+          bad++;
+          console.error("index.html: item missing file/txt/prompt: " + JSON.stringify(it));
+          break;
+        }
+      }
+    }
+  }
 }
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("checked " + total + " <script> blocks across " + files.length + " html files — " + (bad === 0 ? "ALL OK" : bad + " FAILED"));
