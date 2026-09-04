@@ -240,7 +240,10 @@ const html = `<!DOCTYPE html>
       ev.preventDefault();
       var w = null;
       try { w = window.open(url, "_blank", "noopener"); } catch (e) {}
-      if (!w) { window.location.href = url; }
+      if (!w) {
+        var target = new URL(url, document.baseURI).href;
+        try { window.location.href = target; } catch (e) {}
+      }
     }
     ob.addEventListener("click", function (ev) { openDemo(ev, it.file); });
 
