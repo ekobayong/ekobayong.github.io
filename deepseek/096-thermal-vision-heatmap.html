@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THERMA-1 — longwave infrared camera</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:radial-gradient(70% 50% at 50% 0%,#16181c,transparent 60%),#07080a;
+  color:#d7dbd2;min-height:100vh;font-family:ui-monospace,'SF Mono',Menlo,Consolas,'Courier New',monospace;
+  display:flex;flex-direction:column;align-items:center;padding:30px 16px 40px;
+}
+header{width:min(1100px,100%);display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;flex-wrap:wrap;gap:12px}
+header h1{font-size:clamp(28px,4vw,54px);letter-spacing:.3em;font-weight:400;color:#f4f2ec;text-shadow:0 0 24px rgba(255,160,40,.35)}
+header .mc{font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:#7c8378}
+/* bezel */
+.bezel{
+  position:relative;width:min(1100px,100%);aspect-ratio:16/9;border-radius:26px;background:linear-gradient(180deg,#2b2e34,#1a1c20 60%,#0c0d10);
+  padding:22px;box-shadow:inset 0 2px 1px rgba(255,255,255,.16),0 40px 80px rgba(0,0,0,.6);position:relative;
+}
+.screw6{position:absolute;width:14px;height:14px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#4a4e55,#1a1c20);box-shadow:inset 0 1px 1px rgba(255,255,255,.3)}
+.screw6.tl{top:9px;left:9px}.screw6.tr{top:9px;right:9px}.screw6.bl{bottom:9px;left:9px}.screw6.br{bottom:9px;right:9px}
+.viewport{position:relative;width:100%;height:100%;border-radius:12px;overflow:hidden;background:#000}
+canvas#thermal{position:absolute;inset:0;width:100%;height:100%;display:block}
+canvas#heat{position:absolute;inset:0;width:100%;height:100%;display:none}
+/* overlay */
+.ov{position:absolute;inset:0;pointer-events:none;z-index:3}
+.ov .slines{position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,255,255,.025) 3px 4px)}
+.ov .vig6{position:absolute;inset:0;background:radial-gradient(120% 100% at 50% 50%,transparent 55%,rgba(0,0,0,.5))}
+.ov .corner{position:absolute;width:22px;height:22px;border:1.5px solid rgba(215,219,210,.55)}
+.ov .corner.c1{top:10px;left:10px;border-right:none;border-bottom:none}
+.ov .corner.c2{top:10px;right:10px;border-left:none;border-bottom:none}
+.ov .corner.c3{bottom:10px;left:10px;border-right:none;border-top:none}
+.ov .corner.c4{bottom:10px;right:10px;border-left:none;border-top:none}
+.hudline{position:absolute;font-size:11px;color:rgba(255,255,255,.85);text-shadow:0 1px 4px rgba(0,0,0,.9);letter-spacing:.1em;line-height:1.7}
+.hudline.lt{top:14px;left:16px}
+.hudline.rt{top:14px;right:16px;text-align:right}
+.hudline.lb{bottom:14px;left:16px}
+.hudline.rb{bottom:14px;right:16px;text-align:right}
+.rec2{display:inline-block;padding:3px 8px;border:1px solid rgba(255,80,80,.6);border-radius:4px}
+.rec2 i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#ff4040;box-shadow:0 0 8px #ff4040;animation:recblink 1.2s steps(2) infinite;margin-right:5px}
+@keyframes recblink{50%{opacity:.2}}
+.crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:44px;height:44px;
+  border:1px dashed rgba(255,255,255,.4);border-radius:50%}
+.crosshair::before,.crosshair::after{content:"";position:absolute;background:rgba(255,255,255,.5)}
+.crosshair::before{left:50%;top:-6px;height:10px;width:1px}
+.crosshair::after{top:50%;left:-6px;width:10px;height:1px}
+.crosshair b{position:absolute;left:50%;bottom:-16px;transform:translateX(-50%);font-size:12px;color:#fff;font-weight:400;text-shadow:0 1px 4px #000;white-space:nowrap}
+.marker2{position:absolute;pointer-events:none}
+.marker2 .mbody{transform:translate(-50%,-100%);font-size:11px;text-shadow:0 1px 3px #000;white-space:nowrap;border:1px solid currentColor;padding:1px 5px;border-radius:3px}
+.marker2 .mline{width:1px;height:14px;margin:0 auto;background:currentColor}
+.marker2.hot{color:#ffd7a1}.marker2.cold{color:#a9c4ff}
+/* legend */
+.legend6{position:absolute;right:12px;top:50%;transform:translateY(-50%);height:60%;width:16px;border-radius:4px;overflow:hidden;
+  background:linear-gradient(180deg,#ffffff,#ffdc3c,#fa8214,#d22832,#78008c,#14003c,#000)}
+.legend6 .ticks6{position:absolute;left:-36px;font-size:8.5px;color:rgba(255,255,255,.8);text-shadow:0 1px 3px #000;line-height:1.2}
+/* controls */
+.ctrlbar{width:min(1100px,100%);margin-top:18px;background:linear-gradient(180deg,#1a1c20,#141518);border-radius:16px;padding:16px 20px;
+  box-shadow:0 20px 44px rgba(0,0,0,.5);display:flex;gap:20px;align-items:center;flex-wrap:wrap;justify-content:center}
+.cgroup{display:flex;flex-direction:column;align-items:center;gap:6px}
+.cgroup .clabel{font-size:8.5px;letter-spacing:.22em;text-transform:uppercase;color:#7c8378}
+.palrow6{display:flex;gap:7px}
+.pal6{width:44px;height:26px;border-radius:6px;border:1px solid rgba(255,255,255,.2);cursor:pointer;padding:0;transition:all .2s}
+.pal6:hover{border-color:#ffb347}
+.pal6.on{border-color:#ffb347;box-shadow:0 0 10px rgba(255,179,71,.5)}
+.slrow6{display:flex;align-items:center;gap:8px;font-size:10px;color:#7c8378;letter-spacing:.08em}
+.slrow6 b{color:#ffb347;font-weight:400;min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+.slrow6 input{appearance:none;-webkit-appearance:none;width:90px;height:3px;background:rgba(255,255,255,.2);border-radius:2px;outline:none}
+.slrow6 input::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#ffb347;cursor:pointer;box-shadow:0 0 8px rgba(255,179,71,.8)}
+.mbtn6{border:1px solid rgba(255,179,71,.5);background:none;color:#ffb347;font-family:inherit;font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;padding:10px 16px;border-radius:8px;cursor:pointer;transition:all .25s}
+.mbtn6:hover{background:rgba(255,179,71,.15)}
+@media(max-width:760px){.bezel{aspect-ratio:16/11}.ctrlbar{justify-content:flex-start}.legend6{display:none}}
+@media(prefers-reduced-motion:reduce){.rec2 i{animation:none}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>THERMA-1</h1>
+    <div class="mc">HANDHELD LONGWAVE INFRARED · 1 6 0 × 9 0</div>
+  </div>
+  <div class="mc" id="verLine">v2.4.1 · bolometer array ok</div>
+</header>
+
+<div class="bezel">
+  <span class="screw6 tl"></span><span class="screw6 tr"></span><span class="screw6 bl"></span><span class="screw6 br"></span>
+  <div class="viewport">
+    <canvas id="thermal"></canvas>
+    <div class="ov">
+      <div class="slines"></div>
+      <div class="vig6"></div>
+      <div class="corner c1"></div><div class="corner c2"></div><div class="corner c3"></div><div class="corner c4"></div>
+      <div class="hudline lt"><span class="rec2"><i></i>REC</span> <span id="recT">00:00</span><br><span id="isoDate">2026-09-01</span><br><span id="palName">IRON</span></div>
+      <div class="hudline rt">ε <span id="eRead">0.950</span><br><span id="rangeRead">−20…150 °C</span><br>FPS <span id="fpsRead">30</span></div>
+      <div class="hudline lb">ZOOM 1.0× · FOCUS ∞<br>GHOSTS <span id="ghostRead">2</span></div>
+      <div class="hudline rb">MAX <span id="maxRead">57.3°</span><br>MIN <span id="minRead">20.9°</span><br><span class="batt"><svg width="20" height="10" viewBox="0 0 20 10"><rect x="1" y="1" width="15" height="8" fill="none" stroke="#d7dbd2" stroke-width="1"/><rect id="battFill" x="2" y="2" width="12" height="6" fill="#5ee36a"/><line x1="17.5" y1="3" x2="17.5" y2="7" stroke="#d7dbd2" stroke-width="1"/></svg></span></div>
+      <div class="legend6"><span class="ticks6" style="top:-3px">150</span><span class="ticks6" style="top:25%">108</span><span class="ticks6" style="top:44%">65</span><span class="ticks6" style="top:76%">23</span><span class="ticks6" style="bottom:-3px">−20</span></div>
+      <div class="crosshair"><b id="centerTemp">21.0°</b></div>
+      <div class="marker2 hot" id="mHot" style="display:none"><div class="mbody">▲</div><div class="mline"></div></div>
+      <div class="marker2 cold" id="mCold" style="display:none"><div class="mbody">▼</div><div class="mline"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="ctrlbar">
+  <div class="cgroup">
+    <span class="clabel">Palette</span>
+    <div class="palrow6" id="palRow">
+      <button class="pal6 on" data-p="iron" style="background:linear-gradient(90deg,#000,#14003c,#78008c,#d22832,#fa8214,#ffdc3c,#fff)" title="IRON"></button>
+      <button class="pal6" data-p="rainbow" style="background:linear-gradient(90deg,#000,#000080,#001a8f,#00a0ff,#00ff8f,#ffe600,#fff)" title="RAINBOW"></button>
+      <button class="pal6" data-p="arctic" style="background:linear-gradient(90deg,#080a14,#143c78,#46a0dc,#beebfa,#fff)" title="ARCTIC"></button>
+      <button class="pal6" data-p="gray" style="background:linear-gradient(90deg,#000,#7f7f7f,#fff)" title="GRAY"></button>
+    </div>
+  </div>
+  <div class="slrow6"><span>Brush</span><b id="brushV6">4</b><input type="range" id="brushR6" min="2" max="14" value="4"></div>
+  <div class="slrow6"><span>Diffusion</span><b id="diffV6">0.10</b><input type="range" id="diffR6" min="0.02" max="0.24" step="0.01" value="0.10"></div>
+  <div class="slrow6"><span>Cooling</span><b id="coolV6">0.98</b><input type="range" id="coolR6" min="0.95" max="0.999" step="0.001" value="0.98"></div>
+  <div class="slrow6"><span>Ghosts</span><b id="gV6">2</b><input type="range" id="gR6" min="0" max="8" value="2"></div>
+  <button class="mbtn6" id="resetBtn6">Reset</button>
+  <button class="mbtn6" id="emberBtn6">Drop ember</button>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cv=document.getElementById("thermal"),ctx=cv.getContext("2d");
+  var W=0,H=0,DPR=1;
+  var CW=160,CH=90;
+  var heat=new Float32Array(CW*CH);
+  var embers=[],ghosts=[];
+  var palette="iron",palName="IRON";
+  var brush=4,diff=0.1,cool=0.98,ghostN=2;
+  var recT=0,lastTs=performance.now();
+  var mX=0,mY=0;
+  // ---------- palettes ----------
+  var PAL={
+    iron:[[0,0,0],[20,0,60],[120,0,140],[210,40,50],[250,130,20],[255,220,60],[255,255,255]],
+    rainbow:[[0,0,0],[0,0,110],[0,26,143],[0,100,160],[0,255,143],[255,230,0],[255,255,255]],
+    arctic:[[8,10,20],[20,60,120],[70,156,220],[190,235,250],[250,255,255]],
+    gray:[[0,0,0],[127,127,127],[150,150,150],[190,190,190],[255,255,255]]
+  };
+  var LUT={};
+  function makeLUT(p){
+    var stops=PAL[p];
+    var lut=new Uint8Array(256*3);
+    for(var i=0;i<256;i++){
+      var x=i/255;
+      var fx=x*(stops.length-1);
+      var idx=Math.min(stops.length-2,Math.floor(fx));
+      var t=fx-idx;t=t*t*(3-2*t);
+      var a=stops[idx],b=stops[idx+1];
+      for(var c2=0;c2<3;c2++)lut[i*3+c2]=Math.round(a[c2]+(b[c2]-a[c2])*t);
+    }
+    return lut;
+  }
+  function resize(){
+    DPR=Math.min(2,devicePixelRatio||1);
+    var r=cv.parentElement.getBoundingClientRect();
+    W=r.width;H=r.height;
+    cv.width=W*DPR;cv.height=H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener("resize",function(){resize()});
+  // ---------- field ----------
+  function addHeat(x,y,power,r){
+    // x,y in grid coords
+    for(var dy=-r;dy<=r;dy++)for(var dx=-r;dx<=r;dx++){
+      var gx=Math.round(x+dx),gy=Math.round(y+dy);
+      if(gx<0||gx>=CW||gy<0||gy>=CH)continue;
+      var d=Math.sqrt(dx*dx+dy*dy)/r;
+      if(d>1)continue;
+      heat[gy*CW+gx]=Math.min(60,heat[gy*CW+gx]+power*(1-d*d));
+    }
+  }
+  function stepField(dt){
+    // diffusion
+    var A=new Float32Array(CW*CH);
+    var k=diff;
+    for(var y=0;y<CH;y++){
+      for(var x=0;x<CW;x++){
+        var i=y*CW+x;
+        var l=heat[(y*CW+(x-1+CW)%CW)];
+        var r2=heat[(y*CW+(x+1)%CW)];
+        var u=heat[((y-1+CH)%CH)*CW+x];
+        var d2=heat[((y+1)%CH)*CW+x];
+        A[i]=heat[i]+k*(l+r2+u+d2-4*heat[i]);
+      }
+    }
+    heat.set(A);
+    var coolF=Math.pow(cool,dt*60);
+    for(var i2=0;i2<heat.length;i2++){
+      heat[i2]=21+(heat[i2]-21)*coolF;
+      // noise
+      if(Math.random()<0.05)heat[i2]+=(Math.random()-0.5)*0.5;
+    }
+    // embers
+    for(var e=embers.length-1;e>=0;e--){
+      var eb=embers[e];
+      eb.life+=dt;
+      var r3=eb.r0*(eb.life/1.4);
+      addHeat(eb.x,eb.y,eb.power*(1-eb.life/1.4),Math.max(1,Math.min(11,Math.ceil(r3/ (Math.max(CW,CH)/160)*4+2))));
+      // simpler: radius scales 2->11 cells
+      addHeat(eb.x,eb.y,eb.power*(1-eb.life/1.4),Math.max(2,Math.min(11,2+ (eb.life/1.4)*9)));
+      if(eb.life>1.4)embers.splice(e,1);
+    }
+    // ghosts
+    for(var g=0;g<ghosts.length;g++){
+      var gh=ghosts[g];
+      gh.x+=gh.vx*dt;gh.y+=gh.vy*dt+Math.sin(performance.now()/900+gh.ph)*6*dt;
+      if(gh.x<-40)gh.x=CW+40;
+      if(gh.x>CW+40)gh.x=-40;
+      if(gh.y<-40)gh.y=CH+40;
+      if(gh.y>CH+40)gh.y=-40;
+      // draw as 4 blobs
+      var headP=8+Math.sin(performance.now()/400)*4;
+      addHeat(gh.x,gh.y,12,2.5);
+      addHeat(gh.x+3,gh.y+5,10,3);
+      var foot=(Math.sin(performance.now()/220)*0.5+0.5)*2;
+      addHeat(gh.x-foot*2+0.5,gh.y+13,8,2.2);
+      addHeat(gh.x+(1-foot)*4,gh.y+13,8,2.2);
+    }
+  }
+  function seedGhosts(n){
+    ghosts=[];
+    for(var i=0;i<n;i++){
+      ghosts.push({x:Math.random()*CW,y:Math.random()*CH,
+        vx:(Math.random()<0.5?-1:1)*(4+Math.random()*6),vy:0,
+        ph:Math.random()*6});
+    }
+    document.getElementById("ghostRead").textContent=ghosts.length;
+  }
+  // ---------- render ----------
+  function render(){
+    // min/max for autoscale
+    var mn=Infinity,mx=-Infinity;
+    for(var i=0;i<heat.length;i++){if(heat[i]<mn)mn=heat[i];if(heat[i]>mx)mx=heat[i]}
+    var span=Math.max(4,mx-mn);
+    var lo=mn,hi=mn+span;
+    if(hi-lo<6){lo-=3;hi+=3}
+    var lut=LUT[palette]||makeLUT("iron");
+    // temp canvas
+    var img=ctx.createImageData(160,90);
+    for(var y=0;y<90;y++){
+      for(var x=0;x<160;x++){
+        var v=(heat[y*CW+x]-lo)/(hi-lo);
+        v=Math.max(0,Math.min(1,v));
+        // noise
+        v+= (Math.random()-0.5)*0.03;
+        v=Math.max(0,Math.min(1,v));
+        var idx=Math.floor(v*255);
+        var o=(y*160+x)*4;
+        img.data[o]=lut[idx*3];img.data[o+1]=lut[idx*3+1];img.data[o+2]=lut[idx*3+2];img.data[o+3]=255;
+      }
+    }
+    var tmp=document.createElement("canvas");
+    tmp.width=160;tmp.height=90;
+    var tc=tmp.getContext("2d");
+    tc.putImageData(img,0,0);
+    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
+    ctx.clearRect(0,0,W,H);
+    ctx.drawImage(tmp,0,0,W,H);
+    // markers
+    var mxi=0,mni=0;
+    for(var i2=0;i2<heat.length;i2++){
+      if(heat[i2]>heat[mxi])mxi=i2;
+      if(heat[i2]<heat[mni])mni=i2;
+    }
+    placeMarker(document.getElementById("mHot"),mxi,hi,30);
+    placeMarker(document.getElementById("mCold"),mni,lo,10);
+    var cT=heat[Math.round(mY/ (H/90))*CW+Math.round(mX/(W/160))]||21;
+    document.getElementById("centerTemp").textContent=Math.max(-20,cT.toFixed(1))+"°";
+    document.getElementById("maxRead").textContent=(Math.max(-20,heat[mxi])).toFixed(1)+"°";
+    document.getElementById("minRead").textContent=(Math.max(-20,heat[mni])).toFixed(1)+"°";
+    document.getElementById("rangeRead").textContent=Math.round(lo)+"…"+Math.round(hi)+" °C";
+  }
+  function placeMarker(el,idx,val,pad){
+    var gx=idx%160,gy=Math.floor(idx/160);
+    el.style.display="block";
+    el.style.left=(gx/160*W)+"px";
+    el.style.top=(gy/90*H)+"px";
+    el.querySelector(".mbody").textContent=(val>50?8:3)+" "+(val>50?val.toFixed(1):val.toFixed(1))+"°";
+    el.querySelector(".mbody").textContent=(el.classList.contains("hot")?"▲ ":"▼ ")+val.toFixed(1)+"°";
+  }
+  // ---------- interactions ----------
+  var painting=false;
+  cv.addEventListener("pointerdown",function(e){
+    var r=cv.getBoundingClientRect();
+    var x=(e.clientX-r.left)/W*160,y=(e.clientY-r.top)/H*90;
+    mX=e.clientX-r.left;mY=e.clientY-r.top;
+    painting=true;
+    addHeat(x,y,26,brush);
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener("pointermove",function(e){
+    var r=cv.getBoundingClientRect();
+    var x=(e.clientX-r.left)/W*160,y=(e.clientY-r.top)/H*90;
+    mX=e.clientX-r.left;mY=e.clientY-r.top;
+    if(painting)addHeat(x,y,22,brush);
+  });
+  window.addEventListener("pointerup",function(){painting=false});
+  cv.addEventListener("click",function(){
+    // ember at click
+    embers.push({x:mX/W*160,y:mY/H*90,power:30,life:0,r0:2});
+  });
+  // controls
+  document.querySelectorAll("#palRow .pal6").forEach(function(b){
+    b.addEventListener("click",function(){
+      document.querySelectorAll("#palRow .pal6").forEach(function(x){x.classList.remove("on")});
+      b.classList.add("on");
+      palette=b.dataset.p;
+      palName=palette.toUpperCase();
+      document.getElementById("palName").textContent=palName;
+      LUT[palette]=makeLUT(palette);
+    });
+  });
+  document.getElementById("brushR6").addEventListener("input",function(){
+    brush=+this.value;document.getElementById("brushV6").textContent=brush;
+  });
+  document.getElementById("diffR6").addEventListener("input",function(){
+    diff=+this.value;document.getElementById("diffV6").textContent=diff.toFixed(2);
+  });
+  document.getElementById("coolR6").addEventListener("input",function(){
+    cool=+this.value;document.getElementById("coolV6").textContent=Number(cool).toFixed(3);
+  });
+  document.getElementById("gR6").addEventListener("input",function(){
+    ghostN=+this.value;document.getElementById("gV6").textContent=ghostN;
+    seedGhosts(ghostN);
+  });
+  document.getElementById("resetBtn6").addEventListener("click",function(){
+    heat.fill(21);
+    embers=[];seedGhosts(ghostN);
+  });
+  document.getElementById("emberBtn6").addEventListener("click",function(){
+    embers.push({x:Math.random()*160,y:Math.random()*90,power:32,life:0,r0:2});
+  });
+  window.addEventListener("keydown",function(e){
+    if(e.key==="1")palBtn(0);
+    if(e.key==="2")palBtn(1);
+    if(e.key==="3")palBtn(2);
+    if(e.key==="4")palBtn(3);
+  });
+  function palBtn(i){
+    var b=document.querySelectorAll("#palRow .pal6")[i];
+    if(b)b.click();
+  }
+  // loop
+  var last=performance.now(),acc=0;
+  function loop(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    if(now-lastTs>1000){recT+=(now-lastTs)/1000;lastTs=now}
+    var res=Math.min(0.05,dt*0.05);
+    acc+=dt*(RM?0.5:1);
+    var steps=Math.max(1,Math.floor(dt*60/3));
+    for(var i=0;i<steps;i++)stepField(Math.min(0.05,dt/steps));
+    render();
+    document.getElementById("recT").textContent=String(Math.floor(recT/60)).padStart(2,"0")+":"+String(Math.floor(recT%60)).padStart(2,"0");
+    document.getElementById("fpsRead").textContent=Math.round(1/Math.max(0.001,dt));
+    document.getElementById("eRead").textContent=(0.950+Math.sin(now/3000)*0.004).toFixed(3);
+    // battery
+    var bt=0.6+Math.sin(now/15000)*0.05;
+    if(bt<0.3)document.getElementById("battFill").style.fill="#ff4040";
+    document.getElementById("battFill").style.width=(bt*12)+"px";
+    requestAnimationFrame(loop);
+  }
+  for(var i=0;i<160*90;i++)heat[i]=21;
+  resize();
+  seedGhosts(2);
+  // warm up with presets
+  [[40,30],[120,55],[30,70]].forEach(function(p){addHeat(p[0],p[1],18,4)});
+  // drop embers periodically
+  setInterval(function(){if(embers.length<2)embers.push({x:Math.random()*160,y:Math.random()*90,power:28,life:0,r0:2})},4000);
+  LUT[palette]=makeLUT(palette);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

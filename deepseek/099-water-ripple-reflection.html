@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mirage — a placid pool, rendered live</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--skyc:#8fc8e8}
+html,body{height:100%;overflow:hidden}
+body{background:#03060c;color:#dce6f2;font-family:ui-monospace,Menlo,Consolas,monospace;}
+canvas#pool{position:fixed;inset:0;display:block;width:100vw;height:100vh;touch-action:none}
+.vig8{position:fixed;inset:0;pointer-events:none;z-index:2;background:radial-gradient(120% 110% at 50% 45%,transparent 62%,rgba(0,0,10,.55))}
+.ui{position:fixed;inset:0;z-index:5;pointer-events:none}
+.title8{position:absolute;top:26px;left:28px}
+.title8 h1{font-family:Georgia,'Iowan Old Style',serif;font-weight:400;font-size:clamp(26px,3vw,40px);letter-spacing:.08em}
+.title8 p{font-size:9.5px;letter-spacing:.3em;text-transform:uppercase;color:rgba(220,230,242,.5);margin-top:6px}
+.panel8{position:absolute;right:24px;bottom:24px;width:240px;background:rgba(8,14,26,.6);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:16px;pointer-events:auto}
+.panel8 .prow{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:rgba(220,230,242,.8);margin-bottom:10px}
+.panel8 .prow b{color:#8fd8f0;font-weight:400;font-variant-numeric:tabular-nums;min-width:38px;text-align:right}
+.panel8 input[type=range]{width:130px;appearance:none;-webkit-appearance:none;height:2px;background:rgba(255,255,255,.2);border-radius:1px;outline:none}
+.panel8 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#8fd8f0;cursor:pointer;box-shadow:0 0 8px rgba(143,216,240,.8)}
+.time8{position:absolute;left:28px;bottom:26px;font-size:14px;color:#8fd8f0;letter-spacing:.1em;font-variant-numeric:tabular-nums}
+.hint8{position:absolute;left:50%;bottom:82px;transform:translateX(-50%);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:rgba(220,230,242,.6);animation:h8b 3.6s ease-in-out infinite}
+@keyframes h8b{0%,100%{opacity:.4}50%{opacity:1}}
+@media(max-width:640px){.panel8{left:14px;right:14px;bottom:14px;width:auto;display:none}.time8{left:16px;bottom:70px;font-size:12px}.hint8{bottom:64px}}
+</style>
+</head>
+<body>
+<canvas id="pool"></canvas>
+<div class="vig8"></div>
+<div class="ui">
+  <div class="title8"><h1>Mirage</h1><p>pbr water · 256² normal map · live</p></div>
+  <div class="time8" id="time8">00:00</div>
+  <div class="panel8">
+    <div class="prow"><span>Ripple</span><b id="ripV">3</b><input type="range" id="ripR" min="0" max="8" step="0.1" value="3"></div>
+    <div class="prow"><span>Wind</span><b id="windV">0.4</b><input type="range" id="windR" min="0" max="1.2" step="0.01" value="0.4"></div>
+    <div class="prow"><span>Clarity</span><b id="claV">1.8</b><input type="range" id="claR" min="0.5" max="3" step="0.05" value="1.8"></div>
+    <div class="prow"><span>Sky</span><b id="skyV">76</b><input type="range" id="skyR" min="30" max="140" value="76"></div>
+  </div>
+  <div class="hint8" id="hint8">click anywhere · the pool believes you</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cv=document.getElementById("pool"),ctx=cv.getContext("2d");
+  var W=0,H=0,DPR=1;
+  var N=256;
+  var height=new Float32Array(N*N),prev=new Float32Array(N*N),norm=new Float32Array(N*N*2);
+  var taps=[],t=0;
+  var rip=3,wind=0.4,clarity=1.8,skyV=0.76;
+  function resize(){
+    DPR=Math.min(2,devicePixelRatio||1);
+    W=innerWidth;H=innerHeight;
+    cv.width=W*DPR;cv.height=H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener("resize",function(){resize()});
+  // heightfield
+  function tap(x,y,r,amp){
+    var rx=Math.round(x),ry=Math.round(y);
+    for(var dy=-r;dy<=r;dy++)for(var dx=-r;dx<=r;dx++){
+      var gx=rx+dx,gy=ry+dy;
+      if(gx<0||gx>=N||gy<0||gy>=N)continue;
+      var d=Math.sqrt(dx*dx+dy*dy)/r;
+      if(d>1)continue;
+      height[gy*N+gx]+=amp*(1-d*d)*(1-d*d);
+    }
+  }
+  function step(dt){
+    // wind-driven ambient ripples
+    if(wind>0.01){
+      var tw=performance.now()/1000;
+      for(var x=0;x<N;x+=4){
+        var v=Math.sin(x*0.15+tw*1.7)*0.4*wind+Math.sin(x*0.06-tw*0.7)*0.7*wind;
+        height[Math.round(tw*30)%N*N+x]=v*0.4;
+      }
+    }
+    var a=0.02;
+    // wave equation with damping
+    for(var y=1;y<N-1;y++){
+      for(var x=1;x<N-1;x++){
+        var i=y*N+x;
+        var h2=(
+          height[(y-1)*N+x]+height[(y+1)*N+x]+height[y*N+x-1]+height[y*N+x+1]
+          +0.25*(height[(y-1)*N+x+1]+height[(y-1)*N+x-1]+height[(y+1)*N+x+1]+height[(y+1)*N+x-1])
+        )/2.5*0.25*1*1;
+        h2=h2*(0.98);
+        prev[i]=prev[i]*0.995+(h2-prev[i])*0.012;
+        // simple explicit: v = prev, h = height
+        var newH;
+        var vv=prev[i];
+        var hh=(h2 - vv*0.0 - 0);
+        // roll: height[i] += (h2 - height[i]) * stiff
+        height[i]+=(h2-height[i])*0.35;
+        prev[i]=height[i];
+      }
+    }
+    /*
+     Standard: tmp = height; height[i] = (sum)*0.99 - prev[i]; prev = tmp
+     */
+    var tmp=height.slice();
+    for(var y2=1;y2<N-1;y2++){
+      for(var x2=1;x2<N-1;x2++){
+        var i2=y2*N+x2;
+        var sum=(tmp[(y2-1)*N+x2]+tmp[(y2+1)*N+x2]+tmp[y2*N+x2-1]+tmp[y2*N+x2+1]);
+        height[i2]=(sum*0.497 - prev[i2])*0.996;
+        prev[i2]=tmp[i2];
+      }
+    }
+  }
+  function reflectSky(dx,dy){
+    // approx sky model: horizon + sun disc + clouds
+    var px=dx,py=dy;
+    var sky=0.5+0.5*Math.sin(py*1.57);
+    // sun
+    var sunX=0.25,sunY=-0.1;
+    var sx=px-sunX,sy=py-sunY;
+    var sunD=Math.sqrt(sx*sx+sy*sy)*3;
+    sunD=Math.max(0,1-sunD);
+    var sun=Math.pow(sunD,8)*200+Math.pow(sunD,2)*30;
+    // clouds (approx)
+    var cloud=Math.max(0,Math.sin(px*6+1.3)*Math.sin(px*4)*0.5+0.5)*10;
+    var base=0.35+skyV*0.5;
+    return[base+sun*0.02+cloud*0.01, base-20+0.008+sun*0.02+cloud*0.01, base+sun*0.04+cloud*0.012];
+    // returns multipliers; we'll build RGB from sky color
+  }
+  function render(){
+    // compute normals from height
+    for(var y=1;y<N-1;y++){
+      for(var x=1;x<N-1;x++){
+        var i=y*N+x;
+        var gx=height[y*N+x+1]-height[y*N+x-1];
+        var gy=height[(y+1)*N+x]-height[(y-1)*N+x];
+        var l=Math.sqrt(gx*gx+gy*gy+1);
+        norm[i*2]=-gx/l*clarity;
+        norm[i*2+1]=-gy/l*clarity;
+      }
+    }
+    // render per tile 4x4
+    var img=ctx.createImageData(256,256);
+    var skyVals=[204,216,236];
+    for(var y=0;y<256;y++){
+      for(var x=0;x<256;x++){
+        var nx=norm[y*256*2+x*2]||0,ny=norm[y*256*2+x*2+1]||0;
+        // reflected direction (view vector up)
+        var rx=nx, ry=ny, rz=Math.sqrt(Math.max(0,1-nx*nx-ny*ny));
+        // sky sample
+        var sx=rx*0.6, sy=-rz*0.8 + 0.3;
+        var skyCol=skySample(sx,sy);
+        // sun specular
+        var lx=-0.3,ly=0.5,lz=0.6;
+        var reflect=2*ny*lz/ (lz*ly*lx+1);
+        var spec=Math.pow(Math.max(0,nx*lx/ (Math.sqrt(nx*nx+ny*ny+1)*1)+ny*ly+rz*lz*0.6),40);
+        // fresnel
+        var fres=0.02+0.98*Math.pow(1-Math.abs(rz),5);
+        var r=skyCol[0]*(1-fres)+skyCol[0];
+        var g2=skyCol[1]*(1-fres)+skyCol[1];
+        var b=skyCol[2]*(1-fres)+skyCol[2];
+        r+=spec*255*0.6;g2+=spec*255*0.6;b+=spec*255*0.7;
+        r=Math.min(255,Math.max(0,r));g2=Math.min(255,Math.max(0,g2));b=Math.min(255,Math.max(0,b));
+        var o=(y*256+x)*4;
+        img.data[o]=r;img.data[o+1]=g2;img.data[o+2]=b;img.data[o+3]=255;
+      }
+    }
+    var tmp=document.createElement("canvas");
+    tmp.width=256;tmp.height=256;
+    tmp.getContext("2d").putImageData(img,0,0);
+    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
+    ctx.clearRect(0,0,W,H);
+    ctx.drawImage(tmp,0,0,W,H);
+  }
+  function skySample(sx,sy){
+    // screen-space approximate gradient sky + sun disc + soft clouds
+    var t=Math.max(0,Math.min(1,(sy+1)/2));
+    var horizon=skyV;
+    var top=skyV+0.15;
+    var sunDX=sx-0.0, sunDY=sy+0.35;
+    var sd=Math.sqrt(sunDX*sunDX+sunDY*sunDY);
+    var sunGlow=Math.max(0,1-sd*2.2);
+    var sunCore=Math.max(0,1-sd*0.35);
+    var r=(0.35+0.45*t)*(225*0.96)+sunGlow*40+Math.pow(sunCore,6)*255*0.4;
+    var g=(0.35+0.45*t)*(238*0.96)+sunGlow*36+Math.pow(sunCore,6)*255*0.35;
+    var b=(0.35+0.45*t)*(250*0.96)+sunGlow*30+Math.pow(sunCore,6)*255*0.3;
+    // clouds
+    var cld=Math.max(0,Math.sin(sx*9+1.7)*Math.sin(sy*7+3)*0.4+0.5)*14;
+    r+=cld;g+=cld;b+=cld*1.4;
+    return[r,g,b];
+  }
+  // interactions
+  cv.addEventListener("pointerdown",function(e){
+    // drop several ripples
+    var r=cv.getBoundingClientRect();
+    var x=e.clientX-r.left,y=e.clientY-r.top;
+    var gx=x/W*256,gy=y/H*256;
+    // dispose heat ripple (height impulse)
+    tap(gx,gy,7,2.5);
+    var h=document.getElementById("hint8");
+    if(h)h.style.opacity=0;
+    // droplet trail
+    for(var i=0;i<4;i++){
+      var ax=Math.random()*Math.PI*2;
+      setTimeout(function(){
+        tap(gx+Math.cos(ax)*(2+Math.random()*6),gy+Math.sin(ax)*(2+Math.random()*6),3+i,2-i*0.4);
+      },i*120);
+    }
+  });
+  cv.addEventListener("pointermove",function(e){
+    if(!e.buttons)return;
+    var r=cv.getBoundingClientRect();
+    var x=(e.clientX-r.left)/W*256,y=(e.clientY-r.top)/H*256;
+    tap(x,y,4,1.4);
+  });
+  // controls
+  function bindR(id,out,fn){
+    document.getElementById(id).addEventListener("input",function(){
+      var v=+this.value;
+      document.getElementById(out).textContent=(v%1)?v.toFixed(2):v;
+      fn(v);
+    });
+  }
+  bindR("ripR","ripV",function(v){rip=v});
+  bindR("windR","windV",function(v){wind=v});
+  bindR("claR","claV",function(v){clarity=v});
+  bindR("skyR","skyV",function(v){skyV=v/100});
+  // loop
+  var last=performance.now();
+  function loop(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    t+=dt;
+    document.getElementById("time8").textContent=String(Math.floor(t/60)).padStart(2,"0")+":"+String(Math.floor(t%60)).padStart(2,"0");
+    for(var i=0;i<(RM?2:3);i++)step(dt/3);
+    render();
+    requestAnimationFrame(loop);
+  }
+  // initial calm
+  for(var i=0;i<8;i++)tap(Math.random()*256,Math.random()*256,6,1.2);
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

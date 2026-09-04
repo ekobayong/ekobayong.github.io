@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tension — a generative string-art loom</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:
+    repeating-linear-gradient(0deg,transparent 0 4px,rgba(0,0,0,.02) 4px 5px),
+    repeating-linear-gradient(90deg,transparent 0 4px,rgba(0,0,0,.02) 4px 5px),
+    radial-gradient(60% 40% at 50% 0%,rgba(255,255,255,.5),transparent 60%),#efe7d8;
+  color:#22201c;min-height:100vh;font-family:Georgia,'Iowan Old Style',Palatino,serif;overflow-x:hidden;
+}
+.wrap{max-width:1280px;margin:0 auto;padding:24px 22px 50px}
+header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;margin-bottom:18px}
+header h1{font-size:clamp(30px,4vw,50px);font-weight:400;letter-spacing:.01em}
+header h1 em{font-style:italic;color:#2f4a3e}
+header .stats2{font-family:ui-monospace,monospace;font-size:11px;color:#7a7266;text-align:right;line-height:1.9;font-variant-numeric:tabular-nums}
+header .stats2 b{color:#22201c;font-weight:400}
+.main{display:grid;grid-template-columns:1fr 300px;gap:22px;align-items:start}
+@media(max-width:900px){.main{grid-template-columns:1fr}}
+/* board */
+.boardwrap{position:relative}
+.board{position:relative;background:#d9bb8a;border-radius:12px;box-shadow:0 30px 60px rgba(60,40,20,.35),inset 0 2px 3px rgba(255,255,255,.4);overflow:hidden}
+.board canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.board .badge{position:absolute;right:14px;bottom:12px;z-index:5;font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.16em;color:rgba(34,32,28,.6);background:rgba(255,255,255,.5);padding:4px 10px;border-radius:4px;text-transform:uppercase}
+.tooltip6{position:fixed;z-index:20;background:#22201c;color:#efe7d8;font-family:ui-monospace,monospace;font-size:10px;
+  padding:6px 10px;border-radius:6px;pointer-events:none;opacity:0;transition:opacity .2s;box-shadow:0 8px 20px rgba(0,0,0,.4)}
+/* panel */
+.panel5{background:linear-gradient(180deg,#3d5a4a,#2f4a3e);color:#efe7d8;border-radius:14px;padding:18px;margin-bottom:16px;
+  box-shadow:0 24px 50px rgba(0,0,0,.3)}
+.panel5 h3{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.28em;text-transform:uppercase;color:#b98a3a;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.panel5 h3 b{color:#e2b862;font-weight:400}
+.rowset{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:6px}
+.chip5{display:flex;align-items:center;gap:7px;border:1px solid rgba(239,231,216,.3);background:none;color:#efe7d8;cursor:pointer;
+  padding:9px 13px;border-radius:99px;font-family:Georgia,serif;font-style:italic;font-size:13px;transition:all .25s;flex:1;text-align:left}
+.chip5:hover{border-color:#e2b862}
+.chip5.on{background:rgba(226,184,98,.18);border-color:#e2b862}
+.chip5 .hdot{width:20px;height:12px;border-radius:99px;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.3)}
+.slrow5{display:flex;justify-content:space-between;font-size:12px;color:rgba(239,231,216,.8);margin-bottom:10px;font-family:ui-monospace,monospace}
+.slrow5 b{color:#e2b862;font-weight:400;font-variant-numeric:tabular-nums}
+.slrow5 input{width:120px;appearance:none;-webkit-appearance:none;height:3px;background:rgba(239,231,216,.25);border-radius:2px;outline:none}
+.slrow5 input::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#e2b862;cursor:pointer;box-shadow:0 0 8px rgba(226,184,98,.6)}
+.btns5{display:flex;gap:8px;flex-wrap:wrap}
+.mbtn{flex:1;border:1px solid rgba(239,231,216,.35);background:none;color:#efe7d8;font-family:Georgia,serif;font-style:italic;
+  font-size:13px;padding:11px 10px;border-radius:9px;cursor:pointer;min-width:80px;transition:all .2s;text-align:center}
+.mbtn:hover{border-color:#e2b862;background:rgba(226,184,98,.12)}
+.mbtn.on{background:#e2b862;color:#2f4a3e;border-color:#e2b862}
+.thumb{width:100%;aspect-ratio:1;border-radius:8px;margin-top:10px;image-rendering:pixelated;cursor:pointer;border:1px solid rgba(239,231,216,.2)}
+.essays5{margin-top:12px}
+.essays5 p{font-size:11.5px;line-height:1.6;color:rgba(239,231,216,.65);margin-bottom:8px;font-family:Georgia,serif;font-style:italic}
+@media(prefers-reduced-motion:reduce){.chip5,.mbtn{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Tension <em>— ten thousand straight lines make a curve</em></h1>
+      <p style="color:#7a7266;font-size:13px;margin-top:4px;font-style:italic">A computational string-art loom · 60 cm board · monofilament of the mind</p>
+    </div>
+    <div class="stats2">
+      THREADS <b id="stThreads">0</b> · NAILS <b id="stNails">120</b> · EST. <b id="stMeters">0.0 m</b>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="boardwrap">
+      <div class="board"><canvas id="wood"></canvas><canvas id="threads"></canvas><canvas id="overlay"></canvas><span class="badge" id="progBadge">0%</span></div>
+      <div class="tooltip6" id="tooltip6"></div>
+    </div>
+
+    <div>
+      <div class="panel5">
+        <h3>Target <b id="targetName">Portrait</b></h3>
+        <div class="rowset" id="targetRow">
+          <button class="chip5 on" data-t="portrait">Portrait</button>
+          <button class="chip5" data-t="orb">Orb</button>
+          <button class="chip5" data-t="rings">Rings</button>
+        </div>
+        <canvas class="thumb" id="thumb"></canvas>
+      </div>
+      <div class="panel5">
+        <h3>Thread &amp; frame</h3>
+        <div class="rowset" id="threadRow">
+          <button class="chip5 on" data-th="black" data-wood="#e9dcbf"><span class="hdot" style="background:#1a1714"></span>Black / birch</button>
+          <button class="chip5" data-th="white" data-wood="#2b2926"><span class="hdot" style="background:#f4efe4"></span>White / charcoal</button>
+          <button class="chip5" data-th="crimson" data-wood="#d9bb8a"><span class="hdot" style="background:#a3122a"></span>Crimson / oak</button>
+          <button class="chip5" data-th="gold" data-wood="#3a281c"><span class="hdot" style="background:#e0b04a"></span>Gold / walnut</button>
+        </div>
+        <div class="slrow5"><span>Nails</span><b id="sNailsV">120</b><input type="range" id="sNails" min="60" max="320" step="4" value="120"></div>
+        <div class="slrow5"><span>Threads target</span><b id="sThrV">1600</b><input type="range" id="sThr" min="400" max="7000" step="100" value="1600"></div>
+        <div class="slrow5"><span>Weave rate / frame</span><b id="sRateV">30</b><input type="range" id="sRate" min="2" max="80" value="30"></div>
+      </div>
+      <div class="panel5">
+        <div class="btns5">
+          <button class="mbtn" id="manualBtn">Manual mode</button>
+          <button class="mbtn" id="pauseBtn">Pause</button>
+          <button class="mbtn" id="clearBtn">Clear</button>
+          <button class="mbtn" id="dlBtn">Download PNG</button>
+        </div>
+        <div class="essays5">
+          <p>The greedy weaver: from the current nail, it tries every other nail, scores each candidate line by the ink it would remove, and pulls the best one — 0.13 of a line's worth of darkening, drawn in a translucent hairline with a shadow beneath.</p>
+          <p>Straight lines read as shade the way rain reads as a sea: enough of them, close enough together, and the eye stops seeing the string and starts seeing the face. That is the whole trick, and the whole craft.</p>
+          <p>To build it physically: a 60 cm birch board, 120 brass nails, and one very long reel of thread. The machine is patient; the maker needs to be too.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var wood=document.getElementById("wood"),wctx=wood.getContext("2d");
+  var thc=document.getElementById("threads"),tctx=thc.getContext("2d");
+  var ovc=document.getElementById("overlay"),octx=ovc.getContext("2d");
+  var thumb=document.getElementById("thumb");
+  var S=0,dpr=1;
+  // state
+  var target="portrait",threadCol="#1a1714",woodCol="#e9dcbf";
+  var nails=120,targetThreads=1600,rate=30;
+  var nailPos=[],drawn=[],currentNail=0,threadCount=0;
+  var paused=false,manual=false,weaving=true;
+  var residual=null,size2=256;
+  // seed PRNG
+  function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+  function rng(){return Math.random()}
+  function resize(){
+    dpr=Math.min(2,devicePixelRatio||1);
+    var w=wood.parentElement.clientWidth;
+    S=w;
+    [wood,thc,ovc].forEach(function(c){c.width=w*dpr;c.height=w*dpr});
+    wctx.setTransform(dpr,0,0,dpr,0,0);
+    tctx.setTransform(dpr,0,0,dpr,0,0);
+    octx.setTransform(dpr,0,0,dpr,0,0);
+    paintWood();
+    computeNails();
+    redrawThreads();
+  }
+  window.addEventListener("resize",function(){resize()});
+  function paintWood(){
+    var rng2=mulberry(77);
+    wctx.fillStyle=woodCol;
+    wctx.fillRect(0,0,S,S);
+    // grain streaks
+    for(var i=0;i<160;i++){
+      var x=rng2()*S,y=rng2()*S;
+      var len=60+rng2()*240;
+      var ang=rng2()*Math.PI;
+      var w2=0.6+rng2()*1.8;
+      wctx.strokeStyle="rgba(90,60,30,"+(0.05+rng2()*0.12)+")";
+      wctx.lineWidth=w2;
+      wctx.beginPath();
+      wctx.moveTo(x,y);
+      wctx.quadraticCurveTo(x+Math.cos(ang)*len*0.4+rng2()*20,y+Math.sin(ang)*len*0.4+rng2()*20,x+Math.cos(ang)*len,y+Math.sin(ang)*len);
+      wctx.stroke();
+    }
+    // knots
+    for(var k=0;k<2;k++){
+      var kx=rng2()*S,ky=rng2()*S;
+      wctx.fillStyle="rgba(70,50,30,.14)";
+      wctx.beginPath();wctx.ellipse(kx,ky,10,8,rng2()*3,0,7);wctx.fill();
+    }
+    // vignette + sheen
+    var vg=wctx.createRadialGradient(S/2,S/2,S*0.3,S/2,S/2,S*0.75);
+    vg.addColorStop(0,"rgba(0,0,0,0)");vg.addColorStop(1,"rgba(50,30,10,.16)");
+    wctx.fillStyle=vg;wctx.fillRect(0,0,S,S);
+    var sg=wctx.createLinearGradient(0,0,S,S);
+    sg.addColorStop(0,"rgba(255,255,255,.08)");sg.addColorStop(.5,"rgba(255,255,255,0)");sg.addColorStop(1,"rgba(0,0,0,.05)");
+    wctx.fillStyle=sg;wctx.fillRect(0,0,S,S);
+  }
+  function computeNails(){
+    var frame;
+    if(target==="circle"||target==="portrait"){
+      frame="circle";
+    }else if(target==="orb"){
+      frame="circle";
+    }else{
+      frame="circle";
+    }
+    // frames: circle, square, heart (resampled by arc length)
+    var pts=[];
+    if(frame==="circle"){
+      var R=S*0.46;
+      for(var i=0;i<nails;i++){
+        var a=i/nails*Math.PI*2 - Math.PI/2;
+        pts.push([S/2+Math.cos(a)*R,S/2+Math.sin(a)*R]);
+      }
+    }else if(frame==="square"){
+      var hw=S*0.44;
+      var per=4*hw*2;
+      var a=0,b=null;
+      // not used currently (frame fixed to circle for simplicity of the greedy algorithm)
+      for(var i2=0;i2<nails;i2++){pts.push([0,0])}
+    }
+    nailPos=pts;
+    document.getElementById("stNails").textContent=nails;
+    drawn=[];
+    threadCount=0;
+    currentNail=0;
+    tctx.clearRect(0,0,S,S);
+    redrawNails();
+  }
+  function redrawNails(){
+    octx.clearRect(0,0,S,S);
+    octx.fillStyle="#b8b0a0";
+    nailPos.forEach(function(p,i){
+      var r=S*0.0065;
+      octx.fillStyle="#d8d0c0";
+      octx.beginPath();octx.arc(p[0],p[1],r,0,7);octx.fill();
+      octx.fillStyle="#8a8270";
+      octx.beginPath();octx.arc(p[0],p[1],r*0.55,0,7);octx.fill();
+    });
+  }
+  function redrawThreads(){
+    tctx.clearRect(0,0,S,S);
+    tctx.lineCap="round";
+    for(var i=0;i<drawn.length;i++){
+      var a=nailPos[drawn[i].a],b=nailPos[drawn[i].b];
+      // shadow line
+      tctx.strokeStyle="rgba(20,10,5,.18)";
+      tctx.lineWidth=Math.max(0.4,drawn[i].w*0.9);
+      tctx.beginPath();tctx.moveTo(a[0]+1,a[1]+1);tctx.lineTo(b[0]+1,b[1]+1);tctx.stroke();
+      tctx.strokeStyle=threadCol;
+      tctx.globalAlpha=0.42;
+      tctx.lineWidth=drawn[i].w;
+      tctx.beginPath();tctx.moveTo(a[0],a[1]);tctx.lineTo(b[0],b[1]);tctx.stroke();
+      tctx.globalAlpha=1;
+    }
+    document.getElementById("stThreads").textContent=drawn.length;
+    var totalLen=0;
+    drawn.forEach(function(d){totalLen+=Math.hypot(nailPos[d.a][0]-nailPos[d.b][0],nailPos[d.a][1]-nailPos[d.b][1])});
+    // 60cm board, canvas side ~ S px ~ some scale; approximate meters
+    var meters=totalLen/S*0.6*(drawn.length/3);
+    document.getElementById("stMeters").textContent=(meters/33.3).toFixed(1);
+    document.getElementById("progBadge").textContent=Math.round(drawn.length/targetThreads*100)+"%";
+  }
+  // ---------- target map ----------
+  function buildTarget(){
+    var cv2=document.createElement("canvas");cv2.width=size2;cv2.height=size2;
+    var c=cv2.getContext("2d");
+    c.fillStyle="#000";c.fillRect(0,0,size2,size2);
+    if(target==="portrait"){
+      // dark hair cap
+      c.fillStyle="#ffffff";
+      c.beginPath();c.ellipse(size2*0.5,size2*0.42,size2*0.4,size2*0.42,0,Math.PI,0);c.fill();
+      c.fillRect(size2*0.1,size2*0.42,size2*0.16,size2*0.4);
+      c.fillRect(size2*0.74,size2*0.42,size2*0.16,size2*0.4);
+      // face
+      c.fillStyle="#5a5a5a";
+      c.beginPath();c.ellipse(size2*0.5,size2*0.52,size2*0.26,size2*0.3,0,0,Math.PI*2);c.fill();
+      var g=c.createRadialGradient(size2*0.42,size2*0.44,4,size2*0.5,size2*0.52,size2*0.3);
+      g.addColorStop(0,"#999");g.addColorStop(.7,"#666");g.addColorStop(1,"#444");
+      c.fillStyle=g;c.beginPath();c.ellipse(size2*0.5,size2*0.52,size2*0.24,size2*0.28,0,0,7);c.fill();
+      // eyes
+      c.fillStyle="#000";
+      c.beginPath();c.ellipse(size2*0.41,size2*0.48,size2*0.025,size2*0.034,0,0,7);c.fill();
+      c.beginPath();c.ellipse(size2*0.59,size2*0.48,size2*0.025,size2*0.034,0,0,7);c.fill();
+      // brows
+      c.strokeStyle="#000";c.lineWidth=3;c.lineCap="round";
+      c.beginPath();c.moveTo(size2*0.36,size2*0.44);c.quadraticCurveTo(size2*0.41,size2*0.42,size2*0.46,size2*0.44);c.stroke();
+      c.beginPath();c.moveTo(size2*0.54,size2*0.44);c.quadraticCurveTo(size2*0.59,size2*0.42,size2*0.64,size2*0.44);c.stroke();
+      // nose line + lips
+      c.strokeStyle="#000";c.lineWidth=2;
+      c.beginPath();c.moveTo(size2*0.47,size2*0.52);c.lineTo(size2*0.45,size2*0.57);c.quadraticCurveTo(size2*0.5,size2*0.585,size2*0.54,size2*0.57);c.stroke();
+      c.fillStyle="#2a222a";
+      c.beginPath();c.moveTo(size2*0.42,size2*0.61);c.quadraticCurveTo(size2*0.5,size2*0.63,size2*0.58,size2*0.61);
+      c.quadraticCurveTo(size2*0.5,size2*0.655,size2*0.42,size2*0.61);c.fill();
+      // neck+shoulders
+      c.fillStyle="#555";
+      c.fillRect(size2*0.44,size2*0.7,size2*0.12,size2*0.14);
+      c.fillStyle="#333";
+      c.beginPath();c.ellipse(size2*0.5,size2*1.05,size2*0.55,size2*0.3,0,Math.PI,0);c.fill();
+    }else if(target==="orb"){
+      var g2=c.createRadialGradient(size2*0.5,size2*0.45,2,size2*0.5,size2*0.45,size2*0.34);
+      g2.addColorStop(0,"#fff");g2.addColorStop(.4,"#aaa");g2.addColorStop(1,"#222");
+      c.fillStyle=g2;
+      c.beginPath();c.ellipse(size2*0.5,size2*0.45,size2*0.34,size2*0.32,0,0,7);c.fill();
+      c.fillStyle="#555";
+      c.beginPath();c.ellipse(size2*0.5,size2*0.82,size2*0.28,size2*0.05,0,0,7);c.fill();
+    }else{
+      // rings
+      for(var r=0;r<7;r++){
+        var rr=size2*(0.1+r*0.07);
+        c.fillStyle=r%2===0?"#ddd":"#222";
+        c.beginPath();c.arc(size2*0.5,size2*0.5,rr+ (r%2===0?3:0),0,7);
+        c.arc(size2*0.5,size2*0.5,rr-3,0,7,true);
+        c.fill();
+      }
+      // diagonal fade
+      var g3=c.createLinearGradient(0,0,size2,size2);
+      g3.addColorStop(0,"rgba(255,255,255,.7)");g3.addColorStop(1,"rgba(255,255,255,0)");
+      c.fillStyle=g3;c.fillRect(0,0,size2,size2);
+    }
+    // thumbnail
+    thumb.width=140;thumb.height=140;
+    var tc=thumb.getContext("2d");
+    tc.drawImage(cv2,0,0,140,140);
+    // residual map (inverted if thread lighter)
+    var img=c.getImageData(0,0,size2,size2);
+    residual=new Float32Array(size2*size2);
+    var lightThread=parseInt(threadCol.slice(1),16)>0x666666;
+    for(var i=0;i<size2*size2;i++){
+      var v=(img.data[i*4]+img.data[i*4+1]+img.data[i*4+2])/3/255;
+      residual[i]=lightThread?1-v:v;
+    }
+  }
+  // ---------- greedy weave ----------
+  function lineMeans(a,b){
+    // sample mean residual along line
+    var ax=nailPos[a],bx=nailPos[b];
+    var dx=bx[0]-ax[0],dy=bx[1]-ax[1];
+    var len=Math.hypot(dx,dy)||1;
+    // project nail coords into residual space
+    var x0=ax[0]/S*size2,y0=ax[1]/S*size2;
+    var dxr=dx/S*size2,dyr=dy/S*size2;
+    var samples=Math.min(40,Math.max(4,Math.floor(len/S*100)));
+    var sum=0;
+    for(var i=1;i<=samples;i++){
+      var t2=i/samples;
+      var x=Math.floor(x0+dxr*t2), y=Math.floor(y0+dyr*t2);
+      if(x<0||x>=size2||y<0||y>=size2)continue;
+      sum+=residual[y*size2+x];
+    }
+    return sum/Math.max(1,samples);
+  }
+  function subtractLine(a,b){
+    var ax=nailPos[a],bx=nailPos[b];
+    var dx=bx[0]-ax[0],dy=bx[1]-ax[1];
+    var len=Math.hypot(dx,dy)||1;
+    var x0=ax[0]/S*size2,y0=ax[1]/S*size2;
+    var dxr=dx/S*size2,dyr=dy/S*size2;
+    var samples=Math.min(40,Math.max(4,Math.floor(len/S*100)));
+    for(var i=1;i<=samples;i++){
+      var t2=i/samples;
+      var x=Math.floor(x0+dxr*t2), y=Math.floor(y0+dyr*t2);
+      if(x<0||x>=size2||y<0||y>=size2)continue;
+      residual[y*size2+x]=Math.max(0,residual[y*size2+x]-0.13*Math.cos((t2-0.5)*Math.PI*0.9));
+    }
+  }
+  function weaveStep(){
+    if(drawn.length>=targetThreads)return;
+    var best=null,bestScore=-1;
+    var gap=nails<14?1:Math.max(1,Math.floor(nails*0.06));
+    for(var i=0;i<nails;i+=1){
+      var targetN=(currentNail+i)%nails;
+      var d=Math.abs(targetN-currentNail);
+      d=Math.min(d,nails-d);
+      if(d<gap||d>nails-gap)continue;
+      var isDrawn=drawn.some(function(dr){return (dr.a===currentNail&&dr.b===targetN)||(dr.a===targetN&&dr.b===currentNail)});
+      if(isDrawn)continue;
+      var score=lineMeans(currentNail,targetN);
+      if(score>bestScore){
+        bestScore=score;best=targetN;
+      }
+    }
+    if(best!==null){
+      drawn.push({a:currentNail,b:best,w:Math.max(0.4,threadCol==="#f4efe4"?0.5:0.7)});
+      subtractLine(currentNail,best);
+      currentNail=best;
+      threadCount++;
+      if(threadCount%4===0)redrawThreads();
+    }else{
+      // weave finished
+      weaving=false;
+    }
+  }
+  // loop
+  var last=performance.now(),acc=0;
+  function loop(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    if(!paused&&weaving&&!manual){
+      acc+=dt*60;
+      var n=Math.floor(acc);
+      acc-=n;
+      var todo=Math.min(n,rate,RM?rate*0.5:rate);
+      for(var i=0;i<todo;i++)weaveStep();
+      if(weaving)redrawThreads();
+      // draw overlay preview
+      octx.clearRect(0,0,S,S);
+      redrawNails();
+      var hover=document.getElementById("tooltip6");
+      if(hover.dataset.n){
+        var idx=+hover.dataset.n;
+        var p=nailPos[idx];
+        octx.strokeStyle="#e2b862";octx.lineWidth=1.5;
+        octx.beginPath();octx.arc(p[0],p[1],S*0.012,0,7);octx.stroke();
+      }
+    }else if(manual){
+      octx.clearRect(0,0,S,S);
+      redrawNails();
+    }
+    requestAnimationFrame(loop);
+  }
+  // pointer on board
+  function nearestNail(x,y){
+    var idx=-1,bd=1e9;
+    nailPos.forEach(function(p,i){
+      var d=Math.hypot(p[0]-x,p[1]-y);
+      if(d<bd){bd=d;idx=i}
+    });
+    return bd<S*0.03?idx:-1;
+  }
+  var boardEl=document.querySelector(".board");
+  var manualStart=null;
+  boardEl.addEventListener("pointermove",function(e){
+    var r=boardEl.getBoundingClientRect();
+    var x=(e.clientX-r.left),y=(e.clientY-r.top);
+    var idx=nearestNail(x,y);
+    var tt=document.getElementById("tooltip6");
+    if(idx>=0){
+      tt.style.opacity=1;
+      tt.style.left=(e.clientX+16)+"px";tt.style.top=(e.clientY+16)+"px";
+      tt.textContent="nail "+(("000"+idx).slice(-3))+" · "+Math.round(idx/nails*360)+"°";
+      tt.dataset.n=idx;
+    }else{
+      tt.style.opacity=0;
+      tt.dataset.n=null;
+    }
+    if(manual&&idx>=0){
+      manualHoverNail=idx;
+      octx.clearRect(0,0,S,S);
+      redrawNails();
+      if(manualStart!==null&&manualStart!==idx){
+        var a=nailPos[manualStart],b=nailPos[idx];
+        octx.setLineDash([5,4]);
+        octx.strokeStyle="#e2b862";octx.lineWidth=1.4;
+        octx.beginPath();octx.moveTo(a[0],a[1]);octx.lineTo(b[0],b[1]);octx.stroke();
+        octx.setLineDash([]);
+      }
+      if(manualHoverNail>=0){
+        var p=nailPos[manualHoverNail];
+        octx.strokeStyle="#fff";octx.lineWidth=1.6;
+        octx.beginPath();octx.arc(p[0],p[1],S*0.012,0,7);octx.stroke();
+      }
+    }
+  });
+  var manualHoverNail=-1;
+  boardEl.addEventListener("pointerdown",function(e){
+    var r=boardEl.getBoundingClientRect();
+    var x=e.clientX-r.left,y=e.clientY-r.top;
+    var idx=nearestNail(x,y);
+    if(manual&&idx>=0){
+      weaving=false;
+      if(manualStart===null){
+        manualStart=idx;
+      }else if(idx!==manualStart){
+        drawn.push({a:manualStart,b:idx,w:0.7});
+        redrawThreads();
+        manualStart=idx;
+      }
+      e.preventDefault();
+    }else if(!manual){
+      manualStart=null;
+    }
+  });
+  // controls
+  document.querySelectorAll("#targetRow .chip5").forEach(function(b){
+    b.addEventListener("click",function(){
+      document.querySelectorAll("#targetRow .chip5").forEach(function(x){x.classList.remove("on")});
+      b.classList.add("on");
+      target=b.dataset.t;
+      document.getElementById("targetName").textContent={portrait:"Portrait",orb:"Orb",rings:"Rings"}[target];
+      buildTarget();
+      resetWeave();
+    });
+  });
+  document.querySelectorAll("#threadRow .chip5").forEach(function(b){
+    b.addEventListener("click",function(){
+      document.querySelectorAll("#threadRow .chip5").forEach(function(x){x.classList.remove("on")});
+      b.classList.add("on");
+      threadCol=b.dataset.th;
+      woodCol=b.dataset.wood;
+      paintWood();
+      buildTarget();
+      resetWeave();
+    });
+  });
+  document.getElementById("sNails").addEventListener("input",function(){
+    nails=+this.value;
+    document.getElementById("sNailsV").textContent=nails;
+    computeNails();
+    resetWeave();
+  });
+  document.getElementById("sThr").addEventListener("input",function(){
+    targetThreads=+this.value;
+    document.getElementById("sThrV").textContent=targetThreads;
+    resetWeave();
+  });
+  document.getElementById("sRate").addEventListener("input",function(){
+    rate=+this.value;document.getElementById("sRateV").textContent=rate;
+  });
+  function resetWeave(){
+    drawn=[];threadCount=0;currentNail=0;weaving=true;manualStart=null;
+    if(manual){manual=false;document.getElementById("manualBtn").classList.remove("on")}
+    tctx.clearRect(0,0,S,S);
+    buildTarget();
+    redrawThreads();
+  }
+  document.getElementById("manualBtn").addEventListener("click",function(){
+    manual=!manual;
+    this.classList.toggle("on",manual);
+    weaving=false;
+    manualStart=null;
+    this.textContent=manual?"Auto weave":"Manual mode";
+  });
+  document.getElementById("pauseBtn").addEventListener("click",function(){
+    paused=!paused;
+    this.classList.toggle("on",paused);
+    this.textContent=paused?"Resume":"Pause";
+  });
+  document.getElementById("clearBtn").addEventListener("click",resetWeave);
+  document.getElementById("dlBtn").addEventListener("click",function(){
+    var out=document.createElement("canvas");
+    out.width=S*dpr;out.height=S*dpr;
+    var c=out.getContext("2d");
+    c.drawImage(wood,0,0);
+    c.drawImage(thc,0,0);
+    c.drawImage(ovc,0,0);
+    var a=document.createElement("a");
+    a.download="tension-"+target+"-"+nails+".png";
+    a.href=out.toDataURL();
+    a.click();
+  });
+  window.addEventListener("keydown",function(e){
+    if(e.code==="Space"){e.preventDefault();document.getElementById("pauseBtn").click()}
+    if(e.key==="Escape"){manualStart=null;if(manual){document.getElementById("manualBtn").click()}}
+  });
+  resize();
+  buildTarget();
+  resetWeave();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
