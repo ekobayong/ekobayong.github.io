@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stillwater — a focus timer</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--h:200}
+body{
+  background:radial-gradient(80% 70% at 50% 30%,hsl(calc(var(--h) + 40) 28% 16%),hsl(var(--h) 30% 10%));
+  color:hsl(var(--h) 30% 94%);min-height:100vh;overflow-x:hidden;font-family:system-ui,sans-serif;
+  transition:background 3s linear;
+}
+.stars3{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+  background-image:radial-gradient(1.5px 1.5px at 12% 20%,hsl(var(--h) 30% 90%) 40%,transparent 60%),
+  radial-gradient(1px 1px at 28% 12%,hsl(var(--h) 30% 88%) 40%,transparent 60%),
+  radial-gradient(2px 2px at 46% 28%,hsl(var(--h) 30% 92%) 40%,transparent 60%),
+  radial-gradient(1px 1px at 64% 16%,hsl(var(--h) 30% 86%) 40%,transparent 60%),
+  radial-gradient(1px 1px at 82% 24%,hsl(var(--h) 30% 90%) 40%,transparent 60%),
+  radial-gradient(1.5px 1.5px at 92% 10%,hsl(var(--h) 30% 85%) 40%,transparent 60%)}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 26px 60px;display:grid;grid-template-columns:1fr 360px;gap:60px;align-items:start;position:relative;z-index:2}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+/* timer side */
+.timerzone{display:flex;flex-direction:column;align-items:center;padding-top:20px}
+.modebadge{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:hsl(var(--h) 30% 65%);margin-bottom:24px}
+.ringwrap{position:relative;width:min(78vw,440px);aspect-ratio:1;cursor:pointer}
+.ringwrap svg.tring{width:100%;height:100%}
+.tring .track{fill:none;stroke:hsl(var(--h) 30% 76% / .14);stroke-width:7}
+.tring .progress{fill:none;stroke:url(#grad2);stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset .9s linear;filter:drop-shadow(0 0 8px hsl(var(--h) 70% 70% / .8))}
+.tring .ticks{stroke:hsl(var(--h) 30% 70% / .2)}
+.gleam{position:absolute;left:50%;top:50%;font-size:15px;color:hsl(var(--h) 30% 95%);animation:gleamgo 14s linear infinite;transform-origin:0 0}
+@keyframes gleamgo{to{transform:rotate(360deg)}}
+.timertext{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.timertext .mode{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.32em;text-transform:uppercase;color:hsl(var(--h) 30% 70%)}
+.timertext .bigtime{font-size:clamp(64px,16vw,124px);font-weight:200;font-variant-numeric:tabular-nums;letter-spacing:.01em;line-height:1}
+.timertext .edithint{font-size:10px;letter-spacing:.16em;color:hsl(var(--h) 30% 55%);margin-top:7px}
+.dots4{display:flex;gap:10px;margin-top:26px}
+.dots4 i{width:10px;height:10px;border-radius:50%;background:hsl(var(--h) 30% 20%);transition:all .3s}
+.dots4 i.done{background:hsl(calc(var(--h) + 30) 80% 70% / .9);box-shadow:0 0 10px hsl(calc(var(--h) + 30) 80% 70% / .8)}
+.dots4 i.cur{transform:scale(1.5);background:hsl(var(--h) 30% 80%)}
+.tbtn4{display:flex;align-items:center;gap:22px;margin-top:30px}
+.circlebtn{width:56px;height:56px;border-radius:50%;border:1px solid hsl(var(--h) 30% 50% / .4);background:transparent;
+  color:hsl(var(--h) 30% 92%);cursor:pointer;display:grid;place-items:center;transition:all .3s;font-size:18px}
+.circlebtn:hover{transform:scale(1.1);border-color:hsl(var(--h) 30% 85%)}
+.circlebtn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mainbtn{width:88px;height:88px;border-radius:50%;border:none;cursor:pointer;display:grid;place-items:center;position:relative;
+  background:linear-gradient(145deg,hsl(calc(var(--h) + 20) 60% 45%),hsl(calc(var(--h) - 10) 60% 35%));
+  color:hsl(var(--h) 30% 95%);transition:transform .3s cubic-bezier(.34,1.56,.64,1),filter .3s;
+  box-shadow:0 14px 34px hsl(var(--h) 60% 30% / .4)}
+.mainbtn:hover{transform:scale(1.07);filter:brightness(1.05)}
+.mainbtn svg{width:34px;height:34px;fill:currentColor}
+.kbds{display:flex;gap:16px;margin-top:24px;font-family:ui-monospace,monospace;font-size:10px;color:hsl(var(--h) 30% 55%);letter-spacing:.1em}
+kbd{background:hsl(var(--h) 30% 12%);border:1px solid hsl(var(--h) 30% 45% / .4);border-bottom-width:3px;border-radius:5px;padding:3px 8px;font-size:10px}
+/* bloom */
+.bloom{position:fixed;left:50%;top:50%;width:14px;height:14px;border-radius:50%;background:radial-gradient(closest-side,hsl(calc(var(--h)+30) 80% 78%),transparent 70%);
+  transform:translate(-50%,-50%) scale(.2);opacity:0;pointer-events:none;z-index:30;transition:none}
+.bloom.go{animation:bloomgo 3.2s ease-out forwards}
+@keyframes bloomgo{0%{transform:translate(-50%,-50%) scale(.2);opacity:.95}100%{transform:translate(-50%,-50%) scale(9);opacity:0}}
+/* halo in break */
+body.break .ringwrap::before{content:"";position:absolute;inset:0;border-radius:50%;
+  animation:halo 7s ease-in-out infinite;border:1px solid hsl(calc(var(--h) + 40) 80% 70% / .15);pointer-events:none}
+@keyframes halo{0%,100%{transform:scale(.92);opacity:.5}50%{transform:scale(1.08);opacity:1}}
+/* task side */
+.tasks{background:hsl(var(--h) 30% 94% / .05);border:1px solid hsl(var(--h) 30% 90% / .12);border-radius:20px;padding:26px;backdrop-filter:blur(10px)}
+.tasks h2{font-family:Georgia,'Iowan Old Style',serif;font-style:italic;font-weight:400;font-size:22px;margin-bottom:18px}
+.addrow{display:flex;gap:10px;margin-bottom:20px}
+.addrow input{flex:1;background:transparent;border:none;border-bottom:1px solid hsl(var(--h) 30% 70% / .35);color:hsl(var(--h) 30% 94%);
+  font-family:inherit;font-size:15px;padding:10px 4px;outline:none}
+.addrow input::placeholder{color:hsl(var(--h) 30% 60% / .6)}
+.addrow button{border:none;background:hsl(var(--h) 30% 94% / .1);color:hsl(var(--h) 30% 94%);width:44px;border-radius:50%;
+  font-size:20px;cursor:pointer;transition:all .3s}
+.addrow button:hover{background:hsl(var(--h) 60% 60%);color:hsl(var(--h) 30% 12%)}
+.tasklist{list-style:none;display:flex;flex-direction:column;gap:6px}
+.tasklist li{display:flex;align-items:center;gap:14px;padding:14px 12px;border-radius:12px;transition:background .3s;position:relative}
+.tasklist li:hover{background:hsl(var(--h) 30% 94% / .06)}
+.tasklist li.done .tlbl{color:hsl(var(--h) 30% 60%);text-decoration:none}
+.tasklist .tchk{width:22px;height:22px;border-radius:50%;border:1.5px solid hsl(var(--h) 30% 70% / .5);background:none;cursor:pointer;
+  display:grid;place-items:center;flex:none;transition:all .3s;padding:0}
+.tasklist .tchk::after{content:"";width:9px;height:9px;border-radius:50%;background:hsl(calc(var(--h)+30) 80% 72%);transform:scale(0);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.tasklist li.done .tchk{background:hsl(calc(var(--h)+30) 80% 20%);border-color:transparent}
+.tasklist li.done .tchk::after{transform:scale(1)}
+.tasklist .tlbl{flex:1;font-size:14.5px;position:relative}
+.tasklist li.done .tlbl::after{content:"";position:absolute;left:0;top:50%;height:1.5px;width:100%;background:hsl(calc(var(--h)+30) 80% 70%);
+  transform-origin:left;animation:strk .4s ease forwards;transform:scaleX(0)}
+@keyframes strk{to{transform:scaleX(1)}}
+.tasklist .tdel{background:none;border:none;color:hsl(var(--h) 30% 60%);cursor:pointer;font-size:15px;opacity:0;transition:opacity .3s}
+.tasklist li:hover .tdel{opacity:1}
+.stats3{display:flex;justify-content:space-between;margin-top:22px;padding-top:16px;border-top:1px solid hsl(var(--h) 30% 90% / .12);
+  font-family:ui-monospace,monospace;font-size:11px;color:hsl(var(--h) 30% 65%)}
+.stats3 b{color:hsl(var(--h) 30% 94%);font-weight:400}
+footer{position:relative;z-index:2;text-align:center;padding:0 20px 30px;font-family:ui-monospace,monospace;font-size:9.5px;
+  letter-spacing:.2em;color:hsl(var(--h) 30% 55%);text-transform:uppercase}
+@media(prefers-reduced-motion:reduce){
+  .gleam,.dots4 i,.halo,.bloom.go{animation:none}
+  .tring .progress{transition:none}
+  body{transition:none}
+}
+</style>
+</head>
+<body>
+<canvas id="bloom" class="bloom"></canvas>
+<div class="stars3" id="stars3"></div>
+
+<div class="wrap">
+  <div class="timerzone">
+    <div class="modebadge" id="modeBadge">FOCUS</div>
+    <div class="ringwrap" id="ringwrap" title="click the numerals to edit">
+      <svg class="tring" viewBox="0 0 220 220">
+        <defs><linearGradient id="grad2" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="hsl(calc(var(--h) - 20) 80% 72%)"/><stop offset="1" stop-color="hsl(calc(var(--h) + 60) 80% 70%)"/></linearGradient></defs>
+        <circle class="track" cx="110" cy="110" r="88"/>
+        <g id="ticksG">
+          <g class="ticks"></g>
+        </g>
+        <circle class="progress" id="ringArc" cx="110" cy="110" r="88" stroke-dasharray="552.9" stroke-dashoffset="0"/>
+        <circle class="gleam" id="gleam" cx="198" cy="110" r="2.6" fill="hsl(calc(var(--h) + 30) 80% 88%)"/>
+      </svg>
+      <div class="timertext">
+        <div class="mode" id="timerMode">Focus</div>
+        <div class="bigtime" id="bigTime">25:00</div>
+        <div class="edithint">click the numerals to edit</div>
+      </div>
+    </div>
+    <div class="dots4" id="sessDots"></div>
+    <div class="tbtn4">
+      <button class="circlebtn" id="resetBtn" title="Reset"><svg viewBox="0 0 24 24"><path d="M4 4v6h6M4 10a8 8 0 1 0 2-5"/></svg></button>
+      <button class="mainbtn" id="mainBtn" aria-label="Start"><svg id="mainIc" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21"/></svg></button>
+      <button class="circlebtn" id="skipBtn" title="Skip"><svg viewBox="0 0 24 24"><path d="M5 4l10 8-10 8zM19 5v14"/></svg></button>
+    </div>
+    <div class="kbds">
+      <kbd>space</kbd> start/pause · <kbd>r</kbd> reset · <kbd>n</kbd> skip · <kbd>1 2 3</kbd> modes
+    </div>
+  </div>
+
+  <aside class="tasks">
+    <h2>What deserves your <em>attention?</em></h2>
+    <div class="addrow">
+      <input id="taskIn" type="text" placeholder="write one thing, not ten…" maxlength="90">
+      <button id="addTask">+</button>
+    </div>
+    <ul class="tasklist" id="taskList"></ul>
+    <div class="stats3">
+      <span>done <b id="doneC">0</b> / <b id="totalC">3</b></span>
+      <span>focus today <b id="focusM">0</b> min</span>
+    </div>
+  </aside>
+</div>
+
+<footer>stillwater · a spa for the schedule</footer>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var root=document.documentElement;
+  var modes={focus:{name:"Focus",h:200,min:25},short:{name:"Short break",h:150,min:5},long:{name:"Long break",h:270,min:15}};
+  var mode="focus",state="idle",timeLeft=modes.focus.min*60,totalTime=timeLeft,interval=null;
+  var sessionsDone=0,focusMinutes=0;
+  var hue=200,hueTarget=200,drift=0;
+  // ---------- hue drift ----------
+  function updateHueTarget(){
+    var base=modes[mode].h;
+    // drift +50 over session
+    hueTarget=base+(drift*50)%360;
+  }
+  function start(){
+    if(state==="idle"){
+      state="running";
+      clearInterval(interval);
+      interval=setInterval(tick,1000);
+    }else if(state==="running"){
+      state="paused";clearInterval(interval);
+    }else{
+      state="running";
+      interval=setInterval(tick,1000);
+    }
+    updateMainBtn();
+  }
+  function tick(){
+    if(timeLeft<=1){
+      timeLeft=0;
+      completeSession();
+      return;
+    }
+    timeLeft--;
+    renderTime();
+  }
+  function completeSession(){
+    clearInterval(interval);
+    state="idle";
+    // bloom
+    var b=document.querySelector(".bloom");
+    b.classList.remove("go");void b.offsetWidth;b.classList.add("go");
+    toast("Session complete. Time to rest.");
+    if(mode==="focus"){
+      focusMinutes+=modes.focus.min;
+      sessionsDone++;
+      document.getElementById("focusM").textContent=focusMinutes;
+      mode=sessionsDone%4===0?"long":"short";
+    }else{
+      mode="focus";
+    }
+    var m=modes[mode];
+    timeLeft=m.min*60;totalTime=timeLeft;
+    document.body.classList.toggle("break",mode!=="focus");
+    setModeVisual(mode);
+    renderTime();
+    updateMainBtn();
+    updateDots();
+  }
+  function skip(){
+    completeSession();
+  }
+  function reset(){
+    clearInterval(interval);
+    state="idle";
+    timeLeft=totalTime;
+    renderTime();
+    updateMainBtn();
+  }
+  function setModeVisual(md){
+    var m=modes[md];
+    document.getElementById("modeBadge").textContent=md==="focus"?"FOCUS":"BREAK · "+m.name.toUpperCase();
+    document.getElementById("timerMode").textContent=m.name;
+    document.body.classList.toggle("break",md!=="focus");
+  }
+  function renderTime(){
+    var mm=Math.floor(timeLeft/60),ss=timeLeft%60;
+    document.getElementById("bigTime").textContent=
+      String(Math.max(0,mm)).padStart(2,"0")+":"+String(Math.max(0,ss)).padStart(2,"0");
+    var frac=timeLeft/totalTime;
+    var arc=document.getElementById("ringArc");
+    arc.setAttribute("stroke-dashoffset",552.9*(1-frac));
+    document.title=(mm+":"+String(ss).padStart(2,"0"))+" · stillwater";
+    // hue drift per second
+    if(state==="running"){
+      drift=(drift+ (50/(modes[mode].min*60)) )%1;
+      updateHueTarget();
+    }
+    hue+=(hueTarget-hue)*0.03;
+    if(Math.abs(hue-hueTarget)<0.5)hue=hueTarget;
+    document.documentElement.style.setProperty("--h",Math.round(hue));
+    document.body.style.setProperty("--h",Math.round(hue));
+  }
+  function updateMainBtn(){
+    document.getElementById("mainIc").innerHTML=state==="running"?'<rect x="6" y="4" width="5" height="16" rx="1"/><rect x="13" y="4" width="5" height="16" rx="1"/>':'<polygon points="6 3 20 12 6 21"/>';
+  }
+  function updateDots(){
+    var dots=document.getElementById("sessDots");
+    dots.innerHTML="";
+    var total=4;
+    for(var i=0;i<total;i++){
+      var d=document.createElement("i");
+      if(i<sessionsDone%4)d.classList.add("done");
+      if(i===sessionsDone%4&&state!=="idle")d.classList.add("cur");
+      dots.appendChild(d);
+    }
+  }
+  // edit via prompt
+  document.getElementById("ringwrap").addEventListener("click",function(e){
+    var v=prompt("Set "+modes[mode].name+" length in minutes (1–120)",modes[mode].min);
+    var n=parseInt(v,10);
+    if(!isNaN(n)){
+      n=Math.max(1,Math.min(120,n));
+      modes[mode].min=n;
+      if(state==="idle"){timeLeft=n*60;totalTime=timeLeft;renderTime()}
+    }
+  });
+  // tasks
+  var tasks=[{t:"Draft the first paragraph",done:false},{t:"Water the jade on the sill",done:false},{t:"Read for twenty minutes, guilt-free",done:false}];
+  var taskList=document.getElementById("taskList");
+  function renderTasks(){
+    taskList.innerHTML="";
+    tasks.forEach(function(ts,i){
+      var li=document.createElement("li");
+      li.className=ts.done?"done":"";
+      li.innerHTML='<button class="tchk" aria-label="toggle"></button><span class="tlbl">'+ts.t+'</span><button class="tdel" aria-label="remove">✕</button>';
+      li.querySelector(".tchk").addEventListener("click",function(){
+        ts.done=!ts.done;
+        renderTasks();
+      });
+      li.querySelector(".tdel").addEventListener("click",function(){
+        tasks.splice(i,1);
+        renderTasks();
+      });
+      taskList.appendChild(li);
+    });
+    document.getElementById("doneC").textContent=tasks.filter(function(x){return x.done}).length;
+    document.getElementById("totalC").textContent=tasks.length;
+  }
+  document.getElementById("addTask").addEventListener("click",addTask2);
+  document.getElementById("taskIn").addEventListener("keydown",function(e){
+    if(e.key==="Enter")addTask2();
+  });
+  function addTask2(){
+    var v=document.getElementById("taskIn").value.trim();
+    if(!v)return;
+    tasks.push({t:v,done:false});
+    document.getElementById("taskIn").value="";
+    renderTasks();
+  }
+  // buttons
+  document.getElementById("mainBtn").addEventListener("click",function(){ensureAudio();start()});
+  document.getElementById("resetBtn").addEventListener("click",reset);
+  document.getElementById("skipBtn").addEventListener("click",skip);
+  window.addEventListener("keydown",function(e){
+    if(e.code==="Space"){e.preventDefault();start()}
+    if(e.key==="r"||e.key==="R")reset();
+    if(e.key==="n"||e.key==="N")skip();
+    if(e.key==="1"){mode="focus";timeLeft=modes.focus.min*60;totalTime=timeLeft;state="idle";setModeVisual("focus");renderTime();updateMainBtn()}
+    if(e.key==="2"){mode="short";timeLeft=modes.short.min*60;totalTime=timeLeft;state="idle";setModeVisual("short");renderTime();updateMainBtn()}
+    if(e.key==="3"){mode="long";timeLeft=modes.long.min*60;totalTime=timeLeft;state="idle";setModeVisual("long");renderTime();updateMainBtn()}
+  });
+  // audio chime
+  var AC=null;
+  function ensureAudio(){}
+  function chime(){
+    try{
+      if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();
+      var t=AC.currentTime;
+      [523.25,659.25,783.99,1046.5].forEach(function(f,i){
+        var o=AC.createOscillator(),g=AC.createGain();
+        o.type="sine";o.frequency.value=f;
+        g.gain.setValueAtTime(0,t+i*0.18);
+        g.gain.linearRampToValueAtTime(0.1,t+i*0.18+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001,t+i*0.18+1.2);
+        o.connect(g);g.connect(AC.destination);
+        o.start(t+i*0.18);o.stop(t+i*0.18+1.3);
+      });
+    }catch(e){}
+  }
+  function toast(msg){
+    var t=document.createElement("div");
+    t.textContent=msg;
+    t.style.cssText="position:fixed;bottom:74px;left:50%;transform:translateX(-50%);background:hsl(var(--h) 30% 94% / .12);border:1px solid hsl(var(--h) 30% 90% / .2);backdrop-filter:blur(10px);padding:12px 24px;border-radius:99px;font-size:13px;z-index:40;opacity:0;transition:opacity .5s;pointer-events:none";
+    document.body.appendChild(t);
+    requestAnimationFrame(function(){t.style.opacity=1});
+    setTimeout(function(){t.style.opacity=0;setTimeout(function(){t.remove()},500)},2400);
+  }
+  // build ticks
+  (function(){
+    var ticksG=document.querySelector("#ticksG");
+    var frag="";
+    for(var i=0;i<60;i++){
+      var a=(i/60)*Math.PI*2;
+      var r1=i%5===0?102:106,r2=i%5===0?108:108;
+      var x1=110+Math.cos(a)*r1,y1=110+Math.sin(a)*r1;
+      var x2=110+Math.cos(a)*r2,y2=110+Math.sin(a)*r2;
+      frag+='<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" class="ticks"/>';
+    }
+    var g=document.createElementNS("http://www.w3.org/2000/svg","g");
+    g.innerHTML=frag;
+    ticksG.innerHTML="";
+    ticksG.appendChild(g);
+  })();
+  renderTime();
+  renderTasks();
+  updateDots();
+  updateHueTarget();
+  document.documentElement.style.setProperty("--h",200);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ABYSSAL — Bathypelagic</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{
+  background:linear-gradient(180deg,#04102a,#030b1d 60%,#020611);
+  color:#c9dcf0;font-family:system-ui,sans-serif;
+}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:2;box-shadow:inset 0 0 180px rgba(0,2,10,.65)}
+canvas#abyss{position:fixed;inset:0;display:block;touch-action:none}
+/* HUD */
+.hud{position:fixed;left:24px;top:24px;z-index:5;pointer-events:none}
+.hud h1{font-family:system-ui,sans-serif;font-weight:200;letter-spacing:.62em;font-size:clamp(22px,3vw,34px);color:#c9dcf0;
+  text-shadow:0 0 24px rgba(120,180,255,.5)}
+.hud .cap2{font-family:ui-monospace,monospace;font-size:9.5px;letter-spacing:.24em;color:rgba(201,220,240,.5);margin-top:8px}
+.hudrow{position:fixed;bottom:18px;left:0;right:0;z-index:6;display:flex;justify-content:space-between;align-items:flex-end;
+  padding:0 24px;font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.22em;color:rgba(201,220,240,.55)}
+.hudrow .deep{font-size:19px;color:#c9dcf0;text-shadow:0 0 16px rgba(120,180,255,.4);font-variant-numeric:tabular-nums}
+.hudrow .deep small{font-size:10px;color:rgba(201,220,240,.5)}
+.hudrow .specs{text-align:right;line-height:2;margin-top:6px}
+.hudrow .specs b{color:#4fe3ff;font-weight:400;font-variant-numeric:tabular-nums}
+.spectrum{display:flex;gap:12px;justify-content:flex-end}
+.spectrum i{width:13px;height:13px;border-radius:50%;box-shadow:0 0 10px var(--c)}
+.hint2{position:fixed;left:50%;top:56%;transform:translate(-50%,-50%);z-index:6;font-family:ui-monospace,monospace;
+  font-size:10px;letter-spacing:.24em;color:rgba(201,220,240,.65);text-transform:uppercase;text-align:center;pointer-events:none;
+  transition:opacity 1.5s;animation:hintB 3.4s ease-in-out infinite}
+@keyframes hintB{0%,100%{opacity:.5}50%{opacity:1}}
+.manatee{position:fixed;bottom:8px;right:130px;z-index:5;font-family:ui-monospace,monospace;font-size:9px;
+  letter-spacing:.14em;color:rgba(201,220,240,.4);pointer-events:none}
+@media(max-width:640px){
+  .hud{left:16px;top:16px}
+  .hint2{top:auto;bottom:120px;left:16px;right:16px;transform:none;max-width:100%}
+  .spectrum{display:none}
+  .manatee{display:none}
+}
+</style>
+</head>
+<body>
+<canvas id="abyss"></canvas>
+<div class="hud">
+  <h1>ABYSSAL</h1>
+  <div class="cap2">Bathypelagic zone · no sunlight reaches here</div>
+</div>
+<div class="hudrow">
+  <div>
+    <div class="deep"><span id="depthV">−3 400</span> <small>m</small></div>
+    <div id="tempP">temp 3.1°C · <span id="pressV">342 atm</span></div>
+    <div id="motesV">medusae <b id="medC">3</b> · plankton <b id="plC">0</b></div>
+  </div>
+  <div class="specs">
+    <div class="spectrum">
+      <i style="--c:#4fe3ff"></i><i style="--c:#3fd9c4"></i><i style="--c:#6a7dff"></i><i style="--c:#a56bff"></i>
+    </div>
+    <div>EMISSION <b>SPECTRUM</b></div>
+  </div>
+</div>
+<div class="hint2" id="hint2">move to stir the water · click to release a jellyfish</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cv=document.getElementById("abyss"),ctx=cv.getContext("2d");
+  var W=0,H=0,DPR=1;
+  var t=0;
+  var PAL=[188,168,232,268];
+  var mouse={x:-9999,y:-9999,vx:0,vy:0,active:false};
+  var jellies=[],plankton=[],fishSchools=[];
+  var depth=-3400;
+  function resize(){
+    DPR=Math.min(2,devicePixelRatio||1);
+    W=innerWidth;H=innerHeight;
+    cv.width=W*DPR;cv.height=H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    seedPlankton();
+  }
+  window.addEventListener("resize",function(){resize()});
+  function seedPlankton(){
+    var n=RM?90:190;
+    n=Math.round(n*W/1200);
+    plankton=[];
+    for(var i=0;i<n;i++){
+      plankton.push({x:Math.random()*W,y:Math.random()*H,
+        hue:PAL[Math.floor(Math.random()*4)]+Math.random()*14-7,
+        ph:Math.random()*6,sp:3+Math.random()*6,glow:0,size:1+Math.random()*1.8});
+    }
+    document.getElementById("plC").textContent=plankton.length;
+  }
+  function newJelly(x,y,hue3){
+    var r=30+Math.random()*40;
+    return{x:x===undefined?Math.random()*W:x,y:y===undefined?H*0.5+Math.random()*H*0.3:y,
+      vx:(Math.random()-0.5)*6,vy:-10-Math.random()*14,
+      hue:hue3===undefined?PAL[Math.floor(Math.random()*4)]:hue3,
+      r:r,pulsePhase:Math.random()*6,pulseRate:0.8+Math.random()*1.4,
+      tentacles:[],arms:[],parts:[]};
+  }
+  function initJelly(j){
+    var tCount=7+Math.floor(Math.random()*8);
+    var aCount=4;
+    function chain(n,segLen){
+      var pts=[];
+      for(var i=0;i<n;i++)pts.push({x:0,y:i*segLen});
+      return pts;
+    }
+    j.chain={tCount:tCount,seg:Math.max(12,Math.round(j.r*0.22))};
+    j.tentacles=[];
+    j.arms=[];
+    for(var i=0;i<tCount;i++){
+      j.tentacles.push([]);
+    }
+    for(var a2=0;a2<aCount;a2++)j.arms.push([]);
+    j._seg=j.chain.seg;
+  }
+  function settlement(){
+    jellies.forEach(function(j){initJelly(j)});
+    document.getElementById("medC").textContent=jellies.length;
+  }
+  // ---------- step ----------
+  function stepJellies(dt){
+    var mx=mouse.x,my=mouse.y;
+    for(var i=0;i<jellies.length;i++){
+      var j=jellies[i];
+      j.pulsePhase+=dt*j.pulseRate;
+      var pulse=1+0.13*Math.sin(j.pulsePhase);
+      // thrust during contraction
+      var thrust=Math.max(0,Math.sin(j.pulsePhase+Math.PI))* (j.r*0.02);
+      j.vy-=thrust*dt*30;
+      j.vy+=4*dt; // gentle sink between pulses
+      j.vx+=Math.sin(t*0.7+i*2.2)*3*dt;
+      j.x+=j.vx*dt;j.y+=j.vy*dt;
+      // wraparound
+      if(j.y<-j.r*3){j.y=H+j.r*3}
+      if(j.x<-j.r*2)j.x=W+j.r*2;
+      if(j.x>W+j.r*2)j.x=-j.r*2;
+      // pointer
+      var dx=j.x-mx,dy=j.y-my;
+      var d=Math.sqrt(dx*dx+dy*dy)||1;
+      if(d<260){
+        var f=(1-d/260)*60*Math.max(0.3,Math.min(2,Math.sqrt(mouse.vx*mouse.vx+mouse.vy*mouse.vy)/20));
+        j.vx+=dx/d*f*dt*0.3;j.vy+=dy/d*f*dt*0.3;
+      }
+      // update chains (Verlet)
+      var seg=j._seg;
+      var base=[{x:j.x,y:j.y}];
+      // tentacles: build from rim
+      for(var tc=0;tc<j.chain.tCount;tc++){
+        var chain=j.tentacles[tc];
+        var ang=(tc/j.chain.tCount)*Math.PI*2;
+        var sx=j.x+Math.cos(ang)*j.r*pulse*0.9, sy=j.y+Math.sin(ang)*j.r*pulse*0.9;
+        if(chain.length===0){
+          for(var s2=0;s2<j.chain.seg;s2++)chain.push({x:sx,y:sy+s2*seg});
+        }else{
+          chain[0].x=sx;chain[0].y=sy;
+          for(var s3=1;s3<chain.length;s3++){
+            var p=chain[s3];
+            var px=(p.x-chain[s3-1].x)*0.985*0+ p.x + (chain[s3-1].x - p.x)*0.05;
+            // verlet: keep simple damped follow
+            var tx=p.x+(chain[s3-1].x-p.x)*0.02 + Math.sin(t*2+tc+s3)*0.02 +(Math.random()-0.5)*0.5;
+            var ty=p.y+(chain[s3-1].y-p.y)*0.02+ seg*0.9*0 + 0;
+            chain[s3]={x:tx,y:ty};
+          }
+          // constraints: recompute to fixed spacing
+          for(var pass=0;pass<3;pass++){
+            for(var s4=1;s4<chain.length;s4++){
+              var a=chain[s4-1],b=chain[s4];
+              var dx2=a.x-b.x,dy2=a.y-b.y;
+              var dist=Math.sqrt(dx2*dx2+dy2*dy2)||0.0001;
+              var diff=(dist-seg)/dist*0.5;
+              if(s4>1){a.x-=dx2*diff*0.5;a.y-=dy2*diff*0.5}
+              b.x+=dx2*diff*0.6;b.y+=dy2*diff*0.6;
+              // pointer repulsion
+              var px2=b.x-mx,py2=b.y-my;
+              var pd=Math.sqrt(px2*px2+py2*py2)||1;
+              if(pd<120){b.x+=px2/pd*2.5;b.y+=py2/pd*2.5}
+            }
+            chain[0].x=sx;chain[0].y=sy;
+          }
+        }
+      }
+      // arms (thicker, fewer)
+      // simplified: reuse tentacles 0-3 as arms with bigger width
+    }
+  }
+  function stepPlankton(dt){
+    var mx=mouse.x,my=mouse.y;
+    for(var i=0;i<plankton.length;i++){
+      var p=plankton[i];
+      // current field
+      var ux=Math.sin(p.y*0.003+t*0.2)*14+Math.cos(p.x*0.005-t*0.15)*8;
+      var uy=Math.cos(p.x*0.004+t*0.25)*10-Math.sin(p.y*0.003)*6;
+      p.x+=(ux+ (Math.random()-0.5)*8)*dt;
+      p.y+=(uy+ (Math.random()-0.5)*8)*dt;
+      // pointer
+      var dx=p.x-mx,dy=p.y-my;
+      var d=Math.sqrt(dx*dx+dy*dy)||1;
+      if(d<140){
+        var f=(1-d/140)*8*Math.max(0.5,Math.sqrt(mouse.vx*mouse.vx+mouse.vy*mouse.vy)/10+0.5);
+        p.x+=dx/d*f;p.y+=dy/d*f;
+        p.glow=Math.min(1,p.glow+0.3);
+      }else{
+        p.glow*=Math.pow(0.001,dt);
+      }
+      p.ph+=dt*(0.6+Math.sin(p.x*0.01)*1.5);
+      if(p.x<-10)p.x=W+10;if(p.x>W+10)p.x=-10;
+      if(p.y<-10)p.y=H+10;if(p.y>H+10)p.y=-10;
+    }
+  }
+  // fish schools
+  var fishT=0,nextSchool=10+Math.random()*20;
+  function stepFish(dt){
+    fishT+=dt;
+    if(fishT>nextSchool){
+      fishT=0;nextSchool=18+Math.random()*20;
+      var fromLeft=Math.random()<0.5;
+      var y=H*(0.35+Math.random()*0.4);
+      var school=[];
+      var n=10+Math.floor(Math.random()*12);
+      for(var i=0;i<n;i++){
+        school.push({x:(fromLeft?-20:W+20)+Math.random()*80, y:y+Math.random()*24-12,
+          sp:(fromLeft?60:60)*(-1)*(Math.random()<0.5?1:1)*(fromLeft?1:-1)+ (fromLeft?60:60)>0?60* (fromLeft?1:-1):0,
+          ph:Math.random()*6,size:2+Math.random()*2});
+      }
+      fishSchools.push({school:school,dir:fromLeft?1:-1,y:y});
+    }
+    for(var s=fishSchools.length-1;s>=0;s--){
+      var sc=fishSchools[s];
+      sc.school.forEach(function(f){
+        f.x+=sc.dir*(55+Math.sin(f.ph+t))*dt;
+        f.y+=Math.sin(f.ph*2+t*0.7)*4*dt;
+        f.ph+=dt;
+        if(f.ph>10)f.ph=0;
+      });
+      var head=sc.school[0];
+      if((sc.dir>0&&head.x>W+40)||(sc.dir<0&&head.x<-40))fishSchools.splice(s,1);
+    }
+  }
+  // ---------- render ----------
+  function renderShaft(){
+    var g=ctx.createLinearGradient(0,-20,0,H*0.95);
+    g.addColorStop(0,"rgba(80,140,210,.09)");
+    g.addColorStop(1,"rgba(80,140,210,0)");
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    var sway=Math.sin(t*0.3)*14;
+    ctx.translate(W*0.3+sway,0);
+    ctx.transform(1,0,0.16,1,0,0);
+    ctx.fillStyle=g;
+    ctx.fillRect(-40,0,80,H*0.95);
+    ctx.restore();
+    ctx.translate(W*0.68-sway,0);
+    ctx.transform(1,0,-0.1,1,0,0);
+    ctx.fillStyle=g;ctx.fillRect(-26,0,52,H*0.95);
+    ctx.restore();
+    ctx.translate(W*0.5,0);
+    ctx.fillStyle="rgba(70,120,190,.05)";ctx.fillRect(-70,0,140,H*0.95);
+    ctx.restore();
+  }
+  function renderPlankton(){
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    for(var i=0;i<plankton.length;i++){
+      var p=plankton[i];
+      var tw=0.4+0.6*Math.sin(p.ph)*Math.sin(p.ph);
+      var glow=p.glow;
+      var size=p.size*(1+glow*1.4);
+      var al=0.25+tw*0.3+glow*0.55;
+      var col="hsla("+p.hue+",85%,"+(55+glow*30)+"%,"+al+")";
+      ctx.fillStyle=col;
+      ctx.beginPath();ctx.arc(p.x,p.y,size*0.4,0,7);ctx.fill();
+      if(glow>0.1||tw>0.8){
+        var g2=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,size*6);
+        g2.addColorStop(0,"hsla("+p.hue+",85%,70%,"+(al*0.4)+")");
+        g2.addColorStop(1,"hsla("+p.hue+",85%,70%,0)");
+        ctx.fillStyle=g2;
+        ctx.beginPath();ctx.arc(p.x,p.y,size*6,0,7);ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+  function renderFish(){
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    fishSchools.forEach(function(sc){
+      sc.school.forEach(function(f){
+        var dir=sc.dir;
+        ctx.fillStyle="rgba(10,20,40,.9)";
+        ctx.beginPath();
+        ctx.moveTo(f.x-dir*f.size, f.y);
+        ctx.quadraticCurveTo(f.x-dir*f.size*0.5, f.y-f.size*0.4, f.x+dir*f.size, f.y+Math.sin(f.ph*3)*2);
+        ctx.quadraticCurveTo(f.x-dir*f.size*0.4, f.y+f.size*0.3, f.x-dir*f.size, f.y);
+        ctx.fill();
+        // photophore
+        ctx.fillStyle="rgba(79,227,255,.7)";
+        ctx.beginPath();ctx.arc(f.x+dir*f.size*0.55, f.y, 1.2,0,7);ctx.fill();
+        ctx.fillStyle="rgba(79,227,255,.4)";
+        ctx.beginPath();ctx.arc(f.x+dir*f.size*0.45, f.y+f.size*0.5, .6,0,7);ctx.fill();
+        ctx.beginPath();ctx.arc(f.x+dir*f.size*0.5, f.y-f.size*0.5, .6,0,7);ctx.fill();
+      });
+    });
+    ctx.restore();
+  }
+  function renderJellies(){
+    // sort by size
+    var sorted=jellies.slice().sort(function(a,b){return a.r-b.r});
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    sorted.forEach(function(j){
+      var pulse=1+0.13*Math.sin(j.pulsePhase);
+      var bw=j.r*2*pulse, bh=j.r*1.6*(2-pulse*0.5)/ (2-pulse*0.5);
+      bh=j.r*1.25*(1.55-pulse*0.35);
+      // halo
+      var g=ctx.createRadialGradient(j.x,j.y,j.r*0.2,j.x,j.y,j.r*2);
+      g.addColorStop(0,"hsla("+j.hue+",80%,70%,.16)");
+      g.addColorStop(1,"hsla("+j.hue+",80%,70%,0)");
+      ctx.fillStyle=g;
+      ctx.beginPath();ctx.arc(j.x,j.y,j.r*2,0,7);ctx.fill();
+      // bell
+      var bell=ctx.createLinearGradient(j.x,j.y-j.r,j.x,j.y+j.r*0.4);
+      bell.addColorStop(0,"hsla("+j.hue+",85%,85%,.85)");
+      bell.addColorStop(.7,"hsla("+j.hue+",80%,60%,.5)");
+      bell.addColorStop(1,"hsla("+j.hue+",80%,45%,0)");
+      ctx.fillStyle=bell;
+      ctx.beginPath();
+      ctx.moveTo(j.x-bw/2, j.y);
+      ctx.quadraticCurveTo(j.x-bw/2, j.y-bh*1.05, j.x, j.y-bh);
+      ctx.quadraticCurveTo(j.x+bw/2, j.y-bh*1.05, j.x+bw/2, j.y);
+      ctx.quadraticCurveTo(j.x, j.y+j.r*0.42, j.x-bw/2, j.y);
+      ctx.fill();
+      // rim
+      ctx.strokeStyle="hsla("+j.hue+",90%,80%,.8)";
+      ctx.lineWidth=1.4;
+      ctx.beginPath();
+      ctx.moveTo(j.x-bw/2, j.y);
+      ctx.quadraticCurveTo(j.x-bw/2, j.y-bh*1.05, j.x, j.y-bh);
+      ctx.quadraticCurveTo(j.x+bw/2, j.y-bh*1.05, j.x+bw/2, j.y);
+      ctx.stroke();
+      // gonads
+      ctx.fillStyle="hsla("+j.hue+",85%,75%,.5)";
+      [[-0.4,0.1],[0.4,0.1],[-0.2,0.28],[0.2,0.28]].forEach(function(off){
+        ctx.beginPath();ctx.arc(j.x+off[0]*bw/2,j.y-off[1]*bh,2.2,0,7);ctx.fill();
+      });
+      // specular
+      ctx.fillStyle="rgba(255,255,255,.4)";
+      ctx.beginPath();ctx.ellipse(j.x-bw*0.16,j.y-bh*0.72,bw*0.08,bh*0.12,-0.4,0,7);ctx.fill();
+      // tentacles
+      for(var tc=0;tc<j.tentacles.length;tc++){
+        var chain=j.tentacles[tc];
+        if(chain.length<2)continue;
+        var thick=tc<j.chain.tCount*0.4?1.6:0.8;
+        ctx.lineWidth=thick;
+        ctx.strokeStyle="hsla("+j.hue+",80%,70%,.5)";
+        ctx.beginPath();
+        ctx.moveTo(chain[0].x,chain[0].y);
+        for(var s=1;s<chain.length;s+=2)ctx.lineTo(chain[s].x,chain[s].y);
+        ctx.stroke();
+      }
+    });
+    ctx.restore();
+  }
+  // ---------- interactions ----------
+  cv.addEventListener("pointermove",function(e){
+    var r=cv.getBoundingClientRect();
+    mouse.vx=e.clientX-mouse.x;mouse.vy=e.clientY-mouse.y;
+    mouse.x=e.clientX-r.left;mouse.y=e.clientY-r.top;
+    if(!mouse.active){
+      mouse.active=true;
+      var h=document.getElementById("hint2");
+      if(h)h.style.opacity=0;
+    }
+  });
+  cv.addEventListener("pointerdown",function(e){
+    var r=cv.getBoundingClientRect();
+    var x=e.clientX-r.left,y=e.clientY-r.top;
+    spawnJelly(x,y);
+    // push plankton
+    for(var i=0;i<plankton.length;i++){
+      var p=plankton[i];
+      var dx=p.x-x,dy=p.y-y;
+      var d=Math.sqrt(dx*dx+dy*dy)||1;
+      if(d<220)p.glow=Math.min(1,p.glow+0.6);
+    }
+    var h=document.getElementById("hint2");
+    if(h)h.style.opacity=0;
+  });
+  cv.addEventListener("pointerleave",function(){mouse.x=-9999;mouse.y=-9999});
+  function spawnJelly(x,y){
+    var j=newJelly(x,y);
+    initJelly(j);
+    jellies.push(j);
+    if(jellies.length>9)jellies.shift();
+    document.getElementById("medC").textContent=jellies.length;
+  }
+  // ---------- loop ----------
+  var last=performance.now(),depthT=0;
+  function loop(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    t+=dt*(RM?0.3:1);
+    // depth drift
+    depthT+=dt;
+    var drift=Math.sin(depthT*0.05)*24+Math.sin(depthT*0.13)*9;
+    var dV=Math.round(-3400+drift);
+    document.getElementById("depthV").textContent="−"+Math.abs(dV).toLocaleString();
+    document.getElementById("pressV").textContent=Math.round((Math.abs(dV)/10+1))+" atm";
+    // clear
+    ctx.clearRect(0,0,W,H);
+    renderShaft();
+    renderPlankton();
+    renderFish();
+    renderJellies();
+    stepPlankton(dt*1.4);
+    stepJellies(dt*(RM?0.4:1));
+    stepFish(dt);
+    requestAnimationFrame(loop);
+  }
+  resize();
+  // seed three jellies
+  for(var i=0;i<3;i++){
+    var j=newJelly(undefined,undefined,PAL[i%4]);
+    initJelly(j);
+    jellies.push(j);
+  }
+  document.getElementById("medC").textContent=jellies.length;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

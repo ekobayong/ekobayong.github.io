@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Winter, kept — an interactive snow globe</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--size:min(78vw,56vh,520px)}
+html,body{height:100%;overflow:hidden}
+body{
+  background:
+    radial-gradient(50% 40% at 50% 100%,rgba(18,58,61,.55),transparent 70%),
+    radial-gradient(120% 110% at 50% 45%,transparent 55%,rgba(0,0,0,.6)),
+    linear-gradient(180deg,#0e2a2e,#061518);
+  color:#e8e0d0;font-family:Georgia,'Iowan Old Style',Palatino,serif;cursor:grab;
+  display:flex;flex-direction:column;align-items:center;
+}
+body:active{cursor:grabbing}
+/* bokeh lights */
+.fairies{position:fixed;inset:0;pointer-events:none;z-index:0}
+.bokeh{position:absolute;border-radius:50%;filter:blur(3px);animation:bk 11s ease-in-out infinite alternate}
+@keyframes bk{from{transform:translateY(-6px);opacity:.35}to{transform:translateY(8px);opacity:.75}}
+.string{position:fixed;top:18px;left:0;right:0;z-index:0;pointer-events:none;
+  stroke:#2c4a4e;fill:none;stroke-width:1.4}
+/* header */
+.head{position:relative;z-index:5;text-align:center;padding:24px 16px 8px;pointer-events:none}
+.head .cat{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:rgba(232,224,208,.5)}
+.head h1{font-size:clamp(24px,3.2vw,40px);font-weight:400;margin-top:4px}
+.head h1 em{font-style:italic;color:#fbe7a3}
+/* globe assembly */
+.globe{position:relative;z-index:5;margin-top:10px;width:var(--size);cursor:grab;touch-action:none;transform-origin:50% 100%}
+.sphere{position:relative;width:100%;aspect-ratio:1;border-radius:50%;overflow:hidden;
+  background:radial-gradient(circle at 32% 28%,#2b5f77,#0d2c42 55%,#061a2b);
+  box-shadow:0 34px 70px rgba(0,0,0,.65),inset 0 10px 30px rgba(255,255,255,.12);
+}
+svg#interior{position:absolute;inset:0;width:100%;height:100%}
+canvas#snow{position:absolute;inset:0;width:100%;height:100%}
+.glassfx{position:absolute;inset:0;border-radius:50%;pointer-events:none;z-index:8}
+.glassfx::before{content:"";position:absolute;left:12%;top:8%;width:30%;height:20%;
+  background:linear-gradient(115deg,rgba(255,255,255,.4),rgba(255,255,255,.06) 70%);border-radius:50%;transform:rotate(-18deg)}
+.glassfx::after{content:"";position:absolute;right:10%;bottom:10%;width:18%;height:10%;
+  background:radial-gradient(closest-side,rgba(255,255,255,.22),transparent);border-radius:50%}
+.glassfx .rim{position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle,transparent 96.5%,rgba(255,255,255,.32) 97% 99%,transparent 99.5%);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.25),inset 0 0 0 3.5% rgba(255,255,255,.07)}
+.glassfx .sheen{position:absolute;inset:8%;border-radius:50%;
+  background:linear-gradient(160deg,rgba(255,255,255,.08),transparent 40%)}
+.glassfx .hl{position:absolute;left:22%;top:24%;width:16%;height:4%;border-radius:99px;transform:rotate(-30deg);
+  background:rgba(255,255,255,.5);filter:blur(1.5px)}
+/* neck + base */
+.neck{width:26%;height:18px;margin:0 auto;background:linear-gradient(180deg,#6f5218,#d9b25a 30%,#fbe7a3 48%,#d9b25a 70%,#6f5218);box-shadow:0 6px 14px rgba(0,0,0,.4)}
+.base{
+  position:relative;width:78%;margin:0 auto;height:70px;border-radius:8px 8px 16px 16px;
+  background:linear-gradient(180deg,#8d5a40,#7a4a33 30%,#4a2a1c 75%,#2a150e);
+  background-image:repeating-linear-gradient(90deg,transparent 0 6px,rgba(255,255,255,.03) 6px 7px),linear-gradient(180deg,#8d5a40,#7a4a33 30%,#4a2a1c 75%,#2a150e);
+  box-shadow:0 20px 44px rgba(0,0,0,.6),inset 0 2px 3px rgba(255,220,170,.3);
+  transform-origin:50% 100%;transition:transform .4s;
+}
+.base::before{content:"";position:absolute;top:-8px;left:6%;right:6%;height:10px;border-radius:99px;
+  background:linear-gradient(90deg,#6f5218,#d9b25a 40%,#fbe7a3 60%,#6f5218)}
+.base::after{content:"";position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:70%;height:8px;
+  background:radial-gradient(closest-side,rgba(0,0,0,.5),transparent);filter:blur(4px)}
+.plaque{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:10px;font-style:italic;color:#fbe7a3;letter-spacing:.08em;text-shadow:0 1px 0 rgba(0,0,0,.5);white-space:nowrap}
+.key{position:absolute;right:-22px;top:24px;width:26px;height:34px;cursor:pointer;transform-origin:0 0;transition:transform .6s cubic-bezier(.34,1.56,.64,1)}
+.key svg{width:26px;height:34px}
+/* footer */
+.footer{position:relative;z-index:5;display:flex;align-items:center;gap:14px;margin-top:22px;flex-wrap:wrap;justify-content:center}
+.btn4{background:rgba(10,24,26,.6);border:1px solid rgba(232,224,208,.3);color:#e8e0d0;font-family:inherit;
+  font-size:12.5px;font-style:italic;padding:11px 20px;border-radius:99px;cursor:pointer;transition:all .3s}
+.btn4:hover{border-color:#fbe7a3;color:#fff}
+.btn4:active{transform:scale(.97)}
+.meter{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.2em;color:rgba(232,224,208,.55);text-transform:uppercase}
+.meter b{color:#fbe7a3;font-weight:400}
+.hint3{position:fixed;bottom:12px;left:0;right:0;text-align:center;font-family:ui-monospace,monospace;font-size:9px;
+  letter-spacing:.24em;text-transform:uppercase;color:rgba(232,224,208,.4);z-index:6;pointer-events:none}
+@media(max-width:640px){.key{right:-14px}}
+@media(prefers-reduced-motion:reduce){.bokeh{animation:none}}
+</style>
+</head>
+<body>
+<svg class="string" viewBox="0 0 1200 80"><path d="M-20 24 Q 300 58 600 30 T 1220 24" stroke="#2c4a4e"/></svg>
+<div class="fairies" id="fairies"></div>
+
+<div class="head">
+  <div class="cat">Object 088 · Glass, brass, walnut, water, glycerine</div>
+  <h1>Winter, <em>kept</em></h1>
+</div>
+
+<div class="globe" id="globe">
+  <div class="sphere">
+    <svg id="interior" viewBox="0 0 300 300" preserveAspectRatio="xMidYMid slice"></svg>
+    <canvas id="snow"></canvas>
+    <div class="glassfx"></div>
+  </div>
+  <div class="neck"></div>
+  <div class="base" id="base">
+    <div class="plaque">Blessington Lane · Christmas Eve</div>
+    <div class="key" id="keyBtn"><svg viewBox="0 0 26 34"><path d="M8 12 L8 30 M18 12 L18 30 M8 20 h10" stroke="#fbe7a3" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M13 6 l-6 2 M13 6 l6 2 M9 4 h8 M11 2 h4" stroke="#fbe7a3" stroke-width="2" fill="none" stroke-linecap="round"/><rect x="10" y="1" width="6" height="8" fill="none" stroke="#fbe7a3" stroke-width="1.5"/></svg></div>
+  </div>
+</div>
+
+<div class="footer">
+  <button class="btn4" id="shakeBtn">Shake</button>
+  <button class="btn4" id="windBtn">Wind the key</button>
+  <span class="meter">Flurry <b id="energy">0%</b></span>
+</div>
+<div class="hint3">drag the globe to shake · click the key to wind</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var globe=document.getElementById("globe"),base=document.getElementById("base");
+  var sphere=document.querySelector(".sphere");
+  // ---------- bokeh ----------
+  var fairies=document.getElementById("fairies");
+  for(var i=0;i<11;i++){
+    var b=document.createElement("div");
+    b.className="bokeh";
+    var warm=Math.random()<0.7;
+    b.style.background=warm?"rgba(255,214,140,.5)":"rgba(160,220,225,.4)";
+    b.style.width=(6+Math.random()*10)+"px";b.style.height=b.style.width;
+    b.style.left=(Math.random()*100)+"%";b.style.top=(3+Math.random()*26)+"%";
+    b.style.animationDelay=(-Math.random()*10)+"s";
+    b.style.animationDuration=(7+Math.random()*7)+"s";
+    fairies.appendChild(b);
+  }
+  // ---------- interior ----------
+  var interior=document.getElementById("interior");
+  function buildInterior(){
+    interior.innerHTML='<defs>'+
+      '<linearGradient id="night" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16264d"/><stop offset="1" stop-color="#0a1a30"/></linearGradient>'+
+      '<linearGradient id="snowg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#cfe0ea"/></linearGradient>'+
+      '</defs>'+
+      '<rect width="300" height="300" fill="url(#night)"/>'+
+      '<circle cx="238" cy="54" r="16" fill="#eef2e8"/>'+
+      '<cirlce cx="232" cy="50" r="4" fill="#c8cfc0" opacity=".7"/>'+
+      '<g fill="#fff"><circle cx="40" cy="40" r="1.3"/><circle cx="90" cy="70" r="1"/><circle cx="150" cy="30" r="1.2"/><circle cx="200" cy="88" r="1"/><circle cx="270" cy="30" r="1.2"/><circle cx="60" cy="110" r="1"/><circle cx="260" cy="100" r="1.1"/></g>'+
+      '<path d="M0 210 Q 60 190 130 205 T 300 200 L300 300 L0 300 Z" fill="#0d1c34"/>'+
+      '<path d="M0 228 Q 70 212 140 224 T 300 220 L300 300 L0 300 Z" fill="url(#snowg)"/>'+
+      // pines
+      '<g fill="#173a2a"><path d="M40 180 l12 -26 l12 26 z"/><path d="M40 166 l9 -20 l9 20 z"/><path d="M40 152 l7 -15 l7 15 z"/></g>'+
+      '<g fill="#0f2a1e"><path d="M52 184 l8 -18 l8 18 z"/></g>'+
+      '<g fill="#1e4a36"><path d="M230 176 l13 -28 l13 28 z"/><path d="M230 160 l9 -20 l9 20 z"/><path d="M230 146 l7 -15 l7 15 z"/></g>'+
+      // cottage
+      '<g transform="translate(108 196)">'+
+      '<rect x="-26" y="0" width="52" height="26" fill="#5a3a24"/>'+
+      '<path d="M-34 0 L0 -18 L34 0 Z" fill="#7a3b2a"/>'+
+      '<path d="M-34 0 L0 -18 L34 0 Z" fill="none" stroke="#e8e0d0" stroke-width="2"/>'+
+      '<rect x="-14" y="-4" width="10" height="24" fill="#5a3a24"/>'+
+      '<rect id="win1" x="-18" y="6" width="12" height="11" fill="#ffd27a"/>'+
+      '<rect id="win2" x="8" y="6" width="12" height="11" fill="#ffd27a"/>'+
+      '<line x1="-12" y1="6" x2="-12" y2="17" stroke="#5a3a24" stroke-width="1.5"/>'+
+      '<line x1="-18" y1="11" x2="-6" y2="11" stroke="#5a3a24" stroke-width="1.5"/>'+
+      '<line x1="14" y1="6" x2="14" y2="17" stroke="#5a3a24" stroke-width="1.5"/>'+
+      '<line x1="8" y1="11" x2="20" y2="11" stroke="#5a3a24" stroke-width="1.5"/>'+
+      '<rect x="-7" y="14" width="12" height="12" fill="#22130c" rx="1.5"/>'+
+      '<circle cx="3" cy="20" r="1.4" fill="#fbe7a3"/>'+
+      '</g>'+
+      // lamp post
+      '<g transform="translate(196 190)"><rect x="-3" y="0" width="6" height="36" fill="#0d1520"/>'+
+      '<path d="M-8 -2 Q 0 -10 8 -2 L6 2 L-6 2 Z" fill="#0d1520"/>'+
+      '<circle cx="0" cy="-3" r="6" fill="#ffe6a0"/>'+
+      '<circle cx="0" cy="-3" r="12" fill="#ffe6a0" opacity=".3" class="lampl"></circle>'+
+      '</g>'+
+      '<ellipse cx="150" cy="244" rx="120" ry="14" fill="#f6f8f6" opacity=".85"/>';
+    // fix stray element
+    var mist=interior.querySelector("cirlce");
+    if(mist)mist.setAttribute("class","cirlce");
+  }
+  // ---------- snow particles ----------
+  var scv=document.getElementById("snow"),sctx=scv.getContext("2d");
+  var flakes=[],S=0,DPR=1,maxFlakes=460;
+  function resizeSnow(){
+    DPR=Math.min(2,devicePixelRatio||1);
+    var r=scv.parentElement.getBoundingClientRect();
+    S=r.width;
+    scv.width=S*DPR;scv.height=S*DPR;
+    sctx.setTransform(DPR,0,0,DPR,0,0);
+    var n=RM?220:460;
+    flakes=[];
+    for(var i=0;i<n;i++)flakes.push(newFlake(true));
+  }
+  function newFlake(anywhere){
+    return{x:Math.random()*S,y:anywhere?Math.random()*S:0,
+      vx:0,vy:0,z:0.3+Math.random(),r:0.7+Math.random()*1.9,settled:false,
+      ph:Math.random()*6};
+  }
+  var energy=0,energyV=0;
+  function stepSnow(dt){
+    var px2=(dt)*60;
+    var floor=S*0.52; // radius fraction line
+    for(var i=0;i<flakes.length;i++){
+      var f=flakes[i];
+      f.ph+=dt*3;
+      if(f.settled){
+        f.x+=Math.sin(f.ph*0.5)*0.06*px2*0.2;
+        continue;
+      }
+      var g=9.8*f.r*0.9;
+      var turb=Math.sin(f.x*0.05+f.ph)*0.12+Math.cos(f.y*0.04)*0.08;
+      f.vy+=(g+turb*energy*10)*dt;
+      f.vx+=(Math.sin(f.ph*0.7))*(0.02*energy)*dt*20;
+      f.x+=f.vx*dt*60*0.4;
+      f.y+=f.vy*dt*60*0.4+Math.sin(f.ph)*0.05;
+      // wall reflection
+      var dx=f.x-S/2,dy=f.y-S/2;
+      var d=Math.sqrt(dx*dx+dy*dy);
+      if(d>0.93*S/2){
+        // push back
+        f.x=S/2+dx/d*(0.9*S/2);
+        f.y=S/2+dy/d*(0.9*S/2);
+      }
+      // settle on floor
+      var floorY=S*0.5+Math.sqrt(Math.max(0,S*S/4-dx*dx))*0.94*(1-(f.z-0.3)*0.06);
+      if(f.y>floorY&&Math.abs(f.vy)<0.8){
+        f.settled=true;
+        f.y=floorY+(Math.random()-0.5)*2;
+      }
+      // reloft
+      if(energy>0.5&&Math.random()<energy*0.005){
+        f.settled=false;
+        f.vy=-2;
+        f.x=S/2+Math.random()*S*0.4;
+        f.y=S*0.42;
+      }
+    }
+    energyV+=(energy-energyV)*0.05;
+    document.getElementById("energy").textContent=Math.round(energyV*100)+"%";
+  }
+  function drawSnow(){
+    sctx.clearRect(0,0,S,S);
+    for(var i=0;i<flakes.length;i++){
+      var f=flakes[i];
+      var alpha=0.35+0.65*f.z;
+      sctx.fillStyle=f.settled?"rgba(255,255,255,"+(alpha*0.8)+")":"rgba(255,255,255,"+alpha+")";
+      sctx.beginPath();sctx.arc(f.x,f.y,f.r*(0.6+0.4*f.z),0,7);sctx.fill();
+    }
+  }
+  // ---------- physics ----------
+  var dragging=false,lastPX=0,lastPY=0,velX=0,wobbleSpring={x:0,v:0};
+  var spin=0;
+  function shakeGlobe(impulse){
+    energy=Math.min(1.2,energy+impulse);
+    flakes.forEach(function(f){f.settled=false});
+    // re-loft all
+    flakes.forEach(function(f){
+      f.x=S/2+Math.random()*S*0.3;
+      f.y=S*0.3+Math.random()*S*0.2;
+      f.vy=-1-Math.random()*2;
+    });
+  }
+  globe.addEventListener("pointerdown",function(e){
+    dragging=true;
+    lastPX=e.clientX;lastPY=e.clientY;
+    if(e.target.closest(".key"))return;
+    globe.setPointerCapture(e.pointerId);
+  });
+  globe.addEventListener("pointermove",function(e){
+    if(!dragging)return;
+    var dx=e.clientX-lastPX,dy=e.clientY-lastPY;
+    lastPX=e.clientX;lastPY=e.clientY;
+    var sp=Math.hypot(dx,dy);
+    if(sp>900)shakeGlobe(Math.min(0.8,sp/2000));
+    // wobble
+    wobbleSpring.x+=dx*0.01;wobbleSpring.v+= (dx*0.004-dy*0.003);
+    if(dx!==0||dy!==0){
+      // clamp globe movement with spring
+      var targetX=Math.max(-14,Math.min(14,dx*0.6));
+      var targetY=Math.max(-10,Math.min(10,dy*0.5));
+      globe.style.transform="translate("+targetX+"px,"+targetY+"px)";
+      base.style.transform="translateX(-"+targetX+"px) rotate("+(dx*0.05)+"deg)";
+    }
+  });
+  window.addEventListener("pointerup",function(){dragging=false;globe.style.transform="";base.style.transform=""});
+  document.getElementById("shakeBtn").addEventListener("click",function(){
+    shakeGlobe(0.8);
+    wobble();
+  });
+  function wobble(){
+    globe.style.transform="rotate("+(-8)+"deg)";
+    base.style.transform="rotate("+(2)+"deg)";
+    setTimeout(function(){
+      globe.style.transform="rotate(6deg)";
+      base.style.transform="rotate(-1.5deg)";
+      setTimeout(function(){
+        globe.style.transform="";
+        base.style.transform="";
+      },120);
+    },90);
+  }
+  // key wind
+  var windOn=false;
+  document.getElementById("windBtn").addEventListener("click",windKey);
+  document.getElementById("keyBtn").addEventListener("click",windKey);
+  function windKey(){
+    if(windOn)return;
+    windOn=true;
+    var k=document.getElementById("keyBtn");
+    spin=0;
+    (function spinAnim(){
+      spin+=14;
+      k.style.transform="rotate("+spin+"deg)";
+      if(spin<720)requestAnimationFrame(spinAnim);
+      else{
+        k.style.transform="";
+        windOn=false;
+        // audio chime
+        chime();
+        // interior slowly turns
+        var t0=performance.now();
+        (function turn(now){
+          var t=(now-t0)/7000;
+          var r=Math.sin(Math.min(1,t)*Math.PI)*28;
+          sphere.style.perspective="800px";
+          interior.style.transform="translateZ(30px) rotateY("+ (r*Math.sin(t*3.1)) +"deg)";
+          if(t<1)requestAnimationFrame(turn);
+        })(t0);
+      }
+    })();
+  }
+  var AC=null;
+  function chime(){
+    if(RM||!AC){
+      if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){return}}
+    }
+    var t=AC.currentTime;
+    [523.25,659.25,783.99,1046.5].forEach(function(f,i){
+      var o=AC.createOscillator(),g=AC.createGain();
+      o.frequency.value=f;o.type="sine";
+      g.gain.setValueAtTime(0,t+i*0.18);
+      g.gain.linearRampToValueAtTime(0.12,t+i*0.18+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+i*0.18+1.4);
+      o.connect(g);g.connect(AC.destination);
+      o.start(t+i*0.18);o.stop(t+i*0.18+1.5);
+    });
+  }
+  // loop
+  window.addEventListener("resize",function(){resizeSnow();buildInterior()});
+  var last=performance.now();
+  function loop(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    // energy decay
+    energy=energy*Math.exp(-dt/2.6);
+    energy=Math.max(0,energy-0.004);
+    stepSnow(dt);
+    drawSnow();
+    // window glow breathing
+    var w1=interior.querySelector("#win1"),w2=interior.querySelector("#win2");
+    if(w1&&w2&&!RM){
+      var b=0.75+0.25*Math.sin(now/1800);
+      w1.setAttribute("opacity",b);w2.setAttribute("opacity",1-b*0.3);
+    }
+    requestAnimationFrame(loop);
+  }
+  buildInterior();
+  resizeSnow();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
