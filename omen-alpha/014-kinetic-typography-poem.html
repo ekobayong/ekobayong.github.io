@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nocturne for the Sea — a scroll-driven poem</title>
+<style>
+  :root{
+    --bone:#ece6d9;
+    --bone-dim:rgba(236,230,217,.42);
+    --teal:#146c73;
+    --teal-hi:#2aa3ab;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html{ scroll-behavior:smooth; }
+  body{
+    background:#0e0c0b; color:var(--bone);
+    font-family:Georgia, "Iowan Old Style", Palatino, "Book Antiqua", ui-serif, serif;
+    overflow-x:hidden;
+  }
+  body{ --gp:0; }
+  /* ---------- atmosphere ---------- */
+  #moon{
+    position:fixed; z-index:0; left:72vw; top:24vh; width:120px; height:120px;
+    border-radius:50%; pointer-events:none;
+    background:
+      radial-gradient(circle at 34% 30%, rgba(0,0,0,.14) 0 9%, transparent 11%),
+      radial-gradient(circle at 62% 55%, rgba(0,0,0,.18) 0 6%, transparent 8%),
+      radial-gradient(circle at 40% 38%, #f7f1e1 0%, #d8d0bd 55%, #8f8877 100%);
+    box-shadow:0 0 40px 14px rgba(236,230,217,.22), 0 0 120px 50px rgba(236,230,217,.1);
+  }
+  #water{
+    position:fixed; z-index:0; left:0; right:0; bottom:-18vh; height:48vh; pointer-events:none;
+    background:radial-gradient(60% 100% at 50% 100%, rgba(20,108,115,.55), transparent 75%);
+    filter:blur(24px);
+    opacity:calc(.35 + var(--gp) * .55);
+    animation:swell 11s ease-in-out infinite alternate;
+  }
+  @keyframes swell{ from{ transform:scaleY(1) translateY(0); } to{ transform:scaleY(1.14) translateY(-3vh); } }
+  #grain{
+    position:fixed; inset:0; z-index:40; pointer-events:none; opacity:.06; mix-blend-mode:overlay;
+    background:
+      repeating-radial-gradient(circle at 17% 34%, rgba(255,255,255,.7) 0 .6px, transparent .6px 2.4px),
+      repeating-radial-gradient(circle at 71% 77%, rgba(0,0,0,.8) 0 .7px, transparent .7px 2.1px);
+  }
+  /* ---------- scroll hint ---------- */
+  #hint{
+    position:fixed; z-index:30; left:50%; bottom:38px; transform:translateX(-50%);
+    text-align:center; transition:opacity .6s;
+  }
+  #hint .line{
+    width:1px; height:52px; margin:0 auto 10px; background:linear-gradient(var(--teal-hi), transparent);
+    transform-origin:top; animation:drip 2.2s ease-in-out infinite;
+  }
+  #hint span{ font-family:ui-sans-serif, system-ui, "Helvetica Neue", sans-serif; font-size:10px;
+    letter-spacing:.32em; text-transform:uppercase; color:var(--bone-dim); }
+  @keyframes drip{ 0%{ transform:scaleY(0); } 55%{ transform:scaleY(1); } 100%{ transform:scaleY(1) translateY(6px); opacity:0; } }
+  body.scrolled #hint{ opacity:0; pointer-events:none; }
+  /* ---------- progress rail ---------- */
+  #rail{
+    position:fixed; z-index:30; right:26px; top:50%; transform:translateY(-50%);
+    display:flex; align-items:center; gap:12px; height:52vh;
+  }
+  #railTrack{ position:relative; width:1px; height:100%; background:rgba(236,230,217,.18); }
+  #railFill{
+    position:absolute; top:0; left:0; width:1px; height:0;
+    background:var(--teal-hi); box-shadow:0 0 8px var(--teal-hi);
+  }
+  #dots{ display:flex; flex-direction:column; justify-content:space-between; height:100%; }
+  #dots button{
+    width:9px; height:9px; border-radius:50%; border:1px solid rgba(236,230,217,.4);
+    background:transparent; cursor:pointer; padding:0; transition:transform .2s, background .2s;
+  }
+  #dots button:hover, #dots button.cur{ transform:scale(1.5); background:var(--teal-hi); border-color:var(--teal-hi); }
+  #counter{
+    font-family:ui-sans-serif, system-ui, sans-serif; font-size:10px; letter-spacing:.22em;
+    color:var(--bone-dim); writing-mode:vertical-rl;
+  }
+  /* ---------- stanzas ---------- */
+  .stanza{
+    min-height:100svh; display:grid; place-content:center; text-align:center;
+    position:relative; z-index:2; padding:0 6vw;
+  }
+  .numeral{
+    font-family:ui-sans-serif, system-ui, "Helvetica Neue", sans-serif;
+    font-size:11px; letter-spacing:.3em; color:var(--teal-hi);
+    margin-bottom:3.2vh; opacity:0; transform:translateY(10px); transition:opacity .8s, transform .8s;
+  }
+  .stanza.in .numeral{ opacity:.9; transform:none; }
+  .verse{
+    font-size:clamp(1.5rem, 1rem + 3.6vw, 4.4rem);
+    line-height:1.22; max-width:22ch; margin:0 auto; text-wrap:balance;
+  }
+  .em{ color:var(--teal-hi); font-style:italic; }
+  /* split spans */
+  .l, .w{ display:inline-block; white-space:pre; will-change:transform; }
+  /* I — letters rise */
+  .fxI .l{ opacity:0; transform:translateY(1.1em) rotate(8deg); transition:transform .7s cubic-bezier(.22,1,.36,1), opacity .7s; transition-delay:calc(var(--i) * 26ms); }
+  .fxI.in .l{ opacity:1; transform:none; }
+  /* II — words from sides */
+  .fxII .w{ opacity:0; transition:transform .8s cubic-bezier(.22,1,.36,1), opacity .8s; transition-delay:calc(var(--i) * 55ms); }
+  .fxII .w:nth-child(odd){ transform:translateX(-30vw); }
+  .fxII .w:nth-child(even){ transform:translateX(30vw); }
+  .fxII.in .w{ opacity:1; transform:none; }
+  /* III — letter-spacing stretches */
+  .fxIII .verse{ letter-spacing:calc(.02em + var(--p) * .4em); }
+  .fxIII .tight{ letter-spacing:.02em !important; font-style:italic; }
+  /* IV — hinge up 3D */
+  .fxIV .row{ display:block; transform-origin:50% 100%; perspective:900px; }
+  .fxIV .row > span{ display:inline-block; transform:rotateX(85deg) translateZ(-120px); opacity:0;
+    transition:transform .9s cubic-bezier(.22,1,.36,1), opacity .9s; transition-delay:calc(var(--i) * 120ms); }
+  .fxIV.in .row > span{ transform:none; opacity:1; }
+  /* V — liquid fill */
+  .fxV .verse{
+    background-image:linear-gradient(180deg, var(--bone) 0%,
+      var(--bone) calc(92% - var(--p) * 108%),
+      var(--teal-hi) calc(102% - var(--p) * 108%),
+      var(--teal-hi) 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  /* VI — blur surface */
+  .fxVI .w{ opacity:0; filter:blur(14px); transform:scale(1.25);
+    transition:all .9s cubic-bezier(.22,1,.36,1); transition-delay:calc(var(--i) * 70ms); }
+  .fxVI.in .w{ opacity:1; filter:blur(0); transform:none; }
+  /* VII — scattered convergence */
+  .fxVII .w{ transform:translate(calc(var(--dx) * (1 - var(--t))), calc(var(--dy) * (1 - var(--t))))
+    rotate(calc(var(--dr) * (1 - var(--t)))); opacity:calc(.15 + var(--t) * .85); }
+  /* VIII — ripple */
+  .fxVIII .l{ transform:translateY(calc(sin(var(--wave)) * var(--amp))); }
+  .fxVIII{ --amp:calc((1 - var(--t)) * 7px); }
+  .fxVIII .l{ --wave:calc(var(--p) * 360deg + var(--i) * 24deg); }
+  /* IX — closing */
+  .fxIX .verse{ transform:scale(calc(1.35 - var(--t) * .35)); letter-spacing:calc(.2em * (1 - var(--t))); }
+  .colophon{
+    margin-top:6vh; font-family:ui-sans-serif, system-ui, sans-serif; font-size:10px;
+    letter-spacing:.28em; text-transform:uppercase; color:var(--bone-dim);
+    opacity:calc(var(--t) * .9); transition:opacity .3s;
+  }
+  @media (prefers-reduced-motion: reduce){
+    html{ scroll-behavior:auto; }
+    .fxI .l, .fxII .w, .fxIV .row > span, .fxVI .w{ opacity:1 !important; transform:none !important; filter:none !important; transition:none !important; }
+    .fxVII .w{ transform:none !important; opacity:1 !important; }
+    .fxVIII .l{ transform:none !important; }
+    .fxIX .verse{ transform:none !important; letter-spacing:.02em !important; }
+    #water{ animation:none; }
+    #hint .line{ animation:none; }
+    .numeral{ opacity:.9; transform:none; }
+    .colophon{ opacity:.9; }
+  }
+</style>
+</head>
+<body>
+  <div id="moon"></div>
+  <div id="water"></div>
+  <div id="grain"></div>
+
+  <div id="hint"><div class="line"></div><span>scroll</span></div>
+
+  <div id="rail">
+    <div id="counter">I / IX</div>
+    <div id="dots"></div>
+    <div id="railTrack"><div id="railFill"></div></div>
+  </div>
+
+  <main id="poem">
+    <section class="stanza fxI" id="s1">
+      <div class="numeral">I</div>
+      <div class="verse" data-split="letters">midnight pours a slow silver wine into the bay</div>
+    </section>
+    <section class="stanza fxII" id="s2">
+      <div class="numeral">II</div>
+      <div class="verse" data-split="words">the moon a pale coin spent on black water</div>
+    </section>
+    <section class="stanza fxIII" id="s3">
+      <div class="numeral">III</div>
+      <div class="verse">waves repeat one word <span class="tight">over and over</span></div>
+    </section>
+    <section class="stanza fxIV" id="s4">
+      <div class="numeral">IV</div>
+      <div class="verse">
+        <span class="row"><span style="--i:0">far out,</span></span>
+        <span class="row"><span style="--i:1">a ship carries</span></span>
+        <span class="row"><span style="--i:2">its small room of light</span></span>
+      </div>
+    </section>
+    <section class="stanza fxV" id="s5">
+      <div class="numeral">V</div>
+      <div class="verse">the sea keeps every promise it never made</div>
+    </section>
+    <section class="stanza fxVI" id="s6">
+      <div class="numeral">VI</div>
+      <div class="verse" data-split="words">and I stand where the sand forgets my feet</div>
+    </section>
+    <section class="stanza fxVII" id="s7">
+      <div class="numeral">VII</div>
+      <div class="verse" data-split="words">your voice still folds itself into every wave</div>
+    </section>
+    <section class="stanza fxVIII" id="s8">
+      <div class="numeral">VIII</div>
+      <div class="verse" data-split="letters">the water says <span class="em">almost your name.</span></div>
+    </section>
+    <section class="stanza fxIX" id="s9">
+      <div class="numeral">IX</div>
+      <div class="verse">and the night goes home <span class="em">dripping light.</span></div>
+      <div class="colophon">nocturne for the sea · nine movements · read slowly</div>
+    </section>
+  </main>
+
+<script>
+(function(){
+  'use strict';
+  var RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var sections = Array.prototype.slice.call(document.querySelectorAll('.stanza'));
+  var ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX'];
+
+  /* ---------- splitting ---------- */
+  var wi = 0;
+  sections.forEach(function(sec){
+    sec.querySelectorAll('[data-split]').forEach(function(el){
+      var mode = el.dataset.split;
+      var text = el.textContent;
+      var frag = document.createDocumentFragment();
+      if (mode === 'letters'){
+        var idx = 0;
+        Array.prototype.forEach.call(el.childNodes, function(node){
+          if (node.nodeType === 3){
+            for (var ch of node.textContent){
+              var s = document.createElement('span'); s.className = 'l';
+              s.style.setProperty('--i', idx++);
+              s.textContent = ch === ' ' ? '\u00A0' : ch;
+              frag.appendChild(s);
+            }
+          } else if (node.nodeType === 1){
+            var inner = document.createElement('span');
+            inner.className = node.className + ' l';
+            inner.style.setProperty('--i', idx++);
+            inner.textContent = node.textContent;
+            frag.appendChild(inner);
+          }
+        });
+      } else {
+        text.split(' ').forEach(function(word){
+          var s = document.createElement('span'); s.className = 'w';
+          s.style.setProperty('--i', wi++);
+          s.textContent = word;
+          frag.appendChild(s);
+          frag.appendChild(document.createTextNode(' '));
+        });
+      }
+      el.textContent = '';
+      el.appendChild(frag);
+    });
+    /* random scatter offsets for VII */
+    if (sec.classList.contains('fxVII')){
+      sec.querySelectorAll('.w').forEach(function(w){
+        w.style.setProperty('--dx', ((Math.random() - .5) * 60).toFixed(1) + 'vw');
+        w.style.setProperty('--dy', ((Math.random() - .5) * 50).toFixed(1) + 'vh');
+        w.style.setProperty('--dr', ((Math.random() - .5) * 60).toFixed(1) + 'deg');
+      });
+    }
+  });
+
+  /* ---------- observer ---------- */
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(en){ if (en.isIntersecting) en.target.classList.add('in'); });
+  }, { threshold: .35 });
+  sections.forEach(function(s){ io.observe(s); });
+
+  /* ---------- rail dots ---------- */
+  var dots = document.getElementById('dots');
+  sections.forEach(function(s, i){
+    var b = document.createElement('button');
+    b.setAttribute('aria-label', 'Stanza ' + ROMAN[i]);
+    b.addEventListener('click', function(){ s.scrollIntoView({ behavior: RM ? 'auto' : 'smooth' }); });
+    dots.appendChild(b);
+  });
+  var dotBtns = Array.prototype.slice.call(dots.children);
+  var counter = document.getElementById('counter');
+
+  /* ---------- per-frame choreography ---------- */
+  function smoothstep(x){ x = Math.min(Math.max(x, 0), 1); return x * x * (3 - 2 * x); }
+  var cur = -1;
+  function onFrame(){
+    var vh = innerHeight;
+    var docH = document.documentElement.scrollHeight - vh;
+    var gp = docH > 0 ? scrollY / docH : 0;
+    document.body.style.setProperty('--gp', gp.toFixed(4));
+    document.getElementById('railFill').style.height = (gp * 100) + '%';
+    /* moon */
+    var m = document.getElementById('moon');
+    m.style.transform = 'translateY(' + (-gp * 70) + 'vh) scale(' + (1 - gp * .45) + ')';
+    m.style.opacity = String(1 - gp * .8);
+    var best = 0, bestD = 1e9;
+    sections.forEach(function(sec, i){
+      var r = sec.getBoundingClientRect();
+      var centerDist = Math.abs((r.top + r.height / 2) - vh / 2);
+      var t = smoothstep(1 - centerDist / (vh * .6));
+      var p = Math.min(Math.max((vh - r.top) / (vh + r.height), 0), 1);
+      sec.style.setProperty('--t', t.toFixed(4));
+      sec.style.setProperty('--p', p.toFixed(4));
+      if (centerDist < bestD){ bestD = centerDist; best = i; }
+    });
+    if (best !== cur){
+      cur = best;
+      counter.textContent = ROMAN[cur] + ' / IX';
+      dotBtns.forEach(function(b, i){ b.classList.toggle('cur', i === cur); });
+    }
+    requestAnimationFrame(onFrame);
+  }
+  requestAnimationFrame(onFrame);
+  addEventListener('scroll', function(){ document.body.classList.add('scrolled'); }, { once:true, passive:true });
+
+  /* ---------- keyboard stepping ---------- */
+  function step(dir){
+    var target = Math.min(Math.max(cur + dir, 0), sections.length - 1);
+    sections[target].scrollIntoView({ behavior: RM ? 'auto' : 'smooth' });
+  }
+  addEventListener('keydown', function(e){
+    if (e.key === 'ArrowDown' || e.key === 'PageDown'){ e.preventDefault(); step(1); }
+    else if (e.key === 'ArrowUp' || e.key === 'PageUp'){ e.preventDefault(); step(-1); }
+    else if (e.key === ' '){ e.preventDefault(); step(1); }
+  });
+})();
+</script>
+</body>
+</html>

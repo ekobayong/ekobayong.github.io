@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kaleido — Symmetric Mandala Studio</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  background:radial-gradient(circle at 50% 50%, #1a1b1e 0%, #0d0e10 100%);
+  color:#e8e9ec;
+  touch-action:none;
+  user-select:none;
+}
+#stage{position:fixed;inset:0;display:block;cursor:crosshair}
+.vignette{
+  position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(circle at 50% 50%, transparent 45%, rgba(0,0,0,.55) 100%);
+}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Courier New',monospace}
+
+/* ---------- brand ---------- */
+.brand{position:fixed;top:22px;left:26px;z-index:6;pointer-events:none}
+.brand h1{font-weight:200;font-size:22px;letter-spacing:.32em;color:#f2f3f5}
+.brand p{margin-top:5px;font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;color:#8b8c91}
+
+/* ---------- status ---------- */
+.status{
+  position:fixed;top:22px;right:26px;z-index:6;pointer-events:none;text-align:right;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Courier New',monospace;
+  font-size:11.5px;line-height:1.85;color:#7e8086;letter-spacing:.06em;
+}
+.status b{font-weight:400;color:#f0b35a}
+
+/* ---------- toolbar ---------- */
+.toolbar{
+  position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:8;
+  display:flex;align-items:center;gap:4px;
+  padding:8px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:999px;
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+  box-shadow:0 18px 44px rgba(0,0,0,.55);
+  max-width:calc(100vw - 20px);
+}
+.tool{
+  position:relative;
+  display:flex;align-items:center;gap:7px;
+  background:transparent;border:0;color:#cfd1d6;
+  font:inherit;font-size:12.5px;
+  padding:9px 14px;border-radius:999px;cursor:pointer;white-space:nowrap;
+  transition:background .2s,color .2s;
+}
+.tool:hover,.tool:focus-visible{background:rgba(255,255,255,.1);color:#fff;outline:none}
+.tool.on{background:rgba(240,179,90,.18);color:#f0b35a}
+.tool.on:hover{background:rgba(240,179,90,.3)}
+.tool svg{flex:none;display:block}
+.sep{width:1px;height:22px;background:rgba(255,255,255,.14);margin:0 4px;flex:none}
+
+/* popovers */
+.pop{
+  position:absolute;bottom:calc(100% + 12px);left:50%;
+  transform:translate(-50%,10px);opacity:0;pointer-events:none;
+  background:rgba(24,25,28,.92);
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:16px;
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+  box-shadow:0 18px 44px rgba(0,0,0,.6);
+  padding:14px;
+  transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .28s ease;
+  min-width:210px;
+}
+.pop.open{transform:translate(-50%,0);opacity:1;pointer-events:auto}
+.pop h3{
+  font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#8b8c91;
+  font-weight:400;margin-bottom:10px;
+}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{
+  border:1px solid rgba(255,255,255,.2);background:transparent;color:#cfd1d6;
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;
+  padding:6px 12px;border-radius:999px;cursor:pointer;transition:all .2s;
+}
+.chip:hover{border-color:#fff;color:#fff}
+.chip[aria-pressed="true"]{background:#f0b35a;color:#17181a;border-color:#f0b35a}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.sw{
+  width:40px;height:26px;border-radius:8px;cursor:pointer;
+  border:1.5px solid transparent;transition:transform .15s,border-color .15s;
+}
+.sw:hover{transform:translateY(-2px)}
+.sw[aria-pressed="true"]{border-color:#f0b35a}
+.sw.drift{background:conic-gradient(from 0deg, hsl(0,85%,62%),hsl(60,85%,62%),hsl(120,85%,62%),hsl(180,85%,62%),hsl(240,85%,62%),hsl(300,85%,62%),hsl(360,85%,62%))}
+.sw.ember{background:linear-gradient(90deg,#ffb347,#ff7a3a,#ff5e3a,#e0335a,#c81d5a)}
+.sw.lagoon{background:linear-gradient(90deg,#a7f3d0,#5eead4,#22d3ee,#3b82f6,#1e3a8a)}
+.sw.gilded{background:linear-gradient(90deg,#fff6d5,#f7dd9a,#f0b35a,#c98a2c,#7a4b12)}
+.sw.ivory{background:linear-gradient(90deg,#ffffff,#e8e6df,#c9c5b8,#a8a49a,#6e6a60)}
+.pop .lbl{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;color:#8b8c91;margin-top:8px;text-align:center}
+
+@media (max-width:640px){
+  .tool .tlbl{display:none}
+  .tool{padding:9px 11px}
+  .brand h1{font-size:16px}
+  .status{font-size:10px;top:16px;right:16px}
+  .brand{top:16px;left:16px}
+}
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<div class="brand">
+  <h1>KALEIDO</h1>
+  <p>symmetric mandala studio</p>
+</div>
+
+<div class="status mono" aria-live="off">
+  symmetry <b id="stSym">8</b><br>
+  mirror <b id="stMir">off</b><br>
+  strokes <b id="stCount">0</b><br>
+  palette <b id="stPal">drift</b>
+</div>
+
+<div class="toolbar" id="toolbar">
+  <div class="pop" id="popSym">
+    <h3>Symmetry</h3>
+    <div class="chips" id="symChips">
+      <button class="chip" data-n="6" aria-pressed="false">6</button>
+      <button class="chip" data-n="8" aria-pressed="true">8</button>
+      <button class="chip" data-n="12" aria-pressed="false">12</button>
+      <button class="chip" data-n="16" aria-pressed="false">16</button>
+    </div>
+  </div>
+  <button class="tool" id="btnSym" aria-haspopup="true">
+    <svg width="15" height="15" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.4"/><path d="M8 1.6v12.8M1.6 8h12.8"/></g></svg>
+    <span class="tlbl">Symmetry</span>
+  </button>
+
+  <div class="pop" id="popPal">
+    <h3>Palette</h3>
+    <div class="swatches">
+      <button class="sw drift" data-p="drift" aria-pressed="true" title="Drifting hue"></button>
+      <button class="sw ember" data-p="Ember" aria-pressed="false" title="Ember"></button>
+      <button class="sw lagoon" data-p="Lagoon" aria-pressed="false" title="Lagoon"></button>
+      <button class="sw gilded" data-p="Gilded" aria-pressed="false" title="Gilded"></button>
+      <button class="sw ivory" data-p="Ivory" aria-pressed="false" title="Ivory"></button>
+    </div>
+    <p class="lbl" id="palName">drifting hue</p>
+  </div>
+  <button class="tool" id="btnPal" aria-haspopup="true">
+    <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 1.5a6.5 6.5 0 1 0 0 13c1.1 0 1.6-.7 1.2-1.6-.5-1.1.2-2.1 1.4-2.1h1.6a2.3 2.3 0 0 0 2.3-2.4A6.6 6.6 0 0 0 8 1.5z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="5.4" cy="6" r="1.1" fill="currentColor"/><circle cx="8.6" cy="4.6" r="1.1" fill="currentColor"/><circle cx="11.4" cy="7" r="1.1" fill="currentColor"/></svg>
+    <span class="tlbl">Palette</span>
+  </button>
+
+  <span class="sep"></span>
+  <button class="tool" id="btnUndo">
+    <svg width="15" height="15" viewBox="0 0 16 16"><path d="M6.5 2.5 3 6l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 6h6.2a4 4 0 0 1 0 8H6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <span class="tlbl">Undo</span>
+  </button>
+  <button class="tool" id="btnClear">
+    <svg width="15" height="15" viewBox="0 0 16 16"><path d="M2.5 4.5h11M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5M4 4.5l.8 9a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.8-9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="tlbl">Clear</span>
+  </button>
+  <button class="tool" id="btnSave">
+    <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 2v8m0 0 3-3M8 10 5 7M2.5 12.5h11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="tlbl">Save PNG</span>
+  </button>
+
+  <span class="sep"></span>
+  <button class="tool" id="btnMirror" aria-pressed="false">
+    <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 1.5v13M5.5 4 3 8l2.5 4M10.5 4 13 8l-2.5 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="tlbl">Mirror</span>
+  </button>
+  <button class="tool" id="btnAuto" aria-pressed="false">
+    <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+    <span class="tlbl">Auto-draw</span>
+  </button>
+</div>
+
+<script>
+(function(){
+"use strict";
+/* ================= setup ================= */
+const canvas=document.getElementById("stage");
+const ctx=canvas.getContext("2d");
+const committed=document.createElement("canvas");
+const cctx=committed.getContext("2d");
+let W=0,H=0,DPR=1,CX=0,CY=0;
+
+function resize(){
+  DPR=Math.min(3,devicePixelRatio||1);
+  W=innerWidth; H=innerHeight;
+  CX=W/2; CY=H/2;
+  for (const [c,cc] of [[canvas,ctx],[committed,cctx]]){
+    c.width=W*DPR; c.height=H*DPR;
+    c.style.width=W+"px"; c.style.height=H+"px";
+    cc.setTransform(DPR,0,0,DPR,0,0);
+  }
+  redrawCommitted();
+}
+addEventListener("resize",resize);
+
+/* ================= state ================= */
+const PALETTES={
+  Ember:["#ffb347","#ff7a3a","#ff5e3a","#e0335a","#c81d5a"],
+  Lagoon:["#a7f3d0","#5eead4","#22d3ee","#3b82f6","#1e3a8a"],
+  Gilded:["#fff6d5","#f7dd9a","#f0b35a","#c98a2c","#7a4b12"],
+  Ivory:["#ffffff","#e8e6df","#c9c5b8","#a8a49a","#6e6a60"]
+};
+let sym=8, mirror=false, strokes=[], palName="drift", hue=0, palIdx=0;
+let live=null, auto=false, autoStroke=null;
+
+/* ================= status ================= */
+const stSym=document.getElementById("stSym"), stMir=document.getElementById("stMir"),
+      stCount=document.getElementById("stCount"), stPal=document.getElementById("stPal");
+function updateStatus(){
+  stSym.textContent=sym+(mirror?" (2"+sym+")":"");
+  stMir.textContent=mirror?"on":"off";
+  stCount.textContent=strokes.length;
+  stPal.textContent=palName;
+}
+
+/* ================= color ================= */
+function nextColor(){
+  if (palName==="drift"){
+    hue=(hue+0.7)%360;
+    return `hsl(${hue.toFixed(1)},85%,62%)`;
+  }
+  const p=PALETTES[palName];
+  const c=p[palIdx%p.length];
+  palIdx++;
+  return c;
+}
+
+/* ================= geometry / symmetry ================= */
+function drawStroke(cc,s){
+  const pts=s.pts;
+  if (pts.length<2) return;
+  const copies=sym*(mirror?2:1);
+  cc.lineCap="round"; cc.lineJoin="round";
+  for (let k=0;k<copies;k++){
+    const isMirror=mirror && k>=sym;
+    const idx=isMirror ? k-sym : k;
+    const a=(Math.PI*2/sym)*idx;
+    const ca=Math.cos(a), sa=Math.sin(a);
+    cc.beginPath();
+    const map=p=>{
+      let dx=p.x-CX, dy=p.y-CY;
+      if (isMirror) dx=-dx;
+      return {x:CX+dx*ca-dy*sa, y:CY+dx*sa+dy*ca, w:p.w};
+    };
+    const m=pts.map(map);
+    cc.moveTo(m[0].x,m[0].y);
+    for (let i=1;i<m.length-1;i++){
+      const mx=(m[i].x+m[i+1].x)/2, my=(m[i].y+m[i+1].y)/2;
+      cc.quadraticCurveTo(m[i].x,m[i].y,mx,my);
+    }
+    cc.lineTo(m[m.length-1].x,m[m.length-1].y);
+    cc.strokeStyle=s.color;
+    cc.globalAlpha=.92;
+    cc.shadowColor=s.color;
+    cc.shadowBlur=8;
+    cc.lineWidth=s.baseW;
+    cc.stroke();
+    /* width-varying pass: draw per-segment widths */
+    for (let i=1;i<m.length;i++){
+      cc.beginPath();
+      cc.lineWidth=m[i].w;
+      cc.moveTo(m[i-1].x,m[i-1].y);
+      cc.lineTo(m[i].x,m[i].y);
+      cc.stroke();
+    }
+    cc.shadowBlur=0;
+    cc.globalAlpha=1;
+  }
+}
+function redrawCommitted(){
+  cctx.clearRect(0,0,W,H);
+  strokes.forEach(s=>drawStroke(cctx,s));
+  updateStatus();
+}
+function composite(){
+  ctx.clearRect(0,0,W,H);
+  ctx.drawImage(committed,0,0,W,H);
+  if (live && live.pts.length>1) drawStroke(ctx,live);
+}
+
+/* ================= pointer drawing ================= */
+let drawing=false, lastPt=null, lastT=0, wSmooth=7;
+function startStroke(x,y){
+  palIdx=0;
+  drawing=true;
+  wSmooth=7;
+  live={pts:[{x,y,w:7}],color:nextColor(),baseW:7};
+  lastPt={x,y}; lastT=performance.now();
+}
+function addSample(x,y,t){
+  const dx=x-lastPt.x, dy=y-lastPt.y;
+  const d=Math.hypot(dx,dy);
+  if (d<2.5) return;
+  const speed=d/Math.max(1,t-lastT);       /* px per ms */
+  const target=Math.max(1.2,Math.min(14,14-speed*9));
+  wSmooth+= (target-wSmooth)*0.22;
+  live.pts.push({x,y,w:wSmooth});
+  live.color = palName==="drift" ? live.color : nextColor();
+  if (palName==="drift"){
+    /* hue advances per sample; refresh stroke color gradually */
+    hue=(hue+0.7)%360;
+    live.color=`hsl(${hue.toFixed(1)},85%,62%)`;
+  }
+  lastPt={x,y}; lastT=t;
+  composite();
+}
+canvas.addEventListener("pointerdown",e=>{
+  if (auto) return;
+  canvas.setPointerCapture(e.pointerId);
+  startStroke(e.clientX,e.clientY);
+  composite();
+});
+canvas.addEventListener("pointermove",e=>{
+  if (!drawing) return;
+  addSample(e.clientX,e.clientY,performance.now());
+});
+function endStroke(){
+  if (!drawing) return;
+  drawing=false;
+  if (live && live.pts.length>1){ strokes.push(live); drawStroke(cctx,live); }
+  live=null;
+  composite();
+  updateStatus();
+}
+canvas.addEventListener("pointerup",endStroke);
+canvas.addEventListener("pointercancel",endStroke);
+
+/* ================= auto-draw ================= */
+/* tiny value noise */
+function hash(n){ n=Math.sin(n*127.1+311.7)*43758.5453; return n-Math.floor(n); }
+function vnoise(t){
+  const i=Math.floor(t), f=t-i, u=f*f*(3-2*f);
+  return hash(i)*(1-u)+hash(i+1)*u;
+}
+const RING_R=["0.18","0.3","0.42","0.56","0.72"];
+let autoId=0;
+function startAutoStroke(){
+  autoId++;
+  const ring=parseFloat(RING_R[autoId%RING_R.length]);
+  const life=120+Math.floor(hash(autoId*3.7)*160);   /* 120-280 */
+  autoStroke={
+    life, count:0,
+    ringR:ring*Math.min(W,H),
+    ang:hash(autoId*9.3)*Math.PI*2,
+    dir:hash(autoId*5.1)>.5?1:-1,
+    baseW:1.5+hash(autoId*7.7)*5,
+    spread:8+hash(autoId*11.3)*44,
+    seed:autoId*17.3,
+    pts:[]
+  };
+}
+function autoStep(){
+  if (!autoStroke) startAutoStroke();
+  const s=autoStroke;
+  for (let n=0;n<2;n++){
+    const t=s.count*0.06;
+    const angVel=(0.035+vnoise(s.seed+t)*0.06)*s.dir;
+    s.ang+=angVel;
+    const wob=(vnoise(s.seed*1.7+t*0.7)-0.5)*2*s.spread;
+    const r=s.ringR+wob;
+    const x=CX+Math.cos(s.ang)*r, y=CY+Math.sin(s.ang)*r;
+    const w=1.2+(vnoise(s.seed*2.3+t*1.3))*Math.min(14,s.baseW*2.4);
+    if (!s.pts.length){
+      live={pts:[{x,y,w}],color:nextColor(),baseW:s.baseW};
+    } else {
+      live.pts.push({x,y,w});
+      if (palName==="drift"){ hue=(hue+0.55)%360; live.color=`hsl(${hue.toFixed(1)},85%,62%)`; }
+      else live.color=nextColor();
+    }
+    s.count++;
+    if (s.count>=s.life){
+      strokes.push(live); drawStroke(cctx,live); live=null;
+      startAutoStroke();
+      break;
+    }
+  }
+  composite();
+  if (strokes.length && strokes.length%12===0) updateStatus();
+}
+let autoTimer=null;
+function setAuto(on){
+  auto=on;
+  btnAuto.classList.toggle("on",on);
+  btnAuto.setAttribute("aria-pressed",String(on));
+  if (on){ startAutoStroke(); autoTimer=setInterval(autoStep, 33); }
+  else { clearInterval(autoTimer); endStroke(); autoStroke=null; }
+}
+
+/* ================= toolbar ================= */
+const btnSym=document.getElementById("btnSym"), btnPal=document.getElementById("btnPal"),
+      popSym=document.getElementById("popSym"), popPal=document.getElementById("popPal"),
+      btnUndo=document.getElementById("btnUndo"), btnClear=document.getElementById("btnClear"),
+      btnSave=document.getElementById("btnSave"), btnMirror=document.getElementById("btnMirror"),
+      btnAuto=document.getElementById("btnAuto");
+function closePops(){ popSym.classList.remove("open"); popPal.classList.remove("open"); }
+function togglePop(p){ const open=p.classList.contains("open"); closePops(); if(!open) p.classList.add("open"); }
+btnSym.addEventListener("click",()=>togglePop(popSym));
+btnPal.addEventListener("click",()=>togglePop(popPal));
+
+document.querySelectorAll("#symChips .chip").forEach(ch=>ch.addEventListener("click",()=>{
+  sym=+ch.dataset.n;
+  document.querySelectorAll("#symChips .chip").forEach(c=>c.setAttribute("aria-pressed",String(c===ch)));
+  redrawCommitted(); composite(); closePops();
+}));
+document.querySelectorAll(".sw").forEach(sw=>sw.addEventListener("click",()=>{
+  palName=sw.dataset.p;
+  document.querySelectorAll(".sw").forEach(x=>x.setAttribute("aria-pressed",String(x===sw)));
+  document.getElementById("palName").textContent =
+    palName==="drift"?"drifting hue":palName.toLowerCase()+" steps";
+  redrawCommitted(); composite(); updateStatus(); closePops();
+}));
+
+btnUndo.addEventListener("click",()=>{
+  if (auto) return;
+  strokes.pop();
+  redrawCommitted(); composite();
+});
+btnClear.addEventListener("click",()=>{
+  strokes=[];
+  if (auto) setAuto(false);
+  redrawCommitted(); composite();
+});
+btnMirror.addEventListener("click",()=>{
+  mirror=!mirror;
+  btnMirror.classList.toggle("on",mirror);
+  btnMirror.setAttribute("aria-pressed",String(mirror));
+  redrawCommitted(); composite();
+});
+btnAuto.addEventListener("click",()=>setAuto(!auto));
+
+/* save png */
+btnSave.addEventListener("click",()=>{
+  const out=document.createElement("canvas");
+  out.width=canvas.width; out.height=canvas.height;
+  const o=out.getContext("2d");
+  o.setTransform(DPR,0,0,DPR,0,0);
+  const g=o.createRadialGradient(CX,CY,0,CX,CY,Math.max(W,H)*.75);
+  g.addColorStop(0,"#1a1b1e"); g.addColorStop(1,"#0d0e10");
+  o.fillStyle=g; o.fillRect(0,0,W,H);
+  o.setTransform(1,0,0,1,0,0);
+  o.drawImage(committed,0,0);
+  const a=document.createElement("a");
+  a.download="kaleido-mandala.png";
+  a.href=out.toDataURL("image/png");
+  a.click();
+});
+
+/* keyboard */
+addEventListener("keydown",e=>{
+  if (e.metaKey||e.ctrlKey||e.altKey) return;
+  switch(e.key.toLowerCase()){
+    case "a": setAuto(!auto); break;
+    case "c": btnClear.click(); break;
+    case "z": btnUndo.click(); break;
+    case "s": btnSave.click(); break;
+    case "m": btnMirror.click(); break;
+    case "escape": closePops(); break;
+  }
+});
+
+resize();
+updateStatus();
+/* a gentle welcome stroke so the canvas isn't empty */
+(function welcome(){
+  const pts=[];
+  const r=Math.min(W,H)*0.3;
+  for (let i=0;i<=60;i++){
+    const a=i/60*Math.PI*2;
+    pts.push({x:CX+Math.cos(a)*r, y:CY+Math.sin(a)*r, w:5+3*Math.sin(a*3)});
+  }
+  const s={pts,color:"hsl(38,85%,62%)",baseW:6};
+  strokes.push(s); drawStroke(cctx,s); composite();
+})();
+})();
+</script>
+</body>
+</html>

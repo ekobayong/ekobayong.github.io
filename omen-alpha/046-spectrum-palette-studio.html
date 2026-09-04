@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>046 · Spectrum — Palette Studio</title>
+<style>
+  :root {
+    --h: 212; --s: 62%; --l: 52%;
+    --base: hsl(var(--h), var(--s), var(--l));
+    --ink: hsl(var(--h), 45%, 12%);
+    --muted: hsl(var(--h), 18%, 42%);
+    --page: hsl(var(--h), 40%, 98%);
+    --hairline: hsl(var(--h), 45%, 86%);
+    --card: rgba(255,255,255,0.78);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(140% 110% at 50% 0%, hsl(var(--h), 55%, 96%) 0%, var(--page) 46%, hsl(var(--h), 30%, 93%) 100%);
+    transition:background 600ms ease;
+    min-height:100vh; padding:48px 32px 90px;
+  }
+  .wrap { max-width:1200px; margin:0 auto; }
+
+  header { margin-bottom:36px; }
+  .eyebrow {
+    font-size:10px; letter-spacing:.42em; text-transform:uppercase; color:var(--muted); margin-bottom:12px;
+  }
+  h1 {
+    font-family:'Iowan Old Style','Palatino','Palatino Linotype',Georgia,serif;
+    font-weight:500; font-size:clamp(34px,4.6vw,54px); letter-spacing:-0.02em; line-height:1.04;
+    color:hsl(var(--h), 30%, 18%);
+    transition:color 600ms ease;
+  }
+  h1 em { font-style:italic; color:var(--base); transition:color 600ms ease; }
+  .sub { margin-top:12px; font-size:14px; color:var(--muted); max-width:60ch; line-height:1.6; }
+
+  .grid { display:grid; grid-template-columns:1.15fr 1fr; gap:22px; align-items:start; }
+  .col { display:flex; flex-direction:column; gap:22px; min-width:0; }
+
+  .card {
+    background:var(--card);
+    -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+    border:1px solid var(--hairline);
+    border-radius:18px;
+    padding:22px;
+    box-shadow:0 1px 0 rgba(255,255,255,.9) inset, 0 1px 2px hsla(var(--h), 45%, 30%, .12), 0 40px 60px -30px hsla(var(--h), 45%, 30%, .22);
+    transition:border-color 600ms ease, box-shadow 600ms ease;
+  }
+  .card h2 {
+    font-family:'Iowan Old Style','Palatino',Georgia,serif; font-weight:500; font-size:19px;
+    letter-spacing:-0.01em; margin-bottom:16px; color:hsl(var(--h), 30%, 20%);
+  }
+  .card h2 .num {
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:10px; letter-spacing:.2em;
+    color:var(--muted); vertical-align:super; margin-right:8px;
+  }
+  .mono { font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; }
+
+  /* ---------- plane + slider ---------- */
+  #plane {
+    position:relative; aspect-ratio:16/10; border-radius:12px; overflow:hidden;
+    background:
+      linear-gradient(to bottom, rgba(128,128,128,0) 0%, rgba(128,128,128,1) 100%),
+      linear-gradient(to right, hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%), hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%));
+    border:1px solid var(--hairline);
+    cursor:crosshair; touch-action:none;
+  }
+  #puck {
+    position:absolute; width:26px; height:26px; border-radius:50%;
+    border:3px solid #fff; transform:translate(-50%,-50%);
+    box-shadow:0 1px 6px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.15) inset;
+    pointer-events:none; transition:width .15s ease, height .15s ease;
+  }
+  #plane.dragging #puck { width:32px; height:32px; }
+  .sliderrow { margin-top:18px; }
+  .sliderrow .lab { display:flex; justify-content:space-between; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  #lightSlider { -webkit-appearance:none; appearance:none; width:100%; height:12px; border-radius:6px; outline:none; border:1px solid var(--hairline); }
+  #lightSlider::-webkit-slider-thumb {
+    -webkit-appearance:none; width:22px; height:22px; border-radius:50%;
+    background:#fff; border:3px solid #fff;
+    box-shadow:0 1px 6px rgba(0,0,0,.35); cursor:pointer;
+  }
+  #lightSlider::-moz-range-thumb { width:16px; height:16px; border-radius:50%; background:#fff; border:3px solid #fff; box-shadow:0 1px 6px rgba(0,0,0,.35); cursor:pointer; }
+
+  /* ---------- harmony ---------- */
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
+  .chip {
+    font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    border:1px solid var(--hairline); background:rgba(255,255,255,.6); color:var(--muted);
+    border-radius:999px; padding:8px 15px; cursor:pointer;
+    transition:all 300ms ease; font-family:inherit;
+  }
+  .chip:hover { border-color:var(--base); color:var(--ink); }
+  .chip.active {
+    background:var(--base); border-color:var(--base); color:#fff; font-weight:600;
+    box-shadow:0 4px 14px -4px var(--base);
+  }
+  .swatches { display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; }
+  .swatch {
+    aspect-ratio:3/4; border-radius:12px; position:relative; cursor:pointer;
+    display:flex; flex-direction:column; justify-content:flex-end; padding:10px 9px;
+    border:1px solid rgba(0,0,0,.08);
+    box-shadow:0 1px 2px hsla(var(--h), 45%, 30%, .14), 0 18px 28px -18px hsla(var(--h), 45%, 30%, .3);
+    animation:pop .5s cubic-bezier(.2,.9,.3,1.2) backwards;
+    transition:transform .25s ease, box-shadow .25s ease;
+  }
+  @keyframes pop { from { opacity:0; transform:translateY(14px) scale(.86); } to { opacity:1; transform:none; } }
+  .swatch:hover { transform:translateY(-4px); box-shadow:0 1px 2px hsla(var(--h),45%,30%,.14), 0 26px 40px -18px hsla(var(--h),45%,30%,.4); }
+  .swatch .nm { position:absolute; top:10px; left:10px; font-size:9.5px; letter-spacing:.18em; text-transform:uppercase; opacity:.85; }
+  .swatch .hexv { font-family:ui-monospace,Menlo,Consolas,monospace; font-weight:700; font-size:13px; }
+  .swatch .cap { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:8.5px; opacity:.8; margin-top:3px; line-height:1.5; }
+  .swatch .copy {
+    position:absolute; top:8px; right:8px; opacity:0; font-size:11px;
+    transition:opacity .2s ease;
+  }
+  .swatch:hover .copy { opacity:.9; }
+
+  /* ---------- contrast ---------- */
+  .crow { display:flex; align-items:center; gap:12px; padding:9px 0; border-top:1px solid var(--hairline); }
+  .crow:first-of-type { border-top:none; }
+  .aatile {
+    flex:none; width:44px; height:44px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+    font-family:'Iowan Old Style',Palatino,Georgia,serif; font-size:19px; border:1px solid rgba(0,0,0,.1);
+  }
+  .cmeta { flex:1; min-width:0; }
+  .croles { font-size:12px; font-weight:600; }
+  .cvals { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:10px; color:var(--muted); margin-top:2px; }
+  .cratio { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; font-weight:700; }
+  .pillbadge {
+    flex:none; font-size:9px; font-weight:700; letter-spacing:.08em; border-radius:999px; padding:4px 10px;
+  }
+  .b-aaa { background:#1d7a3c; color:#fff; }
+  .b-aa  { background:#3f8f2e; color:#fff; }
+  .b-l   { background:#b98a1e; color:#fff; }
+  .b-f   { background:#c0392b; color:#fff; }
+
+  /* ---------- preview ---------- */
+  .pv {
+    border-radius:12px; border:1px solid rgba(0,0,0,.08); overflow:hidden;
+    transition:all 600ms ease;
+  }
+  .pv-top { padding:18px 18px 12px; transition:background 600ms ease; }
+  .pv-brand { display:flex; align-items:center; gap:8px; font-family:'Iowan Old Style',Palatino,Georgia,serif; font-size:16px; }
+  .pv-dot { width:9px; height:9px; border-radius:50%; transition:background 600ms ease; }
+  .pv-line { margin-top:12px; font-size:19px; font-family:'Iowan Old Style',Palatino,Georgia,serif; }
+  .pv-line em { font-style:italic; }
+  .pv-body { padding:0 18px 18px; }
+  .pv-bar { height:6px; border-radius:3px; overflow:hidden; margin:14px 0 16px; background:rgba(0,0,0,.08); }
+  .pv-bar i { display:block; height:100%; width:64%; border-radius:3px; transition:background 600ms ease; }
+  .pv-btns { display:flex; gap:8px; }
+  .pv-btn { border-radius:999px; padding:8px 16px; font-size:11px; letter-spacing:.06em; border:1px solid transparent; transition:all 600ms ease; }
+  .pv-ghost { background:transparent; }
+  .pv-tags { display:flex; gap:6px; margin-top:14px; flex-wrap:wrap; }
+  .pv-tag { border-radius:999px; padding:4px 11px; font-size:10px; transition:all 600ms ease; }
+
+  /* ---------- export ---------- */
+  #cssOut {
+    width:100%; height:150px; resize:none; border:1px solid var(--hairline); border-radius:10px;
+    background:rgba(255,255,255,.5); padding:12px; font-size:10.5px; line-height:1.7;
+    color:hsl(var(--h), 30%, 25%); font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  .btnrow2 { display:flex; gap:10px; margin-bottom:14px; }
+  .toolbtn {
+    font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    border:1px solid var(--hairline); background:rgba(255,255,255,.65); color:var(--ink);
+    border-radius:999px; padding:9px 18px; cursor:pointer; font-family:inherit;
+    transition:all 250ms ease;
+  }
+  .toolbtn:hover { background:var(--base); color:#fff; border-color:var(--base); }
+
+  /* ---------- toast ---------- */
+  #toast {
+    position:fixed; left:50%; bottom:28px; transform:translate(-50%, 16px);
+    background:hsl(var(--h), 30%, 14%); color:#fff; border-radius:999px;
+    padding:11px 20px 11px 14px; display:flex; align-items:center; gap:10px;
+    font-size:12.5px; font-family:ui-monospace,Menlo,Consolas,monospace;
+    opacity:0; pointer-events:none; transition:opacity .35s ease, transform .35s ease;
+    box-shadow:0 10px 30px rgba(0,0,0,.35); z-index:50;
+  }
+  #toast.show { opacity:1; transform:translate(-50%, 0); }
+  #toast .sq { width:14px; height:14px; border-radius:4px; border:1px solid rgba(255,255,255,.4); }
+
+  @media (max-width:900px){
+    .grid { grid-template-columns:1fr; }
+    body { padding:32px 18px 80px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after { transition-duration:.01ms !important; animation-duration:.01ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Spectrum · palette studio</div>
+    <h1>Colour that <em>drifts</em> with the light</h1>
+    <p class="sub">Move the base colour and the whole studio re-tints — page cast, hairlines, shadows and the italic above all follow the hue with an eased transition. Click any swatch to copy its HEX.</p>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <section class="card">
+        <h2><span class="num">01</span>Base color</h2>
+        <div id="plane">
+          <div id="puck"></div>
+        </div>
+        <div class="sliderrow">
+          <div class="lab"><span>Lightness</span><span class="mono" id="lightVal">52%</span></div>
+          <input type="range" id="lightSlider" min="4" max="96" value="52" aria-label="Lightness">
+        </div>
+      </section>
+
+      <section class="card">
+        <h2><span class="num">02</span>Harmony</h2>
+        <div class="chips" id="chips"></div>
+        <div class="swatches" id="swatches"></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="card">
+        <h2><span class="num">03</span>Contrast check</h2>
+        <div id="contrastRows"></div>
+      </section>
+
+      <section class="card">
+        <h2><span class="num">04</span>Live preview</h2>
+        <div class="pv" id="pv">
+          <div class="pv-top">
+            <div class="pv-brand"><span class="pv-dot"></span><span>Marigold Studio</span></div>
+            <div class="pv-line">Autumn collection is <em>live</em></div>
+          </div>
+          <div class="pv-body">
+            <div class="pv-bar"><i></i></div>
+            <div class="pv-btns">
+              <button class="pv-btn" id="pvPrimary">Shop the drop</button>
+              <button class="pv-btn pv-ghost" id="pvGhost">Lookbook</button>
+            </div>
+            <div class="pv-tags">
+              <span class="pv-tag">wool</span>
+              <span class="pv-tag">hand-dyed</span>
+              <span class="pv-tag">small batch</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2><span class="num">05</span>Export</h2>
+        <div class="btnrow2">
+          <button class="toolbtn" id="shuffleBtn">Shuffle</button>
+          <button class="toolbtn" id="copyCssBtn">Copy CSS</button>
+        </div>
+        <textarea id="cssOut" readonly spellcheck="false"></textarea>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div id="toast"><span class="sq"></span><span id="toastMsg"></span></div>
+
+<script>
+(function(){
+"use strict";
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+var state = { h:212, s:62, l:52, harmony:"Analogous" };
+
+/* ---------- colour math ---------- */
+function hslToRgb(h, s, l){
+  h = ((h % 360) + 360) % 360; s /= 100; l /= 100;
+  var c = (1 - Math.abs(2*l - 1)) * s;
+  var x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  var m = l - c / 2;
+  var r=0,g=0,b=0;
+  if (h < 60){ r=c; g=x; } else if (h < 120){ r=x; g=c; }
+  else if (h < 180){ g=c; b=x; } else if (h < 240){ g=x; b=c; }
+  else if (h < 300){ r=x; b=c; } else { r=c; b=x; }
+  return [Math.round((r+m)*255), Math.round((g+m)*255), Math.round((b+m)*255)];
+}
+function rgbHex(rgb){
+  return "#" + rgb.map(function(v){ return ("0" + v.toString(16)).slice(-2).toUpperCase(); }).join("");
+}
+function hslStr(h, s, l){ return "hsl(" + Math.round(((h % 360) + 360) % 360) + ", " + Math.round(s) + "%, " + Math.round(l) + "%)"; }
+function luminance(rgb){
+  var a = rgb.map(function(v){
+    v /= 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+}
+function contrast(rgb1, rgb2){
+  var L1 = luminance(rgb1), L2 = luminance(rgb2);
+  var hi = Math.max(L1, L2), lo = Math.min(L1, L2);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/* ---------- palette ---------- */
+var HARMONIES = ["Analogous","Complementary","Triadic","Split-complementary","Monochrome"];
+function computePalette(){
+  var h = state.h, s = state.s, l = state.l;
+  var h2, h3, ruleNote;
+  switch (state.harmony){
+    case "Complementary": h2 = h + 180; h3 = h + 180; ruleNote = "Complementary (base + 180°)"; break;
+    case "Triadic": h2 = h + 120; h3 = h + 240; ruleNote = "Triadic (base + 120° / + 240°)"; break;
+    case "Split-complementary": h2 = h + 150; h3 = h + 210; ruleNote = "Split-complementary (base + 150° / + 210°)"; break;
+    case "Monochrome": h2 = h; h3 = h; ruleNote = "Monochrome (single hue, stepped lightness)"; break;
+    default: h2 = h - 30; h3 = h + 30; ruleNote = "Analogous (base − 30° / + 30°)";
+  }
+  var mL = state.harmony === "Monochrome";
+  return {
+    rule: ruleNote,
+    roles: {
+      Primary:   { h:h,  s:s, l:l },
+      Secondary: { h:h2, s:mL ? s*0.85 : Math.min(90, s), l:mL ? Math.max(30, l-22) : Math.max(30, l-14) },
+      Accent:    { h:h3, s:mL ? Math.min(100, s*1.1) : s, l:mL ? Math.min(88, l+20) : Math.min(80, l+18) },
+      Surface:   { h:h,  s:s*0.28, l:96 },
+      Ink:       { h:h,  s:Math.min(80, s*0.9), l:14 }
+    }
+  };
+}
+
+/* ---------- DOM ---------- */
+var root = document.documentElement;
+var plane = document.getElementById("plane");
+var puck = document.getElementById("puck");
+var lightSlider = document.getElementById("lightSlider");
+var lightVal = document.getElementById("lightVal");
+var chipsEl = document.getElementById("chips");
+var swatchesEl = document.getElementById("swatches");
+var contrastEl = document.getElementById("contrastRows");
+var cssOut = document.getElementById("cssOut");
+var toast = document.getElementById("toast");
+var toastMsg = document.getElementById("toastMsg");
+var toastSq = toast.querySelector(".sq");
+var toastTimer = null;
+
+HARMONIES.forEach(function(name){
+  var b = document.createElement("button");
+  b.className = "chip"; b.textContent = name; b.dataset.h = name;
+  b.addEventListener("click", function(){ state.harmony = name; apply(); });
+  chipsEl.appendChild(b);
+});
+
+var ROLES = ["Primary","Secondary","Accent","Surface","Ink"];
+var swatchEls = {};
+ROLES.forEach(function(role, i){
+  var el = document.createElement("div");
+  el.className = "swatch";
+  el.style.animationDelay = (i * 0.06) + "s";
+  el.innerHTML = '<span class="nm">' + role + '</span><span class="copy">⧉</span>' +
+                 '<div class="hexv"></div><div class="cap"></div>';
+  el.addEventListener("click", function(){
+    var hex = el.dataset.hex || "#000000";
+    copyText(hex);
+    showToast(hex, "Copied " + hex + " · " + role);
+  });
+  swatchesEl.appendChild(el);
+  swatchEls[role] = el;
+});
+
+function setSwatch(el, role, h, s, l){
+  var rgb = hslToRgb(h, s, l);
+  var hex = rgbHex(rgb);
+  var hss = hslStr(h, s, l);
+  var rgbStr = "rgb(" + rgb.join(", ") + ")";
+  el.dataset.hex = hex;
+  el.style.background = "linear-gradient(160deg, " + hslStr(h, s, Math.min(96, l + 6)) + ", " + hex + ")";
+  var L = luminance(rgb);
+  var txt = L > 0.42 ? "hsl(" + Math.round(h) + ", 60%, 14%)" : "rgba(255,255,255,.94)";
+  el.style.color = txt;
+  el.querySelector(".hexv").textContent = hex;
+  el.querySelector(".cap").innerHTML = rgbStr + "<br>" + hss;
+}
+
+/* ---------- contrast card ---------- */
+var PAIRS = [
+  ["ink","surface","Ink on Surface"],
+  ["primary","surface","Primary on Surface"],
+  ["surface","primary","Surface on Primary"],
+  ["ink","primary","Ink on Primary"],
+  ["surface","ink","Surface on Ink"],
+  ["accent","surface","Accent on Surface"]
+];
+var pairEls = [];
+PAIRS.forEach(function(p){
+  var row = document.createElement("div");
+  row.className = "crow";
+  row.innerHTML = '<div class="aatile">Aa</div>' +
+    '<div class="cmeta"><div class="croles">' + p[2] + '</div><div class="cvals"></div></div>' +
+    '<div class="cratio mono"></div><span class="pillbadge"></span>';
+  contrastEl.appendChild(row);
+  pairEls.push(row);
+});
+function badgeFor(r){
+  if (r >= 7) return ["AAA", "b-aaa"];
+  if (r >= 4.5) return ["AA", "b-aa"];
+  if (r >= 3) return ["AA Large", "b-l"];
+  return ["Fail", "b-f"];
+}
+
+/* ---------- export ---------- */
+function exportCSS(pal){
+  var lines = ["/* " + pal.rule + " · base hsl(" + Math.round(state.h) + ", " + Math.round(state.s) + "%, " + Math.round(state.l) + "%) */", ":root {"];
+  ROLES.forEach(function(role){
+    var c = pal.roles[role];
+    var rgb = hslToRgb(c.h, c.s, c.l);
+    var key = role.toLowerCase();
+    lines.push("  --color-" + key + ": " + rgbHex(rgb) + ";");
+    lines.push("  --color-" + key + "-hsl: " + hslStr(c.h, c.s, c.l) + ";");
+  });
+  lines.push("}");
+  cssOut.value = lines.join("\n");
+}
+
+/* ---------- apply ---------- */
+var pv = document.getElementById("pv");
+function apply(repop){
+  var pal = computePalette();
+  var R = pal.roles;
+
+  root.style.setProperty("--h", Math.round(state.h));
+  root.style.setProperty("--s", Math.round(state.s) + "%");
+  root.style.setProperty("--l", Math.round(state.l) + "%");
+
+  puck.style.left = (state.h / 360 * 100) + "%";
+  puck.style.top = ((1 - state.s / 100) * 100) + "%";
+  puck.style.background = hslStr(state.h, state.s, state.l);
+  lightSlider.value = state.l;
+  lightVal.textContent = Math.round(state.l) + "%";
+  lightSlider.style.background = "linear-gradient(to right, hsl(" + Math.round(state.h) + ", " + Math.round(state.s) + "%, 4%), hsl(" + Math.round(state.h) + ", " + Math.round(state.s) + "%, 50%), hsl(" + Math.round(state.h) + ", " + Math.round(state.s) + "%, 96%))";
+
+  chipsEl.querySelectorAll(".chip").forEach(function(c){
+    c.classList.toggle("active", c.dataset.h === state.harmony);
+  });
+
+  ROLES.forEach(function(role){
+    var c = R[role];
+    setSwatch(swatchEls[role], role, c.h, c.s, c.l);
+  });
+  if (repop && !reduced){
+    ROLES.forEach(function(role, i){
+      var el = swatchEls[role];
+      el.style.animation = "none";
+      void el.offsetWidth;
+      el.style.animation = "";
+      el.style.animationDelay = (i * 0.06) + "s";
+    });
+  }
+
+  // contrast rows
+  PAIRS.forEach(function(p, i){
+    var f = R[p[0]], b = R[p[1]];
+    var frgb = hslToRgb(f.h, f.s, f.l), brgb = hslToRgb(b.h, b.s, b.l);
+    var row = pairEls[i];
+    var tile = row.querySelector(".aatile");
+    tile.style.background = rgbHex(brgb);
+    tile.style.color = rgbHex(frgb);
+    row.querySelector(".cvals").textContent = rgbHex(frgb) + " on " + rgbHex(brgb);
+    var r = contrast(frgb, brgb);
+    row.querySelector(".cratio").textContent = r.toFixed(2);
+    var bd = badgeFor(r);
+    var pill = row.querySelector(".pillbadge");
+    pill.textContent = bd[0];
+    pill.className = "pillbadge " + bd[1];
+  });
+
+  // live preview theme
+  pv.style.background = hslStr(R.Surface.h, R.Surface.s, R.Surface.l);
+  pv.style.color = rgbHex(R.Ink && hslToRgb(R.Ink.h, R.Ink.s, R.Ink.l));
+  pv.querySelector(".pv-top").style.background = hslStr(R.Surface.h, R.Surface.s, 93);
+  pv.querySelector(".pv-dot").style.background = rgbHex(hslToRgb(R.Accent.h, R.Accent.s, R.Accent.l));
+  pv.querySelector(".pv-line").style.color = rgbHex(hslToRgb(R.Ink.h, R.Ink.s, R.Ink.l));
+  var bar = pv.querySelector(".pv-bar i");
+  bar.style.background = rgbHex(hslToRgb(R.Primary.h, R.Primary.s, R.Primary.l));
+  var pbtn = document.getElementById("pvPrimary");
+  pbtn.style.background = rgbHex(hslToRgb(R.Primary.h, R.Primary.s, R.Primary.l));
+  pbtn.style.color = "#fff";
+  var gbtn = document.getElementById("pvGhost");
+  gbtn.style.borderColor = rgbHex(hslToRgb(R.Primary.h, R.Primary.s, R.Primary.l));
+  gbtn.style.color = rgbHex(hslToRgb(R.Primary.h, R.Primary.s, R.Primary.l));
+  pv.querySelectorAll(".pv-tag").forEach(function(t){
+    t.style.background = hslStr(R.Surface.h, R.Surface.s, 88);
+    t.style.color = rgbHex(hslToRgb(R.Ink.h, R.Ink.s, R.Ink.l));
+  });
+
+  exportCSS(pal);
+}
+
+/* ---------- plane drag ---------- */
+var dragging = false;
+function planeApply(e){
+  var r = plane.getBoundingClientRect();
+  var x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  var y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+  state.h = x * 360;
+  state.s = (1 - y) * 100;
+  apply();
+}
+plane.addEventListener("pointerdown", function(e){
+  dragging = true;
+  plane.classList.add("dragging");
+  plane.setPointerCapture(e.pointerId);
+  planeApply(e);
+});
+plane.addEventListener("pointermove", function(e){ if (dragging) planeApply(e); });
+plane.addEventListener("pointerup", function(){ dragging = false; plane.classList.remove("dragging"); });
+plane.addEventListener("pointercancel", function(){ dragging = false; plane.classList.remove("dragging"); });
+
+lightSlider.addEventListener("input", function(){
+  state.l = +lightSlider.value;
+  apply();
+});
+
+window.addEventListener("keydown", function(e){
+  if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+  var step = e.shiftKey ? 10 : 1;
+  var used = true;
+  if (e.key === "ArrowLeft") state.h -= step;
+  else if (e.key === "ArrowRight") state.h += step;
+  else if (e.key === "ArrowUp") state.s = Math.min(100, state.s + step);
+  else if (e.key === "ArrowDown") state.s = Math.max(0, state.s - step);
+  else used = false;
+  if (used){ e.preventDefault(); apply(); }
+});
+
+/* ---------- shuffle ---------- */
+document.getElementById("shuffleBtn").addEventListener("click", function(){
+  var hues = [14, 36, 88, 152, 174, 205, 232, 262, 292, 330];
+  state.h = hues[Math.floor(Math.random() * hues.length)] + Math.floor(Math.random() * 14 - 7);
+  state.s = 48 + Math.floor(Math.random() * 34);
+  state.l = 38 + Math.floor(Math.random() * 22);
+  apply(true);
+});
+
+/* ---------- clipboard + toast ---------- */
+function copyText(txt){
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).catch(function(){ fallbackCopy(txt); });
+  } else fallbackCopy(txt);
+}
+function fallbackCopy(txt){
+  var ta = document.createElement("textarea");
+  ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); } catch(e){}
+  document.body.removeChild(ta);
+}
+function showToast(colorSq, msg){
+  toastSq.style.background = colorSq;
+  toastMsg.textContent = msg;
+  toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ toast.classList.remove("show"); }, 2200);
+}
+
+document.getElementById("copyCssBtn").addEventListener("click", function(){
+  copyText(cssOut.value);
+  var pal = computePalette();
+  var p = pal.roles.Primary;
+  showToast(rgbHex(hslToRgb(p.h, p.s, p.l)), "Copied CSS · " + pal.rule);
+});
+
+apply(true);
+})();
+</script>
+</body>
+</html>

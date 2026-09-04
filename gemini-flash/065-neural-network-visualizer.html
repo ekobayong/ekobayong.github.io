@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Synapse — A Living Neural Network</title>
+  <style>
+    /* ==========================================================================
+       RESET & BASE STYLES
+       ========================================================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-top: #0a1230;
+      --bg-bottom: #050a1a;
+      --cyan: #35f0ff;
+      --cyan-dim: rgba(53, 240, 255, 0.45);
+      --cyan-glow: rgba(53, 240, 255, 0.25);
+      --magenta: #ff3fd1;
+      --magenta-dim: rgba(255, 63, 209, 0.45);
+      --magenta-glow: rgba(255, 63, 209, 0.25);
+      --navy-card: rgba(12, 20, 52, 0.72);
+      --navy-deep: #070c22;
+      --text-main: #e2eafc;
+      --text-muted: #7f93c4;
+      --border-card: rgba(120, 160, 255, 0.14);
+      --border-highlight: rgba(255, 255, 255, 0.12);
+      --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: "Courier New", Courier, monospace;
+    }
+
+    body {
+      min-height: 100vh;
+      font-family: var(--font-ui);
+      color: var(--text-main);
+      background-color: #060b1d;
+      background-image:
+        /* Faint cyan bloom top-left */
+        radial-gradient(circle at 12% 10%, rgba(53, 240, 255, 0.14) 0%, transparent 45%),
+        /* Magenta bloom bottom-right */
+        radial-gradient(circle at 88% 90%, rgba(255, 63, 209, 0.11) 0%, transparent 48%),
+        /* Soft ellipse grid mask overlay */
+        radial-gradient(ellipse 70% 60% at 50% 50%, rgba(10, 18, 48, 0) 25%, rgba(5, 10, 26, 0.94) 100%),
+        /* 48px subtle grid lines */
+        linear-gradient(to right, rgba(120, 160, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(120, 160, 255, 0.05) 1px, transparent 1px),
+        /* Vertical gradient background */
+        linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+      background-size:
+        100% 100%,
+        100% 100%,
+        100% 100%,
+        48px 48px,
+        48px 48px,
+        100% 100%;
+      background-attachment: fixed;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 20px 36px;
+      overflow-x: hidden;
+    }
+
+    /* ==========================================================================
+       CONTAINER & HEADER
+       ========================================================================== */
+    .app-container {
+      width: 100%;
+      max-width: 1420px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .app-header {
+      padding: 6px 4px 4px;
+    }
+
+    .header-title {
+      font-size: 1.85rem;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      color: var(--text-main);
+      margin-bottom: 6px;
+    }
+
+    .header-title .brand {
+      font-weight: 800;
+      background: linear-gradient(135deg, #35f0ff 0%, #d845f5 55%, #ff3fd1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.02em;
+    }
+
+    .header-desc {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+      max-width: 980px;
+    }
+
+    /* ==========================================================================
+       TWO-COLUMN DASHBOARD GRID
+       ========================================================================== */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 980px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ==========================================================================
+       FROSTED GLASS CARD STYLING
+       ========================================================================== */
+    .card {
+      background: var(--navy-card);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border-card);
+      border-radius: 14px;
+      box-shadow: 0 16px 36px rgba(0, 4, 18, 0.6), inset 0 1px 0 0 var(--border-highlight);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 18px;
+      border-bottom: 1px solid rgba(120, 160, 255, 0.08);
+      background: rgba(10, 16, 42, 0.45);
+    }
+
+    .card-title {
+      font-size: 0.69rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.28em;
+      color: var(--text-muted);
+    }
+
+    .card-val {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      color: var(--cyan);
+      letter-spacing: 0.04em;
+    }
+
+    .card-body {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ==========================================================================
+       LEFT COLUMN: NETWORK CARD
+       ========================================================================== */
+    .network-card {
+      min-height: 620px;
+      height: 720px;
+    }
+
+    .network-canvas-container {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #networkCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* ==========================================================================
+       SIDEBAR & CARDS
+       ========================================================================== */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Button Controls Grid */
+    .btn-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .btn {
+      font-family: var(--font-ui);
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(120, 160, 255, 0.2);
+      background: rgba(18, 30, 72, 0.6);
+      color: var(--text-main);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.18s ease;
+      user-select: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+
+    .btn:hover {
+      background: rgba(30, 48, 110, 0.8);
+      border-color: rgba(53, 240, 255, 0.5);
+      color: #ffffff;
+      box-shadow: 0 4px 16px rgba(53, 240, 255, 0.2);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn-forward {
+      grid-column: span 2;
+      background: linear-gradient(135deg, rgba(53, 240, 255, 0.15), rgba(255, 63, 209, 0.15));
+      border: 1px solid rgba(53, 240, 255, 0.35);
+      color: #35f0ff;
+    }
+
+    .btn-forward:hover {
+      background: linear-gradient(135deg, rgba(53, 240, 255, 0.28), rgba(255, 63, 209, 0.28));
+      border-color: #35f0ff;
+      box-shadow: 0 0 16px rgba(53, 240, 255, 0.35);
+    }
+
+    .btn-train.active {
+      background: rgba(53, 240, 255, 0.18);
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: 0 0 16px rgba(53, 240, 255, 0.5), inset 0 0 8px rgba(53, 240, 255, 0.2);
+    }
+
+    /* Form & Sliders */
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .label-val-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .control-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .slider-val {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      color: var(--cyan);
+    }
+
+    .custom-select {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      font-family: var(--font-ui);
+      color: var(--text-main);
+      background: rgba(15, 24, 60, 0.85);
+      border: 1px solid rgba(120, 160, 255, 0.25);
+      border-radius: 8px;
+      outline: none;
+      cursor: pointer;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+      transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .custom-select:hover, .custom-select:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 10px rgba(53, 240, 255, 0.25);
+    }
+
+    .custom-select option {
+      background: #09122c;
+      color: #e2eafc;
+    }
+
+    /* Range Sliders */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #35f0ff 0%, #ff3fd1 100%);
+      outline: none;
+      cursor: pointer;
+      margin: 6px 0;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 0 10px rgba(53, 240, 255, 0.95), 0 0 3px #ffffff;
+      cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.22);
+      box-shadow: 0 0 14px rgba(53, 240, 255, 1), 0 0 5px #ffffff;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: none;
+      box-shadow: 0 0 10px rgba(53, 240, 255, 0.95), 0 0 3px #ffffff;
+      cursor: pointer;
+      transition: transform 0.12s ease;
+    }
+
+    input[type="range"]::-moz-range-thumb:hover {
+      transform: scale(1.22);
+    }
+
+    /* Loss Card Canvas */
+    .loss-canvas-container {
+      width: 100%;
+      height: 160px;
+      padding: 10px 14px 14px;
+      position: relative;
+    }
+
+    #lossCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Decision Boundary Card */
+    .boundary-card {
+      transition: max-height 0.3s ease;
+    }
+
+    .pill-btn {
+      font-family: var(--font-mono);
+      font-size: 0.67rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 12px;
+      background: rgba(53, 240, 255, 0.12);
+      border: 1px solid rgba(53, 240, 255, 0.35);
+      color: var(--cyan);
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .pill-btn:hover {
+      background: rgba(53, 240, 255, 0.22);
+      border-color: var(--cyan);
+      box-shadow: 0 0 10px rgba(53, 240, 255, 0.3);
+    }
+
+    .pill-btn.off {
+      background: rgba(127, 147, 196, 0.12);
+      border-color: rgba(127, 147, 196, 0.3);
+      color: var(--text-muted);
+    }
+
+    .boundary-body {
+      padding: 14px 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .boundary-canvas-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 280px;
+      aspect-ratio: 1;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid rgba(120, 160, 255, 0.2);
+      box-shadow: 0 8px 24px rgba(0, 3, 14, 0.6);
+      cursor: crosshair;
+      background: #060c20;
+    }
+
+    #boundaryCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      image-rendering: auto; /* smooth CSS scaling */
+      display: block;
+    }
+
+    #boundaryOverlayCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      display: block;
+    }
+
+    .boundary-legend {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .dot-magenta {
+      background: #ff3fd1;
+      box-shadow: 0 0 6px rgba(255, 63, 209, 0.7);
+    }
+
+    .dot-cyan {
+      background: #35f0ff;
+      box-shadow: 0 0 6px rgba(53, 240, 255, 0.7);
+    }
+
+    .legend-hint {
+      font-size: 0.66rem;
+      color: rgba(127, 147, 196, 0.75);
+      font-family: var(--font-mono);
+    }
+
+    /* ==========================================================================
+       FOOTER
+       ========================================================================== */
+    .app-footer {
+      text-align: center;
+      padding: 10px 4px 4px;
+      font-size: 0.75rem;
+      color: rgba(127, 147, 196, 0.7);
+      letter-spacing: 0.03em;
+    }
+
+    /* ==========================================================================
+       ACCESSIBILITY & REDUCED MOTION
+       ========================================================================== */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+  <!-- Header -->
+  <header class="app-header">
+    <h1 class="header-title">
+      <span class="brand">Synapse</span> — a living neural network
+    </h1>
+    <p class="header-desc">
+      2 → 6 → 6 → 4 → 1, tanh hidden units, sigmoid output, trained with real backpropagation in your browser.
+    </p>
+  </header>
+
+  <!-- Dashboard Grid -->
+  <main class="dashboard-grid">
+    <!-- Left Column: Large Network Visualization Card -->
+    <section class="card network-card">
+      <div class="card-header">
+        <span class="card-title">Network Architecture &amp; Activations</span>
+        <span class="card-val" id="hudStatus">READY</span>
+      </div>
+      <div class="network-canvas-container" id="networkContainer">
+        <canvas id="networkCanvas"></canvas>
+      </div>
+    </section>
+
+    <!-- Right Column: Sidebar (340px) -->
+    <aside class="sidebar">
+      <!-- Controls Card -->
+      <section class="card">
+        <div class="card-header">
+          <span class="card-title">Training Controls</span>
+          <span class="card-val" id="hudBatch">BATCH: 16</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-grid">
+            <button id="btnForward" class="btn btn-forward" title="Pick sample and trigger back-and-forth synaptic pulse">⚡ Forward Pass</button>
+            <button id="btnTrain" class="btn btn-train">▶ Train</button>
+            <button id="btnStep" class="btn">Step ×1 Epoch</button>
+            <button id="btnReset" class="btn" style="grid-column: span 2;">Reset Weights</button>
+          </div>
+
+          <div class="control-row">
+            <label class="control-label" for="datasetSelect">DATASET</label>
+            <select id="datasetSelect" class="custom-select">
+              <option value="xor">XOR Quadrants</option>
+              <option value="circle">Circle in Square</option>
+              <option value="moons">Two Interleaving Moons</option>
+            </select>
+          </div>
+
+          <div class="control-row">
+            <div class="label-val-row">
+              <label class="control-label">LEARNING RATE</label>
+              <span class="slider-val" id="lrDisplay">0.080</span>
+            </div>
+            <input type="range" id="lrSlider" min="0.005" max="0.5" step="0.005" value="0.08">
+          </div>
+
+          <div class="control-row">
+            <div class="label-val-row">
+              <label class="control-label">EPOCHS PER FRAME</label>
+              <span class="slider-val" id="epfDisplay">2</span>
+            </div>
+            <input type="range" id="epfSlider" min="1" max="12" step="1" value="2">
+          </div>
+        </div>
+      </section>
+
+      <!-- Loss Card -->
+      <section class="card">
+        <div class="card-header">
+          <span class="card-title">Loss Curve</span>
+          <span class="card-val" id="lossCaption">EPOCH 0 • LOSS 0.000</span>
+        </div>
+        <div class="loss-canvas-container" id="lossContainer">
+          <canvas id="lossCanvas"></canvas>
+        </div>
+      </section>
+
+      <!-- Decision Boundary Card -->
+      <section class="card boundary-card" id="boundaryCard">
+        <div class="card-header">
+          <span class="card-title">Decision Boundary</span>
+          <button id="btnToggleBoundary" class="pill-btn">HEATMAP: ON</button>
+        </div>
+        <div class="boundary-body" id="boundaryBody">
+          <div class="boundary-canvas-wrapper" id="boundaryWrapper" title="Click anywhere to sample or run forward pass">
+            <canvas id="boundaryCanvas" width="72" height="72"></canvas>
+            <canvas id="boundaryOverlayCanvas"></canvas>
+          </div>
+          <div class="boundary-legend">
+            <span class="legend-item"><span class="legend-dot dot-magenta"></span> Class 0</span>
+            <span class="legend-hint">Click heatmap to sample</span>
+            <span class="legend-item"><span class="legend-dot dot-cyan"></span> Class 1</span>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    Everything is computed live with no libraries • Pure JavaScript &amp; HTML5 Canvas • Xavier Init, Tanh Hidden, Sigmoid Output
+  </footer>
+</div>
+
+<!-- ==========================================================================
+     APPLICATION JAVASCRIPT
+     ========================================================================== -->
+<script>
+(function() {
+  'use strict';
+
+  // --------------------------------------------------------------------------
+  // 1. DATASET GENERATION (200 points in [-1, 1]^2)
+  // --------------------------------------------------------------------------
+  function generateXOR(n = 200) {
+    const data = [];
+    for (let i = 0; i < n; i++) {
+      // Avoid points right on axes for clean separation
+      let x = (Math.random() * 2 - 1) * 0.92;
+      let y = (Math.random() * 2 - 1) * 0.92;
+      if (Math.abs(x) < 0.08) x += (x >= 0 ? 0.08 : -0.08);
+      if (Math.abs(y) < 0.08) y += (y >= 0 ? 0.08 : -0.08);
+      const label = (x * y > 0) ? 1 : 0;
+      data.push({ x: [x, y], y: label });
+    }
+    return data;
+  }
+
+  function generateCircle(n = 200) {
+    const data = [];
+    const radiusSq = 0.36; // radius 0.6
+    let insideCount = 0;
+    const half = Math.floor(n / 2);
+
+    // Balanced distribution of inside & outside points
+    while (data.length < n) {
+      const x = (Math.random() * 2 - 1) * 0.92;
+      const y = (Math.random() * 2 - 1) * 0.92;
+      const r2 = x * x + y * y;
+      const isInside = (r2 < radiusSq);
+
+      if (isInside && insideCount < half) {
+        data.push({ x: [x, y], y: 1 });
+        insideCount++;
+      } else if (!isInside && (data.length - insideCount) < (n - half)) {
+        data.push({ x: [x, y], y: 0 });
+      }
+    }
+    return data;
+  }
+
+  function generateMoons(n = 200) {
+    const data = [];
+    const half = Math.floor(n / 2);
+    // Upper moon (Class 0)
+    for (let i = 0; i < half; i++) {
+      const theta = (Math.PI * i) / (half - 1);
+      const r = 0.52 + (Math.random() - 0.5) * 0.08;
+      const x = r * Math.cos(theta) - 0.28;
+      const y = r * Math.sin(theta) - 0.12;
+      data.push({ x: [x * 1.4, y * 1.4], y: 0 });
+    }
+    // Lower moon (Class 1)
+    for (let i = 0; i < half; i++) {
+      const theta = (Math.PI * i) / (half - 1);
+      const r = 0.52 + (Math.random() - 0.5) * 0.08;
+      const x = 0.28 - r * Math.cos(theta);
+      const y = 0.12 - r * Math.sin(theta);
+      data.push({ x: [x * 1.4, y * 1.4], y: 1 });
+    }
+    return data;
+  }
+
+  // --------------------------------------------------------------------------
+  // 2. NEURAL NETWORK CLASS (2 -> 6 -> 6 -> 4 -> 1, tanh, sigmoid, BCE)
+  // --------------------------------------------------------------------------
+  class NeuralNetwork {
+    constructor(layers = [2, 6, 6, 4, 1]) {
+      this.layers = layers;
+      this.resetWeights();
+    }
+
+    resetWeights() {
+      this.weights = [];
+      this.biases = [];
+      this.vW = [];
+      this.vb = [];
+
+      for (let l = 0; l < this.layers.length - 1; l++) {
+        const nin = this.layers[l];
+        const nout = this.layers[l + 1];
+        // Xavier / Glorot uniform initialization: sqrt(6 / (nin + nout))
+        const limit = Math.sqrt(6 / (nin + nout));
+        const W = [];
+        const vw = [];
+
+        for (let i = 0; i < nout; i++) {
+          const row = [];
+          const vRow = [];
+          for (let j = 0; j < nin; j++) {
+            row.push((Math.random() * 2 - 1) * limit);
+            vRow.push(0);
+          }
+          W.push(row);
+          vw.push(vRow);
+        }
+
+        this.weights.push(W);
+        this.vW.push(vw);
+        this.biases.push(new Array(nout).fill(0));
+        this.vb.push(new Array(nout).fill(0));
+      }
+    }
+
+    forward(x) {
+      // Returns full activations array: [a0, a1, a2, a3, a4]
+      const activations = [[x[0], x[1]]];
+      let currentA = activations[0];
+
+      for (let l = 0; l < this.weights.length; l++) {
+        const W = this.weights[l];
+        const b = this.biases[l];
+        const nextA = [];
+        const isOutput = (l === this.weights.length - 1);
+
+        for (let i = 0; i < W.length; i++) {
+          let z = b[i];
+          const row = W[i];
+          for (let j = 0; j < currentA.length; j++) {
+            z += row[j] * currentA[j];
+          }
+          // Sigmoid for output layer, tanh for hidden layers
+          if (isOutput) {
+            // Clip z to prevent extreme overflow
+            const clampedZ = Math.max(-25, Math.min(25, z));
+            nextA.push(1 / (1 + Math.exp(-clampedZ)));
+          } else {
+            nextA.push(Math.tanh(z));
+          }
+        }
+        activations.push(nextA);
+        currentA = nextA;
+      }
+      return activations;
+    }
+
+    // Fast inline predict for 72x72 grid
+    predict(x0, x1) {
+      const W0 = this.weights[0], b0 = this.biases[0];
+      const a1 = [];
+      for (let i = 0; i < 6; i++) {
+        a1.push(Math.tanh(b0[i] + W0[i][0] * x0 + W0[i][1] * x1));
+      }
+
+      const W1 = this.weights[1], b1 = this.biases[1];
+      const a2 = [];
+      for (let i = 0; i < 6; i++) {
+        let z = b1[i];
+        for (let j = 0; j < 6; j++) z += W1[i][j] * a1[j];
+        a2.push(Math.tanh(z));
+      }
+
+      const W2 = this.weights[2], b2 = this.biases[2];
+      const a3 = [];
+      for (let i = 0; i < 4; i++) {
+        let z = b2[i];
+        for (let j = 0; j < 6; j++) z += W2[i][j] * a2[j];
+        a3.push(Math.tanh(z));
+      }
+
+      const W3 = this.weights[3], b3 = this.biases[3];
+      let z4 = b3[0];
+      for (let j = 0; j < 4; j++) z4 += W3[0][j] * a3[j];
+      return 1 / (1 + Math.exp(-Math.max(-25, Math.min(25, z4))));
+    }
+
+    trainEpoch(dataset, lr = 0.08, batchSize = 16, momentum = 0.82) {
+      // Shuffle dataset indices
+      const n = dataset.length;
+      const indices = Array.from({ length: n }, (_, i) => i);
+      for (let i = n - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const temp = indices[i];
+        indices[i] = indices[j];
+        indices[j] = temp;
+      }
+
+      let totalLoss = 0;
+      let correct = 0;
+
+      for (let start = 0; start < n; start += batchSize) {
+        const batchIndices = indices.slice(start, start + batchSize);
+        const B = batchIndices.length;
+
+        // Initialize batch gradient accumulators
+        const gradW = this.weights.map(W => W.map(row => new Array(row.length).fill(0)));
+        const gradB = this.biases.map(b => new Array(b.length).fill(0));
+
+        for (const idx of batchIndices) {
+          const sample = dataset[idx];
+          const acts = this.forward(sample.x);
+          const out = acts[acts.length - 1][0];
+          const target = sample.y;
+
+          // Binary Cross-Entropy Loss
+          const eps = 1e-7;
+          totalLoss += -(target * Math.log(Math.max(eps, out)) + (1 - target) * Math.log(Math.max(eps, 1 - out)));
+          if ((out >= 0.5 ? 1 : 0) === target) correct++;
+
+          // Backpropagation of deltas:
+          // Output delta for Sigmoid with BCE: dL/dz = out - target
+          const deltas = [[out - target]];
+
+          // Hidden layers: delta_l = (delta_{l+1} * W_{l+1}^T) * (1 - a_l^2)
+          for (let l = this.weights.length - 1; l >= 1; l--) {
+            const nextDelta = deltas[0];
+            const nextW = this.weights[l];
+            const currentA = acts[l];
+            const curDelta = [];
+
+            for (let j = 0; j < currentA.length; j++) {
+              let sum = 0;
+              for (let k = 0; k < nextW.length; k++) {
+                sum += nextDelta[k] * nextW[k][j];
+              }
+              // tanh derivative: 1 - tanh^2 = 1 - a^2
+              curDelta.push(sum * (1 - currentA[j] * currentA[j]));
+            }
+            deltas.unshift(curDelta);
+          }
+
+          // Accumulate gradients: dW = delta * a_prev^T, db = delta
+          for (let l = 0; l < this.weights.length; l++) {
+            const d = deltas[l];
+            const prevA = acts[l];
+            for (let i = 0; i < d.length; i++) {
+              gradB[l][i] += d[i];
+              for (let j = 0; j < prevA.length; j++) {
+                gradW[l][i][j] += d[i] * prevA[j];
+              }
+            }
+          }
+        }
+
+        // Minibatch SGD parameter update with momentum
+        for (let l = 0; l < this.weights.length; l++) {
+          const W = this.weights[l];
+          const b = this.biases[l];
+          const vw = this.vW[l];
+          const vb = this.vb[l];
+          const gW = gradW[l];
+          const gB = gradB[l];
+
+          for (let i = 0; i < b.length; i++) {
+            vb[i] = momentum * vb[i] - lr * (gB[i] / B);
+            b[i] += vb[i];
+            for (let j = 0; j < W[i].length; j++) {
+              vw[i][j] = momentum * vw[i][j] - lr * (gW[i][j] / B);
+              W[i][j] += vw[i][j];
+            }
+          }
+        }
+      }
+
+      return {
+        loss: totalLoss / n,
+        accuracy: correct / n
+      };
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // 3. APPLICATION STATE
+  // --------------------------------------------------------------------------
+  const net = new NeuralNetwork([2, 6, 6, 4, 1]);
+  let currentDatasetType = 'xor';
+  let dataset = generateXOR(200);
+  let currentSample = dataset[0];
+  let currentActivations = net.forward(currentSample.x);
+
+  let epoch = 0;
+  let currentLoss = 0.693;
+  let currentAccuracy = 0.5;
+  let lossHistory = [];
+
+  let isTraining = false;
+  let learningRate = 0.08;
+  let epochsPerFrame = 2;
+  let frameCount = 0;
+  let isBoundaryVisible = true;
+
+  // Pulse animation state
+  // 4 transitions (layers 0->1, 1->2, 2->3, 3->4) @ 520ms each = 2080ms total
+  const LAYER_PULSE_DURATION = 520;
+  let pulseState = {
+    active: false,
+    startTime: 0,
+    sample: null,
+    activations: null,
+    duration: 4 * LAYER_PULSE_DURATION
+  };
+
+  // --------------------------------------------------------------------------
+  // 4. DOM ELEMENTS
+  // --------------------------------------------------------------------------
+  const networkCanvas = document.getElementById('networkCanvas');
+  const networkCtx = networkCanvas.getContext('2d');
+  const networkContainer = document.getElementById('networkContainer');
+
+  const lossCanvas = document.getElementById('lossCanvas');
+  const lossCtx = lossCanvas.getContext('2d');
+
+  const boundaryCanvas = document.getElementById('boundaryCanvas');
+  const boundaryCtx = boundaryCanvas.getContext('2d', { willReadFrequently: true });
+  const boundaryOverlayCanvas = document.getElementById('boundaryOverlayCanvas');
+  const boundaryOverlayCtx = boundaryOverlayCanvas.getContext('2d');
+  const boundaryWrapper = document.getElementById('boundaryWrapper');
+
+  const btnForward = document.getElementById('btnForward');
+  const btnTrain = document.getElementById('btnTrain');
+  const btnStep = document.getElementById('btnStep');
+  const btnReset = document.getElementById('btnReset');
+  const btnToggleBoundary = document.getElementById('btnToggleBoundary');
+  const boundaryBody = document.getElementById('boundaryBody');
+
+  const datasetSelect = document.getElementById('datasetSelect');
+  const lrSlider = document.getElementById('lrSlider');
+  const lrDisplay = document.getElementById('lrDisplay');
+  const epfSlider = document.getElementById('epfSlider');
+  const epfDisplay = document.getElementById('epfDisplay');
+
+  const hudStatus = document.getElementById('hudStatus');
+  const lossCaption = document.getElementById('lossCaption');
+
+  // --------------------------------------------------------------------------
+  // 5. CANVAS RESIZING (devicePixelRatio Aware)
+  // --------------------------------------------------------------------------
+  let dpr = window.devicePixelRatio || 1;
+
+  function resizeAllCanvases() {
+    dpr = window.devicePixelRatio || 1;
+
+    // Network Canvas
+    const netRect = networkContainer.getBoundingClientRect();
+    if (netRect.width > 0 && netRect.height > 0) {
+      networkCanvas.width = Math.floor(netRect.width * dpr);
+      networkCanvas.height = Math.floor(netRect.height * dpr);
+    }
+
+    // Loss Canvas
+    const lossRect = lossCanvas.getBoundingClientRect();
+    if (lossRect.width > 0 && lossRect.height > 0) {
+      lossCanvas.width = Math.floor(lossRect.width * dpr);
+      lossCanvas.height = Math.floor(lossRect.height * dpr);
+    }
+
+    // Boundary Overlay Canvas (DPR crisp dots over smooth 72x72 heatmap)
+    const bRect = boundaryWrapper.getBoundingClientRect();
+    if (bRect.width > 0 && bRect.height > 0) {
+      boundaryOverlayCanvas.width = Math.floor(bRect.width * dpr);
+      boundaryOverlayCanvas.height = Math.floor(bRect.height * dpr);
+    }
+
+    drawLossChart();
+    drawBoundaryPoints();
+  }
+
+  window.addEventListener('resize', resizeAllCanvases);
+
+  // --------------------------------------------------------------------------
+  // 6. PULSE ANIMATION TRIGGER
+  // --------------------------------------------------------------------------
+  function triggerForwardPass(sample = null) {
+    if (!sample) {
+      // Pick random training point
+      sample = dataset[Math.floor(Math.random() * dataset.length)];
+    }
+    currentSample = sample;
+    const computedActivations = net.forward(sample.x);
+
+    // Check prefers-reduced-motion
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+      currentActivations = computedActivations;
+      pulseState.active = false;
+      return;
+    }
+
+    // Launch pulse
+    pulseState.active = true;
+    pulseState.startTime = performance.now();
+    pulseState.sample = sample;
+    pulseState.activations = computedActivations;
+  }
+
+  // --------------------------------------------------------------------------
+  // 7. NETWORK VISUALIZER CANVAS DRAWING
+  // --------------------------------------------------------------------------
+  function renderNetwork() {
+    const width = networkCanvas.width / dpr;
+    const height = networkCanvas.height / dpr;
+    if (width <= 0 || height <= 0) return;
+
+    networkCtx.save();
+    networkCtx.scale(dpr, dpr);
+    networkCtx.clearRect(0, 0, width, height);
+
+    // Compute pulse progress and which layers are lit
+    let pulseElapsed = 0;
+    let activeTransition = -1;
+    let transitionProgress = 0;
+    let litLayers = [true, true, true, true, true]; // Default: all lit when idle
+
+    if (pulseState.active) {
+      pulseElapsed = performance.now() - pulseState.startTime;
+      if (pulseElapsed >= pulseState.duration) {
+        pulseState.active = false;
+        currentActivations = pulseState.activations;
+        litLayers = [true, true, true, true, true];
+      } else {
+        activeTransition = Math.floor(pulseElapsed / LAYER_PULSE_DURATION);
+        transitionProgress = (pulseElapsed % LAYER_PULSE_DURATION) / LAYER_PULSE_DURATION;
+        // Layers light up as pulse arrives:
+        litLayers = [
+          true,
+          pulseElapsed >= 1 * LAYER_PULSE_DURATION,
+          pulseElapsed >= 2 * LAYER_PULSE_DURATION,
+          pulseElapsed >= 3 * LAYER_PULSE_DURATION,
+          pulseElapsed >= 4 * LAYER_PULSE_DURATION
+        ];
+      }
+    }
+
+    const activeActs = pulseState.active ? pulseState.activations : currentActivations;
+
+    // Node layout geometry
+    const layerSizes = net.layers; // [2, 6, 6, 4, 1]
+    const numLayers = layerSizes.length;
+    const layerNames = ['Input', 'Hidden 1', 'Hidden 2', 'Hidden 3', 'Output'];
+
+    const leftMargin = 85;
+    const rightMargin = width - 110;
+    const colSpacing = (rightMargin - leftMargin) / (numLayers - 1);
+
+    const topBound = 80;
+    const bottomBound = height - 60;
+    const usableHeight = bottomBound - topBound;
+
+    // Compute (x, y) coordinates for all nodes
+    const nodeCoords = [];
+    for (let l = 0; l < numLayers; l++) {
+      const count = layerSizes[l];
+      const colX = leftMargin + l * colSpacing;
+      const rowSpacing = Math.min(74, usableHeight / (count > 1 ? count - 1 : 1));
+      const colHeight = (count - 1) * rowSpacing;
+      const startY = topBound + (usableHeight - colHeight) / 2;
+
+      const coords = [];
+      for (let i = 0; i < count; i++) {
+        const cy = (count === 1) ? (topBound + usableHeight / 2) : (startY + i * rowSpacing);
+        coords.push({ x: colX, y: cy });
+      }
+      nodeCoords.push(coords);
+    }
+
+    // Maximum weight magnitude for line-width scaling
+    let maxW = 0.05;
+    for (const W of net.weights) {
+      for (const row of W) {
+        for (const w of row) {
+          if (Math.abs(w) > maxW) maxW = Math.abs(w);
+        }
+      }
+    }
+
+    // --- DRAW CONNECTIONS (Cubic Bézier curves with horizontal tangents) ---
+    for (let l = 0; l < net.weights.length; l++) {
+      const W = net.weights[l];
+      const fromNodes = nodeCoords[l];
+      const toNodes = nodeCoords[l + 1];
+
+      for (let j = 0; j < toNodes.length; j++) {
+        const to = toNodes[j];
+        for (let i = 0; i < fromNodes.length; i++) {
+          const from = fromNodes[i];
+          const w = W[j][i];
+          const absW = Math.abs(w);
+
+          // Line width: 0.4 + 3.2 · |w| / max|w|
+          const lw = 0.4 + 3.2 * (absW / maxW);
+          const normWeight = Math.min(1, absW / maxW);
+          const alpha = 0.12 + 0.76 * normWeight;
+
+          const mx = (from.x + to.x) / 2;
+          networkCtx.beginPath();
+          networkCtx.moveTo(from.x, from.y);
+          networkCtx.bezierCurveTo(mx, from.y, mx, to.y, to.x, to.y);
+
+          networkCtx.strokeStyle = (w >= 0)
+            ? `rgba(53, 240, 255, ${alpha})`
+            : `rgba(255, 63, 209, ${alpha})`;
+          networkCtx.lineWidth = lw;
+          networkCtx.stroke();
+        }
+      }
+    }
+
+    // --- DRAW TRAVELING SYNAPTIC PULSE PARTICLES ---
+    if (pulseState.active && activeTransition >= 0 && activeTransition < net.weights.length) {
+      const l = activeTransition;
+      const u = transitionProgress;
+      const v = 1 - u;
+      const fromNodes = nodeCoords[l];
+      const toNodes = nodeCoords[l + 1];
+      const W = net.weights[l];
+      const sourceActs = activeActs[l];
+
+      // Find max signed product in current layer for normalization
+      let maxProd = 0.2;
+      for (let j = 0; j < toNodes.length; j++) {
+        for (let i = 0; i < fromNodes.length; i++) {
+          const p = Math.abs(sourceActs[i] * W[j][i]);
+          if (p > maxProd) maxProd = p;
+        }
+      }
+
+      for (let j = 0; j < toNodes.length; j++) {
+        const to = toNodes[j];
+        for (let i = 0; i < fromNodes.length; i++) {
+          const from = fromNodes[i];
+          const w = W[j][i];
+          const a = sourceActs[i];
+          const prod = a * w;
+          const absProd = Math.abs(prod);
+
+          // Cubic Bézier position at u with horizontal tangents:
+          // P0 = (from.x, from.y), P1 = (mx, from.y), P2 = (mx, to.y), P3 = (to.x, to.y)
+          const mx = (from.x + to.x) / 2;
+          const px = v * v * v * from.x + 3 * v * v * u * mx + 3 * v * u * u * mx + u * u * u * to.x;
+          const py = v * v * v * from.y + 3 * v * v * u * from.y + 3 * v * u * u * to.y + u * u * u * to.y;
+
+          // Sized and colored by signed product of activation and weight
+          const dotRadius = Math.max(1.8, Math.min(5.2, 1.8 + 3.2 * (absProd / maxProd)));
+          const isPos = (prod >= 0);
+          const colorStr = isPos ? 'rgb(53, 240, 255)' : 'rgb(255, 63, 209)';
+          const glowStr = isPos ? 'rgba(53, 240, 255, 0.9)' : 'rgba(255, 63, 209, 0.9)';
+
+          // Particle with synaptic spark glow
+          networkCtx.save();
+          networkCtx.shadowColor = glowStr;
+          networkCtx.shadowBlur = 10;
+          networkCtx.beginPath();
+          networkCtx.arc(px, py, dotRadius, 0, Math.PI * 2);
+          networkCtx.fillStyle = colorStr;
+          networkCtx.fill();
+
+          // White spark center
+          networkCtx.beginPath();
+          networkCtx.arc(px, py, Math.max(0.8, dotRadius * 0.4), 0, Math.PI * 2);
+          networkCtx.fillStyle = '#ffffff';
+          networkCtx.fill();
+          networkCtx.restore();
+        }
+      }
+    }
+
+    // --- DRAW NODES (Radial-gradient spheres, specular highlight, colored rim, Courier New values) ---
+    const R = 20; // Sphere radius
+
+    for (let l = 0; l < numLayers; l++) {
+      const isLit = litLayers[l];
+      const acts = isLit ? activeActs[l] : currentActivations[l];
+      const nodes = nodeCoords[l];
+      const isOutput = (l === numLayers - 1);
+      const isHidden = (l > 0 && l < numLayers - 1);
+
+      for (let i = 0; i < nodes.length; i++) {
+        const { x: cx, y: cy } = nodes[i];
+        const val = acts[i];
+
+        // Hidden nodes turn magenta when negative; output is sigmoid (0..1, magenta < 0.5 < cyan)
+        let isNegative = false;
+        let magnitude = Math.abs(val);
+
+        if (isHidden) {
+          isNegative = (val < 0);
+        } else if (isOutput) {
+          isNegative = (val < 0.5);
+          magnitude = Math.abs(val - 0.5) * 2;
+        } else {
+          isNegative = (val < 0);
+        }
+
+        const baseColor = isNegative ? '255, 63, 209' : '53, 240, 255';
+        const glowAlpha = isLit ? (0.25 + 0.65 * magnitude) : 0.12;
+
+        networkCtx.save();
+
+        // shadowBlur glow growing with activation
+        if (isLit) {
+          networkCtx.shadowColor = `rgba(${baseColor}, ${glowAlpha})`;
+          networkCtx.shadowBlur = 8 + 18 * magnitude;
+        } else {
+          networkCtx.shadowBlur = 3;
+          networkCtx.shadowColor = 'rgba(10, 18, 48, 0.4)';
+        }
+
+        // Radial gradient sphere with specular highlight
+        const grad = networkCtx.createRadialGradient(
+          cx - R * 0.35, cy - R * 0.35, R * 0.06,
+          cx, cy, R
+        );
+
+        if (isLit) {
+          grad.addColorStop(0, '#ffffff'); // Specular highlight
+          grad.addColorStop(0.28, `rgba(${baseColor}, 0.85)`);
+          grad.addColorStop(0.72, `rgba(14, 24, 60, 0.95)`);
+          grad.addColorStop(1, `rgba(6, 12, 32, 1)`);
+        } else {
+          grad.addColorStop(0, 'rgba(160, 180, 220, 0.3)');
+          grad.addColorStop(0.35, 'rgba(25, 38, 75, 0.8)');
+          grad.addColorStop(1, 'rgba(8, 14, 35, 0.95)');
+        }
+
+        networkCtx.beginPath();
+        networkCtx.arc(cx, cy, R, 0, Math.PI * 2);
+        networkCtx.fillStyle = grad;
+        networkCtx.fill();
+
+        // Colored rim
+        networkCtx.lineWidth = isLit ? 1.6 : 1.0;
+        networkCtx.strokeStyle = isLit
+          ? `rgba(${baseColor}, ${0.45 + 0.5 * magnitude})`
+          : 'rgba(120, 160, 255, 0.2)';
+        networkCtx.stroke();
+        networkCtx.restore();
+
+        // Activation value printed inside in Courier New
+        networkCtx.save();
+        networkCtx.font = 'bold 9.5px "Courier New", monospace';
+        networkCtx.textAlign = 'center';
+        networkCtx.textBaseline = 'middle';
+        networkCtx.fillStyle = isLit ? '#ffffff' : 'rgba(160, 180, 220, 0.45)';
+
+        let textVal = '';
+        if (isOutput) {
+          textVal = val.toFixed(2);
+        } else {
+          textVal = (val >= 0 ? '+' : '') + val.toFixed(2);
+        }
+        networkCtx.fillText(textVal, cx, cy);
+        networkCtx.restore();
+      }
+
+      // Layer labels underneath
+      networkCtx.save();
+      networkCtx.font = '700 9.5px -apple-system, BlinkMacSystemFont, sans-serif';
+      networkCtx.letterSpacing = '0.22em';
+      networkCtx.textAlign = 'center';
+      networkCtx.fillStyle = '#7f93c4';
+      networkCtx.fillText(layerNames[l].toUpperCase(), nodeCoords[l][0].x, bottomBound + 28);
+      networkCtx.restore();
+    }
+
+    // Small labels: x1, x2 on inputs
+    networkCtx.save();
+    networkCtx.font = 'bold 12px var(--font-mono)';
+    networkCtx.fillStyle = '#35f0ff';
+    networkCtx.textAlign = 'right';
+    networkCtx.textBaseline = 'middle';
+    networkCtx.fillText('x₁', nodeCoords[0][0].x - R - 10, nodeCoords[0][0].y);
+    networkCtx.fillText('x₂', nodeCoords[0][1].x - R - 10, nodeCoords[0][1].y);
+
+    // Output node label: P(class 1) = ... and target
+    const outNode = nodeCoords[4][0];
+    const outProb = activeActs[4][0];
+    networkCtx.textAlign = 'left';
+    networkCtx.font = 'bold 11px var(--font-mono)';
+    networkCtx.fillStyle = '#35f0ff';
+    networkCtx.fillText(`P(class 1) = ${outProb.toFixed(3)}`, outNode.x + R + 12, outNode.y - 7);
+
+    networkCtx.font = '10px var(--font-mono)';
+    networkCtx.fillStyle = '#7f93c4';
+    networkCtx.fillText(`Target: y = ${currentSample.y}`, outNode.x + R + 12, outNode.y + 10);
+    networkCtx.restore();
+
+    // Monospace HUD in the corner (Epoch, Accuracy, Current Sample)
+    networkCtx.save();
+    const hudX = 18;
+    const hudY = 16;
+    networkCtx.fillStyle = 'rgba(10, 18, 48, 0.85)';
+    networkCtx.strokeStyle = 'rgba(120, 160, 255, 0.18)';
+    networkCtx.lineWidth = 1;
+    networkCtx.beginPath();
+    networkCtx.roundRect(hudX, hudY, 320, 44, 8);
+    networkCtx.fill();
+    networkCtx.stroke();
+
+    networkCtx.font = '10.5px "Courier New", monospace';
+    networkCtx.fillStyle = '#35f0ff';
+    networkCtx.textAlign = 'left';
+    networkCtx.textBaseline = 'top';
+    networkCtx.fillText(`EPOCH: ${String(epoch).padStart(5, '0')}  |  ACC: ${(currentAccuracy * 100).toFixed(1)}%`, hudX + 12, hudY + 8);
+
+    networkCtx.font = '10px "Courier New", monospace';
+    networkCtx.fillStyle = '#7f93c4';
+    const sX0 = (currentSample.x[0] >= 0 ? '+' : '') + currentSample.x[0].toFixed(2);
+    const sX1 = (currentSample.x[1] >= 0 ? '+' : '') + currentSample.x[1].toFixed(2);
+    networkCtx.fillText(`SAMPLE: [${sX0}, ${sX1}]  TARGET: ${currentSample.y}`, hudX + 12, hudY + 24);
+    networkCtx.restore();
+
+    networkCtx.restore();
+  }
+
+  // --------------------------------------------------------------------------
+  // 8. LOSS CHART CANVAS DRAWING
+  // --------------------------------------------------------------------------
+  function drawLossChart() {
+    const width = lossCanvas.width / dpr;
+    const height = lossCanvas.height / dpr;
+    if (width <= 0 || height <= 0) return;
+
+    lossCtx.save();
+    lossCtx.scale(dpr, dpr);
+    lossCtx.clearRect(0, 0, width, height);
+
+    const padLeft = 36;
+    const padRight = 14;
+    const padTop = 14;
+    const padBottom = 22;
+
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+
+    // Horizontal grid lines & Y-axis labels
+    lossCtx.font = '9px "Courier New", monospace';
+    lossCtx.textAlign = 'right';
+    lossCtx.textBaseline = 'middle';
+
+    const yLevels = [1.0, 0.75, 0.5, 0.25, 0.0];
+    for (const level of yLevels) {
+      const yPos = padTop + (1.0 - level) * plotH;
+      lossCtx.beginPath();
+      lossCtx.moveTo(padLeft, yPos);
+      lossCtx.lineTo(padLeft + plotW, yPos);
+      lossCtx.strokeStyle = 'rgba(120, 160, 255, 0.08)';
+      lossCtx.lineWidth = 1;
+      lossCtx.stroke();
+
+      lossCtx.fillStyle = '#7f93c4';
+      lossCtx.fillText(level.toFixed(2), padLeft - 6, yPos);
+    }
+
+    if (lossHistory.length < 2) {
+      // Empty state hint
+      lossCtx.fillStyle = 'rgba(127, 147, 196, 0.5)';
+      lossCtx.textAlign = 'center';
+      lossCtx.fillText('Start training to chart loss', padLeft + plotW / 2, padTop + plotH / 2);
+      lossCtx.restore();
+      return;
+    }
+
+    // Downsample history if it exceeds 600 entries
+    if (lossHistory.length > 600) {
+      const downsampled = [];
+      for (let i = 0; i < lossHistory.length; i += 2) {
+        if (i + 1 < lossHistory.length) {
+          downsampled.push((lossHistory[i] + lossHistory[i + 1]) / 2);
+        } else {
+          downsampled.push(lossHistory[i]);
+        }
+      }
+      lossHistory = downsampled;
+    }
+
+    const n = lossHistory.length;
+    const coords = [];
+    for (let i = 0; i < n; i++) {
+      const px = padLeft + (i / (n - 1)) * plotW;
+      const val = Math.max(0, Math.min(1.2, lossHistory[i]));
+      const py = padTop + (1.0 - Math.min(1.0, val)) * plotH;
+      coords.push({ x: px, y: py });
+    }
+
+    // Filled area under the curve fading from magenta to transparent cyan
+    lossCtx.beginPath();
+    lossCtx.moveTo(coords[0].x, padTop + plotH);
+    for (const pt of coords) {
+      lossCtx.lineTo(pt.x, pt.y);
+    }
+    lossCtx.lineTo(coords[coords.length - 1].x, padTop + plotH);
+    lossCtx.closePath();
+
+    const areaGrad = lossCtx.createLinearGradient(0, padTop, 0, padTop + plotH);
+    areaGrad.addColorStop(0, 'rgba(255, 63, 209, 0.35)');
+    areaGrad.addColorStop(0.65, 'rgba(53, 240, 255, 0.12)');
+    areaGrad.addColorStop(1, 'rgba(53, 240, 255, 0.00)');
+    lossCtx.fillStyle = areaGrad;
+    lossCtx.fill();
+
+    // Gradient stroke with cyan glow
+    lossCtx.save();
+    lossCtx.shadowColor = '#35f0ff';
+    lossCtx.shadowBlur = 8;
+
+    const strokeGrad = lossCtx.createLinearGradient(padLeft, 0, padLeft + plotW, 0);
+    strokeGrad.addColorStop(0, '#ff3fd1');
+    strokeGrad.addColorStop(1, '#35f0ff');
+
+    lossCtx.beginPath();
+    lossCtx.moveTo(coords[0].x, coords[0].y);
+    for (let i = 1; i < coords.length; i++) {
+      lossCtx.lineTo(coords[i].x, coords[i].y);
+    }
+    lossCtx.strokeStyle = strokeGrad;
+    lossCtx.lineWidth = 2.2;
+    lossCtx.stroke();
+    lossCtx.restore();
+
+    // White dot at the latest point
+    const latest = coords[coords.length - 1];
+    lossCtx.save();
+    lossCtx.shadowColor = '#35f0ff';
+    lossCtx.shadowBlur = 10;
+    lossCtx.beginPath();
+    lossCtx.arc(latest.x, latest.y, 3.8, 0, Math.PI * 2);
+    lossCtx.fillStyle = '#ffffff';
+    lossCtx.fill();
+    lossCtx.restore();
+
+    lossCtx.restore();
+  }
+
+  // --------------------------------------------------------------------------
+  // 9. DECISION BOUNDARY (72x72 ImageData & Overlay Points)
+  // --------------------------------------------------------------------------
+  const boundaryImgData = boundaryCtx.createImageData(72, 72);
+
+  function renderBoundaryHeatmap() {
+    if (!isBoundaryVisible) return;
+
+    const data = boundaryImgData.data;
+    let idx = 0;
+
+    // Evaluate 72x72 grid over plane [-1.1, 1.1]
+    for (let py = 0; py < 72; py++) {
+      const y = 1.1 - (2.2 * (py + 0.5)) / 72;
+      for (let px = 0; px < 72; px++) {
+        const x = -1.1 + (2.2 * (px + 0.5)) / 72;
+        const prob = net.predict(x, y);
+
+        // Color mapping: Magenta (0) -> Navy (0.5) -> Cyan (1)
+        let r, g, b;
+        if (prob < 0.5) {
+          const t = prob / 0.5; // 0 to 1
+          // Magenta (255, 63, 209) -> Navy (10, 18, 48)
+          r = 255 * (1 - t) + 10 * t;
+          g = 63 * (1 - t) + 18 * t;
+          b = 209 * (1 - t) + 48 * t;
+        } else {
+          const t = (prob - 0.5) / 0.5; // 0 to 1
+          // Navy (10, 18, 48) -> Cyan (53, 240, 255)
+          r = 10 * (1 - t) + 53 * t;
+          g = 18 * (1 - t) + 240 * t;
+          b = 48 * (1 - t) + 255 * t;
+        }
+
+        data[idx++] = r;
+        data[idx++] = g;
+        data[idx++] = b;
+        data[idx++] = 255;
+      }
+    }
+
+    boundaryCtx.putImageData(boundaryImgData, 0, 0);
+  }
+
+  function drawBoundaryPoints() {
+    if (!isBoundaryVisible) return;
+
+    const width = boundaryOverlayCanvas.width / dpr;
+    const height = boundaryOverlayCanvas.height / dpr;
+    if (width <= 0 || height <= 0) return;
+
+    boundaryOverlayCtx.save();
+    boundaryOverlayCtx.scale(dpr, dpr);
+    boundaryOverlayCtx.clearRect(0, 0, width, height);
+
+    // Draw training points as tiny colored dots with dark outlines
+    for (const pt of dataset) {
+      const px = ((pt.x[0] + 1.1) / 2.2) * width;
+      const py = ((1.1 - pt.x[1]) / 2.2) * height;
+
+      boundaryOverlayCtx.beginPath();
+      boundaryOverlayCtx.arc(px, py, 3.2, 0, Math.PI * 2);
+      boundaryOverlayCtx.fillStyle = (pt.y === 1) ? '#35f0ff' : '#ff3fd1';
+      boundaryOverlayCtx.fill();
+      boundaryOverlayCtx.lineWidth = 1.2;
+      boundaryOverlayCtx.strokeStyle = '#050a1a';
+      boundaryOverlayCtx.stroke();
+    }
+
+    // Ring current selected sample in glowing white
+    if (currentSample) {
+      const sx = ((currentSample.x[0] + 1.1) / 2.2) * width;
+      const sy = ((1.1 - currentSample.x[1]) / 2.2) * height;
+
+      boundaryOverlayCtx.save();
+      boundaryOverlayCtx.shadowColor = '#ffffff';
+      boundaryOverlayCtx.shadowBlur = 8;
+      boundaryOverlayCtx.beginPath();
+      boundaryOverlayCtx.arc(sx, sy, 6.5, 0, Math.PI * 2);
+      boundaryOverlayCtx.strokeStyle = '#ffffff';
+      boundaryOverlayCtx.lineWidth = 2.0;
+      boundaryOverlayCtx.stroke();
+      boundaryOverlayCtx.restore();
+    }
+
+    boundaryOverlayCtx.restore();
+  }
+
+  // Click on heatmap runs forward pass on nearest point or coordinate
+  boundaryWrapper.addEventListener('click', (e) => {
+    const rect = boundaryWrapper.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    const dataX = -1.1 + (clickX / rect.width) * 2.2;
+    const dataY = 1.1 - (clickY / rect.height) * 2.2;
+
+    // Find nearest training point
+    let nearestPt = null;
+    let minDist = Infinity;
+    for (const pt of dataset) {
+      const d = Math.hypot(pt.x[0] - dataX, pt.x[1] - dataY);
+      if (d < minDist) {
+        minDist = d;
+        nearestPt = pt;
+      }
+    }
+
+    let targetSample = null;
+    if (minDist < 0.22 && nearestPt) {
+      targetSample = nearestPt;
+    } else {
+      // Create sample at clicked coordinate
+      const pred = net.predict(dataX, dataY);
+      targetSample = { x: [dataX, dataY], y: (pred >= 0.5 ? 1 : 0) };
+    }
+
+    triggerForwardPass(targetSample);
+    drawBoundaryPoints();
+  });
+
+  // --------------------------------------------------------------------------
+  // 10. INTERACTION HANDLERS & CONTROLS
+  // --------------------------------------------------------------------------
+  btnForward.addEventListener('click', () => {
+    triggerForwardPass();
+    drawBoundaryPoints();
+  });
+
+  btnTrain.addEventListener('click', () => {
+    isTraining = !isTraining;
+    if (isTraining) {
+      btnTrain.textContent = '⏸ Pause';
+      btnTrain.classList.add('active');
+      hudStatus.textContent = 'TRAINING';
+    } else {
+      btnTrain.textContent = '▶ Train';
+      btnTrain.classList.remove('active');
+      hudStatus.textContent = 'PAUSED';
+    }
+  });
+
+  btnStep.addEventListener('click', () => {
+    const res = net.trainEpoch(dataset, learningRate, 16);
+    epoch++;
+    currentLoss = res.loss;
+    currentAccuracy = res.accuracy;
+    lossHistory.push(currentLoss);
+
+    lossCaption.textContent = `EPOCH ${epoch} • LOSS ${currentLoss.toFixed(4)}`;
+    hudStatus.textContent = 'STEPPED';
+
+    renderBoundaryHeatmap();
+    drawBoundaryPoints();
+    drawLossChart();
+    if (!pulseState.active) {
+      currentActivations = net.forward(currentSample.x);
+    }
+  });
+
+  btnReset.addEventListener('click', () => {
+    net.resetWeights();
+    epoch = 0;
+    lossHistory = [];
+    currentLoss = 0.693;
+    currentAccuracy = 0.5;
+
+    lossCaption.textContent = `EPOCH 0 • LOSS 0.000`;
+    hudStatus.textContent = 'RESET';
+
+    currentActivations = net.forward(currentSample.x);
+    renderBoundaryHeatmap();
+    drawBoundaryPoints();
+    drawLossChart();
+  });
+
+  datasetSelect.addEventListener('change', (e) => {
+    currentDatasetType = e.target.value;
+    if (currentDatasetType === 'xor') dataset = generateXOR(200);
+    else if (currentDatasetType === 'circle') dataset = generateCircle(200);
+    else if (currentDatasetType === 'moons') dataset = generateMoons(200);
+
+    currentSample = dataset[0];
+    currentActivations = net.forward(currentSample.x);
+
+    renderBoundaryHeatmap();
+    drawBoundaryPoints();
+  });
+
+  lrSlider.addEventListener('input', (e) => {
+    learningRate = parseFloat(e.target.value);
+    lrDisplay.textContent = learningRate.toFixed(3);
+  });
+
+  epfSlider.addEventListener('input', (e) => {
+    epochsPerFrame = parseInt(e.target.value, 10);
+    epfDisplay.textContent = epochsPerFrame;
+  });
+
+  btnToggleBoundary.addEventListener('click', () => {
+    isBoundaryVisible = !isBoundaryVisible;
+    if (isBoundaryVisible) {
+      btnToggleBoundary.textContent = 'HEATMAP: ON';
+      btnToggleBoundary.classList.remove('off');
+      boundaryBody.style.display = 'flex';
+      renderBoundaryHeatmap();
+      drawBoundaryPoints();
+    } else {
+      btnToggleBoundary.textContent = 'HEATMAP: OFF';
+      btnToggleBoundary.classList.add('off');
+      boundaryBody.style.display = 'none';
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // 11. MAIN ANIMATION & TRAINING LOOP
+  // --------------------------------------------------------------------------
+  function loop() {
+    frameCount++;
+
+    if (isTraining) {
+      // Execute configured number of epochs per frame
+      for (let ep = 0; ep < epochsPerFrame; ep++) {
+        const res = net.trainEpoch(dataset, learningRate, 16);
+        epoch++;
+        currentLoss = res.loss;
+        currentAccuracy = res.accuracy;
+        lossHistory.push(currentLoss);
+      }
+
+      lossCaption.textContent = `EPOCH ${epoch} • LOSS ${currentLoss.toFixed(4)}`;
+
+      // Re-render decision boundary every 3rd frame while training
+      if (frameCount % 3 === 0 && isBoundaryVisible) {
+        renderBoundaryHeatmap();
+        drawBoundaryPoints();
+      }
+
+      drawLossChart();
+      if (!pulseState.active) {
+        currentActivations = net.forward(currentSample.x);
+      }
+    }
+
+    renderNetwork();
+    requestAnimationFrame(loop);
+  }
+
+  // Initial initialization
+  window.addEventListener('DOMContentLoaded', () => {
+    resizeAllCanvases();
+    renderBoundaryHeatmap();
+    drawBoundaryPoints();
+    drawLossChart();
+    requestAnimationFrame(loop);
+  });
+
+  // In case DOM is already loaded
+  resizeAllCanvases();
+  renderBoundaryHeatmap();
+  drawBoundaryPoints();
+  drawLossChart();
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>

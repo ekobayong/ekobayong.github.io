@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Northern Lights — Lake Inari, 68.9° N</title>
+  <style>
+    /* ==========================================================================
+       DESIGN TOKENS & RESET
+       ========================================================================== */
+    :root {
+      --bg-zenith: #02030a;
+      --bg-mid: #061021;
+      --bg-horizon: #0b1a30;
+      --water-deep: #020409;
+      --water-surface: #08121f;
+      --tree-front: #02040a;
+      --tree-distant: #050a14;
+      --aurora-green: #3cf5a0;
+      --aurora-mint: #c8ffe4;
+      --aurora-violet: #a86bff;
+      --aurora-pink: #f472b6;
+      --text-fog: rgba(226, 236, 255, 0.72);
+      --text-dim: rgba(200, 220, 245, 0.48);
+      --text-bright: #ffffff;
+      --glass-bg: rgba(6, 12, 28, 0.65);
+      --glass-border: rgba(200, 255, 228, 0.22);
+      --glass-border-hover: rgba(200, 255, 228, 0.48);
+      --glass-shadow: 0 16px 40px -8px rgba(0, 2, 8, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      --font-serif: Georgia, 'Iowan Old Style', Palatino, 'Times New Roman', serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-zenith);
+      color: var(--text-fog);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Fullscreen canvas */
+    #auroraCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 1;
+    }
+
+    /* CSS Vignette overlay */
+    .vignette-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      background: radial-gradient(circle at 50% 48%, transparent 42%, rgba(2, 3, 10, 0.42) 75%, rgba(2, 3, 10, 0.90) 100%);
+    }
+
+    /* ==========================================================================
+       UI FLOATING GLASS INTERFACE
+       ========================================================================== */
+    .ui-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 32px 40px;
+    }
+
+    /* Top bar */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+
+    .eyebrow-tag {
+      pointer-events: auto;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-fog);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 14px;
+      border-radius: 9999px;
+      background: rgba(3, 7, 18, 0.45);
+      border: 1px solid rgba(200, 255, 228, 0.14);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .kp-pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: var(--aurora-green);
+      box-shadow: 0 0 8px var(--aurora-green);
+      animation: kpPulse 2.4s infinite ease-in-out;
+      flex-shrink: 0;
+    }
+
+    @keyframes kpPulse {
+      0%, 100% {
+        transform: scale(0.9);
+        opacity: 0.65;
+        box-shadow: 0 0 6px var(--aurora-green);
+      }
+      50% {
+        transform: scale(1.35);
+        opacity: 1;
+        box-shadow: 0 0 14px var(--aurora-green), 0 0 24px rgba(60, 245, 160, 0.45);
+      }
+    }
+
+    .live-clock {
+      pointer-events: auto;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      color: var(--text-fog);
+      padding: 7px 14px;
+      border-radius: 9999px;
+      background: rgba(3, 7, 18, 0.45);
+      border: 1px solid rgba(200, 255, 228, 0.14);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Bottom section */
+    .bottom-section {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: flex-end;
+      gap: 24px;
+      width: 100%;
+    }
+
+    /* Serif caption block */
+    .caption-block {
+      pointer-events: auto;
+      max-width: 480px;
+      opacity: 0;
+      transform: translateY(18px);
+      animation: captionFadeUp 1.5s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+    }
+
+    @keyframes captionFadeUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .caption-title {
+      font-family: var(--font-serif);
+      font-size: 27px;
+      font-weight: 400;
+      line-height: 1.28;
+      color: #ffffff;
+      letter-spacing: -0.015em;
+      margin-bottom: 10px;
+      text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
+    }
+
+    .caption-title .mint-accent {
+      font-style: italic;
+      color: var(--aurora-mint);
+      text-shadow: 0 0 16px rgba(200, 255, 228, 0.38);
+    }
+
+    .caption-desc {
+      font-family: var(--font-serif);
+      font-size: 13.5px;
+      line-height: 1.62;
+      color: var(--text-fog);
+      margin-bottom: 14px;
+      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+      letter-spacing: 0.01em;
+    }
+
+    .meta-row {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      letter-spacing: 0.07em;
+      color: var(--text-dim);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: center;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+    }
+
+    .meta-row span {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .meta-separator {
+      color: rgba(200, 255, 228, 0.25);
+    }
+
+    /* Frosted control pill */
+    .control-pill-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .frosted-pill {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 22px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 9999px;
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      box-shadow: var(--glass-shadow);
+      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+                  box-shadow 0.28s ease,
+                  border-color 0.28s ease;
+    }
+
+    .frosted-pill:hover {
+      transform: translateY(-3px);
+      border-color: var(--glass-border-hover);
+      box-shadow: 0 20px 48px -10px rgba(0, 2, 8, 0.85),
+                  0 0 24px rgba(60, 245, 160, 0.16),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .control-label {
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: var(--text-fog);
+    }
+
+    /* Range slider with gradient track & spring thumb */
+    .slider-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 130px;
+    }
+
+    .intensity-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 5px;
+      border-radius: 9999px;
+      background: linear-gradient(90deg, var(--aurora-mint) 0%, var(--aurora-green) 50%, var(--aurora-violet) 100%);
+      outline: none;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(60, 245, 160, 0.25);
+    }
+
+    .intensity-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 0 10px #ffffff, 0 0 18px var(--aurora-green);
+      cursor: grab;
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
+    }
+
+    .intensity-slider:active::-webkit-slider-thumb {
+      transform: scale(1.42);
+      box-shadow: 0 0 14px #ffffff, 0 0 24px var(--aurora-green), 0 0 32px var(--aurora-violet);
+      cursor: grabbing;
+    }
+
+    .intensity-slider::-moz-range-thumb {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 0 10px #ffffff, 0 0 18px var(--aurora-green);
+      cursor: grab;
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
+    }
+
+    .intensity-slider:active::-moz-range-thumb {
+      transform: scale(1.42);
+      box-shadow: 0 0 14px #ffffff, 0 0 24px var(--aurora-green), 0 0 32px var(--aurora-violet);
+      cursor: grabbing;
+    }
+
+    .intensity-val {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--aurora-mint);
+      min-width: 34px;
+      text-align: right;
+    }
+
+    .pill-divider {
+      width: 1px;
+      height: 18px;
+      background: rgba(200, 255, 228, 0.18);
+    }
+
+    /* Snow toggle pill */
+    .snow-toggle {
+      -webkit-appearance: none;
+      appearance: none;
+      outline: none;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(200, 255, 228, 0.2);
+      color: var(--text-fog);
+      font-family: var(--font-sans);
+      font-size: 11.5px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      padding: 5px 12px;
+      border-radius: 9999px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .snow-toggle:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--aurora-mint);
+      color: #ffffff;
+    }
+
+    .snow-indicator {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(226, 236, 255, 0.35);
+      transition: all 0.2s ease;
+    }
+
+    .snow-toggle[aria-pressed="true"] {
+      background: rgba(60, 245, 160, 0.12);
+      border-color: rgba(60, 245, 160, 0.45);
+      color: #ffffff;
+    }
+
+    .snow-toggle[aria-pressed="true"] .snow-indicator {
+      background: var(--aurora-green);
+      box-shadow: 0 0 6px var(--aurora-green);
+    }
+
+    /* Bottom right wavelength legend */
+    .legend-block {
+      pointer-events: auto;
+      justify-self: end;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      padding: 6px 12px;
+      border-radius: 9999px;
+      background: rgba(3, 7, 18, 0.45);
+      border: 1px solid rgba(200, 255, 228, 0.14);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pip-oxygen {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--aurora-green);
+      box-shadow: 0 0 6px var(--aurora-green);
+    }
+
+    .pip-nitrogen {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--aurora-violet);
+      box-shadow: 0 0 6px var(--aurora-violet);
+    }
+
+    /* ==========================================================================
+       RESPONSIVE ADAPTATION & ACCESSIBILITY
+       ========================================================================== */
+    @media (max-width: 1024px) {
+      .ui-layer {
+        padding: 24px;
+      }
+      .bottom-section {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+      .control-pill-container {
+        justify-content: flex-start;
+      }
+      .legend-block {
+        justify-self: flex-start;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .ui-layer {
+        padding: 16px;
+      }
+      .top-bar {
+        gap: 12px;
+      }
+      .caption-title {
+        font-size: 22px;
+      }
+      .frosted-pill {
+        width: 100%;
+        justify-content: space-between;
+        padding: 8px 14px;
+        gap: 8px;
+      }
+      .slider-wrapper {
+        width: 90px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Background and rendering canvas -->
+  <canvas id="auroraCanvas"></canvas>
+
+  <!-- Darkening corner vignette -->
+  <div class="vignette-overlay" aria-hidden="true"></div>
+
+  <!-- Floating minimal glass UI -->
+  <main class="ui-layer">
+    <!-- Top row -->
+    <header class="top-bar">
+      <div class="eyebrow-tag">
+        <span class="kp-pulse-dot" aria-hidden="true"></span>
+        <span>Field observation · Kp 5</span>
+      </div>
+      <time class="live-clock" id="liveClock" aria-label="Current local time">00:00:00 UTC</time>
+    </header>
+
+    <!-- Bottom row -->
+    <footer class="bottom-section">
+      <!-- Scientific caption block -->
+      <article class="caption-block">
+        <h1 class="caption-title">The sky <em class="mint-accent">breathing</em> over Lake Inari</h1>
+        <p class="caption-desc">
+          Colliding solar particles channel along magnetic field lines into the subarctic thermosphere: atomic oxygen emissions yield the luminous 557.7&nbsp;nm green arc between 100–150&nbsp;km, capped by high-altitude ionized molecular nitrogen forming 427.8&nbsp;nm violet and pink fringes.
+        </p>
+        <div class="meta-row">
+          <span>68.9° N 27.0° E</span>
+          <span class="meta-separator" aria-hidden="true">·</span>
+          <span>−23 °C</span>
+          <span class="meta-separator" aria-hidden="true">·</span>
+          <span>wind calm</span>
+          <span class="meta-separator" aria-hidden="true">·</span>
+          <span>cloud 0/8</span>
+        </div>
+      </article>
+
+      <!-- Glass frosted control pill -->
+      <div class="control-pill-container">
+        <div class="frosted-pill" role="toolbar" aria-label="Atmosphere controls">
+          <div class="control-group">
+            <label for="intensitySlider" class="control-label">Intensity</label>
+            <div class="slider-wrapper">
+              <input
+                type="range"
+                id="intensitySlider"
+                class="intensity-slider"
+                min="0"
+                max="100"
+                value="62"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="62"
+                aria-label="Aurora intensity"
+              />
+            </div>
+            <span class="intensity-val" id="intensityVal" aria-live="polite">62%</span>
+          </div>
+
+          <div class="pill-divider" aria-hidden="true"></div>
+
+          <button
+            type="button"
+            id="snowToggle"
+            class="snow-toggle"
+            aria-pressed="true"
+            aria-label="Toggle snow particles"
+          >
+            <span class="snow-indicator" aria-hidden="true"></span>
+            <span>Snow</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Wavelength legend -->
+      <div class="legend-block" aria-label="Emission wavelengths">
+        <div class="legend-item">
+          <span class="pip-oxygen" aria-hidden="true"></span>
+          <span>Oxygen 557.7 nm</span>
+        </div>
+        <span class="meta-separator" aria-hidden="true">/</span>
+        <div class="legend-item">
+          <span class="pip-nitrogen" aria-hidden="true"></span>
+          <span>Nitrogen 427.8 nm</span>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    /* ==========================================================================
+       REALISTIC AURORA BOREALIS ENGINE — LAKE INARI
+       ========================================================================== */
+    (function () {
+      'use strict';
+
+      // Canvas & contexts
+      const mainCanvas = document.getElementById('auroraCanvas');
+      const ctx = mainCanvas.getContext('2d', { alpha: false });
+
+      // Low-resolution offscreen canvas for soft upscale
+      const offscreenCanvas = document.createElement('canvas');
+      const offCtx = offscreenCanvas.getContext('2d');
+
+      // Treeline pre-render canvas
+      const treelineCanvas = document.createElement('canvas');
+      const treeCtx = treelineCanvas.getContext('2d');
+
+      // State
+      let dpr = 1;
+      let width = window.innerWidth;
+      let height = window.innerHeight;
+      let horizonY = height * 0.70; // Frozen lake occupies bottom 30%
+      let lakeH = height * 0.30;
+      let offW = 320;
+      let offH = 400;
+
+      let intensity = 62; // 0 to 100
+      let snowEnabled = true;
+      let prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // --------------------------------------------------------------------------
+      // 1D VALUE NOISE & FBM (Smoothstep, repeatable, zero-allocation)
+      // --------------------------------------------------------------------------
+      const NOISE_SIZE = 1024;
+      const noiseTable = new Float32Array(NOISE_SIZE);
+      // Seed deterministic pseudo-random sequence for stable noise
+      let seed = 4291823;
+      function pseudoRandom() {
+        seed = (seed * 1664525 + 1013904223) % 4294967296;
+        return seed / 4294967296;
+      }
+      for (let i = 0; i < NOISE_SIZE; i++) {
+        noiseTable[i] = pseudoRandom();
+      }
+
+      function fastNoise1D(x) {
+        const xi = Math.floor(x);
+        const f = x - xi;
+        const u = f * f * (3.0 - 2.0 * f); // smoothstep
+        const i0 = ((xi % NOISE_SIZE) + NOISE_SIZE) % NOISE_SIZE;
+        const i1 = (i0 + 1) % NOISE_SIZE;
+        return noiseTable[i0] + (noiseTable[i1] - noiseTable[i0]) * u;
+      }
+
+      // 4-octave value-noise fBm
+      function fbm1D(x) {
+        let val = 0;
+        let amp = 0.52;
+        let freq = 1.0;
+        let sum = 0;
+        for (let o = 0; o < 4; o++) {
+          val += fastNoise1D(x * freq) * amp;
+          sum += amp;
+          amp *= 0.5;
+          freq *= 2.03;
+        }
+        return val / sum;
+      }
+
+      // --------------------------------------------------------------------------
+      // FOUR AURORA CURTAINS DEFINITION
+      // Hue ≈ 150–158 (green), 285 (violet), 330 (pink)
+      // --------------------------------------------------------------------------
+      const curtains = [
+        {
+          id: 'primary-green',
+          mainHue: 153, // Aurora green #3cf5a0
+          sat: 92,
+          fringeHue: 285, // Violet fringe #a86bff
+          fringeSat: 85,
+          driftSpeed: 0.00032,
+          driftDir: 1,
+          spatialFreq: 0.015,
+          heightRatio: 0.65,
+          alpha: 0.68,
+          swayFreq: 0.018,
+          swaySpeed: 0.28,
+          ribbonFreq: 0.005,
+          ribbonSpeed: 0.10,
+          undulateFreq: 0.024,
+          undulateSpeed: 0.22,
+          phase: 0.0
+        },
+        {
+          id: 'high-violet-fringe',
+          mainHue: 285, // Violet
+          sat: 88,
+          fringeHue: 330, // Pink fringe
+          fringeSat: 84,
+          driftSpeed: -0.00024,
+          driftDir: -1,
+          spatialFreq: 0.011,
+          heightRatio: 0.76,
+          alpha: 0.44,
+          swayFreq: 0.014,
+          swaySpeed: -0.22,
+          ribbonFreq: 0.0035,
+          ribbonSpeed: -0.07,
+          undulateFreq: 0.018,
+          undulateSpeed: 0.15,
+          phase: 1.7
+        },
+        {
+          id: 'active-green-wave',
+          mainHue: 158, // Bright emerald/mint
+          sat: 95,
+          fringeHue: 150,
+          fringeSat: 90,
+          driftSpeed: 0.00052,
+          driftDir: 1,
+          spatialFreq: 0.024,
+          heightRatio: 0.50,
+          alpha: 0.58,
+          swayFreq: 0.028,
+          swaySpeed: 0.42,
+          ribbonFreq: 0.008,
+          ribbonSpeed: 0.15,
+          undulateFreq: 0.032,
+          undulateSpeed: 0.30,
+          phase: 3.2
+        },
+        {
+          id: 'upper-pink-veil',
+          mainHue: 330, // Pink fringe
+          sat: 82,
+          fringeHue: 285, // Violet
+          fringeSat: 80,
+          driftSpeed: -0.00036,
+          driftDir: -1,
+          spatialFreq: 0.013,
+          heightRatio: 0.70,
+          alpha: 0.34,
+          swayFreq: 0.012,
+          swaySpeed: -0.18,
+          ribbonFreq: 0.004,
+          ribbonSpeed: -0.06,
+          undulateFreq: 0.016,
+          undulateSpeed: 0.12,
+          phase: 4.8
+        }
+      ];
+
+      // --------------------------------------------------------------------------
+      // STARS GENERATION & MANAGEMENT
+      // 8% larger, 20% warm-tinted (#ffe7c4), rest blue-white (#dfe9ff)
+      // Twinkling on individual sine phase, sized by area
+      // --------------------------------------------------------------------------
+      let stars = [];
+
+      function rebuildStars() {
+        stars = [];
+        const starCount = Math.max(220, Math.floor(width * 0.28));
+        const maxStarY = horizonY - 6;
+
+        for (let i = 0; i < starCount; i++) {
+          const isLarger = Math.random() < 0.08;
+          const isWarm = Math.random() < 0.20;
+          const color = isWarm ? '#ffe7c4' : '#dfe9ff';
+
+          // Sized by area: Area = PI * r^2
+          let area;
+          if (isLarger) {
+            area = 3.6 + Math.random() * 5.4; // r ~ 1.07 to 1.69 px
+          } else {
+            area = 0.3 + Math.random() * 1.6; // r ~ 0.31 to 0.78 px
+          }
+          const radius = Math.sqrt(area / Math.PI);
+
+          stars.push({
+            x: Math.random() * width,
+            y: Math.random() * maxStarY,
+            radius: radius,
+            color: color,
+            isLarger: isLarger,
+            baseAlpha: isLarger ? (0.75 + Math.random() * 0.25) : (0.35 + Math.random() * 0.55),
+            twinklePhase: Math.random() * Math.PI * 2,
+            twinkleSpeed: 0.6 + Math.random() * 2.2
+          });
+        }
+      }
+
+      // --------------------------------------------------------------------------
+      // SHOOTING STARS
+      // Spawn roughly once every 8 seconds, short white gradient streak, fades ~1s
+      // --------------------------------------------------------------------------
+      let shootingStars = [];
+      let nextShootingStarTime = performance.now() + 3000 + Math.random() * 5000;
+
+      function spawnShootingStar(now) {
+        const startX = Math.random() * (width * 0.75) + width * 0.1;
+        const startY = Math.random() * (horizonY * 0.42) + 20;
+        // Shallow angle: 16° to 34°
+        const angleDeg = 16 + Math.random() * 18;
+        const angle = (angleDeg * Math.PI) / 180;
+        const length = 45 + Math.random() * 45; // 45–90px
+        const speed = 460 + Math.random() * 220; // px/sec
+        const duration = 900 + Math.random() * 300; // ~1 second
+
+        shootingStars.push({
+          x: startX,
+          y: startY,
+          angle: angle,
+          length: length,
+          speed: speed,
+          duration: duration,
+          birth: now
+        });
+
+        // Next spawn in roughly 8 seconds (6s - 10s)
+        nextShootingStarTime = now + 5500 + Math.random() * 5000;
+      }
+
+      // --------------------------------------------------------------------------
+      // LAKE RIPPLE GLINTS
+      // A dozen thin, slowly wandering horizontal highlight streaks
+      // --------------------------------------------------------------------------
+      let rippleGlints = [];
+
+      function initRippleGlints() {
+        rippleGlints = [];
+        const count = 12;
+        for (let i = 0; i < count; i++) {
+          rippleGlints.push({
+            x: Math.random() * width,
+            yRatio: 0.06 + Math.random() * 0.88, // Depth into lake
+            length: 40 + Math.random() * 85,
+            speedX: (Math.random() * 8 + 3) * (Math.random() < 0.5 ? 1 : -1),
+            pulseSpeed: 0.8 + Math.random() * 1.4,
+            phase: Math.random() * Math.PI * 2
+          });
+        }
+      }
+
+      // --------------------------------------------------------------------------
+      // PROCEDURAL PINE TREELINE
+      // Jagged black pine treeline (#02040a front, #050a14 softer distant row)
+      // Generated once by walking across width, stamping pine shapes made of
+      // trunk plus four stacked triangles whose heights and spacing are driven by 1D noise
+      // --------------------------------------------------------------------------
+      function generateTreeline() {
+        treelineCanvas.width = Math.ceil(width);
+        const maxTreeHeight = Math.ceil(Math.min(140, height * 0.18));
+        treelineCanvas.height = maxTreeHeight;
+
+        treeCtx.clearRect(0, 0, treelineCanvas.width, treelineCanvas.height);
+        const baseY = maxTreeHeight;
+
+        // Draw individual pine tree with trunk + 4 stacked triangles
+        function stampPine(cx, treeH, color) {
+          treeCtx.fillStyle = color;
+
+          const trunkW = Math.max(2, Math.round(treeH * 0.055));
+          const trunkH = Math.round(treeH * 0.16);
+
+          // Trunk
+          treeCtx.fillRect(Math.round(cx - trunkW / 2), baseY - trunkH, trunkW, trunkH);
+
+          // 4 stacked triangles (from bottom tier to crown)
+          const tierHeights = [
+            treeH * 0.38,
+            treeH * 0.32,
+            treeH * 0.28,
+            treeH * 0.26
+          ];
+          const tierWidths = [
+            treeH * 0.44,
+            treeH * 0.36,
+            treeH * 0.28,
+            treeH * 0.18
+          ];
+          const tierBaseY = [
+            baseY - trunkH * 0.5,
+            baseY - trunkH - tierHeights[0] * 0.48,
+            baseY - trunkH - tierHeights[0] * 0.9 - tierHeights[1] * 0.45,
+            baseY - trunkH - tierHeights[0] * 0.9 - tierHeights[1] * 0.85 - tierHeights[2] * 0.45
+          ];
+
+          for (let t = 0; t < 4; t++) {
+            const h = tierHeights[t];
+            const w = tierWidths[t];
+            const b = tierBaseY[t];
+            const topY = b - h;
+
+            treeCtx.beginPath();
+            treeCtx.moveTo(cx - w / 2, b);
+            // Subtle branch irregularity
+            treeCtx.lineTo(cx - w * 0.25, b - h * 0.4);
+            treeCtx.lineTo(cx, topY);
+            treeCtx.lineTo(cx + w * 0.25, b - h * 0.4);
+            treeCtx.lineTo(cx + w / 2, b);
+            treeCtx.closePath();
+            treeCtx.fill();
+          }
+        }
+
+        // 1. Distant softer row (#050a14)
+        let dxDistant = -20;
+        while (dxDistant < width + 25) {
+          const noiseH = fbm1D(dxDistant * 0.012 + 820.5);
+          const treeH = 24 + noiseH * 38; // 24–62px
+          stampPine(dxDistant, treeH, '#050a14');
+
+          const stepNoise = fbm1D(dxDistant * 0.035 + 140.2);
+          const step = 6 + stepNoise * 14; // 6–20px spacing
+          dxDistant += step;
+        }
+
+        // 2. Front sharp row (#02040a)
+        let dxFront = -25;
+        while (dxFront < width + 30) {
+          const noiseH = fbm1D(dxFront * 0.009 + 215.8);
+          const treeH = 42 + noiseH * 68; // 42–110px
+          stampPine(dxFront, treeH, '#02040a');
+
+          const stepNoise = fbm1D(dxFront * 0.028 + 482.1);
+          const step = 8 + stepNoise * 16; // 8–24px spacing
+          dxFront += step;
+        }
+      }
+
+      // --------------------------------------------------------------------------
+      // SNOWFLAKE FIELD
+      // Light field of small white discs (0.6–2.2 px) falling at 12–38 px/s
+      // Gentle sinusoidal drift, recycled to top
+      // --------------------------------------------------------------------------
+      let snowflakes = [];
+
+      function rebuildSnow() {
+        snowflakes = [];
+        const snowCount = Math.max(90, Math.floor(width * 0.09));
+
+        for (let i = 0; i < snowCount; i++) {
+          snowflakes.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            radius: 0.6 + Math.random() * 1.6, // 0.6–2.2 px
+            speedY: 12 + Math.random() * 26, // 12–38 px/s
+            driftSpeed: 0.7 + Math.random() * 1.1,
+            driftAmp: 14 + Math.random() * 24,
+            driftPhase: Math.random() * Math.PI * 2,
+            alpha: 0.32 + Math.random() * 0.55
+          });
+        }
+      }
+
+      // --------------------------------------------------------------------------
+      // DIMENSIONS SETUP & RESIZE
+      // --------------------------------------------------------------------------
+      function setupDimensions() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        width = window.innerWidth;
+        height = window.innerHeight;
+        horizonY = Math.round(height * 0.70);
+        lakeH = height - horizonY;
+
+        mainCanvas.width = Math.floor(width * dpr);
+        mainCanvas.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        // Aurora offscreen: ~one third screen width, scaled up for natural atmospheric softness
+        offW = Math.max(160, Math.round(width / 3));
+        offH = Math.max(120, Math.round(horizonY));
+        offscreenCanvas.width = offW;
+        offscreenCanvas.height = offH;
+
+        rebuildStars();
+        initRippleGlints();
+        generateTreeline();
+        rebuildSnow();
+      }
+
+      // --------------------------------------------------------------------------
+      // AURORA RENDERING TO OFFSCREEN CANVAS
+      // --------------------------------------------------------------------------
+      function renderOffscreenAurora(timeSec) {
+        offCtx.clearRect(0, 0, offW, offH);
+        offCtx.globalCompositeOperation = 'lighter';
+
+        const intensityMult = intensity / 62; // Normalized around default 62
+
+        for (let c = 0; c < curtains.length; c++) {
+          const cur = curtains[c];
+          const timeOffset = timeSec * cur.driftSpeed;
+          const curtainMaxHeight = offH * cur.heightRatio;
+
+          // For every column of offscreen canvas
+          for (let x = 0; x < offW; x++) {
+            // Brightness from 4-octave fBm with time offset
+            const xCoord = x * cur.spatialFreq + timeOffset;
+            const noiseVal = fbm1D(xCoord);
+
+            // Mixed with slow horizontal sine sway and slower ribbon sine
+            const sway = Math.sin(x * cur.swayFreq + timeSec * cur.swaySpeed + cur.phase) * 0.22;
+            const ribbon = Math.sin(x * cur.ribbonFreq + timeSec * cur.ribbonSpeed + cur.phase * 1.5) * 0.32;
+
+            const rawVal = noiseVal + sway + ribbon;
+            // Raised to power 1.8 so bright folds stay rare
+            const normalized = Math.max(0, Math.min(1, (rawVal - 0.16) / 0.84));
+            const brightness = Math.pow(normalized, 1.8);
+
+            if (brightness <= 0.006) continue;
+
+            // Bottom edge undulates around 72% of sky height
+            const undulation = (Math.sin(x * cur.undulateFreq + timeSec * cur.undulateSpeed + cur.phase) * 0.038
+                              + Math.cos(x * 0.011 - timeSec * 0.14) * 0.024) * offH;
+            const bottomY = offH * 0.72 + undulation;
+
+            // Top edge reaches up by curtain height scaled by noise and intensity
+            const reach = curtainMaxHeight * (0.35 + 0.65 * noiseVal) * intensityMult;
+            const topY = Math.max(0, bottomY - reach);
+            const curtainH = bottomY - topY;
+
+            if (curtainH <= 1.5) continue;
+
+            // Vertical linear gradient:
+            // transparent at top, mid-alpha in middle, brightest just above bottom edge, transparent at base
+            const grad = offCtx.createLinearGradient(0, topY, 0, bottomY);
+            const maxColAlpha = cur.alpha * brightness * intensityMult;
+
+            // Color stops: top fringe (violet/pink) transitioning to dominant aurora green
+            grad.addColorStop(0.00, `hsla(${cur.fringeHue}, ${cur.fringeSat}%, 68%, 0)`);
+            grad.addColorStop(0.25, `hsla(${cur.fringeHue}, ${cur.fringeSat}%, 62%, ${(maxColAlpha * 0.32).toFixed(3)})`);
+            grad.addColorStop(0.60, `hsla(${cur.mainHue}, ${cur.sat}%, 55%, ${(maxColAlpha * 0.65).toFixed(3)})`);
+            grad.addColorStop(0.88, `hsla(${cur.mainHue}, 96%, 66%, ${(maxColAlpha * 1.00).toFixed(3)})`);
+            grad.addColorStop(1.00, `hsla(${cur.mainHue}, ${cur.sat}%, 50%, 0)`);
+
+            offCtx.fillStyle = grad;
+            // 1.6-pixel-wide vertical linear gradient
+            offCtx.fillRect(x, topY, 1.6, curtainH);
+          }
+        }
+      }
+
+      // --------------------------------------------------------------------------
+      // MAIN SCENE RENDERING PIPELINE
+      // --------------------------------------------------------------------------
+      let lastTime = performance.now();
+
+      function renderScene(now) {
+        const dt = Math.min((now - lastTime) / 1000, 0.1);
+        lastTime = now;
+        const timeSec = now * 0.001;
+
+        // 1. SKY BACKGROUND
+        // Indigo sky (#02030a at zenith fading through #061021 to #0b1a30 at horizon)
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
+        skyGrad.addColorStop(0.00, '#02030a');
+        skyGrad.addColorStop(0.55, '#061021');
+        skyGrad.addColorStop(1.00, '#0b1a30');
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, width, horizonY);
+
+        // 2. STARS
+        // Twinkling on individual sine phase, dimming slightly as intensity rises
+        const intensityDim = 1.0 - (intensity / 100) * 0.36;
+        for (let i = 0; i < stars.length; i++) {
+          const s = stars[i];
+          const twinkle = Math.sin(timeSec * s.twinkleSpeed + s.twinklePhase) * 0.4 + 0.6;
+          const starAlpha = Math.max(0, Math.min(1, s.baseAlpha * twinkle * intensityDim));
+
+          ctx.fillStyle = s.color;
+          ctx.globalAlpha = starAlpha;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Subtle glow aura for larger bright stars
+          if (s.isLarger && starAlpha > 0.6) {
+            ctx.fillStyle = s.color;
+            ctx.globalAlpha = starAlpha * 0.22;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.radius * 2.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.globalAlpha = 1.0;
+
+        // 3. SHOOTING STARS
+        if (!prefersReducedMotion) {
+          if (now >= nextShootingStarTime) {
+            spawnShootingStar(now);
+          }
+
+          for (let i = shootingStars.length - 1; i >= 0; i--) {
+            const ss = shootingStars[i];
+            const age = now - ss.birth;
+            if (age >= ss.duration) {
+              shootingStars.splice(i, 1);
+              continue;
+            }
+
+            const progress = age / ss.duration;
+            // Rapid fade in, gradual fade out
+            let alpha = progress < 0.2 ? (progress / 0.2) : (1.0 - (progress - 0.2) / 0.8);
+            alpha = Math.max(0, Math.min(1, alpha * 0.95));
+
+            const curX = ss.x + Math.cos(ss.angle) * ss.speed * (age / 1000);
+            const curY = ss.y + Math.sin(ss.angle) * ss.speed * (age / 1000);
+            const tailX = curX - Math.cos(ss.angle) * ss.length;
+            const tailY = curY - Math.sin(ss.angle) * ss.length;
+
+            const streakGrad = ctx.createLinearGradient(tailX, tailY, curX, curY);
+            streakGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+            streakGrad.addColorStop(0.65, `rgba(226, 240, 255, ${(alpha * 0.6).toFixed(3)})`);
+            streakGrad.addColorStop(1, `rgba(255, 255, 255, ${(alpha * 1.0).toFixed(3)})`);
+
+            ctx.save();
+            ctx.lineWidth = 1.8;
+            ctx.strokeStyle = streakGrad;
+            ctx.beginPath();
+            ctx.moveTo(tailX, tailY);
+            ctx.lineTo(curX, curY);
+            ctx.stroke();
+
+            // Bright sparkling head
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha.toFixed(3)})`;
+            ctx.beginPath();
+            ctx.arc(curX, curY, 1.4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+
+        // 4. RENDER OFFSCREEN AURORA & COMPOSITE WITH 'screen'
+        renderOffscreenAurora(timeSec);
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(offscreenCanvas, 0, 0, offW, offH, 0, 0, width, horizonY);
+
+        // Faint green glow band rising from the horizon
+        const horizonGlowH = Math.min(150, horizonY * 0.35);
+        const glowGrad = ctx.createLinearGradient(0, horizonY - horizonGlowH, 0, horizonY);
+        const glowAlpha = 0.10 * (intensity / 62);
+        glowGrad.addColorStop(0.00, 'rgba(60, 245, 160, 0)');
+        glowGrad.addColorStop(0.55, `rgba(60, 245, 160, ${(glowAlpha * 0.45).toFixed(3)})`);
+        glowGrad.addColorStop(1.00, `rgba(60, 245, 160, ${glowAlpha.toFixed(3)})`);
+        ctx.fillStyle = glowGrad;
+        ctx.fillRect(0, horizonY - horizonGlowH, width, horizonGlowH);
+        ctx.restore();
+
+        // 5. LAKE WATER
+        // Dark water gradient (#08121f → #020409)
+        const lakeGrad = ctx.createLinearGradient(0, horizonY, 0, height);
+        lakeGrad.addColorStop(0.00, '#08121f');
+        lakeGrad.addColorStop(1.00, '#020409');
+        ctx.fillStyle = lakeGrad;
+        ctx.fillRect(0, horizonY, width, lakeH);
+
+        // 6. AURORA LAKE REFLECTION
+        // Drawn in 4-pixel horizontal slices from horizon downward,
+        // sampling upward from bottom of sky image (mirror, compressed 1.3×),
+        // offsetting horizontally with two summed sines that grow with depth, fading alpha with depth.
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        const sliceStep = 4;
+        const intensityFactor = intensity / 62;
+
+        for (let ly = 0; ly < lakeH; ly += sliceStep) {
+          const sliceH = Math.min(sliceStep, lakeH - ly);
+          const destY = horizonY + ly;
+          const depth = ly / lakeH;
+
+          // Sampling upward from bottom of sky offscreen buffer
+          const distFromBottom = ly * 1.3;
+          let srcSliceH = sliceH * 1.3;
+          let srcY = offH - distFromBottom - srcSliceH;
+
+          if (srcY + srcSliceH <= 0) continue;
+          if (srcY < 0) {
+            srcSliceH += srcY;
+            srcY = 0;
+          }
+
+          // Two summed sines growing with depth
+          const depthDistortion = 0.28 + 0.72 * Math.pow(depth, 0.65);
+          const waveOffset = (Math.sin(ly * 0.075 + timeSec * 1.8) * 8
+                            + Math.sin(ly * 0.022 - timeSec * 0.9) * 15) * depthDistortion;
+
+          // Fading alpha with depth
+          const sliceAlpha = (1.0 - Math.pow(depth, 0.72)) * 0.52 * intensityFactor;
+
+          if (sliceAlpha > 0.005 && srcSliceH > 0.2) {
+            ctx.globalAlpha = Math.max(0, Math.min(1, sliceAlpha));
+            ctx.drawImage(offscreenCanvas, 0, srcY, offW, srcSliceH, waveOffset, destY, width, sliceH);
+          }
+        }
+        ctx.restore();
+
+        // 7. MIRRORED TREELINE REFLECTION
+        // Sliced downward into lake with weaker wobble so silhouettes shimmer
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        const treeCanvasH = treelineCanvas.height;
+        const maxTreeReflectH = Math.min(lakeH * 0.75, treeCanvasH * 0.95);
+
+        for (let ly = 0; ly < maxTreeReflectH; ly += sliceStep) {
+          const sliceH = Math.min(sliceStep, maxTreeReflectH - ly);
+          const destY = horizonY + ly;
+          const depth = ly / maxTreeReflectH;
+
+          const srcY = treeCanvasH - ly - sliceH;
+          if (srcY < 0) continue;
+
+          // Weaker wobble
+          const wobble = (Math.sin(ly * 0.08 + timeSec * 1.4) * 3
+                        + Math.sin(ly * 0.03 - timeSec * 0.7) * 5) * (0.35 + 0.65 * depth);
+
+          const treeAlpha = (1.0 - Math.pow(depth, 0.8)) * 0.78;
+          ctx.globalAlpha = treeAlpha;
+          ctx.drawImage(treelineCanvas, 0, srcY, width, sliceH, wobble, destY, width, sliceH);
+        }
+        ctx.restore();
+
+        // 8. LAKE RIPPLE GLINTS
+        // A dozen thin, slowly wandering horizontal highlight streaks
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        for (let i = 0; i < rippleGlints.length; i++) {
+          const rg = rippleGlints[i];
+          rg.x += rg.speedX * dt;
+          if (rg.x < -rg.length) rg.x = width + rg.length;
+          if (rg.x > width + rg.length) rg.x = -rg.length;
+
+          const glintY = horizonY + rg.yRatio * lakeH;
+          const pulse = Math.sin(timeSec * rg.pulseSpeed + rg.phase) * 0.5 + 0.5;
+          const glintAlpha = pulse * 0.38 * (1.0 - rg.yRatio * 0.45) * intensityFactor;
+
+          if (glintAlpha > 0.01) {
+            const glintGrad = ctx.createLinearGradient(rg.x - rg.length / 2, glintY, rg.x + rg.length / 2, glintY);
+            glintGrad.addColorStop(0.0, 'rgba(200, 255, 228, 0)');
+            glintGrad.addColorStop(0.5, `rgba(200, 255, 228, ${glintAlpha.toFixed(3)})`);
+            glintGrad.addColorStop(1.0, 'rgba(200, 255, 228, 0)');
+
+            ctx.fillStyle = glintGrad;
+            ctx.fillRect(rg.x - rg.length / 2, glintY, rg.length, 1.4);
+          }
+        }
+        ctx.restore();
+
+        // 9. DRAW THE TREELINE ITSELF ALONG HORIZON
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(
+          treelineCanvas,
+          0, 0, width, treelineCanvas.height,
+          0, horizonY - treelineCanvas.height, width, treelineCanvas.height
+        );
+        ctx.restore();
+
+        // 10. SNOW PARTICLES
+        // White discs (0.6–2.2 px) falling at 12–38 px/s with sinusoidal drift
+        if (snowEnabled && !prefersReducedMotion) {
+          ctx.save();
+          ctx.fillStyle = '#ffffff';
+
+          for (let i = 0; i < snowflakes.length; i++) {
+            const f = snowflakes[i];
+            f.y += f.speedY * dt;
+            if (f.y > height + 5) {
+              f.y = -5;
+              f.x = Math.random() * width;
+            }
+
+            const drift = Math.sin(timeSec * f.driftSpeed + f.driftPhase) * f.driftAmp;
+            let currentX = (f.x + drift) % width;
+            if (currentX < 0) currentX += width;
+
+            ctx.globalAlpha = f.alpha;
+            ctx.beginPath();
+            ctx.arc(currentX, f.y, f.radius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
+
+      // --------------------------------------------------------------------------
+      // ANIMATION LOOP & REDUCED MOTION HANDLING
+      // --------------------------------------------------------------------------
+      let animationFrameId = null;
+
+      function loop(now) {
+        renderScene(now);
+        if (!prefersReducedMotion) {
+          animationFrameId = requestAnimationFrame(loop);
+        }
+      }
+
+      function startOrRender() {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+          animationFrameId = null;
+        }
+        if (prefersReducedMotion) {
+          renderScene(performance.now());
+        } else {
+          lastTime = performance.now();
+          animationFrameId = requestAnimationFrame(loop);
+        }
+      }
+
+      // --------------------------------------------------------------------------
+      // UI CONTROLS & EVENT LISTENERS
+      // --------------------------------------------------------------------------
+      const slider = document.getElementById('intensitySlider');
+      const valOutput = document.getElementById('intensityVal');
+      const snowBtn = document.getElementById('snowToggle');
+      const clockEl = document.getElementById('liveClock');
+
+      // Intensity range slider
+      slider.addEventListener('input', function (e) {
+        intensity = parseInt(e.target.value, 10);
+        valOutput.textContent = intensity + '%';
+        slider.setAttribute('aria-valuenow', intensity);
+        if (prefersReducedMotion) renderScene(performance.now());
+      });
+
+      // Snow toggle
+      snowBtn.addEventListener('click', function () {
+        snowEnabled = !snowEnabled;
+        snowBtn.setAttribute('aria-pressed', snowEnabled ? 'true' : 'false');
+        if (prefersReducedMotion) renderScene(performance.now());
+      });
+
+      // Live local clock
+      function updateClock() {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const h = pad(now.getHours());
+        const m = pad(now.getMinutes());
+        const s = pad(now.getSeconds());
+
+        const tzMinutes = -now.getTimezoneOffset();
+        const sign = tzMinutes >= 0 ? '+' : '-';
+        const tzH = pad(Math.floor(Math.abs(tzMinutes) / 60));
+        const tzM = pad(Math.abs(tzMinutes) % 60);
+        const tzStr = `UTC${sign}${tzH}:${tzM}`;
+
+        clockEl.textContent = `${h}:${m}:${s} ${tzStr}`;
+      }
+      setInterval(updateClock, 1000);
+      updateClock();
+
+      // Debounced resize handler
+      let resizeTimer = null;
+      window.addEventListener('resize', function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () {
+          setupDimensions();
+          startOrRender();
+        }, 150);
+      });
+
+      // Motion preference change listener
+      const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      motionQuery.addEventListener('change', function (e) {
+        prefersReducedMotion = e.matches;
+        startOrRender();
+      });
+
+      // Initialize
+      setupDimensions();
+      startOrRender();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1783 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="ember">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Typographic Word Clock &amp; Time Poem</title>
+  <style>
+    /* -------------------------------------------------------------
+       CSS Custom Properties & Theme Palettes
+       ------------------------------------------------------------- */
+    :root {
+      /* Sky color interpolation defaults (midnight start) */
+      --bg-a: #070a16;
+      --bg-b: #0f1630;
+      --bg-c: #241c3d;
+      --star-opacity: 0.95;
+
+      /* Active theme accents (Ember default) */
+      --accent: #ffd68a;
+      --glow: rgba(255, 214, 138, 0.55);
+      --accent-dim: rgba(255, 214, 138, 0.18);
+      --accent-rgb: 255, 214, 138;
+
+      /* Grid and UI sizing */
+      --cell-size: clamp(16px, min(5.2vw, 6.2vh), 58px);
+      --cell-gap: clamp(2px, 0.55vw, 7px);
+      --frame-padding: clamp(20px, 3.8vw, 42px);
+      --frame-radius: clamp(16px, 2.4vw, 28px);
+
+      /* Typography stacks */
+      --font-sans: "Helvetica Neue", "Avenir Next", Futura, "Segoe UI", system-ui, -apple-system, sans-serif;
+      --font-serif: Georgia, "Iowan Old Style", Palatino, "Palatino Linotype", "Book Antiqua", serif;
+      --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "Cascadia Code", monospace;
+    }
+
+    [data-theme="moon"] {
+      --accent: #e6f0ff;
+      --glow: rgba(230, 240, 255, 0.55);
+      --accent-dim: rgba(230, 240, 255, 0.18);
+      --accent-rgb: 230, 240, 255;
+    }
+
+    [data-theme="verdigris"] {
+      --accent: #a8f0d4;
+      --glow: rgba(168, 240, 212, 0.55);
+      --accent-dim: rgba(168, 240, 212, 0.18);
+      --accent-rgb: 168, 240, 212;
+    }
+
+    /* -------------------------------------------------------------
+       Base Layout & Two-Layer Sky
+       ------------------------------------------------------------- */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-a);
+      color: #ffffff;
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      background:
+        radial-gradient(circle at 50% 120%, var(--bg-c) 0%, transparent 68%),
+        linear-gradient(180deg, var(--bg-a) 0%, var(--bg-b) 100%);
+      background-attachment: fixed;
+      transition: background 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* -------------------------------------------------------------
+       SVG Grain Overlay (feTurbulence at 4.5% opacity)
+       ------------------------------------------------------------- */
+    .grain-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 99;
+      opacity: 0.045;
+    }
+
+    /* -------------------------------------------------------------
+       CSS Star Field Layer
+       ------------------------------------------------------------- */
+    .starfield {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      opacity: var(--star-opacity);
+      transition: opacity 1.6s ease;
+    }
+
+    .starfield::before,
+    .starfield::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-repeat: repeat;
+    }
+
+    /* Multi-layered stars via radial gradients */
+    .starfield::before {
+      background-image:
+        radial-gradient(1px 1px at 12% 18%, rgba(255,255,255,0.9) 100%, transparent),
+        radial-gradient(1.2px 1.2px at 28% 42%, rgba(255,255,255,0.85) 100%, transparent),
+        radial-gradient(1px 1px at 45% 12%, rgba(255,255,255,0.7) 100%, transparent),
+        radial-gradient(1.5px 1.5px at 64% 35%, rgba(255,255,255,0.95) 100%, transparent),
+        radial-gradient(1px 1px at 78% 15%, rgba(255,255,255,0.8) 100%, transparent),
+        radial-gradient(1.2px 1.2px at 88% 48%, rgba(255,255,255,0.75) 100%, transparent),
+        radial-gradient(1px 1px at 22% 76%, rgba(255,255,255,0.65) 100%, transparent),
+        radial-gradient(1.5px 1.5px at 38% 68%, rgba(255,255,255,0.9) 100%, transparent),
+        radial-gradient(1px 1px at 72% 82%, rgba(255,255,255,0.7) 100%, transparent),
+        radial-gradient(1.2px 1.2px at 85% 72%, rgba(255,255,255,0.85) 100%, transparent),
+        radial-gradient(1px 1px at 52% 88%, rgba(255,255,255,0.6) 100%, transparent),
+        radial-gradient(1px 1px at 94% 24%, rgba(255,255,255,0.9) 100%, transparent);
+      background-size: 550px 550px;
+      animation: starTwinkle 7s ease-in-out infinite alternate;
+    }
+
+    .starfield::after {
+      background-image:
+        radial-gradient(1px 1px at 8% 62%, rgba(255,255,255,0.8) 100%, transparent),
+        radial-gradient(1.5px 1.5px at 19% 31%, rgba(255,255,255,0.95) 100%, transparent),
+        radial-gradient(1px 1px at 34% 84%, rgba(255,255,255,0.7) 100%, transparent),
+        radial-gradient(1.2px 1.2px at 58% 22%, rgba(255,255,255,0.85) 100%, transparent),
+        radial-gradient(1px 1px at 69% 56%, rgba(255,255,255,0.75) 100%, transparent),
+        radial-gradient(1.6px 1.6px at 82% 28%, rgba(255,255,255,0.9) 100%, transparent),
+        radial-gradient(1px 1px at 91% 86%, rgba(255,255,255,0.65) 100%, transparent),
+        radial-gradient(1.2px 1.2px at 48% 54%, rgba(255,255,255,0.8) 100%, transparent),
+        radial-gradient(1px 1px at 6% 92%, rgba(255,255,255,0.7) 100%, transparent);
+      background-size: 700px 700px;
+      animation: starTwinkle 11s ease-in-out infinite alternate-reverse;
+    }
+
+    @keyframes starTwinkle {
+      0% { opacity: 0.65; transform: scale(1); }
+      50% { opacity: 0.95; transform: scale(1.02); }
+      100% { opacity: 0.75; transform: scale(1); }
+    }
+
+    /* -------------------------------------------------------------
+       Canvas Letter Shower
+       ------------------------------------------------------------- */
+    #letter-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 60;
+    }
+
+    /* -------------------------------------------------------------
+       Header & Navigation Bar
+       ------------------------------------------------------------- */
+    header {
+      width: 100%;
+      max-width: 1320px;
+      padding: clamp(14px, 2.2vh, 22px) clamp(18px, 3.2vw, 36px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      z-index: 70;
+      position: relative;
+    }
+
+    .brand-mark {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: 0.28em;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .brand-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--glow);
+      transition: background 0.4s ease, box-shadow 0.4s ease;
+    }
+
+    .header-center {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .digital-readout {
+      font-family: var(--font-mono);
+      font-size: clamp(12px, 1.4vw, 15px);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.16em;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(8, 10, 20, 0.32);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: var(--accent);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      transition: color 0.4s ease;
+      white-space: nowrap;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: clamp(8px, 1.2vw, 16px);
+    }
+
+    /* Segmented switch for 12H / 24H */
+    .segmented-control {
+      display: inline-flex;
+      background: rgba(8, 10, 20, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      padding: 3px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .seg-btn {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: rgba(255, 255, 255, 0.5);
+      font-family: var(--font-sans);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      padding: 5px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .seg-btn.active {
+      background: rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .seg-btn:hover:not(.active) {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    /* Theme Picker Buttons */
+    .theme-picker {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(8, 10, 20, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      padding: 3px 6px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .theme-btn {
+      background: transparent;
+      border: none;
+      outline: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-sans);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.48);
+      padding: 5px 9px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .theme-btn .color-swatch {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .theme-btn[data-theme-val="ember"] .color-swatch {
+      background: #ffd68a;
+      box-shadow: 0 0 5px rgba(255, 214, 138, 0.5);
+    }
+    .theme-btn[data-theme-val="moon"] .color-swatch {
+      background: #e6f0ff;
+      box-shadow: 0 0 5px rgba(230, 240, 255, 0.5);
+    }
+    .theme-btn[data-theme-val="verdigris"] .color-swatch {
+      background: #a8f0d4;
+      box-shadow: 0 0 5px rgba(168, 240, 212, 0.5);
+    }
+
+    .theme-btn.active {
+      background: rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+    }
+    .theme-btn.active .color-swatch {
+      transform: scale(1.3);
+    }
+    .theme-btn:hover:not(.active) {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    /* -------------------------------------------------------------
+       Main Center Stage (Word Clock & Poem)
+       ------------------------------------------------------------- */
+    main {
+      flex: 1;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 0 clamp(16px, 3vw, 32px);
+      z-index: 50;
+      position: relative;
+    }
+
+    .clock-stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* The Frosted Glass Frame */
+    .clock-frame {
+      position: relative;
+      padding: var(--frame-padding);
+      background: rgba(8, 10, 20, 0.36);
+      backdrop-filter: blur(28px) saturate(140%);
+      -webkit-backdrop-filter: blur(28px) saturate(140%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--frame-radius);
+      box-shadow:
+        0 36px 90px -16px rgba(0, 0, 0, 0.65),
+        0 12px 36px -8px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        inset 0 1px 1px rgba(255, 255, 255, 0.18);
+      cursor: pointer;
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .clock-frame:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        0 46px 110px -16px rgba(0, 0, 0, 0.72),
+        0 16px 44px -8px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 255, 255, 0.08),
+        inset 0 1px 1px rgba(255, 255, 255, 0.25);
+    }
+
+    /* Two Thin Accent Corner Brackets */
+    .corner-bracket {
+      position: absolute;
+      width: clamp(14px, 2.2vw, 24px);
+      height: clamp(14px, 2.2vw, 24px);
+      pointer-events: none;
+      border-color: var(--accent);
+      opacity: 0.85;
+      filter: drop-shadow(0 0 5px var(--glow));
+      transition: border-color 0.5s ease, filter 0.5s ease;
+    }
+
+    .corner-bracket.tl {
+      top: clamp(8px, 1.2vw, 15px);
+      left: clamp(8px, 1.2vw, 15px);
+      border-top: 1.5px solid var(--accent);
+      border-left: 1.5px solid var(--accent);
+    }
+
+    .corner-bracket.br {
+      bottom: clamp(8px, 1.2vw, 15px);
+      right: clamp(8px, 1.2vw, 15px);
+      border-bottom: 1.5px solid var(--accent);
+      border-right: 1.5px solid var(--accent);
+    }
+
+    /* Four Corner Dots (1 to 4 extra minutes) */
+    .corner-dot {
+      position: absolute;
+      width: clamp(5px, 0.85vw, 8px);
+      height: clamp(5px, 0.85vw, 8px);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.12);
+      transition: background 0.4s ease, box-shadow 0.4s ease, transform 0.4s ease;
+    }
+
+    .corner-dot.dot-1 {
+      top: clamp(12px, 1.8vw, 22px);
+      left: clamp(12px, 1.8vw, 22px);
+    }
+    .corner-dot.dot-2 {
+      top: clamp(12px, 1.8vw, 22px);
+      right: clamp(12px, 1.8vw, 22px);
+    }
+    .corner-dot.dot-3 {
+      bottom: clamp(12px, 1.8vw, 22px);
+      right: clamp(12px, 1.8vw, 22px);
+    }
+    .corner-dot.dot-4 {
+      bottom: clamp(12px, 1.8vw, 22px);
+      left: clamp(12px, 1.8vw, 22px);
+    }
+
+    .corner-dot.lit {
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--glow), 0 0 16px var(--glow);
+      transform: scale(1.2);
+    }
+
+    /* Word Clock 11x10 Grid */
+    .word-grid {
+      display: grid;
+      grid-template-columns: repeat(11, var(--cell-size));
+      grid-template-rows: repeat(10, var(--cell-size));
+      gap: var(--cell-gap);
+      font-family: var(--font-sans);
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: calc(var(--cell-size) * 0.54);
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.10);
+      transition:
+        color 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+        text-shadow 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+        transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .cell.lit {
+      color: var(--accent);
+      text-shadow:
+        0 0 6px var(--glow),
+        0 0 14px var(--glow),
+        0 0 26px var(--glow),
+        0 0 42px var(--glow);
+      transform: scale(1.02);
+    }
+
+    /* -------------------------------------------------------------
+       Poem Section
+       ------------------------------------------------------------- */
+    .poem-container {
+      margin-top: clamp(14px, 2.4vh, 28px);
+      text-align: center;
+      max-width: clamp(320px, 86vw, 720px);
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .poem-stage {
+      position: relative;
+      width: 100%;
+      min-height: clamp(48px, 6.4vh, 76px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .poem-line {
+      position: absolute;
+      width: 100%;
+      margin: 0;
+      padding: 0 16px;
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: clamp(16px, 2.2vw, 26px);
+      line-height: 1.44;
+      color: rgba(255, 255, 255, 0.9);
+      text-shadow: 0 2px 14px rgba(0, 0, 0, 0.65);
+      opacity: 0;
+      transform: translateY(14px);
+      filter: blur(8px);
+      transition:
+        opacity 2.4s cubic-bezier(0.16, 1, 0.3, 1),
+        transform 2.4s cubic-bezier(0.16, 1, 0.3, 1),
+        filter 2.4s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+
+    .poem-line.visible {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0px);
+      pointer-events: auto;
+    }
+
+    .poem-line.exit {
+      opacity: 0;
+      transform: translateY(-14px);
+      filter: blur(8px);
+    }
+
+    .poem-period {
+      margin-top: 6px;
+      font-family: var(--font-sans);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.28em;
+      color: var(--accent);
+      opacity: 0.76;
+      text-shadow: 0 0 12px var(--glow);
+      transition: color 0.5s ease, opacity 0.5s ease;
+    }
+
+    /* -------------------------------------------------------------
+       Footer & Time Travel Scrubber
+       ------------------------------------------------------------- */
+    footer {
+      width: 100%;
+      max-width: 1320px;
+      padding: clamp(14px, 2.2vh, 22px) clamp(18px, 3.2vw, 36px);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      z-index: 70;
+      position: relative;
+    }
+
+    .status-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mode-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(8, 10, 20, 0.36);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .status-pulse {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 8px #4ade80;
+      animation: livePulse 2s infinite;
+    }
+
+    .mode-badge.time-travel .status-pulse {
+      background: #fbbf24;
+      box-shadow: 0 0 8px #fbbf24;
+      animation: none;
+    }
+
+    @keyframes livePulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .now-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+      font-family: var(--font-sans);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      padding: 6px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .now-btn:hover {
+      background: var(--accent);
+      color: #000000;
+      border-color: var(--accent);
+      box-shadow: 0 0 14px var(--glow);
+    }
+
+    .timeline-scrubber-box {
+      flex: 1;
+      min-width: 240px;
+      max-width: 540px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .scrubber-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .scrubber-val {
+      color: var(--accent);
+      font-family: var(--font-mono);
+      letter-spacing: 0.1em;
+    }
+
+    /* Styled Range Slider */
+    .slider-track-wrap {
+      position: relative;
+      width: 100%;
+      height: 20px;
+      display: flex;
+      align-items: center;
+    }
+
+    input[type="range"]#time-scrubber {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 999px;
+      outline: none;
+      cursor: ew-resize;
+      transition: background 0.3s ease;
+    }
+
+    input[type="range"]#time-scrubber:hover {
+      background: rgba(255, 255, 255, 0.26);
+    }
+
+    input[type="range"]#time-scrubber::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--glow), 0 2px 5px rgba(0,0,0,0.5);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    input[type="range"]#time-scrubber::-webkit-slider-thumb:hover,
+    input[type="range"]#time-scrubber::-webkit-slider-thumb:active {
+      transform: scale(1.3);
+      box-shadow: 0 0 16px var(--glow), 0 2px 8px rgba(0,0,0,0.7);
+    }
+
+    input[type="range"]#time-scrubber::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border: none;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--glow), 0 2px 5px rgba(0,0,0,0.5);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    /* Quick jump chips */
+    .quick-jumps {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .jump-btn {
+      background: rgba(8, 10, 20, 0.36);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.55);
+      font-family: var(--font-sans);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      padding: 5px 9px;
+      border-radius: 999px;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.2s ease;
+    }
+
+    .jump-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    /* -------------------------------------------------------------
+       Reduced Motion Accessibility
+       ------------------------------------------------------------- */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+      .poem-line {
+        transition: none !important;
+        transform: none !important;
+        filter: none !important;
+      }
+      .starfield::before,
+      .starfield::after {
+        animation: none !important;
+      }
+    }
+
+    /* Responsive Adjustments */
+    @media (max-width: 768px) {
+      header {
+        padding: 12px 16px;
+      }
+      .header-controls {
+        gap: 6px;
+      }
+      .theme-btn span.lbl {
+        display: none;
+      }
+      footer {
+        padding: 12px 16px;
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .timeline-scrubber-box {
+        max-width: 100%;
+      }
+      .status-group {
+        justify-content: space-between;
+      }
+      .quick-jumps {
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SVG Grain Texture Overlay (feTurbulence at 4.5% opacity) -->
+  <svg class="grain-overlay" xmlns="http://www.w3.org/2000/svg">
+    <filter id="noiseFilter">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"/>
+    </filter>
+    <rect width="100%" height="100%" filter="url(#noiseFilter)"/>
+  </svg>
+
+  <!-- CSS Starfield (fades out by day, in by night) -->
+  <div class="starfield" id="starfield"></div>
+
+  <!-- Full-Screen DPR-Aware Canvas for Minute Shower -->
+  <canvas id="letter-canvas"></canvas>
+
+  <!-- Header -->
+  <header>
+    <div class="brand-mark">
+      <div class="brand-dot"></div>
+      <span>QLOCKTWO • TEMPORAL PIECE</span>
+    </div>
+
+    <div class="header-center">
+      <div class="digital-readout" id="digital-readout">00:00:00</div>
+    </div>
+
+    <div class="header-controls">
+      <!-- 12H / 24H Toggle -->
+      <div class="segmented-control" role="group" aria-label="Hour Mode">
+        <button class="seg-btn active" id="btn-12h" data-mode="12h">12H</button>
+        <button class="seg-btn" id="btn-24h" data-mode="24h">24H</button>
+      </div>
+
+      <!-- Color Theme Switcher -->
+      <div class="theme-picker" role="group" aria-label="Color Themes">
+        <button class="theme-btn active" data-theme-val="ember" title="Ember Theme">
+          <span class="color-swatch"></span>
+          <span class="lbl">Ember</span>
+        </button>
+        <button class="theme-btn" data-theme-val="moon" title="Moon Theme">
+          <span class="color-swatch"></span>
+          <span class="lbl">Moon</span>
+        </button>
+        <button class="theme-btn" data-theme-val="verdigris" title="Verdigris Theme">
+          <span class="color-swatch"></span>
+          <span class="lbl">Verdigris</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Centrepiece Stage -->
+  <main>
+    <div class="clock-stage">
+      <!-- The Frosted Glass Clock Frame -->
+      <div class="clock-frame" id="clock-frame" title="Click to regenerate time poem">
+        <!-- Thin Accent Corner Brackets -->
+        <div class="corner-bracket tl"></div>
+        <div class="corner-bracket br"></div>
+
+        <!-- Four Corner Dots (1 to 4 extra minutes) -->
+        <div class="corner-dot dot-1" id="dot-1" title="+1 Minute"></div>
+        <div class="corner-dot dot-2" id="dot-2" title="+2 Minutes"></div>
+        <div class="corner-dot dot-3" id="dot-3" title="+3 Minutes"></div>
+        <div class="corner-dot dot-4" id="dot-4" title="+4 Minutes"></div>
+
+        <!-- 11x10 Word Clock Letter Grid -->
+        <div class="word-grid" id="word-grid"></div>
+      </div>
+
+      <!-- Poetic Sentence Display -->
+      <div class="poem-container">
+        <div class="poem-stage">
+          <p class="poem-line visible" id="poem-a"></p>
+          <p class="poem-line" id="poem-b"></p>
+        </div>
+        <div class="poem-period" id="poem-period">DEEP NIGHT</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer Controls -->
+  <footer>
+    <div class="status-group">
+      <div class="mode-badge" id="mode-badge">
+        <span class="status-pulse"></span>
+        <span id="mode-text">LIVE</span>
+      </div>
+      <button class="now-btn" id="now-btn">Now</button>
+    </div>
+
+    <!-- Time Travel Range Slider -->
+    <div class="timeline-scrubber-box">
+      <div class="scrubber-header">
+        <span>Time Travel</span>
+        <span class="scrubber-val" id="scrubber-display">12:00</span>
+      </div>
+      <div class="slider-track-wrap">
+        <input type="range" id="time-scrubber" min="0" max="1439" step="1" value="720" aria-label="Time travel scrubber (0-1439 minutes)">
+      </div>
+    </div>
+
+    <!-- Quick Jump Chips -->
+    <div class="quick-jumps">
+      <button class="jump-btn" data-time="360">Dawn</button>
+      <button class="jump-btn" data-time="720">Noon</button>
+      <button class="jump-btn" data-time="1080">Dusk</button>
+      <button class="jump-btn" data-time="0">Midnight</button>
+    </div>
+  </footer>
+
+  <!-- -----------------------------------------------------------
+       Core Application Script
+       ----------------------------------------------------------- -->
+  <script>
+    (function () {
+      'use strict';
+
+      /* ---------------------------------------------------------
+         1. Grid Configuration (11 columns x 10 rows)
+         --------------------------------------------------------- */
+      const GRID_ROWS = [
+        "ITLISASAMPM",
+        "ACQUARTERDC",
+        "TWENTYFIVEX",
+        "HALFSTENFTO",
+        "PASTERUNINE",
+        "ONESIXTHREE",
+        "FOURFIVETWO",
+        "EIGHTELEVEN",
+        "SEVENTWELVE",
+        "TENSEOCLOCK"
+      ];
+
+      // Coordinate mapping [row, col]
+      const WORDS = {
+        IT: [[0, 0], [0, 1]],
+        IS: [[0, 3], [0, 4]],
+        AM: [[0, 7], [0, 8]],
+        PM: [[0, 9], [0, 10]],
+
+        A: [[1, 0]],
+        QUARTER: [[1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7], [1, 8]],
+
+        TWENTY: [[2, 0], [2, 1], [2, 2], [2, 3], [2, 4], [2, 5]],
+        FIVE_MIN: [[2, 6], [2, 7], [2, 8], [2, 9]],
+
+        HALF: [[3, 0], [3, 1], [3, 2], [3, 3]],
+        TEN_MIN: [[3, 5], [3, 6], [3, 7]],
+        TO: [[3, 9], [3, 10]],
+
+        PAST: [[4, 0], [4, 1], [4, 2], [4, 3]],
+        NINE: [[4, 7], [4, 8], [4, 9], [4, 10]],
+
+        ONE: [[5, 0], [5, 1], [5, 2]],
+        SIX: [[5, 3], [5, 4], [5, 5]],
+        THREE: [[5, 6], [5, 7], [5, 8], [5, 9], [5, 10]],
+
+        FOUR: [[6, 0], [6, 1], [6, 2], [6, 3]],
+        FIVE_HOUR: [[6, 4], [6, 5], [6, 6], [6, 7]],
+        TWO: [[6, 8], [6, 9], [6, 10]],
+
+        EIGHT: [[7, 0], [7, 1], [7, 2], [7, 3], [7, 4]],
+        ELEVEN: [[7, 5], [7, 6], [7, 7], [7, 8], [7, 9], [7, 10]],
+
+        SEVEN: [[8, 0], [8, 1], [8, 2], [8, 3], [8, 4]],
+        TWELVE: [[8, 5], [8, 6], [8, 7], [8, 8], [8, 9], [8, 10]],
+
+        TEN_HOUR: [[9, 0], [9, 1], [9, 2]],
+        OCLOCK: [[9, 5], [9, 6], [9, 7], [9, 8], [9, 9], [9, 10]]
+      };
+
+      const HOUR_MAP = {
+        1: WORDS.ONE,
+        2: WORDS.TWO,
+        3: WORDS.THREE,
+        4: WORDS.FOUR,
+        5: WORDS.FIVE_HOUR,
+        6: WORDS.SIX,
+        7: WORDS.SEVEN,
+        8: WORDS.EIGHT,
+        9: WORDS.NINE,
+        10: WORDS.TEN_HOUR,
+        11: WORDS.ELEVEN,
+        12: WORDS.TWELVE
+      };
+
+      /* ---------------------------------------------------------
+         2. Sky Keyframe Table (Interpolating over 1440 minutes)
+         --------------------------------------------------------- */
+      const SKY_KEYFRAMES = [
+        { time: 0,    a: [7, 10, 22],    b: [15, 22, 48],   c: [36, 28, 61] },    // Midnight #070a16, #0f1630, #241c3d
+        { time: 240,  a: [10, 15, 34],   b: [27, 33, 64],   c: [59, 42, 79] },    // 4am #0a0f22, #1b2140, #3b2a4f
+        { time: 360,  a: [43, 42, 85],   b: [141, 79, 109], c: [242, 160, 107] },// 6am dawn #2b2a55, #8d4f6d, #f2a06b
+        { time: 480,  a: [79, 127, 196], b: [159, 195, 232], c: [246, 217, 178] },// 8am #4f7fc4, #9fc3e8, #f6d9b2
+        { time: 720,  a: [74, 138, 216], b: [143, 192, 238], c: [219, 233, 245] },// noon #4a8ad8, #8fc0ee, #dbe9f5
+        { time: 960,  a: [62, 111, 176], b: [169, 160, 200], c: [240, 180, 138] },// 4pm #3e6fb0, #a9a0c8, #f0b48a
+        { time: 1080, a: [38, 49, 79],   b: [107, 61, 102], c: [224, 105, 63] }, // 6pm dusk #26314f, #6b3d66, #e0693f
+        { time: 1200, a: [14, 20, 48],   b: [42, 35, 80],   c: [90, 42, 74] },   // 8pm #0e1430, #2a2350, #5a2a4a
+        { time: 1440, a: [7, 10, 22],    b: [15, 22, 48],   c: [36, 28, 61] }     // Midnight
+      ];
+
+      function lerp(v0, v1, t) {
+        return Math.round(v0 + (v1 - v0) * t);
+      }
+
+      function interpolateColor(c0, c1, t) {
+        return [
+          lerp(c0[0], c1[0], t),
+          lerp(c0[1], c1[1], t),
+          lerp(c0[2], c1[2], t)
+        ];
+      }
+
+      function updateSkyBackground(minuteOfDay) {
+        let idx = 0;
+        for (let i = 0; i < SKY_KEYFRAMES.length - 1; i++) {
+          if (minuteOfDay >= SKY_KEYFRAMES[i].time && minuteOfDay < SKY_KEYFRAMES[i + 1].time) {
+            idx = i;
+            break;
+          }
+        }
+        const kf1 = SKY_KEYFRAMES[idx];
+        const kf2 = SKY_KEYFRAMES[idx + 1];
+        const t = (minuteOfDay - kf1.time) / (kf2.time - kf1.time);
+
+        const colA = interpolateColor(kf1.a, kf2.a, t);
+        const colB = interpolateColor(kf1.b, kf2.b, t);
+        const colC = interpolateColor(kf1.c, kf2.c, t);
+
+        const root = document.documentElement;
+        root.style.setProperty('--bg-a', `rgb(${colA[0]}, ${colA[1]}, ${colA[2]})`);
+        root.style.setProperty('--bg-b', `rgb(${colB[0]}, ${colB[1]}, ${colB[2]})`);
+        root.style.setProperty('--bg-c', `rgb(${colC[0]}, ${colC[1]}, ${colC[2]})`);
+
+        // Starfield opacity interpolation
+        let starOp = 0;
+        if (minuteOfDay <= 240 || minuteOfDay >= 1260) {
+          starOp = 0.95;
+        } else if (minuteOfDay > 240 && minuteOfDay < 390) {
+          starOp = 0.95 * (1 - (minuteOfDay - 240) / 150);
+        } else if (minuteOfDay >= 390 && minuteOfDay <= 1110) {
+          starOp = 0;
+        } else if (minuteOfDay > 1110 && minuteOfDay < 1260) {
+          starOp = 0.95 * ((minuteOfDay - 1110) / 150);
+        }
+        root.style.setProperty('--star-opacity', starOp.toFixed(3));
+      }
+
+      /* ---------------------------------------------------------
+         3. Poetic Sentence Generator Pools
+         --------------------------------------------------------- */
+      const POEM_POOLS = {
+        "deep night": {
+          subjects: [
+            "the silent constellations",
+            "a quiet midnight breeze",
+            "the sleeping metropolis",
+            "a solitary lamppost",
+            "the deep indigo stillness",
+            "the slow hush of night",
+            "an ancient clock tower",
+            "the velvet darkness"
+          ],
+          verbs: [
+            "watches over",
+            "drifts across",
+            "dissolves into",
+            "cradles",
+            "lingers beside",
+            "traces the edge of",
+            "settles quietly upon",
+            "envelops"
+          ],
+          objects: [
+            "the sleeping world without hurry.",
+            "the empty pavement in silver silence.",
+            "dreams awaiting the tomorrow.",
+            "the quiet roofs of the slumbering city.",
+            "the cool velvet expanse of the dark.",
+            "shadows resting until the dawn.",
+            "every forgotten window pane.",
+            "the calm pulse of resting streets."
+          ]
+        },
+        "dawn": {
+          subjects: [
+            "the first pale amber ray",
+            "a gentle morning mist",
+            "the awakening horizon",
+            "a chorus of wild songbirds",
+            "the quiet lilac dawn",
+            "the cold morning breeze",
+            "the earliest silhouette",
+            "the breath of a new day"
+          ],
+          verbs: [
+            "awakens",
+            "creeps across",
+            "stirs through",
+            "gilds",
+            "breathes life into",
+            "washes over",
+            "illuminates",
+            "unfurls along"
+          ],
+          objects: [
+            "the sleeping valley with quiet warmth.",
+            "the dew on frosted grass blades.",
+            "the quiet contours of the hills.",
+            "the cobblestones still wet with rain.",
+            "the edge of the waking sky.",
+            "the sleepy rooftops one by one.",
+            "the glass reflections of the harbor.",
+            "every quiet corner of the avenue."
+          ]
+        },
+        "morning": {
+          subjects: [
+            "the golden morning light",
+            "the lively pulse of the avenue",
+            "the scent of fresh espresso",
+            "a bright coastal breeze",
+            "the steady hum of footsteps",
+            "the sunlit glass facade",
+            "the brisk morning air",
+            "a quiet optimism"
+          ],
+          verbs: [
+            "spills across",
+            "animates",
+            "dances between",
+            "fills",
+            "sweeps along",
+            "brightens",
+            "invigorates",
+            "echoes through"
+          ],
+          objects: [
+            "open plazas full of early promises.",
+            "the tree-lined boulevards of the city.",
+            "the bustling rhythm of new beginnings.",
+            "the market stalls opening their doors.",
+            "fresh pages waiting to be written.",
+            "the warm brick walls of the neighborhood.",
+            "crossroads where hurried strangers pass.",
+            "the golden crest of every spire."
+          ]
+        },
+        "midday": {
+          subjects: [
+            "the high zenith sun",
+            "the brilliant noon light",
+            "the intense white heat",
+            "a crisp midday shadow",
+            "the shimmering midday air",
+            "the motionless summer sky",
+            "the towering glass towers",
+            "the clock at the center of town"
+          ],
+          verbs: [
+            "stands motionless over",
+            "pours directly upon",
+            "sculpts sharp contrast along",
+            "suspends time above",
+            "bakes into",
+            "reflects brilliantly off",
+            "strikes",
+            "claims every inch of"
+          ],
+          objects: [
+            "the limestone terraces in breathless stillness.",
+            "the center of the quiet square.",
+            "the wide avenues drenched in gold.",
+            "the fountains murmuring in the courtyard.",
+            "the highest branch of the olive grove.",
+            "the midday rest of weary travelers.",
+            "the geometric symmetry of the streets.",
+            "the deep blue expanse of the sky."
+          ]
+        },
+        "afternoon": {
+          subjects: [
+            "the slanting afternoon sun",
+            "the lengthening shadows",
+            "a warm cedar breeze",
+            "the quiet hour of tea",
+            "the amber sunlight",
+            "the patient river",
+            "the golden dust motes",
+            "a gentle lull in the rhythm"
+          ],
+          verbs: [
+            "softens",
+            "stretches across",
+            "lingers upon",
+            "drapes warm hues over",
+            "slows the tempo of",
+            "glides through",
+            "bathes",
+            "winds along"
+          ],
+          objects: [
+            "the aged brick walls of the courtyard.",
+            "the quiet library books left open.",
+            "the sleepy afternoon veranda.",
+            "the slow drift of passing clouds.",
+            "the terracotta tiles baking in warmth.",
+            "the peaceful rhythm of conversation.",
+            "the pavement worn smooth by many feet.",
+            "the quiet garden blooming in stillness."
+          ]
+        },
+        "dusk": {
+          subjects: [
+            "the light",
+            "a burning amber horizon",
+            "the violet evening twilight",
+            "the sinking solar disc",
+            "a cool dusk breeze",
+            "the sharp skyline",
+            "the last warmth of daylight",
+            "the evening star"
+          ],
+          verbs: [
+            "is leaving",
+            "dissolves into",
+            "melts across",
+            "surrenders to",
+            "catches fire along",
+            "slips behind",
+            "whispers to",
+            "settles over"
+          ],
+          objects: [
+            "the rooftops one tile at a time.",
+            "the tranquil surface of the bay.",
+            "the rim of the distant western mountains.",
+            "the first lanterns flickering to life.",
+            "the quiet tide receding from shore.",
+            "the silhouette of migrating birds.",
+            "the darkening edge of the atmosphere.",
+            "the threshold of the coming night."
+          ]
+        },
+        "evening": {
+          subjects: [
+            "a warm amber glow",
+            "the velvet darkness",
+            "the murmur of distant conversations",
+            "the soft sound of music",
+            "the quiet neighborhood",
+            "the indigo night air",
+            "a constellation of cafe lights",
+            "the peaceful hearth"
+          ],
+          verbs: [
+            "spills from",
+            "embraces",
+            "echoes through",
+            "drifts into",
+            "welcomes",
+            "wraps",
+            "illuminates",
+            "settles upon"
+          ],
+          objects: [
+            "open windows onto glistening cobblestones.",
+            "the quiet night air with gentle serenity.",
+            "the tables gathered under old awnings.",
+            "weary minds returning home to rest.",
+            "the stillness of the starry vault above.",
+            "the gentle rhythm of quiet reflection.",
+            "the secret stories told behind closed doors.",
+            "the tranquil cadence of another day gone by."
+          ]
+        }
+      };
+
+      function getPeriodName(minuteOfDay) {
+        if (minuteOfDay < 300) return "deep night";       // 00:00 - 04:59
+        if (minuteOfDay < 450) return "dawn";             // 05:00 - 07:29
+        if (minuteOfDay < 690) return "morning";          // 07:30 - 11:29
+        if (minuteOfDay < 840) return "midday";           // 11:30 - 13:59
+        if (minuteOfDay < 1050) return "afternoon";       // 14:00 - 17:29
+        if (minuteOfDay < 1200) return "dusk";            // 17:30 - 19:59
+        return "evening";                                 // 20:00 - 23:59
+      }
+
+      function generateSentence(periodKey) {
+        const pool = POEM_POOLS[periodKey] || POEM_POOLS["deep night"];
+        const s = pool.subjects[Math.floor(Math.random() * pool.subjects.length)];
+        const v = pool.verbs[Math.floor(Math.random() * pool.verbs.length)];
+        const o = pool.objects[Math.floor(Math.random() * pool.objects.length)];
+        return `${s} ${v} ${o}`;
+      }
+
+      /* ---------------------------------------------------------
+         4. Application State
+         --------------------------------------------------------- */
+      let isLive = true;
+      let hourMode = '12h'; // '12h' | '24h'
+      let currentTheme = 'ember';
+      let activePoemIndex = 'a'; // 'a' | 'b'
+      let lastSentence = '';
+      let lastMinute = -1;
+      let poemTimer = null;
+
+      // DOM Elements
+      const gridContainer = document.getElementById('word-grid');
+      const digitalReadout = document.getElementById('digital-readout');
+      const scrubber = document.getElementById('time-scrubber');
+      const scrubberDisplay = document.getElementById('scrubber-display');
+      const modeBadge = document.getElementById('mode-badge');
+      const modeText = document.getElementById('mode-text');
+      const nowBtn = document.getElementById('now-btn');
+      const poemA = document.getElementById('poem-a');
+      const poemB = document.getElementById('poem-b');
+      const poemPeriod = document.getElementById('poem-period');
+      const clockFrame = document.getElementById('clock-frame');
+
+      const cornerDots = [
+        document.getElementById('dot-1'),
+        document.getElementById('dot-2'),
+        document.getElementById('dot-3'),
+        document.getElementById('dot-4')
+      ];
+
+      /* ---------------------------------------------------------
+         5. Generate Cell Elements
+         --------------------------------------------------------- */
+      const cellElements = []; // [row][col]
+
+      for (let r = 0; r < 10; r++) {
+        cellElements[r] = [];
+        for (let c = 0; c < 11; c++) {
+          const div = document.createElement('div');
+          div.className = 'cell';
+          div.textContent = GRID_ROWS[r][c];
+          div.dataset.row = r;
+          div.dataset.col = c;
+          gridContainer.appendChild(div);
+          cellElements[r][c] = div;
+        }
+      }
+
+      /* ---------------------------------------------------------
+         6. Canvas Falling Letter Shower (~90 particles)
+         --------------------------------------------------------- */
+      const canvas = document.getElementById('letter-canvas');
+      const ctx = canvas.getContext('2d');
+      let particles = [];
+      let animFrameId = null;
+
+      function resizeCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = window.innerWidth * dpr;
+        canvas.height = window.innerHeight * dpr;
+        ctx.resetTransform();
+        ctx.scale(dpr, dpr);
+      }
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+
+      class LetterParticle {
+        constructor(w, h, colorHex) {
+          const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+          this.char = chars[Math.floor(Math.random() * chars.length)];
+          this.x = Math.random() * w;
+          this.y = -15 - Math.random() * 60;
+          this.vx = (Math.random() - 0.5) * 1.6;
+          this.vy = 1.2 + Math.random() * 2.8;
+          this.gravity = 0.09 + Math.random() * 0.07;
+          this.angle = (Math.random() - 0.5) * 0.8;
+          this.vAngle = (Math.random() - 0.5) * 0.04;
+          this.size = 14 + Math.random() * 14;
+          this.midScreen = h * 0.52;
+          this.fadeStart = h * 0.26;
+          this.opacity = 1;
+          this.dead = false;
+          this.color = colorHex;
+        }
+
+        update(h) {
+          this.vy += this.gravity;
+          this.x += this.vx;
+          this.y += this.vy;
+          this.angle += this.vAngle;
+
+          if (this.y > this.fadeStart) {
+            this.opacity = Math.max(0, 1 - (this.y - this.fadeStart) / (this.midScreen - this.fadeStart));
+          }
+          if (this.y >= this.midScreen || this.opacity <= 0) {
+            this.dead = true;
+          }
+        }
+
+        draw(c) {
+          if (this.dead || this.opacity <= 0) return;
+          c.save();
+          c.translate(this.x, this.y);
+          c.rotate(this.angle);
+          c.globalAlpha = this.opacity;
+          c.fillStyle = this.color;
+          c.shadowColor = this.color;
+          c.shadowBlur = 12;
+          c.font = `800 ${this.size}px "Helvetica Neue", "Avenir Next", Futura, "Segoe UI", system-ui, sans-serif`;
+          c.textAlign = "center";
+          c.textBaseline = "middle";
+          c.fillText(this.char, 0, 0);
+          c.restore();
+        }
+      }
+
+      function triggerLetterShower() {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          return;
+        }
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const color = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#ffd68a';
+
+        particles = [];
+        for (let i = 0; i < 90; i++) {
+          particles.push(new LetterParticle(w, h, color));
+        }
+
+        if (!animFrameId) {
+          animateParticles();
+        }
+      }
+
+      function animateParticles() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        ctx.clearRect(0, 0, w, h);
+
+        let activeCount = 0;
+        for (let i = 0; i < particles.length; i++) {
+          const p = particles[i];
+          if (!p.dead) {
+            p.update(h);
+            p.draw(ctx);
+            activeCount++;
+          }
+        }
+
+        if (activeCount > 0) {
+          animFrameId = requestAnimationFrame(animateParticles);
+        } else {
+          ctx.clearRect(0, 0, w, h);
+          animFrameId = null;
+        }
+      }
+
+      /* ---------------------------------------------------------
+         7. Word Clock Logic & Rendering
+         --------------------------------------------------------- */
+      function getActiveCells(hour, minute, is12h) {
+        const active = new Set();
+        const addCoords = (coords) => {
+          for (let i = 0; i < coords.length; i++) {
+            active.add(`${coords[i][0]},${coords[i][1]}`);
+          }
+        };
+
+        // "IT IS" are always illuminated
+        addCoords(WORDS.IT);
+        addCoords(WORDS.IS);
+
+        const baseMinute = Math.floor(minute / 5) * 5;
+        const isTo = baseMinute > 30;
+
+        // Minutes phrasing
+        switch (baseMinute) {
+          case 0:
+            addCoords(WORDS.OCLOCK);
+            break;
+          case 5:
+            addCoords(WORDS.FIVE_MIN);
+            addCoords(WORDS.PAST);
+            break;
+          case 10:
+            addCoords(WORDS.TEN_MIN);
+            addCoords(WORDS.PAST);
+            break;
+          case 15:
+            addCoords(WORDS.A);
+            addCoords(WORDS.QUARTER);
+            addCoords(WORDS.PAST);
+            break;
+          case 20:
+            addCoords(WORDS.TWENTY);
+            addCoords(WORDS.PAST);
+            break;
+          case 25:
+            addCoords(WORDS.TWENTY);
+            addCoords(WORDS.FIVE_MIN);
+            addCoords(WORDS.PAST);
+            break;
+          case 30:
+            addCoords(WORDS.HALF);
+            addCoords(WORDS.PAST);
+            break;
+          case 35:
+            addCoords(WORDS.TWENTY);
+            addCoords(WORDS.FIVE_MIN);
+            addCoords(WORDS.TO);
+            break;
+          case 40:
+            addCoords(WORDS.TWENTY);
+            addCoords(WORDS.TO);
+            break;
+          case 45:
+            addCoords(WORDS.A);
+            addCoords(WORDS.QUARTER);
+            addCoords(WORDS.TO);
+            break;
+          case 50:
+            addCoords(WORDS.TEN_MIN);
+            addCoords(WORDS.TO);
+            break;
+          case 55:
+            addCoords(WORDS.FIVE_MIN);
+            addCoords(WORDS.TO);
+            break;
+        }
+
+        // Hours phrasing
+        let targetHour = hour % 12;
+        if (isTo) {
+          targetHour = (targetHour + 1) % 12;
+        }
+        if (targetHour === 0) targetHour = 12;
+
+        if (HOUR_MAP[targetHour]) {
+          addCoords(HOUR_MAP[targetHour]);
+        }
+
+        // AM/PM handling
+        if (is12h) {
+          const effectiveHour24 = isTo ? (hour + 1) % 24 : hour;
+          if (effectiveHour24 >= 12) {
+            addCoords(WORDS.PM);
+          } else {
+            addCoords(WORDS.AM);
+          }
+        }
+
+        return active;
+      }
+
+      function updateClockDisplay(h, m, s, triggerShowerIfChanged = true) {
+        const activeCells = getActiveCells(h, m, hourMode === '12h');
+
+        // Apply lit class to grid
+        for (let r = 0; r < 10; r++) {
+          for (let c = 0; c < 11; c++) {
+            const isLit = activeCells.has(`${r},${c}`);
+            cellElements[r][c].classList.toggle('lit', isLit);
+          }
+        }
+
+        // Corner dots for extra 1-4 minutes
+        const extraMinutes = m % 5;
+        for (let i = 0; i < 4; i++) {
+          cornerDots[i].classList.toggle('lit', i < extraMinutes);
+        }
+
+        // Digital readout in header
+        let readoutText = '';
+        if (hourMode === '12h') {
+          const dispH = (h % 12) || 12;
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          readoutText = `${String(dispH).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')} ${ampm}`;
+        } else {
+          readoutText = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+        digitalReadout.textContent = readoutText;
+
+        // Scrubber display text (HH:MM)
+        const scrubH = String(h).padStart(2, '0');
+        const scrubM = String(m).padStart(2, '0');
+        scrubberDisplay.textContent = `${scrubH}:${scrubM}`;
+
+        // Dynamic Sky
+        const totalMinutes = h * 60 + m;
+        updateSkyBackground(totalMinutes);
+
+        // Check for minute change shower
+        if (triggerShowerIfChanged && lastMinute !== -1 && lastMinute !== m) {
+          triggerLetterShower();
+        }
+        lastMinute = m;
+      }
+
+      /* ---------------------------------------------------------
+         8. Poem Crossfade (Blur & Rise 2.4s)
+         --------------------------------------------------------- */
+      function swapPoem(minuteOfDay) {
+        const periodKey = getPeriodName(minuteOfDay);
+        let sentence = generateSentence(periodKey);
+        while (sentence === lastSentence && POEM_POOLS[periodKey].subjects.length > 1) {
+          sentence = generateSentence(periodKey);
+        }
+        lastSentence = sentence;
+
+        const activeEl = activePoemIndex === 'a' ? poemA : poemB;
+        const nextEl = activePoemIndex === 'a' ? poemB : poemA;
+
+        nextEl.textContent = sentence;
+        nextEl.className = 'poem-line visible';
+
+        activeEl.className = 'poem-line exit';
+        setTimeout(() => {
+          if (activeEl.classList.contains('exit')) {
+            activeEl.className = 'poem-line';
+          }
+        }, 2400);
+
+        activePoemIndex = activePoemIndex === 'a' ? 'b' : 'a';
+        poemPeriod.textContent = periodKey.toUpperCase();
+      }
+
+      function resetPoemTimer() {
+        if (poemTimer) clearInterval(poemTimer);
+        poemTimer = setInterval(() => {
+          const min = isLive ? (new Date().getHours() * 60 + new Date().getMinutes()) : parseInt(scrubber.value, 10);
+          swapPoem(min);
+        }, 18000);
+      }
+
+      /* ---------------------------------------------------------
+         9. Interactive Event Handlers
+         --------------------------------------------------------- */
+      // Click on clock frame to regenerate poem
+      clockFrame.addEventListener('click', () => {
+        const min = isLive ? (new Date().getHours() * 60 + new Date().getMinutes()) : parseInt(scrubber.value, 10);
+        swapPoem(min);
+        resetPoemTimer();
+      });
+
+      // 12H / 24H Toggle
+      const btn12h = document.getElementById('btn-12h');
+      const btn24h = document.getElementById('btn-24h');
+
+      btn12h.addEventListener('click', () => {
+        hourMode = '12h';
+        btn12h.classList.add('active');
+        btn24h.classList.remove('active');
+        tick(false);
+      });
+
+      btn24h.addEventListener('click', () => {
+        hourMode = '24h';
+        btn24h.classList.add('active');
+        btn12h.classList.remove('active');
+        tick(false);
+      });
+
+      // Theme Picker
+      const themeBtns = document.querySelectorAll('.theme-btn');
+      themeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          themeBtns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentTheme = btn.dataset.themeVal;
+          document.documentElement.setAttribute('data-theme', currentTheme);
+        });
+      });
+
+      // Time Travel Scrubber
+      scrubber.addEventListener('input', (e) => {
+        isLive = false;
+        modeBadge.classList.add('time-travel');
+        modeText.textContent = 'TIME TRAVEL';
+        const totalMinutes = parseInt(e.target.value, 10);
+        const h = Math.floor(totalMinutes / 60);
+        const m = totalMinutes % 60;
+        updateClockDisplay(h, m, 0, false);
+      });
+
+      scrubber.addEventListener('change', () => {
+        const totalMinutes = parseInt(scrubber.value, 10);
+        swapPoem(totalMinutes);
+        resetPoemTimer();
+      });
+
+      // "Now" Button
+      nowBtn.addEventListener('click', () => {
+        isLive = true;
+        modeBadge.classList.remove('time-travel');
+        modeText.textContent = 'LIVE';
+        const now = new Date();
+        scrubber.value = now.getHours() * 60 + now.getMinutes();
+        tick(false);
+        swapPoem(now.getHours() * 60 + now.getMinutes());
+        resetPoemTimer();
+      });
+
+      // Quick Jump Buttons
+      const jumpBtns = document.querySelectorAll('.jump-btn');
+      jumpBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          isLive = false;
+          modeBadge.classList.add('time-travel');
+          modeText.textContent = 'TIME TRAVEL';
+          const targetTime = parseInt(btn.dataset.time, 10);
+          scrubber.value = targetTime;
+          const h = Math.floor(targetTime / 60);
+          const m = targetTime % 60;
+          updateClockDisplay(h, m, 0, false);
+          swapPoem(targetTime);
+          resetPoemTimer();
+        });
+      });
+
+      // Keyboard navigation
+      window.addEventListener('keydown', (e) => {
+        if (e.key === ' ' && e.target === document.body) {
+          e.preventDefault();
+          if (isLive) {
+            isLive = false;
+            modeBadge.classList.add('time-travel');
+            modeText.textContent = 'TIME TRAVEL';
+          } else {
+            nowBtn.click();
+          }
+        } else if (e.key === 'ArrowLeft') {
+          isLive = false;
+          modeBadge.classList.add('time-travel');
+          modeText.textContent = 'TIME TRAVEL';
+          scrubber.value = Math.max(0, parseInt(scrubber.value, 10) - 5);
+          scrubber.dispatchEvent(new Event('input'));
+        } else if (e.key === 'ArrowRight') {
+          isLive = false;
+          modeBadge.classList.add('time-travel');
+          modeText.textContent = 'TIME TRAVEL';
+          scrubber.value = Math.min(1439, parseInt(scrubber.value, 10) + 5);
+          scrubber.dispatchEvent(new Event('input'));
+        }
+      });
+
+      /* ---------------------------------------------------------
+         10. Main Loop & Initialization
+         --------------------------------------------------------- */
+      function tick(triggerShower = true) {
+        if (isLive) {
+          const now = new Date();
+          const h = now.getHours();
+          const m = now.getMinutes();
+          const s = now.getSeconds();
+          scrubber.value = h * 60 + m;
+          updateClockDisplay(h, m, s, triggerShower);
+        } else {
+          const totalMinutes = parseInt(scrubber.value, 10);
+          const h = Math.floor(totalMinutes / 60);
+          const m = totalMinutes % 60;
+          updateClockDisplay(h, m, 0, false);
+        }
+      }
+
+      // Initial startup
+      const initialDate = new Date();
+      const initialMins = initialDate.getHours() * 60 + initialDate.getMinutes();
+      scrubber.value = initialMins;
+
+      // Initial poem line
+      poemA.textContent = generateSentence(getPeriodName(initialMins));
+      poemA.className = 'poem-line visible';
+      lastSentence = poemA.textContent;
+      poemPeriod.textContent = getPeriodName(initialMins).toUpperCase();
+
+      // Initial clock update
+      tick(false);
+
+      // Start 1-second interval loop
+      setInterval(() => {
+        tick(true);
+      }, 1000);
+
+      // Start 18-second poem crossfade loop
+      resetPoemTimer();
+
+    })();
+  </script>
+</body>
+</html>

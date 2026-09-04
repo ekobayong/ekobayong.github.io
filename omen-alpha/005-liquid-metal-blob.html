@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MERCURY — liquid metal study</title>
+<style>
+  :root{ --mono: ui-monospace,"SF Mono",Menlo,Consolas,"Courier New",monospace;
+         --sans: ui-sans-serif,system-ui,-apple-system,"Segoe UI","Helvetica Neue",sans-serif; }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden}
+  body{
+    background:
+      linear-gradient(to bottom, rgba(0,0,0,0) 62%, rgba(0,0,0,.28) 100%),
+      radial-gradient(120% 100% at 50% 42%, #232428 0%, #1b1c1f 55%, #101113 100%);
+    font-family:var(--sans);
+    color:#fff;
+  }
+  #stage{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+  .grain{
+    position:fixed;inset:0;z-index:6;pointer-events:none;opacity:.07;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+  .ui{position:fixed;inset:0;z-index:8;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between}
+  .urow{display:flex;justify-content:space-between;gap:24px;padding:22px 28px}
+  .lbl{
+    font-family:var(--mono);font-size:11px;letter-spacing:.32em;text-transform:uppercase;
+    color:rgba(255,255,255,.55);
+  }
+  .lbl.right{text-align:right}
+  .title-wrap{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
+  h1{
+    font-family:var(--sans);font-weight:200;
+    font-size:clamp(48px,13.5vw,300px);
+    letter-spacing:.05em;color:#fff;mix-blend-mode:difference;
+    opacity:0;filter:blur(18px);letter-spacing:.3em;
+    transition:opacity 2.4s ease-out, filter 2.4s ease-out, letter-spacing 2.4s ease-out;
+  }
+  h1.in{opacity:1;filter:blur(0);letter-spacing:.05em}
+  .ufoot{align-items:flex-end}
+  .desc{
+    max-width:38ch;font-size:12.5px;line-height:1.65;color:rgba(255,255,255,.55);
+  }
+  .stats{font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:rgba(255,255,255,.55);text-align:right;text-transform:uppercase}
+  .hint{
+    position:fixed;left:50%;bottom:12vh;transform:translateX(-50%);z-index:8;
+    font-family:var(--mono);font-size:11px;letter-spacing:.3em;text-transform:uppercase;
+    color:rgba(255,255,255,.5);pointer-events:none;
+    transition:opacity 1.2s ease;
+  }
+  .hint.gone{opacity:0}
+  @media (max-width:640px){
+    .lbl.right{display:none}
+    .urow{padding:16px 18px;flex-direction:column;gap:10px}
+    .stats{text-align:left}
+  }
+  @media (prefers-reduced-motion:reduce){ h1{opacity:1;filter:none;letter-spacing:.05em;transition:none} }
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+<div class="grain"></div>
+
+<div class="ui">
+  <div class="urow">
+    <span class="lbl">Liquid metal study · 05</span>
+    <span class="lbl right">Metaball field · environment mapped</span>
+  </div>
+  <div class="urow ufoot">
+    <p class="desc">Seven bodies of chrome drift across a dark studio, merging and separating as a single scalar field crosses its threshold. Reflected in each surface: one razor-thin horizon.</p>
+    <div class="stats" id="stats">fps — · bodies — · buffer —%</div>
+  </div>
+</div>
+<div class="title-wrap"><h1 id="title">MERCURY</h1></div>
+<div class="hint" id="hint">Move to attract · click to add</div>
+
+<script>
+(function(){
+"use strict";
+var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+var canvas = document.getElementById("stage");
+var ctx = canvas.getContext("2d");
+var off = document.createElement("canvas");
+var octx = off.getContext("2d");
+
+/* ---------- environment LUT: chrome horizon ---------- */
+var LUT = new Uint8Array(256*3);
+function smoothstep(a,b,x){
+  var t = Math.min(1, Math.max(0, (x-a)/(b-a)));
+  return t*t*(3-2*t);
+}
+function hex(c){ return [parseInt(c.slice(1,3),16), parseInt(c.slice(3,5),16), parseInt(c.slice(5,7),16)]; }
+var stops = [
+  [0.00, hex("#0e0f12")],
+  [0.30, hex("#282a30")],
+  [0.45, hex("#585a60")],
+  [0.495,hex("#d2d0cc")],
+  [0.505,hex("#fafafc")],
+  [0.56, hex("#bec4ce")],
+  [0.68, hex("#808996")],
+  [0.85, hex("#484e5a")],
+  [1.00, hex("#1a1c22")]
+];
+for (var i = 0; i < 256; i++){
+  var t = i/255, k = 0;
+  while (k < stops.length-2 && t > stops[k+1][0]) k++;
+  var a = stops[k], b = stops[k+1];
+  var tt = smoothstep(a[0], b[0], t);
+  LUT[i*3]   = a[1][0] + (b[1][0]-a[1][0])*tt;
+  LUT[i*3+1] = a[1][1] + (b[1][1]-a[1][1])*tt;
+  LUT[i*3+2] = a[1][2] + (b[1][2]-a[1][2])*tt;
+}
+
+/* ---------- bodies ---------- */
+var bodies = [];
+function reseed(){
+  bodies = [];
+  var n = innerWidth < 600 ? 5 : 7;
+  for (var i = 0; i < n; i++) addBody(Math.random()*innerWidth, Math.random()*innerHeight, i*3.7);
+}
+function addBody(x, y, seed){
+  var rmin = Math.min(innerWidth, innerHeight);
+  bodies.push({
+    x:x, y:y,
+    vx:0, vy:0,
+    r: rmin*(0.09 + Math.random()*0.10),
+    seed: seed !== undefined ? seed : Math.random()*100,
+    swell: 1
+  });
+  if (bodies.length > 12) bodies.shift();
+}
+reseed();
+
+/* ---------- buffer ---------- */
+var bufScale = 0.45;
+var W = 0, H = 0, img = null, buf32 = null, fArr = null, gxA = null, gyA = null;
+function sizeAll(){
+  var dpr = Math.min(devicePixelRatio || 1, 2);
+  canvas.width = Math.round(innerWidth * dpr);
+  canvas.height = Math.round(innerHeight * dpr);
+  resizeBuffer();
+}
+function resizeBuffer(){
+  var s = bufScale;
+  var w = Math.max(2, Math.round(innerWidth * s));
+  var h = Math.max(2, Math.round(innerHeight * s));
+  if (w*h > 420000){
+    var k = Math.sqrt(420000/(w*h));
+    w = Math.floor(w*k); h = Math.floor(h*k);
+  }
+  W = w; H = h;
+  off.width = w; off.height = h;
+  img = octx.createImageData(w, h);
+  buf32 = new Uint32Array(img.data.buffer);
+  fArr = new Float32Array(w*h);
+  gxA = new Float32Array(w*h);
+  gyA = new Float32Array(w*h);
+}
+sizeAll();
+window.addEventListener("resize", function(){ sizeAll(); if (reduce) settleAndRender(); });
+
+/* ---------- simulation ---------- */
+var px = -9999, py = -9999, ptrActive = false, strength = 0, strengthT = 0;
+var paused = false;
+function simStep(dt, t){
+  var cx = innerWidth/2, cy = innerHeight/2;
+  strengthT = ptrActive ? 1 : 0;
+  strength += (strengthT - strength) * 0.06;
+  bodies.forEach(function(b){
+    var s = b.seed;
+    var ax = Math.sin(t*0.53 + s)*14 + Math.sin(t*0.21 + s*2.3)*9;
+    var ay = Math.cos(t*0.47 + s*1.7)*14 + Math.sin(t*0.13 + s)*9;
+    /* weak spring toward centre */
+    ax += (cx - b.x)*0.14;
+    ay += (cy - b.y)*0.14;
+    /* pointer attraction */
+    if (strength > 0.01){
+      var dx = px - b.x, dy = py - b.y;
+      var d = Math.hypot(dx, dy) + 40;
+      var f = strength * 2600 / (d*d/1000 + 8);
+      ax += dx/d * f * 60;
+      ay += dy/d * f * 60;
+    }
+    b.vx = (b.vx + ax*dt) * 0.985;
+    b.vy = (b.vy + ay*dt) * 0.985;
+    b.x += b.vx; b.y += b.vy;
+    if (b.x < b.r*0.4){ b.x = b.r*0.4; b.vx = Math.abs(b.vx); }
+    if (b.x > innerWidth - b.r*0.4){ b.x = innerWidth - b.r*0.4; b.vx = -Math.abs(b.vx); }
+    if (b.y < b.r*0.4){ b.y = b.r*0.4; b.vy = Math.abs(b.vy); }
+    if (b.y > innerHeight - b.r*0.4){ b.y = innerHeight - b.r*0.4; b.vy = -Math.abs(b.vy); }
+    if (b.swell < 1){
+      b.swell = Math.min(1, b.swell + dt/0.9);
+      var sw = b.swell*b.swell*(3-2*b.swell);
+      b.curR = b.r * sw;
+    } else b.curR = b.r;
+  });
+  /* pairwise repulsion */
+  for (var i = 0; i < bodies.length; i++)
+    for (var j = i+1; j < bodies.length; j++){
+      var a = bodies[i], b2 = bodies[j];
+      var dx = b2.x - a.x, dy = b2.y - a.y;
+      var d = Math.hypot(dx,dy) || 0.01;
+      var lim = (a.curR + b2.curR) * 0.85;
+      if (d < lim){
+        var push = (lim - d)/lim * 46;
+        a.vx -= dx/d * push * dt * 60 * 0.02;
+        a.vy -= dy/d * push * dt * 60 * 0.02;
+        b2.vx += dx/d * push * dt * 60 * 0.02;
+        b2.vy += dy/d * push * dt * 60 * 0.02;
+      }
+    }
+}
+
+/* ---------- field + shade ---------- */
+var Lz = 0.64, Lx = -0.45, Ly = -0.62;
+function renderField(t){
+  var total = W*H;
+  fArr.fill(0); gxA.fill(0); gyA.fill(0);
+  var kx = W/innerWidth, ky = H/innerHeight;
+  for (var b = 0; b < bodies.length; b++){
+    var bd = bodies[b];
+    var bx = bd.x*kx, by = bd.y*ky;
+    var r = Math.max(6, bd.curR * (kx+ky)/2);
+    var r2 = r*r;
+    var inf = r*2.35;
+    var x0 = Math.max(0, Math.floor(bx-inf)), x1 = Math.min(W-1, Math.ceil(bx+inf));
+    var y0 = Math.max(0, Math.floor(by-inf)), y1 = Math.min(H-1, Math.ceil(by+inf));
+    for (var y = y0; y <= y1; y++){
+      var dy = y - by, dy2 = dy*dy;
+      var row = y*W;
+      for (var x = x0; x <= x1; x++){
+        var dx = x - bx;
+        var d2 = dx*dx + dy2;
+        if (d2 < 1) d2 = 1;
+        var inv = r2/d2;
+        var inv2 = inv/d2;
+        fArr[row+x] += inv;
+        gxA[row+x] -= 2*dx*inv2;
+        gyA[row+x] -= 2*dy*inv2;
+      }
+    }
+  }
+  for (var p = 0; p < total; p++){
+    var f = fArr[p];
+    if (f < 0.8) { buf32[p] = 0; continue; }
+    var gx = gxA[p], gy = gyA[p];
+    var g = Math.sqrt(gx*gx + gy*gy) || 1e-6;
+    var alpha = (f - 1)/g + 0.5;
+    if (alpha <= 0){ buf32[p] = 0; continue; }
+    if (alpha > 1) alpha = 1;
+    var tilt = Math.pow(1/f, 1.6);
+    var nx = -gx/g*tilt, ny = -gy/g*tilt, nz = 1;
+    var nl = Math.sqrt(nx*nx + ny*ny + 1);
+    nx/=nl; ny/=nl; nz/=nl;
+    /* reflect view (0,0,1) */
+    var rx = 2*nz*nx, ry = 2*nz*ny, rz = 2*nz*nz - 1;
+    var li = ((ry + 1) * 127.5) | 0;
+    if (li < 0) li = 0; else if (li > 255) li = 255;
+    var lr = LUT[li*3], lg = LUT[li*3+1], lb = LUT[li*3+2];
+    /* studio falloff left→right */
+    var fall = 1 - 0.10*((rx*0.5 + 0.5));
+    /* diffuse + specular */
+    var dot = nx*Lx + ny*Ly + nz*Lz;
+    if (dot < 0) dot = 0;
+    var spec = dot >= 1 ? 1 : Math.pow(dot, 48);
+    var diff = dot*20;
+    var rim = Math.min(1, tilt*tilt*tilt);
+    var rr = (lr*fall + rim*72 + spec*235 + diff);
+    var gg = (lg*fall + rim*92 + spec*235 + diff);
+    var bb = (lb*fall + rim*112 + spec*235 + diff);
+    if (rr > 255) rr = 255; if (gg > 255) gg = 255; if (bb > 255) bb = 255;
+    var a = (alpha*255)|0;
+    buf32[p] = ((a<<24) | ((bb|0)<<16) | ((gg|0)<<8) | (rr|0)) >>> 0;
+  }
+  octx.putImageData(img, 0, 0);
+}
+
+/* ---------- contact shadows ---------- */
+function shadows(){
+  var dpr = Math.min(devicePixelRatio||1, 2);
+  var kx = canvas.width/innerWidth, ky = canvas.height/innerHeight;
+  bodies.forEach(function(b){
+    var r = b.curR*kx;
+    var g = ctx.createRadialGradient(0,0,0, 0,0,r*1.15);
+    g.addColorStop(0,"rgba(0,0,0,.5)");
+    g.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.save();
+    ctx.translate(b.x*kx, (b.y + b.curR*0.62)*ky);
+    ctx.scale(1, 0.32);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0,0,r*1.15,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+/* ---------- frame ---------- */
+var slow = 0, fast = 0, stats = document.getElementById("stats");
+var lastT = performance.now(), simT = 0, fpsShown = 0;
+function frame(now){
+  var dtms = now - lastT;
+  lastT = now;
+  if (!paused){
+    var dt = Math.min(dtms, 50)/1000;
+    simT += dt;
+    simStep(dt, simT);
+    renderField(simT);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    shadows();
+    ctx.imageSmoothingEnabled = true;
+    try{ ctx.imageSmoothingQuality = "high"; }catch(_){}
+    ctx.drawImage(off, 0, 0, canvas.width, canvas.height);
+    /* adaptivity */
+    if (dtms > 26){ if (++slow >= 20){ bufScale = Math.max(0.28, bufScale*0.85); resizeBuffer(); slow = 0; } }
+    else slow = 0;
+    if (dtms < 14){ if (++fast >= 240){ bufScale = Math.min(0.60, bufScale*1.10); resizeBuffer(); fast = 0; } }
+    else fast = 0;
+    if (now - fpsShown > 250){
+      stats.textContent = "fps " + Math.round(1000/Math.max(dtms,1)) + " · bodies " + bodies.length +
+        " · buffer " + Math.round(bufScale*100) + "%";
+      fpsShown = now;
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- reduced motion: settle offline, render once ---------- */
+function settleAndRender(){
+  for (var i = 0; i < 240; i++){ simT += 1/60; simStep(1/60, simT); }
+  renderField(simT);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  shadows();
+  ctx.drawImage(off, 0, 0, canvas.width, canvas.height);
+}
+if (reduce) settleAndRender(); else requestAnimationFrame(frame);
+
+/* ---------- input ---------- */
+var hint = document.getElementById("hint");
+function interacted(){ hint.classList.add("gone"); }
+canvas.addEventListener("pointermove", function(e){
+  px = e.clientX; py = e.clientY; ptrActive = true;
+  if (reduce && !reduceThrottle){ reduceThrottle = true; settleAndRender(); setTimeout(function(){reduceThrottle=false;}, 90); }
+});
+var reduceThrottle = false;
+canvas.addEventListener("pointerleave", function(){ ptrActive = false; });
+canvas.addEventListener("pointerdown", function(e){
+  interacted();
+  px = e.clientX; py = e.clientY; ptrActive = true;
+  addBody(e.clientX, e.clientY);
+  if (reduce) settleAndRender();
+});
+window.addEventListener("keydown", function(e){
+  if (e.key === "r" || e.key === "R"){ reseed(); if (reduce) settleAndRender(); }
+  if (e.code === "Space"){ paused = !paused; e.preventDefault(); }
+});
+setTimeout(function(){ document.getElementById("title").classList.add("in"); }, reduce ? 0 : 120);
+})();
+</script>
+</body>
+</html>

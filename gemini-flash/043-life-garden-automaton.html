@@ -1,0 +1,1767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>The Garden Automaton — Plate XIV · Cellular Horticulture</title>
+  <style>
+    /* ==========================================================================
+       THE GARDEN AUTOMATON — PLATE XIV: CELLULAR HORTICULTURE
+       A nocturnal botanical garden reimagining Conway's Game of Life
+       Palette:
+         Umber: #241911
+         Soil Black: #16100B
+         Near Black: #0C0805
+         Seedling Moss Green: #7FB069
+         Coral Bud: #F28E7B
+         Violet Blossom: #A687D1
+         Elder Gold: #E7B95A
+         Loam Stain: rgba(120, 80, 60, ...)
+       ========================================================================== */
+
+    :root {
+      --bg-umber: #241911;
+      --bg-soil: #16100B;
+      --bg-near-black: #0C0805;
+      
+      --color-moss: #7FB069;
+      --color-coral: #F28E7B;
+      --color-violet: #A687D1;
+      --color-elder: #E7B95A;
+      
+      --parchment: #F5EDE0;
+      --parchment-soft: #E6D8C3;
+      --parchment-dim: #BDAA92;
+      --parchment-muted: #8E7A66;
+      
+      --brass-border: rgba(231, 185, 90, 0.28);
+      --brass-border-soft: rgba(231, 185, 90, 0.14);
+      --brass-glow: rgba(231, 185, 90, 0.45);
+      
+      --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, ui-serif, serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      
+      --ease-botanical: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-near-black);
+      background: radial-gradient(ellipse at 50% 50%, #241911 0%, #16100B 55%, #0C0805 100%);
+      font-family: var(--font-serif);
+      color: var(--parchment);
+      touch-action: none;
+    }
+
+    /* Screen Canvas */
+    #garden-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 1;
+      cursor: crosshair;
+    }
+
+    /* Heavy Radial Vignette */
+    .vignette-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 4;
+      background: radial-gradient(circle at 50% 50%, transparent 45%, rgba(12, 8, 5, 0.72) 80%, rgba(6, 4, 2, 0.96) 100%);
+      box-shadow: inset 0 0 100px rgba(12, 8, 5, 0.8), inset 0 0 180px rgba(6, 4, 2, 0.95);
+    }
+
+    /* Faint SVG Fractal-Noise Grain Overlay (Data URI, Overlay blend) */
+    .grain-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 5;
+      opacity: 0.24;
+      mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='paperNoise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='1 0 0 0 0  0 0.9 0 0 0  0 0 0.8 0 0  0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23paperNoise)'/%3E%3C/svg%3E");
+      background-repeat: repeat;
+      background-size: 256px 256px;
+    }
+
+    /* Botanical Journal Frame Borders */
+    .journal-frame {
+      position: fixed;
+      inset: 16px;
+      pointer-events: none;
+      z-index: 6;
+      border: 1px solid var(--brass-border);
+      border-radius: 2px;
+    }
+
+    .journal-frame::before {
+      content: "";
+      position: absolute;
+      inset: 5px;
+      border: 1px solid var(--brass-border-soft);
+      pointer-events: none;
+    }
+
+    .frame-corner {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-color: var(--color-elder);
+      opacity: 0.75;
+    }
+    .corner-tl { top: -2px; left: -2px; border-top: 2px solid; border-left: 2px solid; }
+    .corner-tr { top: -2px; right: -2px; border-top: 2px solid; border-right: 2px solid; }
+    .corner-bl { bottom: -2px; left: -2px; border-bottom: 2px solid; border-left: 2px solid; }
+    .corner-br { bottom: -2px; right: -2px; border-bottom: 2px solid; border-right: 2px solid; }
+
+    /* UI Layout Layer */
+    .ui-layer {
+      position: fixed;
+      inset: 0;
+      padding: 32px 36px;
+      pointer-events: none;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .ui-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+    }
+
+    .ui-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 24px;
+    }
+
+    /* Top Left: Title & Horticulture Caption */
+    .title-block {
+      max-width: 580px;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+    }
+
+    .plate-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--parchment-muted);
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .plate-label::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: var(--color-elder);
+      border-radius: 50%;
+      box-shadow: 0 0 6px var(--color-elder);
+    }
+
+    .main-title {
+      font-size: clamp(24px, 3.8vw, 40px);
+      font-weight: 400;
+      color: var(--parchment);
+      line-height: 1.15;
+      letter-spacing: 0.02em;
+    }
+
+    .main-title span.automaton {
+      font-style: italic;
+      color: var(--color-elder);
+      font-weight: 400;
+      text-shadow: 0 0 16px rgba(231, 185, 90, 0.4);
+    }
+
+    .journal-caption {
+      font-style: italic;
+      font-size: clamp(12px, 1.15vw, 14.5px);
+      color: var(--parchment-dim);
+      line-height: 1.5;
+      margin-top: 9px;
+      max-width: 520px;
+      border-left: 2px solid rgba(231, 185, 90, 0.35);
+      padding-left: 12px;
+    }
+
+    /* Top Right: Counters */
+    .counters-cluster {
+      display: flex;
+      gap: 28px;
+      background: rgba(22, 16, 11, 0.65);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--brass-border-soft);
+      padding: 12px 22px;
+      border-radius: 8px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), inset 0 0 15px rgba(0, 0, 0, 0.4);
+    }
+
+    .counter-item {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .counter-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--parchment-muted);
+      margin-bottom: 2px;
+    }
+
+    .counter-value-row {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .counter-num {
+      font-size: clamp(24px, 2.8vw, 36px);
+      font-family: var(--font-serif);
+      font-variant-numeric: tabular-nums;
+      font-weight: 400;
+      color: var(--parchment);
+      line-height: 1;
+    }
+
+    .counter-unit {
+      font-style: italic;
+      font-size: 14px;
+      color: var(--color-elder);
+      letter-spacing: 0.02em;
+    }
+
+    /* Bottom Left: Botanical Legend */
+    .legend-cluster {
+      background: rgba(22, 16, 11, 0.65);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--brass-border-soft);
+      padding: 12px 18px;
+      border-radius: 8px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .legend-title {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--parchment-muted);
+      margin-bottom: 2px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-style: italic;
+      font-size: 13px;
+      color: var(--parchment-soft);
+    }
+
+    .legend-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot-moss {
+      background-color: var(--color-moss);
+      box-shadow: 0 0 8px var(--color-moss), 0 0 16px rgba(127, 176, 105, 0.5);
+    }
+
+    .dot-coral {
+      background-color: var(--color-coral);
+      box-shadow: 0 0 8px var(--color-coral), 0 0 16px rgba(242, 142, 123, 0.5);
+    }
+
+    .dot-violet {
+      background-color: var(--color-violet);
+      box-shadow: 0 0 8px var(--color-violet), 0 0 16px rgba(166, 135, 209, 0.5);
+    }
+
+    .dot-elder {
+      background-color: var(--color-elder);
+      box-shadow: 0 0 8px var(--color-elder), 0 0 16px rgba(231, 185, 90, 0.5);
+    }
+
+    /* Bottom Right: Control Cluster */
+    .controls-cluster {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(22, 16, 11, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--brass-border);
+      padding: 10px 18px;
+      border-radius: 40px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(231, 185, 90, 0.2);
+      pointer-events: auto;
+    }
+
+    /* Tempo Slider Section */
+    .tempo-section {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-right: 14px;
+      border-right: 1px solid rgba(231, 185, 90, 0.2);
+    }
+
+    .tempo-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--parchment-muted);
+      white-space: nowrap;
+    }
+
+    .tempo-readout {
+      font-family: var(--font-serif);
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      color: var(--color-elder);
+      width: 48px;
+      text-align: right;
+    }
+
+    .tempo-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 90px;
+      height: 4px;
+      background: rgba(231, 185, 90, 0.18);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .tempo-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--color-elder);
+      border: 1.5px solid #fff8e8;
+      box-shadow: 0 0 10px #E7B95A, 0 0 18px rgba(231, 185, 90, 0.8);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .tempo-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 14px #E7B95A, 0 0 24px rgba(231, 185, 90, 1);
+    }
+
+    .tempo-slider::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--color-elder);
+      border: 1.5px solid #fff8e8;
+      box-shadow: 0 0 10px #E7B95A, 0 0 18px rgba(231, 185, 90, 0.8);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    /* Pill Buttons */
+    .pill-btn {
+      font-family: var(--font-serif);
+      font-size: 13.5px;
+      letter-spacing: 0.03em;
+      color: var(--parchment-soft);
+      background: rgba(36, 25, 17, 0.7);
+      border: 1px solid var(--brass-border-soft);
+      border-radius: 20px;
+      padding: 7px 15px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      transition: all 0.22s var(--ease-botanical);
+      outline: none;
+      white-space: nowrap;
+    }
+
+    .pill-btn:hover {
+      background: rgba(48, 33, 22, 0.9);
+      border-color: var(--color-elder);
+      color: #fff9ee;
+      box-shadow: 0 0 12px rgba(231, 185, 90, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .pill-btn:active {
+      transform: translateY(1px);
+      box-shadow: none;
+    }
+
+    .pill-btn.btn-primary {
+      background: rgba(231, 185, 90, 0.14);
+      border-color: var(--brass-border);
+      color: var(--parchment);
+    }
+
+    .pill-btn.btn-primary.is-growing {
+      background: rgba(127, 176, 105, 0.18);
+      border-color: var(--color-moss);
+      color: #ebfae6;
+      box-shadow: 0 0 12px rgba(127, 176, 105, 0.3);
+    }
+
+    .pill-btn.btn-drawer {
+      background: linear-gradient(135deg, rgba(231, 185, 90, 0.2) 0%, rgba(166, 135, 209, 0.18) 100%);
+      border-color: var(--color-elder);
+      color: #fff8eb;
+      box-shadow: 0 0 14px rgba(231, 185, 90, 0.3);
+    }
+
+    .btn-icon {
+      display: inline-flex;
+      width: 14px;
+      height: 14px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-icon svg {
+      width: 100%;
+      height: 100%;
+      fill: currentColor;
+    }
+
+    /* Seed Drawer Modal (Pops and scales from corner) */
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: rgba(8, 5, 3, 0.4);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s var(--ease-botanical);
+    }
+
+    .drawer-backdrop.is-open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .seed-drawer {
+      position: fixed;
+      bottom: 84px;
+      right: 36px;
+      width: 520px;
+      max-width: calc(100vw - 48px);
+      max-height: calc(100vh - 120px);
+      background: rgba(20, 14, 9, 0.93);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--color-elder);
+      border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(231, 185, 90, 0.18);
+      z-index: 51;
+      padding: 24px;
+      transform-origin: bottom right;
+      transform: scale(0.65) translateY(20px);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.34s var(--ease-botanical), opacity 0.28s ease;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--brass-border) transparent;
+    }
+
+    .seed-drawer.is-open {
+      transform: scale(1) translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--brass-border-soft);
+    }
+
+    .drawer-title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .drawer-plate-tag {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--parchment-muted);
+    }
+
+    .drawer-title {
+      font-size: 20px;
+      font-weight: 400;
+      color: var(--parchment);
+      letter-spacing: 0.02em;
+    }
+
+    .drawer-close-btn {
+      background: transparent;
+      border: 1px solid var(--brass-border-soft);
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      color: var(--parchment-dim);
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .drawer-close-btn:hover {
+      color: var(--color-elder);
+      border-color: var(--color-elder);
+      transform: rotate(90deg);
+    }
+
+    /* Seed Packets Grid: Laid out Two-Up */
+    .packets-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+    }
+
+    .seed-packet {
+      position: relative;
+      background: rgba(36, 25, 17, 0.7);
+      border: 1px solid var(--brass-border-soft);
+      border-radius: 10px;
+      padding: 14px 14px 14px 16px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 104px;
+      transition: all 0.24s var(--ease-botanical);
+      text-align: left;
+    }
+
+    .seed-packet::before {
+      content: "";
+      position: absolute;
+      inset: 3px;
+      border: 1px dashed rgba(231, 185, 90, 0.12);
+      border-radius: 7px;
+      pointer-events: none;
+    }
+
+    .seed-packet:hover {
+      background: rgba(48, 33, 22, 0.9);
+      border-color: var(--color-elder);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(231, 185, 90, 0.22);
+    }
+
+    .seed-packet:active {
+      transform: translateY(1px);
+    }
+
+    .packet-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .packet-num {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-elder);
+      opacity: 0.85;
+    }
+
+    .packet-icon {
+      width: 14px;
+      height: 14px;
+      color: var(--color-elder);
+      opacity: 0.65;
+    }
+
+    .packet-name {
+      font-size: 15.5px;
+      font-weight: 500;
+      color: var(--parchment);
+      margin-bottom: 4px;
+      line-height: 1.2;
+    }
+
+    .packet-tagline {
+      font-style: italic;
+      font-size: 12px;
+      color: var(--parchment-dim);
+      line-height: 1.35;
+    }
+
+    /* Keyboard Hints Bar */
+    .keyboard-hint {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 14px;
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      letter-spacing: 0.1em;
+      color: var(--parchment-muted);
+    }
+
+    .kbd-tag {
+      background: rgba(231, 185, 90, 0.1);
+      border: 1px solid rgba(231, 185, 90, 0.2);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--parchment-soft);
+    }
+
+    /* Responsive Constraints */
+    @media (max-width: 900px) {
+      .ui-layer {
+        padding: 24px;
+      }
+      .counters-cluster {
+        padding: 8px 14px;
+        gap: 16px;
+      }
+      .controls-cluster {
+        flex-wrap: wrap;
+        border-radius: 20px;
+        padding: 12px;
+        justify-content: center;
+      }
+      .tempo-section {
+        border-right: none;
+        padding-right: 0;
+        width: 100%;
+        justify-content: center;
+      }
+      .seed-drawer {
+        width: calc(100vw - 32px);
+        right: 16px;
+        bottom: 96px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .ui-top {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+      }
+      .counters-cluster {
+        align-self: flex-start;
+      }
+      .journal-caption {
+        display: none;
+      }
+      .ui-bottom {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+      }
+      .legend-cluster {
+        display: none;
+      }
+      .controls-cluster {
+        align-self: center;
+        width: 100%;
+      }
+      .packets-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Prefers Reduced Motion Behavior */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition-duration: 0.001ms !important;
+        animation-duration: 0.001ms !important;
+      }
+      .seed-drawer {
+        transition: none !important;
+      }
+      .drawer-backdrop {
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fullscreen Garden Canvas -->
+  <canvas id="garden-canvas"></canvas>
+
+  <!-- Deep Radial Soil Vignette -->
+  <div class="vignette-overlay"></div>
+
+  <!-- Fractal Noise Texture Overlay -->
+  <div class="grain-overlay"></div>
+
+  <!-- Antique Journal Frame -->
+  <div class="journal-frame">
+    <div class="frame-corner corner-tl"></div>
+    <div class="frame-corner corner-tr"></div>
+    <div class="frame-corner corner-bl"></div>
+    <div class="frame-corner corner-br"></div>
+  </div>
+
+  <!-- UI Overlay Layer -->
+  <div class="ui-layer">
+    <!-- Top Bar -->
+    <div class="ui-top">
+      <div class="title-block">
+        <div class="plate-label">Plate XIV · Cellular Horticulture</div>
+        <h1 class="main-title">The Garden <span class="automaton">Automaton</span></h1>
+        <p class="journal-caption">
+          A solitary bloom withers in loneliness; two or three companions grant gentle life; yet crowded beyond measure, the garden chokes upon itself.
+        </p>
+      </div>
+
+      <div class="counters-cluster">
+        <div class="counter-item">
+          <span class="counter-label">Generation</span>
+          <div class="counter-value-row">
+            <span class="counter-num" id="gen-count">0</span>
+          </div>
+        </div>
+        <div class="counter-item">
+          <span class="counter-label">Population</span>
+          <div class="counter-value-row">
+            <span class="counter-num" id="pop-count">0</span>
+            <span class="counter-unit">blooms</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Bar -->
+    <div class="ui-bottom">
+      <!-- Bottom Left: Age Color Legend -->
+      <div class="legend-cluster">
+        <span class="legend-title">Horticultural Age</span>
+        <div class="legend-item">
+          <span class="legend-dot dot-moss"></span>
+          <span>Seedling (gen. 1–2)</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot dot-coral"></span>
+          <span>Bud (gen. 3–8)</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot dot-violet"></span>
+          <span>Blossom (gen. 9–20)</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot dot-elder"></span>
+          <span>Elder (gen. 21–45+)</span>
+        </div>
+      </div>
+
+      <!-- Bottom Right: Simulation Controls -->
+      <div class="controls-cluster">
+        <div class="tempo-section">
+          <span class="tempo-label">Tempo</span>
+          <input type="range" id="tempo-slider" class="tempo-slider" min="1" max="30" value="12" aria-label="Simulation tempo slider">
+          <span class="tempo-readout" id="tempo-display">12 gen/s</span>
+        </div>
+
+        <button id="btn-toggle" class="pill-btn btn-primary is-growing" title="Toggle simulation (Space)">
+          <span class="btn-icon">
+            <svg viewBox="0 0 24 24" id="play-pause-icon">
+              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+            </svg>
+          </span>
+          <span id="toggle-text">Pause</span>
+        </button>
+
+        <button id="btn-step" class="pill-btn" title="Step one generation (S)">
+          <span class="btn-icon">
+            <svg viewBox="0 0 24 24">
+              <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+            </svg>
+          </span>
+          <span>Step</span>
+        </button>
+
+        <button id="btn-clear" class="pill-btn" title="Clear soil bed (C)">
+          <span class="btn-icon">
+            <svg viewBox="0 0 24 24">
+              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+            </svg>
+          </span>
+          <span>Clear bed</span>
+        </button>
+
+        <button id="btn-drawer" class="pill-btn btn-drawer" title="Open seed drawer">
+          <span class="btn-icon">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14.5c0 .28-.22.5-.5.5s-.5-.22-.5-.5V13H8.5c-.28 0-.5-.22-.5-.5s.22-.5.5-.5H12V8.5c0-.28.22-.5.5-.5s.5.22.5.5V12h3.5c.28 0 .5.22.5.5s-.22.5-.5.5H13v3.5z"/>
+            </svg>
+          </span>
+          <span>Seed drawer</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Seed Drawer Modal -->
+  <div id="drawer-backdrop" class="drawer-backdrop"></div>
+  <div id="seed-drawer" class="seed-drawer" role="dialog" aria-label="Seed Drawer">
+    <div class="drawer-header">
+      <div class="drawer-title-group">
+        <span class="drawer-plate-tag">Botanical Herbarium Specimen</span>
+        <h2 class="drawer-title">Cabinet of Living Seeds</h2>
+      </div>
+      <button id="drawer-close" class="drawer-close-btn" aria-label="Close seed drawer">×</button>
+    </div>
+
+    <div class="packets-grid">
+      <!-- Packet 1: Gosper's glider gun -->
+      <div class="seed-packet" data-seed="gun">
+        <div>
+          <div class="packet-top">
+            <span class="packet-num">Seed No. I</span>
+            <span class="packet-icon">❧</span>
+          </div>
+          <h3 class="packet-name">Gosper's glider gun</h3>
+        </div>
+        <p class="packet-tagline">A ceaseless fountain of migrating seeds</p>
+      </div>
+
+      <!-- Packet 2: Pulsar -->
+      <div class="seed-packet" data-seed="pulsar">
+        <div>
+          <div class="packet-top">
+            <span class="packet-num">Seed No. II</span>
+            <span class="packet-icon">✦</span>
+          </div>
+          <h3 class="packet-name">Pulsar</h3>
+        </div>
+        <p class="packet-tagline">A breathing twelve-petaled nocturnal star</p>
+      </div>
+
+      <!-- Packet 3: R-pentomino -->
+      <div class="seed-packet" data-seed="rpentomino">
+        <div>
+          <div class="packet-top">
+            <span class="packet-num">Seed No. III</span>
+            <span class="packet-icon">❦</span>
+          </div>
+          <h3 class="packet-name">R-pentomino</h3>
+        </div>
+        <p class="packet-tagline">A tiny shoot that erupts into wild, tangled briars</p>
+      </div>
+
+      <!-- Packet 4: Acorn -->
+      <div class="seed-packet" data-seed="acorn">
+        <div>
+          <div class="packet-top">
+            <span class="packet-num">Seed No. IV</span>
+            <span class="packet-icon">❖</span>
+          </div>
+          <h3 class="packet-name">Acorn</h3>
+        </div>
+        <p class="packet-tagline">A solitary acorn yielding an orchard of centuries</p>
+      </div>
+
+      <!-- Packet 5: Wild garden -->
+      <div class="seed-packet" data-seed="wild">
+        <div>
+          <div class="packet-top">
+            <span class="packet-num">Seed No. V</span>
+            <span class="packet-icon">✿</span>
+          </div>
+          <h3 class="packet-name">Wild garden (random 30%)</h3>
+        </div>
+        <p class="packet-tagline">Untamed scatter of wild meadow flora</p>
+      </div>
+
+      <!-- Packet 6: Diehard -->
+      <div class="seed-packet" data-seed="diehard">
+        <div>
+          <div class="packet-top">
+            <span class="packet-num">Seed No. VI</span>
+            <span class="packet-icon">✧</span>
+          </div>
+          <h3 class="packet-name">Diehard</h3>
+        </div>
+        <p class="packet-tagline">A fleeting bloom that vanishes after many seasons</p>
+      </div>
+    </div>
+
+    <div class="keyboard-hint">
+      <span><span class="kbd-tag">Space</span> Play/Pause</span>
+      <span><span class="kbd-tag">Drag</span> Paint Blooms</span>
+      <span><span class="kbd-tag">Esc</span> Close Drawer</span>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      /* ==========================================================================
+         CANVAS & GRID CONFIGURATION
+         Toroidal grid, dynamic responsive cell size:
+         11px on phones -> 18px on 4K displays
+         ========================================================================== */
+      const canvas = document.getElementById('garden-canvas');
+      const ctx = canvas.getContext('2d', { alpha: true });
+
+      // Elements
+      const genCountEl = document.getElementById('gen-count');
+      const popCountEl = document.getElementById('pop-count');
+      const tempoSlider = document.getElementById('tempo-slider');
+      const tempoDisplay = document.getElementById('tempo-display');
+      const btnToggle = document.getElementById('btn-toggle');
+      const toggleText = document.getElementById('toggle-text');
+      const playPauseIcon = document.getElementById('play-pause-icon');
+      const btnStep = document.getElementById('btn-step');
+      const btnClear = document.getElementById('btn-clear');
+      const btnDrawer = document.getElementById('btn-drawer');
+      const seedDrawer = document.getElementById('seed-drawer');
+      const drawerBackdrop = document.getElementById('drawer-backdrop');
+      const drawerClose = document.getElementById('drawer-close');
+
+      // Grid State
+      let cols = 0;
+      let rows = 0;
+      let cellSize = 14;
+      let gridA = new Uint16Array(0);
+      let gridB = new Uint16Array(0);
+      let stains = new Float32Array(0);
+
+      let generation = 0;
+      let population = 0;
+      let isRunning = true;
+
+      // Fixed-Step Simulation Accumulator
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let tempo = prefersReducedMotion ? 4 : 12;
+      tempoSlider.value = tempo;
+      tempoDisplay.textContent = tempo + ' gen/s';
+
+      let stepDuration = 1000 / tempo;
+      let accumulator = 0;
+      let lastTime = performance.now();
+
+      // Pointer & Drawing State
+      let isPointerDown = false;
+      let isDragging = false;
+      let pointerDownX = 0;
+      let pointerDownY = 0;
+      let hoverCol = -1;
+      let hoverRow = -1;
+      let isPointerInside = false;
+      let lastDrawnCol = -1;
+      let lastDrawnRow = -1;
+
+      // Pre-rendered Sprites Cache
+      // Sprite canvases for discrete ages 1..46 (46 represents 45+) + stain sprite
+      let sprites = [];
+      let stainSprite = null;
+      let spriteSize = 0;
+      let stainSize = 0;
+
+      /* ==========================================================================
+         RESPONSIVE SIZING & GRID RESIZE PRESERVATION
+         Preserves living cells across viewport re-orientations & resizes
+         ========================================================================== */
+      function computeCellSize() {
+        const maxDim = Math.max(window.innerWidth, window.innerHeight);
+        // Map 400px -> 11px, 3840px -> 18px smoothly
+        const t = Math.max(0, Math.min(1, (maxDim - 400) / (3840 - 400)));
+        return Math.round(11 + t * 7);
+      }
+
+      function resizeGrid() {
+        const dpr = window.devicePixelRatio || 1;
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        ctx.scale(dpr, dpr);
+
+        const newCellSize = computeCellSize();
+        const newCols = Math.ceil(width / newCellSize);
+        const newRows = Math.ceil(height / newCellSize);
+
+        if (newCols === cols && newRows === rows && newCellSize === cellSize) {
+          return;
+        }
+
+        const oldCols = cols;
+        const oldRows = rows;
+        const oldGrid = gridA;
+        const oldStains = stains;
+
+        cellSize = newCellSize;
+        cols = newCols;
+        rows = newRows;
+
+        gridA = new Uint16Array(cols * rows);
+        gridB = new Uint16Array(cols * rows);
+        stains = new Float32Array(cols * rows);
+
+        // Preserve previous living blooms & stains centered in the new grid
+        if (oldGrid.length > 0) {
+          const colOffset = Math.floor((cols - oldCols) / 2);
+          const rowOffset = Math.floor((rows - oldRows) / 2);
+
+          let newPop = 0;
+          for (let r = 0; r < oldRows; r++) {
+            for (let c = 0; c < oldCols; c++) {
+              const oldIdx = r * oldCols + c;
+              const val = oldGrid[oldIdx];
+              const stn = oldStains[oldIdx];
+
+              const targetC = (c + colOffset + cols) % cols;
+              const targetR = (r + rowOffset + rows) % rows;
+              const targetIdx = targetR * cols + targetC;
+
+              if (val > 0) {
+                gridA[targetIdx] = val;
+                newPop++;
+              }
+              if (stn > 0) {
+                stains[targetIdx] = stn;
+              }
+            }
+          }
+          population = newPop;
+        }
+
+        // Rebuild sprite cache for current cellSize
+        buildSprites();
+        updateCounters();
+      }
+
+      /* ==========================================================================
+         AGE COLOUR INTERPOLATION
+         Seedling moss green (#7FB069) for first 2 gens
+         -> Coral (#F28E7B) by age 8
+         -> Violet (#A687D1) by age 20
+         -> Elder gold (#E7B95A) by age 45
+         ========================================================================== */
+      function getAgeColor(age) {
+        if (age <= 2) {
+          return { r: 127, g: 176, b: 105 }; // #7FB069
+        } else if (age <= 8) {
+          const t = (age - 2) / (8 - 2);
+          return {
+            r: Math.round(127 + t * (242 - 127)),
+            g: Math.round(176 + t * (142 - 176)),
+            b: Math.round(105 + t * (123 - 105))
+          };
+        } else if (age <= 20) {
+          const t = (age - 8) / (20 - 8);
+          return {
+            r: Math.round(242 + t * (166 - 242)),
+            g: Math.round(142 + t * (135 - 142)),
+            b: Math.round(123 + t * (209 - 123))
+          };
+        } else if (age <= 45) {
+          const t = (age - 20) / (45 - 20);
+          return {
+            r: Math.round(166 + t * (231 - 166)),
+            g: Math.round(135 + t * (185 - 135)),
+            b: Math.round(209 + t * (90 - 209))
+          };
+        } else {
+          return { r: 231, g: 185, b: 90 }; // #E7B95A
+        }
+      }
+
+      /* ==========================================================================
+         SPRITE PRE-RENDERING
+         Each living bloom:
+           1. Wide low-alpha radial glow
+           2. For cells older than 8 gens: five faint petal discs around the center
+           3. Filled circle body
+           4. Small white specular highlight
+           Newborn sprout: 70% scale
+         ========================================================================== */
+      function buildSprites() {
+        sprites = [];
+        spriteSize = Math.ceil(cellSize * 3.8);
+        if (spriteSize % 2 !== 0) spriteSize++;
+        const center = spriteSize / 2;
+
+        // Build sprites for ages 1 through 46 (where 46 represents 45+)
+        for (let age = 1; age <= 46; age++) {
+          const sCanvas = document.createElement('canvas');
+          sCanvas.width = spriteSize;
+          sCanvas.height = spriteSize;
+          const sCtx = sCanvas.getContext('2d');
+
+          const col = getAgeColor(age);
+          const isSprout = (age === 1);
+          const scale = isSprout ? 0.70 : 1.0;
+
+          // 1. Wide low-alpha radial glow
+          const glowR = cellSize * 1.5 * scale;
+          const glowGrad = sCtx.createRadialGradient(center, center, 0, center, center, glowR);
+          glowGrad.addColorStop(0, `rgba(${col.r}, ${col.g}, ${col.b}, 0.38)`);
+          glowGrad.addColorStop(0.35, `rgba(${col.r}, ${col.g}, ${col.b}, 0.18)`);
+          glowGrad.addColorStop(0.7, `rgba(${col.r}, ${col.g}, ${col.b}, 0.05)`);
+          glowGrad.addColorStop(1, `rgba(${col.r}, ${col.g}, ${col.b}, 0)`);
+
+          sCtx.fillStyle = glowGrad;
+          sCtx.beginPath();
+          sCtx.arc(center, center, glowR, 0, Math.PI * 2);
+          sCtx.fill();
+
+          // 2. For cells older than 8 generations: 5 faint petal discs
+          if (age > 8) {
+            const petalDist = cellSize * 0.44 * scale;
+            const petalRadius = cellSize * 0.23 * scale;
+            const petalAlpha = Math.min(0.42, 0.22 + (age - 8) * 0.015);
+
+            for (let p = 0; p < 5; p++) {
+              const angle = p * (Math.PI * 2 / 5) - Math.PI / 2;
+              const px = center + Math.cos(angle) * petalDist;
+              const py = center + Math.sin(angle) * petalDist;
+
+              const petalGrad = sCtx.createRadialGradient(px, py, 0, px, py, petalRadius);
+              petalGrad.addColorStop(0, `rgba(${col.r}, ${col.g}, ${col.b}, ${petalAlpha})`);
+              petalGrad.addColorStop(0.7, `rgba(${col.r}, ${col.g}, ${col.b}, ${petalAlpha * 0.4})`);
+              petalGrad.addColorStop(1, `rgba(${col.r}, ${col.g}, ${col.b}, 0)`);
+
+              sCtx.fillStyle = petalGrad;
+              sCtx.beginPath();
+              sCtx.arc(px, py, petalRadius, 0, Math.PI * 2);
+              sCtx.fill();
+            }
+          }
+
+          // 3. Filled circle body
+          const bodyR = cellSize * 0.41 * scale;
+          const bodyGrad = sCtx.createRadialGradient(center - bodyR * 0.15, center - bodyR * 0.15, 0, center, center, bodyR);
+          const rHigh = Math.min(255, col.r + 45);
+          const gHigh = Math.min(255, col.g + 45);
+          const bHigh = Math.min(255, col.b + 45);
+          bodyGrad.addColorStop(0, `rgba(${rHigh}, ${gHigh}, ${bHigh}, 0.96)`);
+          bodyGrad.addColorStop(0.65, `rgba(${col.r}, ${col.g}, ${col.b}, 0.88)`);
+          bodyGrad.addColorStop(1, `rgba(${Math.max(0, col.r - 20)}, ${Math.max(0, col.g - 20)}, ${Math.max(0, col.b - 20)}, 0.72)`);
+
+          sCtx.fillStyle = bodyGrad;
+          sCtx.beginPath();
+          sCtx.arc(center, center, bodyR, 0, Math.PI * 2);
+          sCtx.fill();
+
+          // 4. Small white specular highlight
+          const specR = bodyR * 0.32;
+          const specX = center - bodyR * 0.35;
+          const specY = center - bodyR * 0.35;
+          const specGrad = sCtx.createRadialGradient(specX, specY, 0, specX, specY, specR);
+          specGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+          specGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.45)');
+          specGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+          sCtx.fillStyle = specGrad;
+          sCtx.beginPath();
+          sCtx.arc(specX, specY, specR, 0, Math.PI * 2);
+          sCtx.fill();
+
+          sprites[age] = sCanvas;
+        }
+
+        // Build pre-rendered decay stain sprite (rgba 120, 80, 60)
+        stainSize = Math.ceil(cellSize * 2.6);
+        if (stainSize % 2 !== 0) stainSize++;
+        const stCenter = stainSize / 2;
+        const stRadius = cellSize * 0.9;
+
+        stainSprite = document.createElement('canvas');
+        stainSprite.width = stainSize;
+        stainSprite.height = stainSize;
+        const stCtx = stainSprite.getContext('2d');
+
+        const stainGrad = stCtx.createRadialGradient(stCenter, stCenter, 0, stCenter, stCenter, stRadius);
+        stainGrad.addColorStop(0, 'rgba(120, 80, 60, 0.72)');
+        stainGrad.addColorStop(0.4, 'rgba(120, 80, 60, 0.42)');
+        stainGrad.addColorStop(0.8, 'rgba(120, 80, 60, 0.12)');
+        stainGrad.addColorStop(1, 'rgba(120, 80, 60, 0)');
+
+        stCtx.fillStyle = stainGrad;
+        stCtx.beginPath();
+        stCtx.arc(stCenter, stCenter, stRadius, 0, Math.PI * 2);
+        stCtx.fill();
+      }
+
+      /* ==========================================================================
+         CONWAY'S GAME OF LIFE ENGINE
+         Toroidal (wrapping at all four edges)
+         Fixed-step accumulator logic
+         Decaying soil stains (rgba 120, 80, 60) decaying by 7% per frame
+         ========================================================================== */
+      function stepSimulation() {
+        let pop = 0;
+        const W = cols;
+        const H = rows;
+
+        for (let y = 0; y < H; y++) {
+          const yUp = ((y - 1 + H) % H) * W;
+          const yMid = y * W;
+          const yDown = ((y + 1) % H) * W;
+
+          for (let x = 0; x < W; x++) {
+            const xLeft = (x - 1 + W) % W;
+            const xRight = (x + 1) % W;
+
+            // Count 8 neighbors on toroidal surface
+            let neighbors = 0;
+            if (gridA[yUp + xLeft] > 0) neighbors++;
+            if (gridA[yUp + x] > 0) neighbors++;
+            if (gridA[yUp + xRight] > 0) neighbors++;
+            if (gridA[yMid + xLeft] > 0) neighbors++;
+            if (gridA[yMid + xRight] > 0) neighbors++;
+            if (gridA[yDown + xLeft] > 0) neighbors++;
+            if (gridA[yDown + x] > 0) neighbors++;
+            if (gridA[yDown + xRight] > 0) neighbors++;
+
+            const idx = yMid + x;
+            const age = gridA[idx];
+
+            if (age > 0) {
+              // Loneliness (<2) or Crowding (>3)
+              if (neighbors === 2 || neighbors === 3) {
+                gridB[idx] = Math.min(65535, age + 1);
+                pop++;
+              } else {
+                // Dies, leaving a warm brown soil stain
+                gridB[idx] = 0;
+                stains[idx] = Math.min(1.0, stains[idx] + 0.85);
+              }
+            } else {
+              // Reproduction (gentle company of exactly 3 blooms)
+              if (neighbors === 3) {
+                gridB[idx] = 1; // newborn sprout
+                pop++;
+              } else {
+                gridB[idx] = 0;
+              }
+            }
+          }
+        }
+
+        // Swap Uint16Array buffers
+        const tmp = gridA;
+        gridA = gridB;
+        gridB = tmp;
+
+        generation++;
+        population = pop;
+        updateCounters();
+      }
+
+      function updateCounters() {
+        genCountEl.textContent = generation.toLocaleString();
+        popCountEl.textContent = population.toLocaleString();
+      }
+
+      /* ==========================================================================
+         RENDER LOOP
+         - Soft decaying stains
+         - Additive "lighter" bloom compositing
+         - Hover cream ring
+         ========================================================================== */
+      function render(timestamp) {
+        requestAnimationFrame(render);
+
+        const dt = Math.min(timestamp - lastTime, 150);
+        lastTime = timestamp;
+
+        // Fixed-step simulation accumulation
+        if (isRunning) {
+          accumulator += dt;
+          while (accumulator >= stepDuration) {
+            stepSimulation();
+            accumulator -= stepDuration;
+          }
+        }
+
+        // Decay soil stains by 7% per frame (0.93 per ~16.6ms)
+        const decayFactor = Math.pow(0.93, dt / 16.667);
+        const total = cols * rows;
+        for (let i = 0; i < total; i++) {
+          if (stains[i] > 0.005) {
+            stains[i] *= decayFactor;
+            if (stains[i] < 0.005) stains[i] = 0;
+          }
+        }
+
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        ctx.clearRect(0, 0, width, height);
+
+        // 1. Draw decaying soil stains (source-over blending)
+        ctx.globalCompositeOperation = 'source-over';
+        const stHalf = stainSize / 2;
+        if (stainSprite) {
+          for (let y = 0; y < rows; y++) {
+            const yOffset = y * cols;
+            const py = (y + 0.5) * cellSize;
+            for (let x = 0; x < cols; x++) {
+              const idx = yOffset + x;
+              const stn = stains[idx];
+              if (stn > 0.01 && gridA[idx] === 0) {
+                ctx.globalAlpha = Math.min(1.0, stn * 0.95);
+                ctx.drawImage(stainSprite, (x + 0.5) * cellSize - stHalf, py - stHalf);
+              }
+            }
+          }
+          ctx.globalAlpha = 1.0;
+        }
+
+        // 2. Draw living blooms with additive 'lighter' compositing
+        ctx.globalCompositeOperation = 'lighter';
+        const spHalf = spriteSize / 2;
+
+        for (let y = 0; y < rows; y++) {
+          const yOffset = y * cols;
+          const py = (y + 0.5) * cellSize;
+          for (let x = 0; x < cols; x++) {
+            const age = gridA[yOffset + x];
+            if (age > 0) {
+              const spriteIdx = Math.min(46, age);
+              const sprite = sprites[spriteIdx];
+              if (sprite) {
+                const px = (x + 0.5) * cellSize;
+                ctx.drawImage(sprite, px - spHalf, py - spHalf);
+              }
+            }
+          }
+        }
+
+        // 3. Draw hover indicator: thin cream ring following hovered cell
+        ctx.globalCompositeOperation = 'source-over';
+        if (isPointerInside && hoverCol >= 0 && hoverCol < cols && hoverRow >= 0 && hoverRow < rows) {
+          const hx = (hoverCol + 0.5) * cellSize;
+          const hy = (hoverRow + 0.5) * cellSize;
+          const r = cellSize * 0.55;
+
+          ctx.save();
+          ctx.strokeStyle = 'rgba(245, 237, 224, 0.65)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(hx, hy, r, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Delicate corner ticks
+          const tick = r * 0.25;
+          ctx.strokeStyle = 'rgba(231, 185, 90, 0.5)';
+          ctx.beginPath();
+          ctx.moveTo(hx - r - tick, hy); ctx.lineTo(hx - r + 1, hy);
+          ctx.moveTo(hx + r - 1, hy); ctx.lineTo(hx + r + tick, hy);
+          ctx.moveTo(hx, hy - r - tick); ctx.lineTo(hx, hy - r + 1);
+          ctx.moveTo(hx, hy + r - 1); ctx.lineTo(hx, hy + r + tick);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      /* ==========================================================================
+         INTERACTION: CLICK TO TOGGLE, DRAG TO PAINT LIVING BLOOMS
+         ========================================================================== */
+      function getCellAt(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+        const clientY = e.clientY ?? (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+        const x = Math.floor((clientX - rect.left) / cellSize);
+        const y = Math.floor((clientY - rect.top) / cellSize);
+        return {
+          col: (x % cols + cols) % cols,
+          row: (y % rows + rows) % rows
+        };
+      }
+
+      function paintCell(c, r) {
+        if (c < 0 || c >= cols || r < 0 || r >= rows) return;
+        const idx = r * cols + c;
+        if (gridA[idx] === 0) {
+          gridA[idx] = 1;
+          population++;
+          updateCounters();
+        }
+      }
+
+      function toggleCell(c, r) {
+        if (c < 0 || c >= cols || r < 0 || r >= rows) return;
+        const idx = r * cols + c;
+        if (gridA[idx] === 0) {
+          gridA[idx] = 1;
+          population++;
+        } else {
+          gridA[idx] = 0;
+          stains[idx] = Math.min(1.0, stains[idx] + 0.85);
+          population = Math.max(0, population - 1);
+        }
+        updateCounters();
+      }
+
+      // Linear interpolation between consecutive pointer points for smooth brush painting
+      function interpolatePaint(c0, r0, c1, r1) {
+        const dx = Math.abs(c1 - c0);
+        const dy = Math.abs(r1 - r0);
+        const sx = c0 < c1 ? 1 : -1;
+        const sy = r0 < r1 ? 1 : -1;
+        let err = dx - dy;
+
+        let currX = c0;
+        let currY = r0;
+
+        while (true) {
+          paintCell((currX % cols + cols) % cols, (currY % rows + rows) % rows);
+          if (currX === c1 && currY === r1) break;
+          const e2 = 2 * err;
+          if (e2 > -dy) {
+            err -= dy;
+            currX += sx;
+          }
+          if (e2 < dx) {
+            err += dx;
+            currY += sy;
+          }
+        }
+      }
+
+      // Pointer event listeners
+      canvas.addEventListener('pointerdown', function (e) {
+        isPointerDown = true;
+        isDragging = false;
+        pointerDownX = e.clientX;
+        pointerDownY = e.clientY;
+
+        const { col, row } = getCellAt(e);
+        lastDrawnCol = col;
+        lastDrawnRow = row;
+      });
+
+      window.addEventListener('pointermove', function (e) {
+        const { col, row } = getCellAt(e);
+        hoverCol = col;
+        hoverRow = row;
+        isPointerInside = true;
+
+        if (isPointerDown) {
+          const dist = Math.hypot(e.clientX - pointerDownX, e.clientY - pointerDownY);
+          if (dist > 4) {
+            isDragging = true;
+          }
+          if (isDragging) {
+            interpolatePaint(lastDrawnCol, lastDrawnRow, col, row);
+            lastDrawnCol = col;
+            lastDrawnRow = row;
+          }
+        }
+      });
+
+      window.addEventListener('pointerup', function (e) {
+        if (isPointerDown) {
+          if (!isDragging) {
+            // Click to toggle
+            const { col, row } = getCellAt(e);
+            toggleCell(col, row);
+          }
+        }
+        isPointerDown = false;
+        isDragging = false;
+      });
+
+      canvas.addEventListener('pointerleave', function () {
+        isPointerInside = false;
+      });
+
+      /* ==========================================================================
+         BOTANICAL SEED PACKETS (PATTERNS)
+         Six historic patterns:
+           1. Gosper's glider gun (offset to upper left)
+           2. Pulsar
+           3. R-pentomino
+           4. Acorn
+           5. Wild garden (random 30%)
+           6. Diehard
+         ========================================================================== */
+      const GOSPER_GUN = [
+        [24, 0],
+        [22, 1], [24, 1],
+        [12, 2], [13, 2], [20, 2], [21, 2], [34, 2], [35, 2],
+        [11, 3], [15, 3], [20, 3], [21, 3], [34, 3], [35, 3],
+        [0, 4], [1, 4], [10, 4], [16, 4], [20, 4], [21, 4],
+        [0, 5], [1, 5], [10, 5], [14, 5], [16, 5], [17, 5], [22, 5], [24, 5],
+        [10, 6], [16, 6], [24, 6],
+        [11, 7], [15, 7],
+        [12, 8], [13, 8]
+      ];
+
+      const PULSAR = (function () {
+        const pts = [];
+        const rows = [0, 5, 7, 12];
+        const cols = [2, 3, 4, 8, 9, 10];
+        for (const r of rows) {
+          for (const c of cols) {
+            pts.push([c, r]);
+          }
+        }
+        for (const c of rows) {
+          for (const r of cols) {
+            pts.push([c, r]);
+          }
+        }
+        return pts;
+      })();
+
+      const R_PENTOMINO = [
+        [1, 0], [2, 0],
+        [0, 1], [1, 1],
+        [1, 2]
+      ];
+
+      const ACORN = [
+        [1, 0],
+        [3, 1],
+        [0, 2], [1, 2], [4, 2], [5, 2], [6, 2]
+      ];
+
+      const DIEHARD = [
+        [6, 0],
+        [0, 1], [1, 1],
+        [1, 2], [5, 2], [6, 2], [7, 2]
+      ];
+
+      function clearBed() {
+        gridA.fill(0);
+        gridB.fill(0);
+        stains.fill(0);
+        generation = 0;
+        population = 0;
+        updateCounters();
+      }
+
+      function stampSeed(seedType) {
+        clearBed();
+
+        if (seedType === 'wild') {
+          let pop = 0;
+          const total = cols * rows;
+          for (let i = 0; i < total; i++) {
+            if (Math.random() < 0.30) {
+              gridA[i] = 1 + Math.floor(Math.random() * 3);
+              pop++;
+            }
+          }
+          population = pop;
+        } else {
+          let coords = [];
+          let w = 0, h = 0;
+          let offsetUpperLeft = false;
+
+          if (seedType === 'gun') {
+            coords = GOSPER_GUN;
+            w = 36; h = 9;
+            offsetUpperLeft = true;
+          } else if (seedType === 'pulsar') {
+            coords = PULSAR;
+            w = 13; h = 13;
+          } else if (seedType === 'rpentomino') {
+            coords = R_PENTOMINO;
+            w = 3; h = 3;
+          } else if (seedType === 'acorn') {
+            coords = ACORN;
+            w = 7; h = 3;
+          } else if (seedType === 'diehard') {
+            coords = DIEHARD;
+            w = 8; h = 3;
+          }
+
+          let startX, startY;
+          if (offsetUpperLeft) {
+            startX = Math.max(3, Math.floor(cols * 0.12));
+            startY = Math.max(3, Math.floor(rows * 0.15));
+          } else {
+            startX = Math.floor((cols - w) / 2);
+            startY = Math.floor((rows - h) / 2);
+          }
+
+          let pop = 0;
+          for (const [x, y] of coords) {
+            const gx = (startX + x + cols) % cols;
+            const gy = (startY + y + rows) % rows;
+            gridA[gy * cols + gx] = 1;
+            pop++;
+          }
+          population = pop;
+        }
+
+        generation = 0;
+        updateCounters();
+
+        // Close drawer and start growth
+        closeSeedDrawer();
+        startGrowing();
+      }
+
+      /* ==========================================================================
+         DRAWER & UI CONTROLS
+         ========================================================================== */
+      function openSeedDrawer() {
+        seedDrawer.classList.add('is-open');
+        drawerBackdrop.classList.add('is-open');
+      }
+
+      function closeSeedDrawer() {
+        seedDrawer.classList.remove('is-open');
+        drawerBackdrop.classList.remove('is-open');
+      }
+
+      function toggleSeedDrawer() {
+        if (seedDrawer.classList.contains('is-open')) {
+          closeSeedDrawer();
+        } else {
+          openSeedDrawer();
+        }
+      }
+
+      function startGrowing() {
+        isRunning = true;
+        btnToggle.classList.add('is-growing');
+        toggleText.textContent = 'Pause';
+        playPauseIcon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+        accumulator = 0;
+        lastTime = performance.now();
+      }
+
+      function pauseGrowing() {
+        isRunning = false;
+        btnToggle.classList.remove('is-growing');
+        toggleText.textContent = 'Grow';
+        playPauseIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+      }
+
+      function toggleGrowth() {
+        if (isRunning) {
+          pauseGrowing();
+        } else {
+          startGrowing();
+        }
+      }
+
+      // Button handlers
+      btnToggle.addEventListener('click', toggleGrowth);
+
+      btnStep.addEventListener('click', function () {
+        pauseGrowing();
+        stepSimulation();
+      });
+
+      btnClear.addEventListener('click', function () {
+        clearBed();
+        pauseGrowing();
+      });
+
+      btnDrawer.addEventListener('click', toggleSeedDrawer);
+      drawerClose.addEventListener('click', closeSeedDrawer);
+      drawerBackdrop.addEventListener('click', closeSeedDrawer);
+
+      // Tempo slider handler
+      tempoSlider.addEventListener('input', function (e) {
+        tempo = parseInt(e.target.value, 10);
+        tempoDisplay.textContent = tempo + ' gen/s';
+        stepDuration = 1000 / tempo;
+      });
+
+      // Seed packets click events
+      document.querySelectorAll('.seed-packet').forEach(packet => {
+        packet.addEventListener('click', function () {
+          const seed = this.getAttribute('data-seed');
+          stampSeed(seed);
+        });
+      });
+
+      // Keyboard shortcuts
+      window.addEventListener('keydown', function (e) {
+        if (e.target.tagName === 'INPUT') return;
+
+        if (e.code === 'Space') {
+          e.preventDefault();
+          toggleGrowth();
+        } else if (e.code === 'Escape') {
+          closeSeedDrawer();
+        } else if (e.key === 's' || e.key === 'S') {
+          pauseGrowing();
+          stepSimulation();
+        } else if (e.key === 'c' || e.key === 'C') {
+          clearBed();
+          pauseGrowing();
+        }
+      });
+
+      // Window resize
+      window.addEventListener('resize', resizeGrid);
+
+      /* ==========================================================================
+         INITIALISATION
+         Plant Gosper's glider gun as default specimen & start
+         ========================================================================== */
+      resizeGrid();
+      stampSeed('gun');
+      requestAnimationFrame(render);
+
+    })();
+  </script>
+</body>
+</html>

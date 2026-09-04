@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>044 · Apiary Studio — Honeycomb Hexagonal Navigation</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; overflow:hidden; }
+  body {
+    font-family:'Iowan Old Style','Palatino','Palatino Linotype',Georgia,serif;
+    color:#F3E2BC;
+    background:
+      radial-gradient(130% 110% at 18% 8%, #4A2606 0%, #2A1604 52%, #150A02 100%);
+    perspective:1200px;
+    -webkit-user-select:none; user-select:none;
+  }
+
+  #sweep {
+    position:fixed; inset:-20%; z-index:2; pointer-events:none;
+    mix-blend-mode:screen; opacity:.9;
+    background:linear-gradient(115deg,
+      rgba(255,210,122,0) 0%, rgba(255,210,122,.16) 30%,
+      rgba(255,240,200,.28) 46%, rgba(255,210,122,.16) 62%, rgba(255,210,122,0) 100%);
+    transform:translateX(-60%);
+    animation:sweep 14s ease-in-out infinite alternate;
+  }
+  @keyframes sweep { from { transform:translateX(-55%) rotate(0.001deg); } to { transform:translateX(55%) rotate(0.001deg); } }
+
+  #comb {
+    position:fixed; inset:0; z-index:1;
+    transform-style:preserve-3d;
+    transition:opacity .7s ease, filter .7s ease;
+  }
+  body.open #comb { opacity:.22; filter:saturate(.5) brightness(.75); }
+
+  .hex {
+    position:absolute;
+    clip-path:polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    background:
+      linear-gradient(135deg, rgba(255,220,150,.14), rgba(255,220,150,0) 45%),
+      linear-gradient(160deg, #6B3A0A 0%, #522906 55%, #3D2005 100%);
+    transition:
+      transform .5s cubic-bezier(.2,.8,.2,1),
+      filter .5s cubic-bezier(.2,.8,.2,1),
+      opacity .5s ease;
+    will-change:transform, filter;
+  }
+  .hex::after {           /* inner wax rim */
+    content:""; position:absolute; inset:3px;
+    clip-path:polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    background:linear-gradient(160deg, rgba(255,205,120,.06), rgba(0,0,0,.22));
+    pointer-events:none;
+  }
+
+  .hex.nav {
+    cursor:pointer;
+    background:
+      radial-gradient(70% 60% at 50% 32%, rgba(255,240,205,.34), rgba(255,240,205,0) 70%),
+      linear-gradient(165deg, #F0A83A 0%, #D98C22 55%, #C47A18 100%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7%;
+    outline:none;
+  }
+  .hex.nav:hover, .hex.nav:focus-visible {
+    filter:brightness(1.22) saturate(1.15);
+  }
+  .hex.nav:focus-visible { box-shadow:0 0 0 3px rgba(255,240,200,.5); }
+  .hex.nav svg { width:20%; height:20%; stroke:#1C0F03; fill:none; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+  .hex.nav .lbl {
+    font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;
+    font-size:clamp(8px, calc(var(--hw) * 0.105), 13px);
+    letter-spacing:.22em; text-transform:uppercase; color:#1C0F03; font-weight:600;
+    transform:translateX(0.11em);   /* recentre tracked text */
+  }
+  body.open .hex.nav { pointer-events:none; }
+
+  /* ---------- brand ---------- */
+  #brand {
+    position:fixed; top:30px; left:36px; z-index:10; pointer-events:none;
+  }
+  #brand h1 { font-weight:500; font-size:clamp(24px,3vw,36px); color:#FBEFD3; letter-spacing:.01em; line-height:1.05; }
+  #brand h1 em { font-style:italic; color:#FFDD9E; }
+  #brand p {
+    font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;
+    font-size:9.5px; letter-spacing:.34em; text-transform:uppercase; color:#B98A3E; margin-top:8px;
+  }
+  #hint {
+    position:fixed; bottom:26px; left:0; right:0; text-align:center; z-index:10; pointer-events:none;
+    font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;
+    font-size:10px; letter-spacing:.4em; text-transform:uppercase; color:rgba(255,225,170,.45);
+    transition:opacity .5s ease;
+  }
+  body.open #hint { opacity:0; }
+
+  /* ---------- morphing content panel ---------- */
+  #panel {
+    position:fixed; z-index:20;
+    clip-path:polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    border-radius:0;
+    background:
+      linear-gradient(150deg, rgba(255,235,190,.06), rgba(255,235,190,0) 40%),
+      linear-gradient(165deg, #7A430C 0%, #5c2f06 55%, #3D1F04 100%);
+    box-shadow:0 40px 90px rgba(0,0,0,.6);
+    opacity:0; pointer-events:none;
+    transition:
+      left .7s cubic-bezier(.3,.75,.25,1), top .7s cubic-bezier(.3,.75,.25,1),
+      width .7s cubic-bezier(.3,.75,.25,1), height .7s cubic-bezier(.3,.75,.25,1),
+      clip-path .7s cubic-bezier(.3,.75,.25,1), border-radius .7s cubic-bezier(.3,.75,.25,1),
+      opacity .45s ease;
+    display:none;
+  }
+  #panel.open { opacity:1; pointer-events:auto; }
+  #panel .inner {
+    padding:44px 52px; height:100%; overflow:auto;
+    opacity:0; transform:translateY(16px);
+    transition:opacity .5s ease .35s, transform .5s ease .35s;
+  }
+  #panel.open .inner { opacity:1; transform:translateY(0); }
+  #panel .kicker {
+    font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;
+    font-size:10px; letter-spacing:.4em; text-transform:uppercase; color:#D9A94E; margin-bottom:14px;
+  }
+  #panel h2 {
+    font-weight:500; font-size:clamp(30px,4.6vw,64px); line-height:1.02; color:#FBF0D4; margin-bottom:18px;
+  }
+  #panel h2 em { font-style:italic; color:#FFDD9E; }
+  #panel p.body { font-size:15.5px; line-height:1.72; color:#E7D3A6; max-width:60ch; margin-bottom:12px; }
+  #panel .tags { margin-top:20px; display:flex; flex-wrap:wrap; gap:10px 22px; max-width:560px; }
+  #panel .tag {
+    font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:#EFD9A8;
+    display:flex; align-items:center; gap:8px;
+  }
+  #panel .tag::before {
+    content:""; width:9px; height:10px; flex:none;
+    clip-path:polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    background:linear-gradient(165deg, #F0A83A, #C47A18);
+  }
+  #closeBtn {
+    position:absolute; top:18px; right:18px; width:40px; height:40px; border-radius:50%;
+    border:1px solid rgba(255,225,170,.4); background:rgba(30,16,2,.4); color:#F3E2BC;
+    font-size:16px; cursor:pointer;
+    transition:transform .35s cubic-bezier(.2,.8,.2,1), border-color .3s ease, background .3s ease;
+  }
+  #closeBtn:hover, #closeBtn:focus-visible { transform:rotate(90deg); border-color:#FFDD9E; background:rgba(60,32,4,.6); outline:none; }
+
+  body.open .hex:not(.panelhex) { opacity:.35; }
+
+  @media (prefers-reduced-motion: reduce){
+    #sweep { animation:none; transform:translateX(-20%); }
+    .hex, #panel, #panel .inner, #closeBtn { transition-duration:.01s !important; }
+  }
+</style>
+</head>
+<body>
+  <div id="comb" aria-hidden="false"></div>
+  <div id="sweep" aria-hidden="true"></div>
+
+  <div id="brand">
+    <h1>Apiary <em>Studio</em></h1>
+    <p>design · honeycomb · est. mmxviii</p>
+  </div>
+  <div id="hint">choose a cell from the comb</div>
+
+  <div id="panel" role="dialog" aria-modal="false" aria-labelledby="panelTitle">
+    <div class="inner">
+      <div class="kicker" id="panelKicker"></div>
+      <h2 id="panelTitle"></h2>
+      <div id="panelBody"></div>
+      <div class="tags" id="panelTags"></div>
+    </div>
+    <button id="closeBtn" aria-label="Close panel">✕</button>
+  </div>
+
+<script>
+(function(){
+"use strict";
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+var comb = document.getElementById("comb");
+var body = document.body;
+var panel = document.getElementById("panel");
+var panelKicker = document.getElementById("panelKicker");
+var panelTitle = document.getElementById("panelTitle");
+var panelBody = document.getElementById("panelBody");
+var panelTags = document.getElementById("panelTags");
+var closeBtn = document.getElementById("closeBtn");
+var hint = document.getElementById("hint");
+
+/* ---------- content ---------- */
+var CONTENT = {
+  Work: { kicker:"Cell 01 · Notes from the comb", title:"Recent <em>work</em>",
+    body:["Twelve identity systems in the last three years, each grown from a single typographic seed. We design for presses, screens and signage with equal care — a poster should survive a rainy bus stop, a website should survive a Monday morning.",
+          "Our current commissions include a botanical archive, a chamber orchestra's season, and a small press that prints only in two colours."],
+    tags:["identity","print","editorial","signage","type"] },
+  Studio: { kicker:"Cell 02 · Notes from the comb", title:"The <em>studio</em>",
+    body:["Apiary is nine people in a converted honey warehouse: four designers, two developers, a typographer, a producer and a workshop dog. We keep the loft cold, the coffee strong and the meetings short.",
+          "Everything we ship passes through the proofing table by the north window, where the light is honest and unflattering."],
+    tags:["nine people","one loft","est. 2018","two colours"] },
+  Journal: { kicker:"Cell 03 · Notes from the comb", title:"From the <em>journal</em>",
+    body:["Essays on margins, misprints and the tyranny of the rectangle. The latest entry asks why spreadsheets are the most honest grids we ever build.",
+          "New entries appear on the first Sunday of each month, set in the same serif you are reading now."],
+    tags:["essays","typography","criticism","sundays"] },
+  Lab: { kicker:"Cell 04 · Notes from the comb", title:"Open <em>lab</em>",
+    body:["Experiments we conduct without a client in the room: generative honeycomb tessellations, variable-font weather gauges, a risograph simulator that runs in the browser.",
+          "All lab work is released under open licences and documented well enough to be repaired."],
+    tags:["generative","tools","open source","risograph"] },
+  People: { kicker:"Cell 05 · Notes from the comb", title:"The <em>keepers</em>",
+    body:["Ilse Varga, creative director, came from cartography. Tomasz Wierzbicki builds our websites by hand and distrusts frameworks. Juno Castellanos keeps the archive and writes the journal.",
+          "We hire one apprentice a year, taught at the proofing table."],
+    tags:["directors","developers","apprentices","the dog"] },
+  Contact: { kicker:"Cell 06 · Notes from the comb", title:"Write to the <em>hive</em>",
+    body:["For commissions: studio@apiary.example. For the journal: journal@apiary.example. The workshop bell rings at 9 and 17 hours; visitors are welcome between the bells.",
+          "Address: Warehouse 7, Fenwick Wharf. We answer every letter within one working day, on paper if you write first."],
+    tags:["studio@apiary.example","+00 20 7946 0018","warehouse 7"] }
+};
+
+/* ---------- hex grid ---------- */
+var hexes = [];
+var navHexes = [];
+var hexW = 100, hexH = 115;
+var combRect = { w:0, h:0 };
+
+function hexWidthForViewport(){
+  var w = window.innerWidth;
+  if (w < 640) return 64;
+  if (w < 1024) return 82;
+  if (w < 1600) return 100;
+  if (w < 2560) return 132;
+  return 180;
+}
+
+var ICONS = {
+  Work:'<svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="1.5"/><path d="M9 8V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></svg>',
+  Studio:'<svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7M6 10v9h12v-9M10 19v-5h4v5"/></svg>',
+  Journal:'<svg viewBox="0 0 24 24"><path d="M5 4h11a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V4z"/><path d="M5 4v14M9 8h6M9 12h6"/></svg>',
+  Lab:'<svg viewBox="0 0 24 24"><path d="M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M8 3h8M7.5 15h9"/></svg>',
+  People:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M4 20c0-3 2.4-5 5-5s5 2 5 5M14.5 20c0-2.4 1.3-4 3-4s3 1.6 3 4"/></svg>',
+  Contact:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 7l9 6 9-6"/></svg>'
+};
+
+function buildGrid(){
+  comb.innerHTML = "";
+  hexes = []; navHexes = [];
+  hexW = hexWidthForViewport();
+  hexH = Math.round(hexW * 1.1547);
+  var stepX = hexW + 4;                 // 4px gap
+  var stepY = Math.round(hexH * 0.75) + 3;  // 3px vertical gap
+  var cols = Math.ceil(window.innerWidth / stepX) + 2;
+  var rows = Math.ceil(window.innerHeight / stepY) + 2;
+  var offX = -hexW / 2, offY = -hexH / 2;
+
+  var NAV = ["Work", "Studio", "Journal", "Lab", "People", "Contact"];
+  var cRow = Math.floor(rows / 2), cCol = Math.floor(cols / 2);
+  // six ring neighbours (odd-r, even row directions)
+  var ring = [[+1,0],[0,-1],[-1,-1],[-1,0],[-1,+1],[0,+1]];
+
+  for (var r = 0; r < rows; r++){
+    for (var c = 0; c < cols; c++){
+      var x = offX + c * stepX + (r % 2 ? stepX / 2 : 0);
+      var y = offY + r * stepY;
+      var el = document.createElement("div");
+      el.className = "hex";
+      el.style.width = hexW + "px";
+      el.style.height = hexH + "px";
+      el.style.left = x + "px";
+      el.style.top = y + "px";
+      el.dataset.cx = (x + hexW / 2);
+      el.dataset.cy = (y + hexH / 2);
+      el.dataset.nav = "";
+      comb.appendChild(el);
+      hexes.push(el);
+    }
+  }
+  // turn six ring hexes around the centre into navigation
+  var idx = 0;
+  for (var k = 0; k < ring.length; k++){
+    var rr = cRow + ring[k][1], cc = cCol + ring[k][0];
+    if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) continue;
+    var target = null;
+    for (var i = 0; i < hexes.length; i++){
+      var hx = hexes[i];
+      if (+hx.dataset.cy > (offY + rr * stepY) - 2 && +hx.dataset.cy < (offY + rr * stepY) + 2 &&
+          Math.abs(+hx.dataset.cx - (offX + cc * stepX + (rr % 2 ? stepX/2 : 0) + hexW/2)) < 2){
+        target = hx; break;
+      }
+    }
+    if (!target) continue;
+    var name = NAV[idx++];
+    target.className = "hex nav";
+    target.dataset.nav = name;
+    target.setAttribute("role", "button");
+    target.setAttribute("tabindex", "0");
+    target.setAttribute("aria-label", name);
+    target.innerHTML = ICONS[name] + '<span class="lbl">' + name + "</span>";
+    target.style.zIndex = 3;
+    navHexes.push(target);
+    target.addEventListener("click", function(e){ openPanel(e.currentTarget); });
+    target.addEventListener("keydown", function(e){
+      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openPanel(e.currentTarget); }
+    });
+  }
+  combRect.w = window.innerWidth; combRect.h = window.innerHeight;
+}
+buildGrid();
+
+var resizeTimer;
+window.addEventListener("resize", function(){
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(function(){ buildGrid(); if (activeHex) closePanelInstant(); }, 120);
+});
+
+/* ---------- pointer ripple + tilt ---------- */
+var pointer = { x:-9999, y:-9999 };
+var lastMove = performance.now();
+var phantom = false;
+var wanderT = 0;
+
+function applyPointer(px, py){
+  var radius = hexW * 3.2;
+  for (var i = 0; i < hexes.length; i++){
+    var hx = hexes[i];
+    var dx = +hx.dataset.cx - px, dy = +hx.dataset.cy - py;
+    var d = Math.sqrt(dx*dx + dy*dy);
+    var f = d < radius ? 1 - d / radius : 0;
+    f = f * f * (3 - 2 * f);     // smoothstep falloff
+    if (f > 0.001){
+      var lift = (34 * f).toFixed(2);
+      var s = (0.96 + 0.06 * f).toFixed(4);
+      var rotY = (-dx / radius * 14 * f).toFixed(2);
+      var rotX = ( dy / radius * 14 * f).toFixed(2);
+      hx.style.transform = "translateZ(" + lift + "px) scale(" + s + ") rotateX(" + rotX + "deg) rotateY(" + rotY + "deg)";
+      hx.style.filter = "brightness(" + (1 + 0.55 * f).toFixed(3) + ") saturate(" + (1 + 0.3 * f).toFixed(3) + ")";
+    } else if (hx.style.transform){
+      hx.style.transform = "";
+      hx.style.filter = "";
+    }
+  }
+}
+
+window.addEventListener("pointermove", function(e){
+  phantom = false;
+  lastMove = performance.now();
+  pointer.x = e.clientX; pointer.y = e.clientY;
+  if (!reduced) requestPointerUpdate();
+});
+function requestPointerUpdate(){
+  if (body.classList.contains("open")) return;
+  applyPointer(pointer.x, pointer.y);
+}
+
+/* phantom cursor when idle 4s */
+function idleLoop(now){
+  if (!reduced && !body.classList.contains("open")){
+    if (performance.now() - lastMove > 4000){
+      if (!phantom){ phantom = true; wanderT = 0; }
+      wanderT += 0.008;
+      var px = window.innerWidth / 2 + Math.sin(wanderT * 1.0) * window.innerWidth * 0.28;
+      var py = window.innerHeight / 2 + Math.sin(wanderT * 1.7 + 1.2) * window.innerHeight * 0.24;
+      applyPointer(px, py);
+    } else if (phantom){
+      phantom = false;
+    }
+  }
+  requestAnimationFrame(idleLoop);
+}
+requestAnimationFrame(idleLoop);
+
+/* ---------- panel morph ---------- */
+var activeHex = null;
+function openPanel(hex){
+  if (body.classList.contains("open")) return;
+  var name = hex.dataset.nav;
+  var data = CONTENT[name];
+  panelKicker.textContent = data.kicker;
+  panelTitle.innerHTML = data.title;
+  panelBody.innerHTML = data.body.map(function(p){ return '<p class="body">' + p + "</p>"; }).join("");
+  panelTags.innerHTML = data.tags.map(function(t){ return '<span class="tag">' + t + "</span>"; }).join("");
+
+  var r = hex.getBoundingClientRect();
+  panel.style.display = "block";
+  // start exactly over the hex, hexagonal
+  panel.style.left = r.left + "px";
+  panel.style.top = r.top + "px";
+  panel.style.width = r.width + "px";
+  panel.style.height = r.height + "px";
+  panel.style.clipPath = "polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)";
+  panel.style.borderRadius = "0";
+  panel.style.opacity = "0";
+  void panel.offsetWidth;   // reflow so the start state commits
+  // grow to a centred card
+  var cw = Math.min(880, window.innerWidth - 40);
+  var ch = Math.min(620, window.innerHeight - 40);
+  panel.style.left = ((window.innerWidth - cw) / 2) + "px";
+  panel.style.top = ((window.innerHeight - ch) / 2) + "px";
+  panel.style.width = cw + "px";
+  panel.style.height = ch + "px";
+  panel.style.clipPath = "polygon(0% 0%, 100% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%)";
+  panel.style.borderRadius = "24px";
+  panel.style.opacity = "1";
+  panel.classList.add("open");
+  hex.style.opacity = "0";
+  activeHex = hex;
+  body.classList.add("open");
+  hint.style.opacity = "0";
+  closeBtn.focus();
+}
+function closePanel(){
+  if (!activeHex) return;
+  var hex = activeHex;
+  var r = hex.getBoundingClientRect();
+  panel.classList.remove("open");
+  panel.style.left = r.left + "px";
+  panel.style.top = r.top + "px";
+  panel.style.width = r.width + "px";
+  panel.style.height = r.height + "px";
+  panel.style.clipPath = "polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)";
+  panel.style.borderRadius = "0";
+  panel.style.opacity = "0";
+  body.classList.remove("open");
+  hint.style.opacity = "";
+  setTimeout(function(){
+    hex.style.opacity = "";
+    panel.style.display = "none";
+  }, reduced ? 20 : 720);
+  activeHex = null;
+}
+function closePanelInstant(){
+  if (activeHex){ activeHex.style.opacity = ""; activeHex = null; }
+  panel.classList.remove("open");
+  panel.style.display = "none";
+  body.classList.remove("open");
+}
+closeBtn.addEventListener("click", closePanel);
+window.addEventListener("keydown", function(e){
+  if (e.key === "Escape") closePanel();
+});
+})();
+</script>
+</body>
+</html>

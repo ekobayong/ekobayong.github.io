@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THERMA-1 — Thermal Vision Heatmap</title>
+<style>
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  min-height:100vh;
+  background:radial-gradient(120% 100% at 50% 30%, #16181c, #07080a);
+  color:#7c8378;
+  font-family:ui-monospace,Menlo,Consolas,"Courier New",monospace;
+  text-transform:uppercase; letter-spacing:.12em;
+  padding:clamp(14px,3vw,40px);
+}
+.wrap{max-width:1500px; margin:0 auto;}
+h1{font-size:15px; color:#d7dbd2; margin-bottom:20px; font-weight:400;}
+h1 b{color:#ffb347; font-weight:400;}
+/* bezel */
+.bezel{
+  background:linear-gradient(160deg,#2b2e34,#1a1c20 55%,#0c0d10);
+  border-radius:26px; padding:clamp(16px,2.4vw,30px);
+  box-shadow:0 30px 70px -20px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.07);
+  position:relative;
+}
+.bezel::after{content:""; position:absolute; inset:8px; border-radius:20px; border:1px solid rgba(255,255,255,.06); pointer-events:none;}
+.screw{
+  position:absolute; width:9px; height:9px; border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, #4a4e56, #14161a 70%);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.6), 0 1px 1px rgba(255,255,255,.08);
+}
+.screw::after{content:""; position:absolute; left:50%; top:1px; bottom:1px; width:1px; background:rgba(0,0,0,.7); transform:translateX(-50%) rotate(40deg);}
+.screw.tl{top:10px; left:10px;} .screw.tr{top:10px; right:10px;}
+.screw.bl{bottom:10px; left:10px;} .screw.br{bottom:10px; right:10px;}
+.viewport{
+  position:relative; border-radius:8px; overflow:hidden;
+  border:1px solid rgba(255,255,255,.08);
+  box-shadow:inset 0 0 40px rgba(0,0,0,.6);
+}
+#stage{display:block; width:100%; aspect-ratio:16/9; cursor:crosshair; touch-action:none;}
+/* controls */
+.strip{
+  display:flex; gap:clamp(14px,2.5vw,34px); flex-wrap:wrap; align-items:flex-end;
+  background:linear-gradient(#1e2126,#141619); border:1px solid rgba(255,255,255,.07);
+  border-radius:14px; padding:18px 22px; margin-top:20px;
+}
+.grp label{display:block; font-size:10px; color:#7c8378; margin-bottom:8px;}
+.grp output{color:#d7dbd2;}
+input[type=range]{
+  -webkit-appearance:none; appearance:none; width:150px; height:4px; background:#2a2d33; border-radius:2px;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; width:15px; height:15px; border-radius:50%;
+  background:#ffb347; box-shadow:0 0 10px rgba(255,179,71,.8); cursor:pointer;
+}
+input[type=range]::-moz-range-thumb{
+  width:14px; height:14px; border-radius:50%; background:#ffb347; border:0;
+  box-shadow:0 0 10px rgba(255,179,71,.8); cursor:pointer;
+}
+.pals{display:flex; gap:8px;}
+.pal{
+  border:1px solid rgba(255,255,255,.14); background:#191b1f; cursor:pointer; padding:5px;
+  display:grid; gap:5px; justify-items:center; color:#7c8378; font:inherit; font-size:9px; letter-spacing:.14em;
+  text-transform:uppercase; border-radius:6px; transition:border-color .25s;
+}
+.pal i{width:64px; height:12px; border-radius:3px; display:block;}
+.pal[aria-pressed="true"]{border-color:#ffb347; color:#d7dbd2;}
+.ibtn{
+  background:#1c1e23; border:1px solid rgba(255,255,255,.16); color:#d7dbd2; font:inherit;
+  font-size:10px; letter-spacing:.14em; text-transform:uppercase; padding:11px 16px; border-radius:7px;
+  cursor:pointer; transition:border-color .25s, color .25s;
+}
+.ibtn:hover{border-color:#ffb347; color:#ffb347;}
+.note{margin-top:16px; font-size:9px; color:#565c52;}
+@media (prefers-reduced-motion:reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><b>THERMA-1</b> — longwave infrared · pointer paints heat · click drops an ember</h1>
+  <div class="bezel">
+    <span class="screw tl"></span><span class="screw tr"></span><span class="screw bl"></span><span class="screw br"></span>
+    <div class="viewport">
+      <canvas id="stage"></canvas>
+    </div>
+  </div>
+
+  <div class="strip">
+    <div class="grp">
+      <label>Palette</label>
+      <div class="pals">
+        <button class="pal" id="palIron" aria-pressed="true"><i></i>Iron</button>
+        <button class="pal" id="palRainbow" aria-pressed="false"><i></i>Rainbow</button>
+        <button class="pal" id="palArctic" aria-pressed="false"><i></i>Arctic</button>
+        <button class="pal" id="palGray" aria-pressed="false"><i></i>Gray</button>
+      </div>
+    </div>
+    <div class="grp"><label>Brush <output id="oBrush">6</output></label>
+      <input type="range" id="sBrush" min="2" max="14" value="6"></div>
+    <div class="grp"><label>Diffusion <output id="oDiff">0.08</output></label>
+      <input type="range" id="sDiff" min="20" max="240" value="80"></div>
+    <div class="grp"><label>Cooling <output id="oCool">0.990</output></label>
+      <input type="range" id="sCool" min="950" max="999" value="990"></div>
+    <div class="grp"><label>Ghosts <output id="oGhost">3</output></label>
+      <input type="range" id="sGhost" min="0" max="8" value="3"></div>
+    <div class="grp" style="display:flex; gap:10px;">
+      <button class="ibtn" id="btnEmber">Drop ember</button>
+      <button class="ibtn" id="btnReset">Reset</button>
+    </div>
+  </div>
+  <p class="note">keys 1–4 switch palettes · emissivity ε 0.95 · auto colour span</p>
+</div>
+
+<script>
+(function(){
+"use strict";
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+var FW = 160, FH = 90, AMBIENT = 21;
+var field = new Float32Array(FW*FH);
+var diff = 0.08, cooling = 0.990, brushR = 6, ghostCount = 3;
+var palName = "IRON", palettes = {}, lut = null;
+var stage = document.getElementById("stage");
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+var vw = 0, vh = 0, ctx = stage.getContext("2d");
+var small = document.createElement("canvas");
+small.width = FW; small.height = FH;
+var sctx = small.getContext("2d");
+
+/* ---------------- palettes ---------------- */
+function hex(c){ return [parseInt(c.slice(1,3),16), parseInt(c.slice(3,5),16), parseInt(c.slice(5,7),16)]; }
+function buildLUT(anchors){
+  var lutArr = new Uint8Array(256*3);
+  var n = anchors.length - 1;
+  for (var i = 0; i < 256; i++){
+    var f = i/255 * n, k = Math.min(n-1, Math.floor(f)), t = f - k;
+    var a = anchors[k][1], b = anchors[k+1][1];
+    lutArr[i*3]   = a[0] + (b[0]-a[0])*t;
+    lutArr[i*3+1] = a[1] + (b[1]-a[1])*t;
+    lutArr[i*3+2] = a[2] + (b[2]-a[2])*t;
+  }
+  return lutArr;
+}
+function anch(list){ return list.map(function(p){ return [p[0], hex(p[1])]; }); }
+palettes.IRON = buildLUT(anch([[0,"#000000"],[.18,"#14003c"],[.34,"#78008c"],[.5,"#d22832"],[.68,"#fa8214"],[.84,"#ffdc3c"],[1,"#ffffff"]]));
+palettes.RAINBOW = buildLUT(anch([[0,"#000000"],[.2,"#0a1a5e"],[.4,"#1a5cd0"],[.6,"#22b04a"],[.78,"#e8d020"],[.9,"#f07818"],[1,"#ffffff"]]));
+palettes.ARCTIC = buildLUT(anch([[0,"#080a14"],[.3,"#143c78"],[.62,"#46a0dc"],[.86,"#beebfa"],[1,"#ffffff"]]));
+palettes.GRAY = buildLUT(anch([[0,"#000000"],[1,"#ffffff"]]));
+lut = palettes.IRON;
+
+/* swatch strips */
+[["palIron", palettes.IRON],["palRainbow", palettes.RAINBOW],["palArctic", palettes.ARCTIC],["palGray", palettes.GRAY]]
+.forEach(function(p){
+  var stops = [];
+  for (var i = 0; i <= 6; i++){
+    var j = Math.min(255, i/6*255|0)*3;
+    stops.push("rgb(" + p[1][j] + "," + p[1][j+1] + "," + p[1][j+2] + ") " + (i/6*100) + "%");
+  }
+  document.querySelector("#" + p[0] + " i").style.background = "linear-gradient(90deg," + stops.join(",") + ")";
+});
+
+function setPal(name){
+  palName = name; lut = palettes[name];
+  ["Iron","Rainbow","Arctic","Gray"].forEach(function(p){
+    document.getElementById("pal" + p).setAttribute("aria-pressed", String(p === name));
+  });
+}
+document.getElementById("palIron").onclick = function(){ setPal("IRON"); };
+document.getElementById("palRainbow").onclick = function(){ setPal("RAINBOW"); };
+document.getElementById("palArctic").onclick = function(){ setPal("ARCTIC"); };
+document.getElementById("palGray").onclick = function(){ setPal("GRAY"); };
+document.addEventListener("keydown", function(e){
+  if (e.target.tagName === "INPUT") return;
+  var m = {"1":"IRON","2":"RAINBOW","3":"ARCTIC","4":"GRAY"};
+  if (m[e.key]) setPal(m[e.key]);
+});
+
+/* ---------------- ghosts & embers ---------------- */
+var ghosts = [], embers = [];
+function spawnGhost(anywhere){
+  return {
+    x: anywhere ? Math.random()*FW : (Math.random() < 0.5 ? -14 : FW + 14),
+    y: 14 + Math.random()*(FH-30),
+    v: 0.14 + Math.random()*0.22,
+    phase: Math.random()*Math.PI*2,
+    bob: 0.4 + Math.random()*0.6,
+    foot: 0
+  };
+}
+for (var gi = 0; gi < 8; gi++) ghosts.push(spawnGhost(true));
+function stepGhosts(){
+  for (var i = 0; i < ghostCount; i++){
+    var g = ghosts[i];
+    g.x += g.v;
+    g.phase += 0.03;
+    g.foot = (g.x * 0.5) % 2 < 1 ? 0 : 1;
+    if (g.x > FW + 14 || g.x < -14) ghosts[i] = spawnGhost(false);
+  }
+}
+function blob(cx, cy, r, heat){
+  var r2 = r*r;
+  var x0 = Math.max(0, cx - r|0), x1 = Math.min(FW-1, cx + r|0);
+  var y0 = Math.max(0, cy - r|0), y1 = Math.min(FH-1, cy + r|0);
+  for (var y = y0; y <= y1; y++)
+    for (var x = x0; x <= x1; x++){
+      var d2 = (x-cx)*(x-cx) + (y-cy)*(y-cy);
+      if (d2 < r2*4){
+        var f = Math.exp(-d2/(r2*0.7));
+        field[y*FW+x] += heat * f;
+      }
+    }
+}
+
+/* ---------------- sim ---------------- */
+var tmp = new Float32Array(FW*FH);
+function step(){
+  var k = diff * 0.25;
+  for (var y = 0; y < FH; y++){
+    for (var x = 0; x < FW; x++){
+      var i = y*FW + x;
+      var l = x > 0 ? field[i-1] : field[i];
+      var r = x < FW-1 ? field[i+1] : field[i];
+      var u = y > 0 ? field[i-FW] : field[i];
+      var dn = y < FH-1 ? field[i+FW] : field[i];
+      var lap = l + r + u + dn - 4*field[i];
+      tmp[i] = field[i] + lap * k;
+    }
+  }
+  for (var j = 0; j < FW*FH; j++){
+    field[j] = AMBIENT + (tmp[j] - AMBIENT) * cooling;
+  }
+  stepGhosts();
+  for (var gi = 0; gi < ghostCount; gi++){
+    var g = ghosts[gi];
+    var by = g.y + Math.sin(g.phase) * 2.2 * g.bob;
+    blob(g.x, by - 3, 2.1, 26);            // head
+    blob(g.x, by + 1.5, 3.1, 30);          // torso
+    var fx = g.x + (g.foot ? 2.5 : -2.5);  // alternating footfalls
+    blob(fx, by + 7, 1.5, 20);
+  }
+  for (var e = embers.length - 1; e >= 0; e--){
+    var em = embers[e];
+    em.t += 1/84;
+    var f = Math.min(1, em.t / 1.4);
+    blob(em.x, em.y, 2 + 9*f, 1600 * (1 - f) / (2 + 9*f));
+    if (em.t > 1.4) embers.splice(e, 1);
+  }
+}
+
+/* ---------------- paint input ---------------- */
+var painting = false;
+function paintAt(e){
+  var r = stage.getBoundingClientRect();
+  var fx = (e.clientX - r.left) / r.width * FW;
+  var fy = (e.clientY - r.top) / r.height * FH;
+  blob(fx, fy, brushR, 90);
+}
+stage.addEventListener("pointerdown", function(e){
+  painting = true;
+  stage.setPointerCapture(e.pointerId);
+  var r = stage.getBoundingClientRect();
+  var fx = (e.clientX - r.left)/r.width*FW, fy = (e.clientY - r.top)/r.height*FH;
+  embers.push({x:fx, y:fy, t:0});
+});
+stage.addEventListener("pointermove", function(e){ if (painting) paintAt(e); });
+stage.addEventListener("pointerup", function(){ painting = false; });
+
+/* ---------------- render ---------------- */
+var img = sctx.createImageData(FW, FH);
+var tminD = 21, tmaxD = 21;
+var hot = {x:FW/2, y:FH/2, dx:FW/2, dy:FH/2}, cold = {x:FW/2, y:FH/2, dx:FW/2, dy:FH/2};
+var startTime = Date.now();
+var frame = 0, lastFpsT = performance.now(), fps = 0;
+
+function resize(){
+  var r = stage.getBoundingClientRect();
+  vw = Math.round(r.width); vh = Math.round(r.height);
+  stage.width = vw * dpr; stage.height = vh * dpr;
+}
+addEventListener("resize", resize);
+
+function render(){
+  var d = img.data;
+  var mn = Infinity, mx = -Infinity, hx = FW/2, hy = FH/2, cx = FW/2, cy = FH/2, mnV = Infinity, mxV = -Infinity;
+  for (var i = 0; i < FW*FH; i++){
+    var v = field[i];
+    if (v < mn) mn = v;
+    if (v > mx) mx = v;
+    if (v > mxV){ mxV = v; hx = i % FW; hy = (i / FW)|0; }
+    if (v < mnV){ mnV = v; cx = i % FW; cy = (i / FW)|0; }
+  }
+  var span = mx - mn;
+  if (span < 10){ var mid = (mx + mn)/2; mn = mid - 5; mx = mid + 5; }
+  for (var j = 0; j < FW*FH; j++){
+    var idx = Math.max(0, Math.min(255, ((field[j] - mn) / (mx - mn) * 255)|0)) * 3;
+    var n = (Math.random() - 0.5) * 4; // bolometer grain
+    d[j*4]   = lut[idx] + n;
+    d[j*4+1] = lut[idx+1] + n;
+    d[j*4+2] = lut[idx+2] + n;
+    d[j*4+3] = 255;
+  }
+  sctx.putImageData(img, 0, 0);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(small, 0, 0, vw, vh);
+  // scanlines
+  ctx.fillStyle = "rgba(0,0,0,.10)";
+  for (var sy = 0; sy < vh; sy += 3) ctx.fillRect(0, sy, vw, 1);
+  // vignette
+  var vg = ctx.createRadialGradient(vw/2, vh/2, vh*0.4, vw/2, vh/2, vh*0.95);
+  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.42)");
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, vw, vh);
+  drawHUD(mn, mx, hx, hy, cx, cy, mxV, mnV);
+}
+
+function monospace(px){ return "700 " + px + "px ui-monospace, Menlo, Consolas, monospace"; }
+function shadowText(txt, x, y, size, color, align){
+  ctx.font = monospace(size);
+  ctx.textAlign = align || "left";
+  ctx.fillStyle = "rgba(0,0,0,.75)";
+  ctx.fillText(txt, x+1, y+1);
+  ctx.fillStyle = color;
+  ctx.fillText(txt, x, y);
+}
+var batLevel = 1, lastBat = Date.now();
+var emEps = 0.95;
+function drawHUD(mn, mx, hx, hy, cx, cy, maxV, minV){
+  var t = Date.now() - startTime;
+  var pad = Math.max(14, vw*0.02);
+  var lineH = 16, fs = Math.max(10, Math.min(13, vw*0.011));
+  // REC + elapsed, ISO date, palette
+  var blinkOn = reduced ? true : (Date.now() % 1000 < 700);
+  if (blinkOn){ ctx.fillStyle = "#e4002b"; ctx.beginPath(); ctx.arc(pad+4, pad+5, 4.5, 0, Math.PI*2); ctx.fill(); }
+  var el = (t/1000)|0;
+  shadowText("REC " + String((el/60)|0).padStart(2,"0") + ":" + String(el%60).padStart(2,"0"),
+    pad+14, pad+9, fs, "#ff9a9a");
+  shadowText(new Date().toISOString().replace("T"," ").slice(0,19), pad, pad + lineH + 6, fs, "#d7dbd2");
+  shadowText("PAL " + palName, pad, pad + lineH*2 + 6, fs, "#d7dbd2");
+  // emissivity, range, fps
+  var xs = vw - pad;
+  emEps = 0.95 + Math.sin(Date.now()*0.00007)*0.003;
+  shadowText("ε " + emEps.toFixed(3), xs, pad+9, fs, "#d7dbd2", "right");
+  shadowText("RNG " + mn.toFixed(1) + "…" + mx.toFixed(1) + " °C", xs, pad+lineH+6, fs, "#d7dbd2", "right");
+  shadowText(fps.toFixed(0) + " FPS", xs, pad+lineH*2+6, fs, "#d7dbd2", "right");
+  // battery
+  if (Date.now() - lastBat > 4000){ batLevel = Math.max(0, batLevel - 0.004); lastBat = Date.now(); }
+  var bw = 26, bh = 12, bx = xs - bw - 4, by = pad + lineH*3 + 2;
+  ctx.strokeStyle = "rgba(255,255,255,.7)"; ctx.lineWidth = 1;
+  ctx.strokeRect(bx, by, bw, bh);
+  ctx.fillStyle = "rgba(255,255,255,.7)";
+  ctx.fillRect(bx + bw + 1, by + bh/2 - 2, 2, 4);
+  ctx.fillStyle = batLevel < 0.3 ? "#e4002b" : "#9adf6a";
+  ctx.fillRect(bx+1.5, by+1.5, (bw-3) * batLevel, bh-3);
+  // bottom-left zoom/focus + ghost count
+  shadowText("ZOOM 1.0× · FOCUS AUTO", pad, vh - pad - lineH, fs, "#d7dbd2");
+  shadowText("GHOSTS " + ghostCount, pad, vh - pad, fs, "#d7dbd2");
+  // MAX / MIN bottom right
+  shadowText("MAX ▲ " + maxV.toFixed(1) + " °C", xs, vh - pad - lineH, fs, "#d7dbd2", "right");
+  shadowText("MIN ▼ " + minV.toFixed(1) + " °C", xs, vh - pad, fs, "#d7dbd2", "right");
+  // crosshair
+  var cxx = vw/2, cyy = vh/2, cr = Math.min(vw,vh)*0.06;
+  ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 1.4;
+  ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.arc(cxx, cyy, cr, 0, Math.PI*2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(cxx - cr - 8, cyy); ctx.lineTo(cxx - cr + 2, cyy);
+  ctx.moveTo(cxx + cr - 2, cyy); ctx.lineTo(cxx + cr + 8, cyy);
+  ctx.moveTo(cxx, cyy - cr - 8); ctx.lineTo(cxx, cyy - cr + 2);
+  ctx.moveTo(cxx, cyy + cr - 2); ctx.lineTo(cxx, cyy + cr + 8);
+  ctx.stroke();
+  var centreV = field[((cyy/vh*FH)|0) * FW + ((cxx/vw*FW)|0)];
+  shadowText(centreV.toFixed(1) + " °C", cxx + cr + 12, cyy + 4, fs + 2, "#ffffff");
+  // hottest / coldest markers (eased)
+  var ex = reduced ? 1 : 0.12;
+  hot.dx += (hx - hot.dx) * ex; hot.dy += (hy - hot.dy) * ex;
+  cold.dx += (cx - cold.dx) * ex; cold.dy += (cy - cold.dy) * ex;
+  drawMarker(hot.dx/FW*vw, hot.dy/FH*vh, "#ffd7a1", "▲ " + maxV.toFixed(1), 1);
+  drawMarker(cold.dx/FW*vw, cold.dy/FH*vh, "#a9c4ff", "▼ " + minV.toFixed(1), -1);
+  // legend bar on right
+  var lw = 10, lh = vh*0.55, lx = vw - pad - lw - 24, ly = (vh - lh)/2;
+  for (var y = 0; y < lh; y++){
+    var idx = ((1 - y/lh) * 255 | 0) * 3;
+    ctx.fillStyle = "rgb(" + (lut[idx]|0) + "," + (lut[idx+1]|0) + "," + (lut[idx+2]|0) + ")";
+    ctx.fillRect(lx, ly + y, lw, 1);
+  }
+  ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 1;
+  ctx.strokeRect(lx, ly, lw, lh);
+  [150,108,65,23,-20].forEach(function(tv, i){
+    var ty = ly + (i/4) * lh;
+    ctx.beginPath(); ctx.moveTo(lx + lw, ty); ctx.lineTo(lx + lw + 4, ty); ctx.stroke();
+    shadowText(tv + "", lx + lw + 7, ty + 3, fs - 2, "#d7dbd2");
+  });
+  // corner brackets
+  ctx.strokeStyle = "rgba(255,255,255,.6)"; ctx.lineWidth = 1.6;
+  var bl = Math.min(vw,vh)*0.05, m2 = pad*0.7;
+  [[m2,m2,1,1],[vw-m2,m2,-1,1],[m2,vh-m2,1,-1],[vw-m2,vh-m2,-1,-1]].forEach(function(b){
+    ctx.beginPath();
+    ctx.moveTo(b[0], b[1] + bl*b[3]); ctx.lineTo(b[0], b[1]); ctx.lineTo(b[0] + bl*b[2], b[1]);
+    ctx.stroke();
+  });
+}
+function drawMarker(x, y, color, label, dir){
+  ctx.strokeStyle = color; ctx.lineWidth = 1.4;
+  var s = 6;
+  ctx.beginPath();
+  ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath();
+  ctx.stroke();
+  shadowText(label, x + 10, y + (dir < 0 ? 10 : -6), 11, color);
+}
+
+/* ---------------- loop ---------------- */
+var simSkip = 0;
+function frameLoop(){
+  frame++;
+  if (reduced){ simSkip ^= 1; }
+  if (!simSkip){
+    step();
+    if (painting) { /* continuous painting handled by pointermove */ }
+  }
+  render();
+  var now = performance.now();
+  if (now - lastFpsT > 500){ fps = 1000 * frame / (now - lastFpsT) / 2 * 2; fps = frame * 2 * 1000 / (now - lastFpsT); frame = 0; lastFpsT = now; }
+  requestAnimationFrame(frameLoop);
+}
+
+/* ---------------- controls ---------------- */
+document.getElementById("sBrush").addEventListener("input", function(){
+  brushR = +this.value; document.getElementById("oBrush").textContent = this.value;
+});
+document.getElementById("sDiff").addEventListener("input", function(){
+  diff = +this.value / 1000; document.getElementById("oDiff").textContent = diff.toFixed(2);
+});
+document.getElementById("sCool").addEventListener("input", function(){
+  cooling = +this.value / 1000; document.getElementById("oCool").textContent = cooling.toFixed(3);
+});
+document.getElementById("sGhost").addEventListener("input", function(){
+  ghostCount = +this.value; document.getElementById("oGhost").textContent = this.value;
+});
+document.getElementById("btnEmber").addEventListener("click", function(){
+  embers.push({x:10 + Math.random()*(FW-20), y:10 + Math.random()*(FH-20), t:0});
+});
+document.getElementById("btnReset").addEventListener("click", function(){
+  field.fill(AMBIENT); embers.length = 0; batLevel = 1;
+});
+
+resize();
+frameLoop();
+})();
+</script>
+</body>
+</html>

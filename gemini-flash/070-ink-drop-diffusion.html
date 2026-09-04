@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Sumi — Zen Ink Drop Diffusion</title>
+  <style>
+    /* -------------------------------------------------------------
+       CSS RESET & DESIGN TOKENS
+       ------------------------------------------------------------- */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --bg-water: #e7edf0;
+      --bg-paper: #f3ead8;
+      --ink-indigo: #1f2a6b;
+      --ink-vermilion: #c8402a;
+      --ink-sepia: #6b4a2b;
+      --ink-black: #14141a;
+      --ink-teal: #157a7a;
+      --active-ink: #1f2a6b;
+      --text-dark: #16161a;
+      --font-serif: Georgia, "Iowan Old Style", Palatino, "Palatino Linotype", "Book Antiqua", serif;
+      --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-water);
+      color: var(--text-dark);
+      font-family: var(--font-sans);
+      touch-action: none;
+      cursor: crosshair;
+      user-select: none;
+      -webkit-user-select: none;
+      transition: background-color 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    body.medium-paper {
+      background-color: var(--bg-paper);
+    }
+
+    /* -------------------------------------------------------------
+       CANVAS STACKING (Background & Ink)
+       ------------------------------------------------------------- */
+    .canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      z-index: 1;
+    }
+
+    #bg-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    #ink-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      mix-blend-mode: multiply;
+      pointer-events: none;
+    }
+
+    /* -------------------------------------------------------------
+       ZEN HEADER & TYPOGRAPHY
+       ------------------------------------------------------------- */
+    .zen-header {
+      position: fixed;
+      top: 32px;
+      left: 36px;
+      display: flex;
+      align-items: flex-start;
+      gap: 18px;
+      pointer-events: none;
+      user-select: none;
+      z-index: 10;
+    }
+
+    .zen-title-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .zen-title {
+      font-family: var(--font-serif);
+      font-size: clamp(22px, 2.6vw, 34px);
+      font-weight: 400;
+      line-height: 1.05;
+      letter-spacing: 0.04em;
+      color: var(--text-dark);
+      margin: 0;
+    }
+
+    .zen-subtitle {
+      font-family: var(--font-sans);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: rgba(22, 22, 26, 0.52);
+      margin-top: 6px;
+    }
+
+    /* Japanese-style vertical rule with dynamic ink dot */
+    .zen-rule {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 8px;
+      height: 52px;
+      margin-top: 4px;
+    }
+
+    .zen-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--active-ink);
+      transition: background-color 0.35s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    }
+
+    .zen-stem {
+      width: 1px;
+      flex: 1;
+      margin-top: 3px;
+      background: linear-gradient(to bottom, rgba(22, 22, 26, 0.45) 0%, rgba(22, 22, 26, 0) 100%);
+    }
+
+    /* Vertical Japanese caption */
+    .zen-caption {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      font-family: var(--font-serif);
+      font-size: 12px;
+      letter-spacing: 0.28em;
+      color: rgba(22, 22, 26, 0.46);
+      height: 140px;
+      line-height: 1.4;
+      pointer-events: none;
+    }
+
+    /* -------------------------------------------------------------
+       CENTRED BREATHING HINT
+       ------------------------------------------------------------- */
+    .zen-hint {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: clamp(17px, 1.9vw, 23px);
+      color: rgba(22, 22, 26, 0.46);
+      letter-spacing: 0.08em;
+      pointer-events: none;
+      user-select: none;
+      z-index: 10;
+      animation: hintBreathe 3.6s ease-in-out infinite;
+      transition: opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1), transform 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes hintBreathe {
+      0%, 100% {
+        opacity: 0.22;
+        transform: translate(-50%, -50%) scale(0.98);
+      }
+      50% {
+        opacity: 0.72;
+        transform: translate(-50%, -50%) scale(1.02);
+      }
+    }
+
+    .zen-hint.fade-out {
+      opacity: 0 !important;
+      transform: translate(-50%, -50%) scale(0.95) !important;
+      animation: none !important;
+    }
+
+    /* -------------------------------------------------------------
+       DROP COUNTER (BOTTOM-RIGHT)
+       ------------------------------------------------------------- */
+    .zen-drop-counter {
+      position: fixed;
+      bottom: 28px;
+      right: 32px;
+      font-family: var(--font-sans);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(22, 22, 26, 0.44);
+      pointer-events: none;
+      user-select: none;
+      z-index: 10;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* -------------------------------------------------------------
+       BOTTOM FLOATING PILL DOCK
+       ------------------------------------------------------------- */
+    .dock-container {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      pointer-events: auto;
+    }
+
+    .dock {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: rgba(255, 255, 255, 0.74);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.75);
+      border-radius: 9999px;
+      padding: 7px 16px;
+      box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(0, 0, 0, 0.03);
+      cursor: default;
+    }
+
+    /* Ink swatches */
+    .swatches-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .swatch-btn {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      outline: none;
+      transition: transform 0.15s ease;
+    }
+
+    .swatch-btn:hover {
+      transform: scale(1.08);
+    }
+
+    .swatch-circle {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background-color: var(--swatch-color);
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35), inset 0 -1px 2px rgba(255, 255, 255, 0.25);
+      transition: box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s ease;
+    }
+
+    .swatch-btn.active .swatch-circle {
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.98), 0 0 0 3.5px var(--swatch-color), inset 0 2px 4px rgba(0, 0, 0, 0.35);
+      transform: scale(1.05);
+    }
+
+    .swatch-btn:focus-visible .swatch-circle {
+      outline: 2px solid var(--swatch-color);
+      outline-offset: 3px;
+    }
+
+    /* Small subtle key indicator badge */
+    .swatch-key {
+      position: absolute;
+      bottom: -4px;
+      right: -2px;
+      font-size: 9px;
+      font-weight: 700;
+      color: rgba(22, 22, 26, 0.6);
+      background: rgba(255, 255, 255, 0.85);
+      border-radius: 4px;
+      padding: 0 3px;
+      line-height: 11px;
+      pointer-events: none;
+      border: 0.5px solid rgba(0,0,0,0.1);
+    }
+
+    /* Divider */
+    .dock-divider {
+      width: 1px;
+      height: 20px;
+      background-color: rgba(22, 22, 26, 0.14);
+    }
+
+    /* Water / Paper Segmented Toggle */
+    .medium-toggle {
+      display: flex;
+      align-items: center;
+      background: rgba(22, 22, 26, 0.06);
+      border-radius: 9999px;
+      padding: 2.5px;
+    }
+
+    .segment-btn {
+      border: none;
+      background: transparent;
+      padding: 5px 12px;
+      border-radius: 9999px;
+      font-family: var(--font-sans);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(22, 22, 26, 0.52);
+      cursor: pointer;
+      outline: none;
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .segment-btn.active {
+      background: #ffffff;
+      color: var(--text-dark);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.04);
+      font-weight: 700;
+    }
+
+    .segment-btn:focus-visible {
+      outline: 2px solid rgba(22, 22, 26, 0.35);
+    }
+
+    /* Drain button */
+    .action-btn {
+      border: 1px solid rgba(22, 22, 26, 0.13);
+      background: rgba(255, 255, 255, 0.5);
+      padding: 5px 13px;
+      border-radius: 9999px;
+      font-family: var(--font-sans);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-dark);
+      cursor: pointer;
+      outline: none;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .action-btn:hover {
+      background: #ffffff;
+      border-color: rgba(22, 22, 26, 0.25);
+    }
+
+    .action-btn:focus-visible {
+      outline: 2px solid rgba(22, 22, 26, 0.4);
+      outline-offset: 2px;
+    }
+
+    .key-badge {
+      font-size: 9px;
+      font-weight: 700;
+      color: rgba(22, 22, 26, 0.48);
+      background: rgba(22, 22, 26, 0.07);
+      border-radius: 4px;
+      padding: 1px 4px;
+      line-height: 10px;
+    }
+
+    .action-btn.pulsing {
+      animation: drainPulse 1.2s infinite ease-in-out;
+      border-color: rgba(200, 64, 42, 0.5);
+      color: #c8402a;
+      background: rgba(200, 64, 42, 0.08);
+    }
+
+    .action-btn.pulsing .key-badge {
+      color: #c8402a;
+      background: rgba(200, 64, 42, 0.15);
+    }
+
+    @keyframes drainPulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(200, 64, 42, 0.45);
+        transform: scale(1);
+      }
+      50% {
+        box-shadow: 0 0 0 7px rgba(200, 64, 42, 0);
+        transform: scale(1.03);
+      }
+    }
+
+    /* -------------------------------------------------------------
+       ACCESSIBILITY & REDUCED MOTION
+       ------------------------------------------------------------- */
+    @media (prefers-reduced-motion: reduce) {
+      .zen-hint {
+        animation: none !important;
+        opacity: 0.55 !important;
+      }
+
+      .action-btn.pulsing {
+        animation: none !important;
+        opacity: 0.8 !important;
+        background: rgba(200, 64, 42, 0.12) !important;
+      }
+
+      .swatch-btn, .segment-btn, .action-btn {
+        transition: none !important;
+      }
+    }
+
+    /* -------------------------------------------------------------
+       RESPONSIVE ADAPTATIONS
+       ------------------------------------------------------------- */
+    @media (max-width: 640px) {
+      .zen-header {
+        top: 20px;
+        left: 20px;
+        gap: 12px;
+      }
+      .zen-caption {
+        display: none;
+      }
+      .zen-drop-counter {
+        bottom: 78px;
+        right: 20px;
+      }
+      .dock-container {
+        bottom: 16px;
+        width: 92vw;
+        max-width: 440px;
+      }
+      .dock {
+        width: 100%;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 12px;
+      }
+      .swatches-group {
+        gap: 4px;
+      }
+      .swatch-btn {
+        width: 28px;
+        height: 28px;
+      }
+      .swatch-circle {
+        width: 22px;
+        height: 22px;
+      }
+      .swatch-key {
+        display: none;
+      }
+      .segment-btn {
+        padding: 5px 8px;
+        font-size: 10px;
+        letter-spacing: 0.12em;
+      }
+      .action-btn {
+        padding: 5px 9px;
+        font-size: 10px;
+        letter-spacing: 0.12em;
+      }
+      .key-badge {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fullscreen stacked canvases -->
+  <div class="canvas-container">
+    <canvas id="bg-canvas" aria-hidden="true"></canvas>
+    <canvas id="ink-canvas" aria-hidden="true"></canvas>
+  </div>
+
+  <!-- Header and Typography -->
+  <header class="zen-header" aria-hidden="true">
+    <div class="zen-title-group">
+      <h1 class="zen-title">Sumi</h1>
+      <div class="zen-subtitle">ink drops in water</div>
+    </div>
+    <div class="zen-rule">
+      <div class="zen-dot" id="zen-dot"></div>
+      <div class="zen-stem"></div>
+    </div>
+    <div class="zen-caption">墨 · still water · slow breath</div>
+  </header>
+
+  <!-- Centred breathing hint -->
+  <div class="zen-hint" id="zen-hint" aria-hidden="true">touch the water</div>
+
+  <!-- Quiet drop counter -->
+  <div class="zen-drop-counter" id="drop-counter" aria-live="polite">0 DROPS</div>
+
+  <!-- Translucent White Pill Dock -->
+  <div class="dock-container">
+    <nav class="dock" aria-label="Ink Simulation Controls">
+      <!-- 5 Inks Swatches -->
+      <div class="swatches-group" role="radiogroup" aria-label="Ink Color">
+        <button type="button" class="swatch-btn active" data-ink="0" data-color="#1f2a6b" aria-label="Indigo (Key 1)" title="Indigo [1]">
+          <span class="swatch-circle" style="--swatch-color: #1f2a6b;"></span>
+          <span class="swatch-key">1</span>
+        </button>
+        <button type="button" class="swatch-btn" data-ink="1" data-color="#c8402a" aria-label="Vermilion (Key 2)" title="Vermilion [2]">
+          <span class="swatch-circle" style="--swatch-color: #c8402a;"></span>
+          <span class="swatch-key">2</span>
+        </button>
+        <button type="button" class="swatch-btn" data-ink="2" data-color="#6b4a2b" aria-label="Sepia (Key 3)" title="Sepia [3]">
+          <span class="swatch-circle" style="--swatch-color: #6b4a2b;"></span>
+          <span class="swatch-key">3</span>
+        </button>
+        <button type="button" class="swatch-btn" data-ink="3" data-color="#14141a" aria-label="Black (Key 4)" title="Black [4]">
+          <span class="swatch-circle" style="--swatch-color: #14141a;"></span>
+          <span class="swatch-key">4</span>
+        </button>
+        <button type="button" class="swatch-btn" data-ink="4" data-color="#157a7a" aria-label="Teal (Key 5)" title="Teal [5]">
+          <span class="swatch-circle" style="--swatch-color: #157a7a;"></span>
+          <span class="swatch-key">5</span>
+        </button>
+      </div>
+
+      <div class="dock-divider" aria-hidden="true"></div>
+
+      <!-- Water / Paper Segmented Toggle -->
+      <div class="medium-toggle" role="radiogroup" aria-label="Medium">
+        <button type="button" class="segment-btn active" id="btn-water" data-medium="water" title="Water Medium [P]">
+          WATER
+        </button>
+        <button type="button" class="segment-btn" id="btn-paper" data-medium="paper" title="Paper Medium [P]">
+          PAPER
+        </button>
+      </div>
+
+      <div class="dock-divider" aria-hidden="true"></div>
+
+      <!-- Drain Button -->
+      <button type="button" class="action-btn" id="btn-drain" title="Drain Ink [D]">
+        DRAIN
+        <span class="key-badge">D</span>
+      </button>
+    </nav>
+  </div>
+
+  <script>
+    /* =============================================================
+       SUMI: ZEN INK DROP DIFFUSION
+       Mathematical, Divergence-Free Curl Noise & Subtractive Pigment
+       ============================================================= */
+
+    (function() {
+      'use strict';
+
+      // -----------------------------------------------------------
+      // CONSTANTS & INK PALETTE
+      // -----------------------------------------------------------
+      const INKS = [
+        { name: 'Indigo', hex: '#1f2a6b', r: 31, g: 42, b: 107 },
+        { name: 'Vermilion', hex: '#c8402a', r: 200, g: 64, b: 42 },
+        { name: 'Sepia', hex: '#6b4a2b', r: 107, g: 74, b: 43 },
+        { name: 'Black', hex: '#14141a', r: 20, g: 20, b: 26 },
+        { name: 'Teal', hex: '#157a7a', r: 21, g: 122, b: 122 }
+      ];
+
+      // -----------------------------------------------------------
+      // STATE VARIABLES
+      // -----------------------------------------------------------
+      let currentInkIndex = 0;
+      let currentMedium = 'water'; // 'water' | 'paper'
+      let dpr = Math.min(window.devicePixelRatio || 1, 2);
+      let dropCount = 0;
+      let firstDropOccurred = false;
+
+      // Pointer drag interaction
+      let isPointerDown = false;
+      let lastDropTime = 0;
+      let pointerPos = { x: 0, y: 0 };
+
+      // Drain state
+      let isDraining = false;
+      let drainTimer = 0;
+      let drainDuration = 7.0; // 7 seconds
+
+      // Accessibility
+      const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      let prefersReducedMotion = motionQuery.matches;
+      motionQuery.addEventListener('change', (e) => {
+        prefersReducedMotion = e.matches;
+      });
+
+      // Simulation timing
+      let simTime = 0;
+      let lastFrameTime = performance.now();
+
+      // Active particles list
+      const particles = [];
+
+      // -----------------------------------------------------------
+      // DOM ELEMENTS
+      // -----------------------------------------------------------
+      const bgCanvas = document.getElementById('bg-canvas');
+      const inkCanvas = document.getElementById('ink-canvas');
+      const bgCtx = bgCanvas.getContext('2d');
+      const inkCtx = inkCanvas.getContext('2d');
+
+      // Scratch canvas for water feedback swirl
+      const scratchCanvas = document.createElement('canvas');
+      const scratchCtx = scratchCanvas.getContext('2d');
+
+      const zenDot = document.getElementById('zen-dot');
+      const zenHint = document.getElementById('zen-hint');
+      const dropCounter = document.getElementById('drop-counter');
+      const btnWater = document.getElementById('btn-water');
+      const btnPaper = document.getElementById('btn-paper');
+      const btnDrain = document.getElementById('btn-drain');
+      const swatchButtons = document.querySelectorAll('.swatch-btn');
+
+      // -----------------------------------------------------------
+      // FAST 3D PERLIN GRADIENT NOISE
+      // -----------------------------------------------------------
+      const P = new Uint8Array(512);
+      const PERMUTATION = [
+        151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,
+        8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,
+        35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,
+        134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,
+        55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,
+        18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,52,217,226,
+        250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,
+        189,28,42,223,183,170,213,119,248,152,2,44,154,163,70,221,153,101,155,167,43,
+        172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,218,246,97,
+        228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,
+        107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,
+        138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180
+      ];
+      for (let i = 0; i < 256; i++) {
+        P[i] = PERMUTATION[i];
+        P[256 + i] = PERMUTATION[i];
+      }
+
+      // 16 3D gradient vector components for branchless lookup
+      const GX = [1, -1, 1, -1, 1, -1, 1, -1, 0,  0,  0,  0, 1, -1,  0,  0];
+      const GY = [1,  1, -1, -1, 0,  0, 0,  0, 1, -1,  1, -1, 1,  1, -1, -1];
+      const GZ = [0,  0,  0,  0, 1,  1, -1, -1, 1,  1, -1, -1, 0,  0,  1, -1];
+
+      function fade(t) {
+        return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+      }
+
+      function lerp(t, a, b) {
+        return a + t * (b - a);
+      }
+
+      function perlin3D(x, y, z) {
+        const X = Math.floor(x) & 255;
+        const Y = Math.floor(y) & 255;
+        const Z = Math.floor(z) & 255;
+
+        const fx = x - Math.floor(x);
+        const fy = y - Math.floor(y);
+        const fz = z - Math.floor(z);
+
+        const u = fade(fx);
+        const v = fade(fy);
+        const w = fade(fz);
+
+        const A = P[X] + Y;
+        const AA = P[A] + Z;
+        const AB = P[A + 1] + Z;
+        const B = P[X + 1] + Y;
+        const BA = P[B] + Z;
+        const BB = P[B + 1] + Z;
+
+        const hAA = P[AA] & 15;
+        const hBA = P[BA] & 15;
+        const hAB = P[AB] & 15;
+        const hBB = P[BB] & 15;
+        const hAA1 = P[AA + 1] & 15;
+        const hBA1 = P[BA + 1] & 15;
+        const hAB1 = P[AB + 1] & 15;
+        const hBB1 = P[BB + 1] & 15;
+
+        const g000 = GX[hAA] * fx + GY[hAA] * fy + GZ[hAA] * fz;
+        const g100 = GX[hBA] * (fx - 1.0) + GY[hBA] * fy + GZ[hBA] * fz;
+        const g010 = GX[hAB] * fx + GY[hAB] * (fy - 1.0) + GZ[hAB] * fz;
+        const g110 = GX[hBB] * (fx - 1.0) + GY[hBB] * (fy - 1.0) + GZ[hBB] * fz;
+
+        const g001 = GX[hAA1] * fx + GY[hAA1] * fy + GZ[hAA1] * (fz - 1.0);
+        const g101 = GX[hBA1] * (fx - 1.0) + GY[hBA1] * fy + GZ[hBA1] * (fz - 1.0);
+        const g011 = GX[hAB1] * fx + GY[hAB1] * (fy - 1.0) + GZ[hAB1] * (fz - 1.0);
+        const g111 = GX[hBB1] * (fx - 1.0) + GY[hBB1] * (fy - 1.0) + GZ[hBB1] * (fz - 1.0);
+
+        const x1 = lerp(u, g000, g100);
+        const x2 = lerp(u, g010, g110);
+        const y1 = lerp(v, x1, x2);
+
+        const x3 = lerp(u, g001, g101);
+        const x4 = lerp(u, g011, g111);
+        const y2 = lerp(v, x3, x4);
+
+        return lerp(w, y1, y2);
+      }
+
+      // -----------------------------------------------------------
+      // 2D DIVERGENCE-FREE CURL NOISE VIA CENTRAL DIFFERENCES
+      // -----------------------------------------------------------
+      // Fine scale: 42px for delicate tendrils
+      // Coarse scale: 240px for broad swirl
+      function potential(x, y, t) {
+        const fine = perlin3D(x / 42.0, y / 42.0, t * 0.08) * 30.0;
+        const coarse = perlin3D(x / 240.0, y / 240.0, t * 0.028) * 92.0;
+        return fine + coarse;
+      }
+
+      const EPS = 1.0;
+      let curlU = 0;
+      let curlV = 0;
+
+      function computeCurl(x, y, t) {
+        // Central differences: dpsi/dy and -dpsi/dx
+        curlU = (potential(x, y + EPS, t) - potential(x, y - EPS, t)) * 0.5;
+        curlV = -(potential(x + EPS, y, t) - potential(x - EPS, y, t)) * 0.5;
+      }
+
+      // -----------------------------------------------------------
+      // PRE-BAKED 64px RADIAL-GRADIENT SPRITES
+      // Harder falloff for water, feathered falloff for paper, dense for impact
+      // -----------------------------------------------------------
+      const inkSprites = [];
+
+      function prebakeSprites() {
+        for (let i = 0; i < INKS.length; i++) {
+          const { r, g, b } = INKS[i];
+
+          // 1. Water sprite (harder falloff: holds dense filament core)
+          const cWater = document.createElement('canvas');
+          cWater.width = 64;
+          cWater.height = 64;
+          const ctxWater = cWater.getContext('2d');
+          const gWater = ctxWater.createRadialGradient(32, 32, 0, 32, 32, 32);
+          gWater.addColorStop(0.00, `rgba(${r}, ${g}, ${b}, 1.0)`);
+          gWater.addColorStop(0.32, `rgba(${r}, ${g}, ${b}, 0.88)`);
+          gWater.addColorStop(0.68, `rgba(${r}, ${g}, ${b}, 0.36)`);
+          gWater.addColorStop(0.90, `rgba(${r}, ${g}, ${b}, 0.08)`);
+          gWater.addColorStop(1.00, `rgba(${r}, ${g}, ${b}, 0.0)`);
+          ctxWater.fillStyle = gWater;
+          ctxWater.fillRect(0, 0, 64, 64);
+
+          // 2. Paper sprite (feathered falloff: soft bleed into fibres)
+          const cPaper = document.createElement('canvas');
+          cPaper.width = 64;
+          cPaper.height = 64;
+          const ctxPaper = cPaper.getContext('2d');
+          const gPaper = ctxPaper.createRadialGradient(32, 32, 0, 32, 32, 32);
+          gPaper.addColorStop(0.00, `rgba(${r}, ${g}, ${b}, 1.0)`);
+          gPaper.addColorStop(0.20, `rgba(${r}, ${g}, ${b}, 0.72)`);
+          gPaper.addColorStop(0.46, `rgba(${r}, ${g}, ${b}, 0.36)`);
+          gPaper.addColorStop(0.76, `rgba(${r}, ${g}, ${b}, 0.12)`);
+          gPaper.addColorStop(1.00, `rgba(${r}, ${g}, ${b}, 0.0)`);
+          ctxPaper.fillStyle = gPaper;
+          ctxPaper.fillRect(0, 0, 64, 64);
+
+          // 3. Impact blot sprite (denser cluster)
+          const cImpact = document.createElement('canvas');
+          cImpact.width = 64;
+          cImpact.height = 64;
+          const ctxImpact = cImpact.getContext('2d');
+          const gImpact = ctxImpact.createRadialGradient(32, 32, 0, 32, 32, 32);
+          gImpact.addColorStop(0.00, `rgba(${r}, ${g}, ${b}, 1.0)`);
+          gImpact.addColorStop(0.42, `rgba(${r}, ${g}, ${b}, 0.94)`);
+          gImpact.addColorStop(0.78, `rgba(${r}, ${g}, ${b}, 0.45)`);
+          gImpact.addColorStop(0.94, `rgba(${r}, ${g}, ${b}, 0.10)`);
+          gImpact.addColorStop(1.00, `rgba(${r}, ${g}, ${b}, 0.0)`);
+          ctxImpact.fillStyle = gImpact;
+          ctxImpact.fillRect(0, 0, 64, 64);
+
+          inkSprites.push({
+            water: cWater,
+            paper: cPaper,
+            impact: cImpact
+          });
+        }
+      }
+      prebakeSprites();
+
+      // -----------------------------------------------------------
+      // DETERMINISTIC PRNG FOR BACKGROUND PAINTING
+      // -----------------------------------------------------------
+      function createPRNG(seed) {
+        let s = seed % 2147483647;
+        if (s <= 0) s += 2147483646;
+        return function() {
+          s = (s * 16807) % 2147483647;
+          return (s - 1) / 2147483646;
+        };
+      }
+
+      // -----------------------------------------------------------
+      // BACKGROUND RENDERING (Water vs. Paper)
+      // -----------------------------------------------------------
+      function paintBackground() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+
+        bgCtx.save();
+        bgCtx.clearRect(0, 0, w, h);
+
+        if (currentMedium === 'water') {
+          // Pale water grey page base
+          document.body.classList.remove('medium-paper');
+
+          // Radial gradient from #f1f5f6 through #e3eaee to #cfd9df at edges
+          const diag = Math.hypot(w, h);
+          const radGrad = bgCtx.createRadialGradient(
+            w * 0.48, h * 0.46, 12,
+            w * 0.50, h * 0.50, diag * 0.68
+          );
+          radGrad.addColorStop(0.00, '#f1f5f6');
+          radGrad.addColorStop(0.52, '#e3eaee');
+          radGrad.addColorStop(1.00, '#cfd9df');
+
+          bgCtx.fillStyle = radGrad;
+          bgCtx.fillRect(0, 0, w, h);
+
+          // Forty faint white elliptical caustic rings at 6% alpha
+          const rng = createPRNG(137);
+          bgCtx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+
+          for (let i = 0; i < 40; i++) {
+            const cx = rng() * w;
+            const cy = rng() * h;
+            const rx = 70 + rng() * 340;
+            const ry = 45 + rng() * 220;
+            const rot = rng() * Math.PI * 2;
+            const lw = 1.2 + rng() * 3.4;
+
+            bgCtx.lineWidth = lw;
+            bgCtx.beginPath();
+            bgCtx.ellipse(cx, cy, rx, ry, rot, 0, Math.PI * 2);
+            bgCtx.stroke();
+          }
+
+        } else {
+          // Paper mode: fibrous cream #f3ead8
+          document.body.classList.add('medium-paper');
+
+          bgCtx.fillStyle = '#f3ead8';
+          bgCtx.fillRect(0, 0, w, h);
+
+          const rng = createPRNG(42);
+
+          // Sixty soft mottling gradients in a warm tan
+          for (let i = 0; i < 60; i++) {
+            const mx = rng() * w;
+            const my = rng() * h;
+            const mr = 90 + rng() * 320;
+            const alpha = 0.025 + rng() * 0.055;
+
+            const mGrad = bgCtx.createRadialGradient(mx, my, 0, mx, my, mr);
+            mGrad.addColorStop(0.00, `rgba(180, 140, 95, ${alpha})`);
+            mGrad.addColorStop(0.55, `rgba(180, 140, 95, ${alpha * 0.45})`);
+            mGrad.addColorStop(1.00, 'rgba(180, 140, 95, 0)');
+
+            bgCtx.fillStyle = mGrad;
+            bgCtx.beginPath();
+            bgCtx.arc(mx, my, mr, 0, Math.PI * 2);
+            bgCtx.fill();
+          }
+
+          // Thousands of short random fibres: rgba(120,95,60,.12) and white at 35%
+          const fibreScale = Math.min(1.4, Math.max(0.65, (w * h) / (1920 * 1080)));
+          const fibreCount = Math.round(3600 * fibreScale);
+
+          for (let i = 0; i < fibreCount; i++) {
+            const fx = rng() * w;
+            const fy = rng() * h;
+            const len = 6 + rng() * 18;
+            const angle = rng() * Math.PI * 2;
+            const curvature = (rng() - 0.5) * 6;
+            const isWhite = rng() < 0.38;
+
+            bgCtx.strokeStyle = isWhite ? 'rgba(255, 255, 255, 0.35)' : 'rgba(120, 95, 60, 0.12)';
+            bgCtx.lineWidth = 0.45 + rng() * 0.75;
+            bgCtx.beginPath();
+            bgCtx.moveTo(fx, fy);
+
+            const midX = fx + Math.cos(angle) * (len * 0.5) + Math.cos(angle + Math.PI / 2) * curvature;
+            const midY = fy + Math.sin(angle) * (len * 0.5) + Math.sin(angle + Math.PI / 2) * curvature;
+            const endX = fx + Math.cos(angle) * len;
+            const endY = fy + Math.sin(angle) * len;
+
+            bgCtx.quadraticCurveTo(midX, midY, endX, endY);
+            bgCtx.stroke();
+          }
+        }
+
+        bgCtx.restore();
+      }
+
+      // -----------------------------------------------------------
+      // CANVAS SIZING & DPR MANAGEMENT
+      // Preserves existing ink bitmap across browser resizes
+      // -----------------------------------------------------------
+      function resizeCanvases() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        // Store old ink content if canvas was already initialized
+        let tempCanvas = null;
+        if (inkCanvas.width > 0 && inkCanvas.height > 0) {
+          tempCanvas = document.createElement('canvas');
+          tempCanvas.width = inkCanvas.width;
+          tempCanvas.height = inkCanvas.height;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx.drawImage(inkCanvas, 0, 0);
+        }
+
+        // Set background canvas physical and CSS size
+        bgCanvas.width = Math.floor(w * dpr);
+        bgCanvas.height = Math.floor(h * dpr);
+        bgCanvas.style.width = w + 'px';
+        bgCanvas.style.height = h + 'px';
+        bgCtx.setTransform(1, 0, 0, 1, 0, 0);
+        bgCtx.scale(dpr, dpr);
+
+        // Set ink canvas physical and CSS size
+        inkCanvas.width = Math.floor(w * dpr);
+        inkCanvas.height = Math.floor(h * dpr);
+        inkCanvas.style.width = w + 'px';
+        inkCanvas.style.height = h + 'px';
+
+        // Scratch canvas matching inkCanvas physical resolution
+        scratchCanvas.width = inkCanvas.width;
+        scratchCanvas.height = inkCanvas.height;
+
+        // Restore old ink content if existed
+        if (tempCanvas) {
+          inkCtx.drawImage(tempCanvas, 0, 0, inkCanvas.width, inkCanvas.height);
+        }
+
+        paintBackground();
+      }
+
+      window.addEventListener('resize', resizeCanvases);
+
+      // -----------------------------------------------------------
+      // SPAWN INK DROP & PARTICLES
+      // -----------------------------------------------------------
+      function spawnDrop(x, y) {
+        // Cancel ongoing drain if user decides to drop new ink
+        if (isDraining) {
+          cancelDrain();
+        }
+
+        // Fade out breathing hint on the first interaction
+        if (!firstDropOccurred) {
+          firstDropOccurred = true;
+          zenHint.classList.add('fade-out');
+          setTimeout(() => {
+            zenHint.style.display = 'none';
+          }, 1300);
+        }
+
+        dropCount++;
+        dropCounter.textContent = `${dropCount} ${dropCount === 1 ? 'DROP' : 'DROPS'}`;
+
+        const isWater = (currentMedium === 'water');
+        const sprites = inkSprites[currentInkIndex];
+
+        // 1. Initial impact: a small cluster of denser sprites stamps the initial blot
+        const impactCount = 22 + Math.floor(Math.random() * 12);
+        inkCtx.save();
+        inkCtx.scale(dpr, dpr);
+        inkCtx.globalCompositeOperation = 'multiply';
+
+        for (let i = 0; i < impactCount; i++) {
+          const rOffset = Math.random() * 9.5;
+          const th = Math.random() * Math.PI * 2;
+          const ix = x + Math.cos(th) * rOffset;
+          const iy = y + Math.sin(th) * rOffset;
+          const r = 9.0 + Math.random() * 18.0;
+
+          inkCtx.globalAlpha = 0.18 + Math.random() * 0.22;
+          inkCtx.drawImage(sprites.impact, ix - r, iy - r, r * 2, r * 2);
+        }
+        inkCtx.restore();
+
+        // 2. Spawn 380-620 particles (scaled by viewport area)
+        const area = window.innerWidth * window.innerHeight;
+        const areaScale = Math.min(1.4, Math.max(0.65, area / (1920 * 1080)));
+        const baseCount = 380 + Math.random() * 240;
+        const particleCount = Math.round(baseCount * areaScale);
+
+        // Particle pool cap to ensure silky performance even under prolonged dragging
+        if (particles.length > 7000) {
+          particles.splice(0, particleCount);
+        }
+
+        const activeSprite = isWater ? sprites.water : sprites.paper;
+
+        for (let i = 0; i < particleCount; i++) {
+          // Outward velocities: 30-120 px/s in water (14-40 in paper)
+          const speed = isWater ? (30.0 + Math.random() * 90.0) : (14.0 + Math.random() * 26.0);
+          const angle = Math.random() * Math.PI * 2;
+          const initRadiusJitter = Math.random() * 4.0;
+
+          particles.push({
+            x: x + Math.cos(angle) * initRadiusJitter,
+            y: y + Math.sin(angle) * initRadiusJitter,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            age: 0,
+            lifetime: 4.0 + Math.random() * 6.0, // 4-10 seconds
+            isWater: isWater,
+            sprite: activeSprite
+          });
+        }
+      }
+
+      // -----------------------------------------------------------
+      // DRAIN CONTROLLER
+      // Seven-second fade removing 1.8% per frame before clear
+      // -----------------------------------------------------------
+      function startDrain() {
+        if (isDraining) return;
+        isDraining = true;
+        drainTimer = 0;
+        drainDuration = prefersReducedMotion ? 2.4 : 7.0;
+        btnDrain.classList.add('pulsing');
+        btnDrain.setAttribute('aria-pressed', 'true');
+      }
+
+      function cancelDrain() {
+        isDraining = false;
+        btnDrain.classList.remove('pulsing');
+        btnDrain.setAttribute('aria-pressed', 'false');
+      }
+
+      // -----------------------------------------------------------
+      // UI CONTROLS & EVENT LISTENERS
+      // -----------------------------------------------------------
+      function selectInk(index) {
+        if (index < 0 || index >= INKS.length) return;
+        currentInkIndex = index;
+
+        // Update swatch UI
+        swatchButtons.forEach((btn, i) => {
+          btn.classList.toggle('active', i === index);
+          btn.setAttribute('aria-checked', i === index ? 'true' : 'false');
+        });
+
+        // Update Japanese vertical dot color
+        const color = INKS[index].hex;
+        zenDot.style.backgroundColor = color;
+        document.documentElement.style.setProperty('--active-ink', color);
+      }
+
+      function setMedium(medium) {
+        if (currentMedium === medium) return;
+        currentMedium = medium;
+
+        btnWater.classList.toggle('active', medium === 'water');
+        btnPaper.classList.toggle('active', medium === 'paper');
+        btnWater.setAttribute('aria-checked', medium === 'water' ? 'true' : 'false');
+        btnPaper.setAttribute('aria-checked', medium === 'paper' ? 'true' : 'false');
+
+        paintBackground();
+      }
+
+      // Swatch clicks
+      swatchButtons.forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const inkIdx = parseInt(btn.getAttribute('data-ink'), 10);
+          selectInk(inkIdx);
+        });
+      });
+
+      // Medium buttons
+      btnWater.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setMedium('water');
+      });
+
+      btnPaper.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setMedium('paper');
+      });
+
+      // Drain button
+      btnDrain.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startDrain();
+      });
+
+      // -----------------------------------------------------------
+      // POINTER / TOUCH INTERACTION & 220ms DRAG CHAIN
+      // -----------------------------------------------------------
+      window.addEventListener('pointerdown', (e) => {
+        // Prevent drop when clicking dock UI
+        if (e.target.closest('.dock')) return;
+
+        isPointerDown = true;
+        pointerPos.x = e.clientX;
+        pointerPos.y = e.clientY;
+
+        spawnDrop(pointerPos.x, pointerPos.y);
+        lastDropTime = performance.now();
+      });
+
+      window.addEventListener('pointermove', (e) => {
+        pointerPos.x = e.clientX;
+        pointerPos.y = e.clientY;
+
+        if (isPointerDown) {
+          const now = performance.now();
+          if (now - lastDropTime >= 220) {
+            spawnDrop(pointerPos.x, pointerPos.y);
+            lastDropTime = now;
+          }
+        }
+      });
+
+      function handlePointerUp() {
+        isPointerDown = false;
+      }
+
+      window.addEventListener('pointerup', handlePointerUp);
+      window.addEventListener('pointercancel', handlePointerUp);
+      window.addEventListener('blur', handlePointerUp);
+
+      // -----------------------------------------------------------
+      // KEYBOARD SHORTCUTS
+      // Keys 1-5 (Inks), P (Toggle Medium), D (Drain)
+      // -----------------------------------------------------------
+      window.addEventListener('keydown', (e) => {
+        // Ignore if modifier keys are pressed
+        if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+        const key = e.key;
+
+        if (key >= '1' && key <= '5') {
+          selectInk(parseInt(key, 10) - 1);
+        } else if (key === 'p' || key === 'P') {
+          setMedium(currentMedium === 'water' ? 'paper' : 'water');
+        } else if (key === 'd' || key === 'D') {
+          startDrain();
+        } else if (key === ' ') {
+          // Space drops ink at center or last pointer position
+          const x = pointerPos.x || window.innerWidth / 2;
+          const y = pointerPos.y || window.innerHeight / 2;
+          spawnDrop(x, y);
+        }
+      });
+
+      // -----------------------------------------------------------
+      // MAIN ANIMATION LOOP
+      // Physics, Divergence-Free Advection, Subtractive Blending
+      // -----------------------------------------------------------
+      function animationLoop(currentTime) {
+        requestAnimationFrame(animationLoop);
+
+        const dt = Math.min((currentTime - lastFrameTime) / 1000.0, 0.05);
+        lastFrameTime = currentTime;
+        simTime += dt;
+
+        // Check dragged drops every 220ms even if pointer is resting
+        if (isPointerDown) {
+          const now = performance.now();
+          if (now - lastDropTime >= 220) {
+            spawnDrop(pointerPos.x, pointerPos.y);
+            lastDropTime = now;
+          }
+        }
+
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const cx = w * 0.5;
+        const cy = h * 0.5;
+
+        // ---------------------------------------------------------
+        // 1. INK CANVAS SELF-SWIRL IN WATER MODE
+        // Redrawn onto itself (composite "copy") with rotation ~0.0002 rad,
+        // scale 1.0004 and sub-pixel translational wobble
+        // Paper mode freezes ink in place
+        // ---------------------------------------------------------
+        if (currentMedium === 'water' && !prefersReducedMotion && !isDraining) {
+          // Copy current inkCanvas to offscreen scratch canvas
+          scratchCtx.globalCompositeOperation = 'copy';
+          scratchCtx.drawImage(inkCanvas, 0, 0);
+
+          // Draw scratch canvas back with micro-transform
+          inkCtx.globalCompositeOperation = 'copy';
+          inkCtx.save();
+
+          const physCx = inkCanvas.width * 0.5;
+          const physCy = inkCanvas.height * 0.5;
+          const wobbleX = Math.sin(simTime * 0.45) * 0.16 * dpr;
+          const wobbleY = Math.cos(simTime * 0.38) * 0.16 * dpr;
+          const rotAngle = 0.0002 + Math.sin(simTime * 0.22) * 0.00003;
+
+          inkCtx.translate(physCx, physCy);
+          inkCtx.rotate(rotAngle);
+          inkCtx.scale(1.0004, 1.0004);
+          inkCtx.translate(-physCx + wobbleX, -physCy + wobbleY);
+          inkCtx.drawImage(scratchCanvas, 0, 0);
+          inkCtx.restore();
+        }
+
+        // ---------------------------------------------------------
+        // 2. DRAIN PROCESS
+        // Destination-out fill removes 1.8% of the ink per frame
+        // ---------------------------------------------------------
+        if (isDraining) {
+          inkCtx.save();
+          inkCtx.globalCompositeOperation = 'destination-out';
+          inkCtx.fillStyle = prefersReducedMotion ? 'rgba(0, 0, 0, 0.06)' : 'rgba(0, 0, 0, 0.018)';
+          inkCtx.fillRect(0, 0, inkCanvas.width, inkCanvas.height);
+          inkCtx.restore();
+
+          drainTimer += dt;
+          if (drainTimer >= drainDuration) {
+            cancelDrain();
+            inkCtx.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
+            particles.length = 0;
+            dropCount = 0;
+            dropCounter.textContent = '0 DROPS';
+          }
+        }
+
+        // ---------------------------------------------------------
+        // 3. ADVECTION & RENDERING OF ACTIVE PARTICLES
+        // Divergence-free curl noise + global rotation + friction
+        // ---------------------------------------------------------
+        const pLen = particles.length;
+        if (pLen > 0) {
+          inkCtx.save();
+          inkCtx.scale(dpr, dpr);
+          inkCtx.globalCompositeOperation = 'multiply';
+
+          const rotSpeed = 0.014; // rad/s for gentle screen swirl
+          const frictionWater = Math.pow(0.965, dt * 60.0);
+          const frictionPaper = Math.pow(0.900, dt * 60.0);
+
+          for (let i = pLen - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.age += dt;
+
+            // Recurse out of life
+            if (p.age >= p.lifetime) {
+              particles.splice(i, 1);
+              continue;
+            }
+
+            const isWater = p.isWater;
+            const normAge = p.age / p.lifetime;
+
+            // Divergence-free curl noise at fine (42px) and coarse (240px) scales
+            computeCurl(p.x, p.y, simTime);
+
+            // Global rotation of water about screen centre
+            let targetVx = curlU * 34.0;
+            let targetVy = curlV * 34.0;
+
+            if (isWater) {
+              const dx = p.x - cx;
+              const dy = p.y - cy;
+              targetVx += -dy * rotSpeed;
+              targetVy += dx * rotSpeed;
+            } else {
+              // Paper fibres restrict movement
+              targetVx *= 0.22;
+              targetVy *= 0.22;
+            }
+
+            // Obey friction
+            const friction = isWater ? frictionWater : frictionPaper;
+            p.vx = p.vx * friction + targetVx * (1.0 - friction);
+            p.vy = p.vy * friction + targetVy * (1.0 - friction);
+
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+
+            // Growth in size with age and fading in alpha
+            // Water: alpha 0.07 -> 0, Paper: 0.045 -> 0
+            let alpha, radius;
+            if (isWater) {
+              alpha = 0.07 * Math.pow(1.0 - normAge, 1.25);
+              radius = 4.5 + Math.pow(normAge, 0.72) * 23.5;
+            } else {
+              alpha = 0.045 * Math.pow(1.0 - normAge, 1.15);
+              radius = 3.5 + Math.pow(normAge, 0.62) * 16.5;
+            }
+
+            // Draw pre-baked 64px sprite subtractively
+            inkCtx.globalAlpha = Math.max(alpha, 0.001);
+            inkCtx.drawImage(p.sprite, p.x - radius, p.y - radius, radius * 2.0, radius * 2.0);
+          }
+
+          inkCtx.restore();
+        }
+      }
+
+      // -----------------------------------------------------------
+      // INITIALIZATION
+      // -----------------------------------------------------------
+      resizeCanvases();
+      selectInk(0); // Default to Indigo
+      requestAnimationFrame(animationLoop);
+
+    })();
+  </script>
+</body>
+</html>

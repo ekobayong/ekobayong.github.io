@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sahel Meridian — Desert Dunes Parallax</title>
+  <style>
+    :root {
+      --sky-top: #5d8fb5;
+      --sky-mid: #e8b86b;
+      --sky-horizon: #f8dca4;
+      --haze-color: rgba(248, 220, 164, 0.45);
+      --sun-color: #fff6d2;
+      --sun-glow: rgba(255, 230, 160, 0.75);
+      --sun-x: 66%;
+      --sun-y: 22%;
+      --sun-opacity: 1;
+      --star-opacity: 0;
+      --dune-1: #f1d9a8;
+      --dune-2: #e4b982;
+      --dune-3: #d59b62;
+      --dune-4: #bd7a48;
+      --dune-5: #9a5a35;
+      --dune-6: #6e3b24;
+      --caravan-color: #bd7a48;
+      --sand-color: #f1d9a8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #070a1a;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    .viewport-scene {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* SVG Filter definition container */
+    .svg-defs {
+      position: absolute;
+      width: 0;
+      height: 0;
+      pointer-events: none;
+      visibility: hidden;
+    }
+
+    /* Sky background gradient layer */
+    .sky-layer {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 46%, var(--sky-horizon) 74%, var(--sky-horizon) 100%);
+      pointer-events: none;
+      z-index: 1;
+      will-change: background;
+    }
+
+    /* Star field canvas layer */
+    .star-canvas {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      opacity: var(--star-opacity);
+      transition: opacity 0.4s ease-out;
+      will-change: opacity, transform;
+    }
+
+    /* Sun wrapper with heat shimmer filter */
+    .sun-wrapper {
+      position: absolute;
+      left: var(--sun-x);
+      top: var(--sun-y);
+      transform: translate(-50%, -50%);
+      opacity: var(--sun-opacity);
+      pointer-events: none;
+      z-index: 3;
+      filter: url(#heatShimmer);
+      will-change: left, top, opacity, transform;
+    }
+
+    .sun-disc {
+      width: 82px;
+      height: 82px;
+      border-radius: 50%;
+      background: var(--sun-color);
+      box-shadow: 0 0 35px var(--sun-color), 0 0 75px var(--sun-glow);
+    }
+
+    .sun-glow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 320px;
+      height: 320px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--sun-glow) 0%, rgba(255, 180, 80, 0.22) 42%, transparent 72%);
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+
+    /* Blurred horizon haze band */
+    .horizon-haze {
+      position: absolute;
+      top: 36%;
+      left: 0;
+      width: 100%;
+      height: 26%;
+      background: linear-gradient(180deg, transparent 0%, var(--haze-color) 45%, var(--haze-color) 65%, transparent 100%);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      pointer-events: none;
+      z-index: 4;
+      opacity: 0.88;
+    }
+
+    /* Dune Layers */
+    .dune-layer {
+      position: absolute;
+      bottom: -6px;
+      left: -7.5%;
+      width: 115%;
+      height: 100%;
+      pointer-events: none;
+      will-change: transform;
+    }
+
+    .dune-layer-1 { z-index: 5; filter: url(#heatShimmer); }
+    .dune-layer-2 { z-index: 6; }
+    .dune-layer-3 { z-index: 7; }
+    .dune-layer-4 { z-index: 8; }
+    .dune-layer-5 { z-index: 9; }
+    .dune-layer-6 { z-index: 10; }
+
+    .dune-svg {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .dune-path-1 { fill: var(--dune-1); transition: fill 1s ease-out; }
+    .dune-path-2 { fill: var(--dune-2); transition: fill 1s ease-out; }
+    .dune-path-3 { fill: var(--dune-3); transition: fill 1s ease-out; }
+    .dune-path-4 { fill: var(--dune-4); transition: fill 1s ease-out; }
+    .dune-path-5 { fill: var(--dune-5); transition: fill 1s ease-out; }
+    .dune-path-6 { fill: var(--dune-6); transition: fill 1s ease-out; }
+
+    /* Caravan on middle dune layer (layer 4) */
+    .caravan-viewport-track {
+      position: absolute;
+      bottom: 19%;
+      left: 0;
+      width: 100%;
+      height: 135px;
+      pointer-events: none;
+      overflow: visible;
+      z-index: 12;
+    }
+
+    .caravan-marcher {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 620px;
+      height: 135px;
+      animation: caravanTraverse 110s linear infinite;
+      will-change: transform;
+    }
+
+    @keyframes caravanTraverse {
+      0% {
+        transform: translateX(-660px);
+      }
+      100% {
+        transform: translateX(calc(100vw + 250px));
+      }
+    }
+
+    .caravan-svg {
+      width: 620px;
+      height: 135px;
+      overflow: visible;
+    }
+
+    .camel-group {
+      transform-origin: center bottom;
+      animation: camelBobbing 1.4s ease-in-out infinite;
+    }
+
+    .camel-1 { animation-delay: 0s; }
+    .camel-2 { animation-delay: -0.35s; }
+    .camel-3 { animation-delay: -0.70s; }
+    .camel-4 { animation-delay: -1.05s; }
+
+    @keyframes camelBobbing {
+      0%, 100% {
+        transform: translateY(0px) rotate(0deg);
+      }
+      28% {
+        transform: translateY(-4.2px) rotate(-1.2deg);
+      }
+      68% {
+        transform: translateY(1.4px) rotate(0.8deg);
+      }
+    }
+
+    .camel-path {
+      fill: var(--dune-4);
+      transition: fill 1s ease-out;
+    }
+
+    .rope-path {
+      stroke: var(--dune-4);
+      stroke-width: 1.1;
+      stroke-dasharray: 2 1.5;
+      fill: none;
+      transition: stroke 1s ease-out;
+    }
+
+    /* Sand streaks canvas */
+    #sandCanvas {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    /* Title Block */
+    .title-block {
+      position: absolute;
+      top: 8vh;
+      left: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      pointer-events: none;
+      z-index: 40;
+      will-change: transform;
+    }
+
+    .title-h1 {
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Century Schoolbook", Georgia, serif;
+      font-size: clamp(2.1rem, 4.8vw, 3.6rem);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.34em;
+      transform: scaleX(1.12);
+      margin: 0;
+      padding: 0;
+      color: #fff9f0;
+      text-shadow: 0 2px 14px rgba(25, 14, 8, 0.55), 0 0 45px rgba(232, 184, 107, 0.35);
+      line-height: 1.15;
+    }
+
+    .title-rule {
+      width: min(280px, 55vw);
+      height: 1px;
+      margin: 14px 0 11px 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255, 235, 205, 0.75) 50%, transparent 100%);
+      border: none;
+    }
+
+    .title-sub {
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Century Schoolbook", Georgia, serif;
+      font-style: italic;
+      font-size: clamp(0.85rem, 1.4vw, 1.12rem);
+      letter-spacing: 0.08em;
+      color: rgba(255, 245, 230, 0.88);
+      text-shadow: 0 1px 8px rgba(20, 10, 5, 0.6);
+      margin: 0;
+    }
+
+    /* Wind Readout */
+    .wind-readout {
+      position: absolute;
+      top: 24px;
+      right: 28px;
+      font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255, 245, 230, 0.88);
+      background: rgba(45, 28, 20, 0.42);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(248, 220, 164, 0.22);
+      border-radius: 9999px;
+      padding: 7px 16px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+      z-index: 50;
+      pointer-events: none;
+      transition: color 0.5s ease;
+    }
+
+    /* Glassy Bottom Control Panel */
+    .control-panel {
+      position: absolute;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 12px 24px;
+      background: rgba(45, 28, 20, 0.48);
+      backdrop-filter: blur(20px) saturate(135%);
+      -webkit-backdrop-filter: blur(20px) saturate(135%);
+      border: 1px solid rgba(248, 220, 164, 0.28);
+      border-radius: 9999px;
+      box-shadow: 0 16px 36px rgba(10, 6, 8, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+      z-index: 60;
+    }
+
+    .panel-label {
+      font-family: ui-monospace, "SF Mono", Consolas, -apple-system, sans-serif;
+      font-size: 0.68rem;
+      letter-spacing: 0.22em;
+      font-weight: 600;
+      color: rgba(255, 235, 200, 0.85);
+      white-space: nowrap;
+    }
+
+    .slider-track-wrap {
+      display: flex;
+      align-items: center;
+      width: clamp(140px, 24vw, 240px);
+    }
+
+    #timeSlider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(to right, #f8dca4 0%, #e3894e 35%, #b2496a 62%, #5a2f5a 82%, #1c1837 100%);
+      outline: none;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      cursor: pointer;
+    }
+
+    #timeSlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff6d2;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 10px #ffb26a, 0 0 18px rgba(227, 137, 78, 0.85);
+      cursor: grab;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    #timeSlider::-webkit-slider-thumb:hover {
+      transform: scale(1.18);
+      box-shadow: 0 0 14px #fff6d2, 0 0 24px rgba(255, 178, 106, 0.95);
+    }
+
+    #timeSlider::-webkit-slider-thumb:active {
+      cursor: grabbing;
+      transform: scale(1.25);
+    }
+
+    #timeSlider::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff6d2;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 10px #ffb26a, 0 0 18px rgba(227, 137, 78, 0.85);
+      cursor: grab;
+    }
+
+    .clock-display {
+      font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+      font-size: 1.08rem;
+      font-weight: 600;
+      color: #fff6d2;
+      letter-spacing: 0.1em;
+      text-shadow: 0 0 12px rgba(255, 230, 160, 0.5);
+      min-width: 60px;
+      text-align: center;
+    }
+
+    .cycle-btn {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 16px;
+      background: rgba(248, 220, 164, 0.14);
+      border: 1px solid rgba(248, 220, 164, 0.35);
+      border-radius: 9999px;
+      color: #fff8ee;
+      font-family: ui-monospace, "SF Mono", Consolas, -apple-system, sans-serif;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+
+    .cycle-btn:hover {
+      background: rgba(248, 220, 164, 0.25);
+      border-color: rgba(255, 246, 210, 0.6);
+      box-shadow: 0 0 14px rgba(232, 184, 107, 0.35);
+    }
+
+    .cycle-btn:active {
+      transform: scale(0.96);
+    }
+
+    /* Reduced Motion Compliance */
+    @media (prefers-reduced-motion: reduce) {
+      .dune-layer-1,
+      .sun-wrapper {
+        filter: none !important;
+      }
+      .camel-group {
+        animation: none !important;
+      }
+      .caravan-marcher {
+        animation: none !important;
+        transform: translateX(35vw) !important;
+      }
+      #sandCanvas {
+        display: none !important;
+      }
+    }
+
+    @media (max-width: 680px) {
+      .control-panel {
+        gap: 12px;
+        padding: 9px 18px;
+        bottom: 18px;
+      }
+      .panel-label {
+        display: none;
+      }
+      .title-h1 {
+        font-size: 1.8rem;
+      }
+      .wind-readout {
+        top: 14px;
+        right: 16px;
+        font-size: 0.7rem;
+        padding: 5px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SVG Filter for Heat Shimmer -->
+  <svg class="svg-defs" aria-hidden="true">
+    <defs>
+      <filter id="heatShimmer" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.012 0.05" numOctaves="2" result="noise">
+          <animate attributeName="baseFrequency" dur="7s" values="0.012 0.05; 0.010 0.035; 0.014 0.065; 0.012 0.05" repeatCount="indefinite" />
+        </feTurbulence>
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="7" xChannelSelector="R" yChannelSelector="G">
+          <animate attributeName="scale" dur="4.5s" values="5; 9; 6.5; 8.5; 5" repeatCount="indefinite" />
+        </feDisplacementMap>
+      </filter>
+    </defs>
+  </svg>
+
+  <div class="viewport-scene" id="scene">
+    <!-- Sky background layer -->
+    <div class="sky-layer" id="skyLayer"></div>
+
+    <!-- Star field canvas -->
+    <canvas class="star-canvas" id="starCanvas"></canvas>
+
+    <!-- Glowing Sun with Shimmer Filter -->
+    <div class="sun-wrapper" id="sunWrapper">
+      <div class="sun-glow"></div>
+      <div class="sun-disc"></div>
+    </div>
+
+    <!-- Blurred Horizon Haze Band -->
+    <div class="horizon-haze"></div>
+
+    <!-- Six Dune Silhouettes (Back to Front) -->
+    <!-- Dune 1: Far layer (Multiplier 8px, Heat Shimmer Filter) -->
+    <div class="dune-layer dune-layer-1" id="layer1">
+      <svg class="dune-svg" viewBox="0 0 1600 600" preserveAspectRatio="xMidYMax slice">
+        <path class="dune-path-1" d="M 0 330 C 220 340, 420 290, 620 300 C 820 310, 1000 350, 1200 320 C 1380 290, 1500 325, 1600 320 L 1600 600 L 0 600 Z" />
+      </svg>
+    </div>
+
+    <!-- Dune 2: Multiplier 18px -->
+    <div class="dune-layer dune-layer-2" id="layer2">
+      <svg class="dune-svg" viewBox="0 0 1600 600" preserveAspectRatio="xMidYMax slice">
+        <path class="dune-path-2" d="M 0 380 C 200 360, 420 400, 680 395 C 920 390, 1150 340, 1380 355 C 1480 362, 1550 375, 1600 370 L 1600 600 L 0 600 Z" />
+      </svg>
+    </div>
+
+    <!-- Dune 3: Multiplier 30px -->
+    <div class="dune-layer dune-layer-3" id="layer3">
+      <svg class="dune-svg" viewBox="0 0 1600 600" preserveAspectRatio="xMidYMax slice">
+        <path class="dune-path-3" d="M 0 435 C 240 410, 480 380, 720 415 C 940 445, 1160 460, 1360 425 C 1460 405, 1540 430, 1600 420 L 1600 600 L 0 600 Z" />
+      </svg>
+    </div>
+
+    <!-- Dune 4: Middle layer (Multiplier 45px, contains Dune 4 and walking caravan) -->
+    <div class="dune-layer dune-layer-4" id="layer4">
+      <svg class="dune-svg" viewBox="0 0 1600 600" preserveAspectRatio="xMidYMax slice">
+        <path class="dune-path-4" d="M 0 475 C 220 490, 480 455, 750 455 C 1020 455, 1240 505, 1460 480 C 1520 472, 1570 470, 1600 472 L 1600 600 L 0 600 Z" />
+      </svg>
+
+      <!-- Walking Camel Caravan inside Middle Layer -->
+      <div class="caravan-viewport-track">
+        <div class="caravan-marcher" id="caravanMarcher">
+          <svg class="caravan-svg" viewBox="0 0 620 135">
+            <!-- Connecting ropes between camels -->
+            <path class="rope-path" d="M 515 48 C 490 62, 470 55, 447 27" />
+            <path class="rope-path" d="M 365 48 C 330 75, 290 80, 255 62" />
+            <path class="rope-path" d="M 205 65 C 185 68, 165 52, 147 27" />
+
+            <!-- Camel 4: Rear adult with pack (x = 0) -->
+            <g class="camel-group camel-4">
+              <g transform="translate(0, 0)">
+                <path class="camel-path" d="M 150 25 C 148 22, 144 20, 140 20 C 138 18, 136 15, 135 12 C 133 14, 133 17, 132 19 C 130 16, 128 13, 127 12 C 126 14, 127 18, 128 21 C 125 30, 121 42, 113 54 C 107 62, 101 65, 97 64 C 93 52, 89 35, 77 35 C 67 35, 61 50, 55 62 C 47 63, 39 64, 31 67 C 25 70, 21 74, 20 80 C 17 84, 15 92, 17 100 C 18 102, 20 101, 19 98 C 18 92, 19 86, 22 82 C 23 88, 23 96, 24 106 L 24 125 C 24 127, 28 127, 29 125 L 30 106 C 30 98, 32 90, 35 84 C 36 89, 38 98, 40 108 L 42 125 C 42 127, 46 127, 47 125 L 47 108 C 46 96, 47 88, 51 82 C 61 85, 73 85, 85 82 C 87 88, 88 96, 90 106 L 91 125 C 91 127, 95 127, 96 125 L 96 106 C 95 95, 97 86, 101 81 C 105 87, 107 97, 110 108 L 112 125 C 112 127, 116 127, 117 125 L 117 105 C 116 94, 117 84, 121 76 C 125 73, 128 67, 128 58 C 128 48, 133 38, 138 33 C 141 30, 145 29, 147 27 C 151 27, 153 26, 150 25 Z" />
+                <path class="camel-path" d="M 66 54 L 68 34 L 73 31 L 87 31 L 92 34 L 94 54 C 91 58, 69 58, 66 54 Z" />
+              </g>
+            </g>
+
+            <!-- Camel 3: Calf trotting behind mother (x = 160, scaled 0.65) -->
+            <g class="camel-group camel-3">
+              <g transform="translate(160, 44) scale(0.65)">
+                <path class="camel-path" d="M 150 25 C 148 22, 144 20, 140 20 C 138 18, 136 15, 135 12 C 133 14, 133 17, 132 19 C 130 16, 128 13, 127 12 C 126 14, 127 18, 128 21 C 125 30, 121 42, 113 54 C 107 62, 101 65, 97 64 C 93 52, 89 35, 77 35 C 67 35, 61 50, 55 62 C 47 63, 39 64, 31 67 C 25 70, 21 74, 20 80 C 17 84, 15 92, 17 100 C 18 102, 20 101, 19 98 C 18 92, 19 86, 22 82 C 23 88, 23 96, 24 106 L 24 125 C 24 127, 28 127, 29 125 L 30 106 C 30 98, 32 90, 35 84 C 36 89, 38 98, 40 108 L 42 125 C 42 127, 46 127, 47 125 L 47 108 C 46 96, 47 88, 51 82 C 61 85, 73 85, 85 82 C 87 88, 88 96, 90 106 L 91 125 C 91 127, 95 127, 96 125 L 96 106 C 95 95, 97 86, 101 81 C 105 87, 107 97, 110 108 L 112 125 C 112 127, 116 127, 117 125 L 117 105 C 116 94, 117 84, 121 76 C 125 73, 128 67, 128 58 C 128 48, 133 38, 138 33 C 141 30, 145 29, 147 27 C 151 27, 153 26, 150 25 Z" />
+              </g>
+            </g>
+
+            <!-- Camel 2: Adult with pack (x = 300) -->
+            <g class="camel-group camel-2">
+              <g transform="translate(300, 0)">
+                <path class="camel-path" d="M 150 25 C 148 22, 144 20, 140 20 C 138 18, 136 15, 135 12 C 133 14, 133 17, 132 19 C 130 16, 128 13, 127 12 C 126 14, 127 18, 128 21 C 125 30, 121 42, 113 54 C 107 62, 101 65, 97 64 C 93 52, 89 35, 77 35 C 67 35, 61 50, 55 62 C 47 63, 39 64, 31 67 C 25 70, 21 74, 20 80 C 17 84, 15 92, 17 100 C 18 102, 20 101, 19 98 C 18 92, 19 86, 22 82 C 23 88, 23 96, 24 106 L 24 125 C 24 127, 28 127, 29 125 L 30 106 C 30 98, 32 90, 35 84 C 36 89, 38 98, 40 108 L 42 125 C 42 127, 46 127, 47 125 L 47 108 C 46 96, 47 88, 51 82 C 61 85, 73 85, 85 82 C 87 88, 88 96, 90 106 L 91 125 C 91 127, 95 127, 96 125 L 96 106 C 95 95, 97 86, 101 81 C 105 87, 107 97, 110 108 L 112 125 C 112 127, 116 127, 117 125 L 117 105 C 116 94, 117 84, 121 76 C 125 73, 128 67, 128 58 C 128 48, 133 38, 138 33 C 141 30, 145 29, 147 27 C 151 27, 153 26, 150 25 Z" />
+                <path class="camel-path" d="M 66 54 L 68 34 L 73 31 L 87 31 L 92 34 L 94 54 C 91 58, 69 58, 66 54 Z" />
+              </g>
+            </g>
+
+            <!-- Camel 1: Lead camel with rider (x = 450) -->
+            <g class="camel-group camel-1">
+              <g transform="translate(450, 0)">
+                <path class="camel-path" d="M 150 25 C 148 22, 144 20, 140 20 C 138 18, 136 15, 135 12 C 133 14, 133 17, 132 19 C 130 16, 128 13, 127 12 C 126 14, 127 18, 128 21 C 125 30, 121 42, 113 54 C 107 62, 101 65, 97 64 C 93 52, 89 35, 77 35 C 67 35, 61 50, 55 62 C 47 63, 39 64, 31 67 C 25 70, 21 74, 20 80 C 17 84, 15 92, 17 100 C 18 102, 20 101, 19 98 C 18 92, 19 86, 22 82 C 23 88, 23 96, 24 106 L 24 125 C 24 127, 28 127, 29 125 L 30 106 C 30 98, 32 90, 35 84 C 36 89, 38 98, 40 108 L 42 125 C 42 127, 46 127, 47 125 L 47 108 C 46 96, 47 88, 51 82 C 61 85, 73 85, 85 82 C 87 88, 88 96, 90 106 L 91 125 C 91 127, 95 127, 96 125 L 96 106 C 95 95, 97 86, 101 81 C 105 87, 107 97, 110 108 L 112 125 C 112 127, 116 127, 117 125 L 117 105 C 116 94, 117 84, 121 76 C 125 73, 128 67, 128 58 C 128 48, 133 38, 138 33 C 141 30, 145 29, 147 27 C 151 27, 153 26, 150 25 Z" />
+                <path class="camel-path" d="M 76 46 C 74 40, 71 31, 72 23 C 72 16, 76 13, 80 13 C 84 13, 87 17, 86 23 C 86 28, 83 33, 85 39 C 87 45, 93 49, 97 51 L 95 56 C 88 53, 81 51, 76 46 Z M 73 19 C 66 18, 58 22, 52 20 C 56 24, 63 23, 71 22 Z" />
+                <path class="rope-path" d="M 93 39 C 110 42, 130 38, 147 27" />
+              </g>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dune 5: Multiplier 62px -->
+    <div class="dune-layer dune-layer-5" id="layer5">
+      <svg class="dune-svg" viewBox="0 0 1600 600" preserveAspectRatio="xMidYMax slice">
+        <path class="dune-path-5" d="M 0 520 C 260 495, 520 545, 800 520 C 1050 495, 1300 535, 1480 515 C 1530 510, 1570 518, 1600 515 L 1600 600 L 0 600 Z" />
+      </svg>
+    </div>
+
+    <!-- Dune 6: Nearest layer (Multiplier 80px) -->
+    <div class="dune-layer dune-layer-6" id="layer6">
+      <svg class="dune-svg" viewBox="0 0 1600 600" preserveAspectRatio="xMidYMax slice">
+        <path class="dune-path-6" d="M 0 550 C 240 520, 500 510, 780 540 C 1020 565, 1280 535, 1480 555 C 1530 560, 1570 550, 1600 552 L 1600 600 L 0 600 Z" />
+      </svg>
+    </div>
+
+    <!-- Canvas of wind-blown sand streaks on top -->
+    <canvas id="sandCanvas"></canvas>
+
+    <!-- Title Block (Parallax in opposite direction) -->
+    <div class="title-block" id="titleBlock">
+      <h1 class="title-h1">SAHEL MERIDIAN</h1>
+      <hr class="title-rule">
+      <p class="title-sub">Where the ergs meet the evening — 16° 14′ N, 0° 02′ W</p>
+    </div>
+
+    <!-- Wind Readout (Top Right, updated every 2s) -->
+    <div class="wind-readout" id="windReadout">WIND ESE · 14 kn</div>
+
+    <!-- Glassy Control Panel with Time-of-Day Scrubber -->
+    <div class="control-panel">
+      <span class="panel-label">TIME OF DAY</span>
+      <div class="slider-track-wrap">
+        <input type="range" id="timeSlider" min="0" max="100" step="0.1" value="0" aria-label="Time of Day scrubber">
+      </div>
+      <div class="clock-display" id="clockDisplay">16:40</div>
+      <button class="cycle-btn" id="cycleBtn" aria-label="Pause or resume time cycle">
+        <span class="btn-symbol" id="btnSymbol">❚❚</span>
+        <span class="btn-label" id="btnLabel">PAUSE</span>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      'use strict';
+
+      // --- 1. PALETTE & KEYFRAME DEFINITIONS ---
+      // 0%: Golden hour
+      // 35%: Deepening sky
+      // 62%: Dusk with stars beginning
+      // 82%: Deep dusk with sun fading
+      // 100%: Night with full stars and muted violet dunes
+      const keyframes = [
+        {
+          t: 0.0,
+          skyTop: [0x5d, 0x8f, 0xb5],
+          skyMid: [0xe8, 0xb8, 0x6b],
+          skyHorizon: [0xf8, 0xdc, 0xa4],
+          dunes: [
+            [0xf1, 0xd9, 0xa8],
+            [0xe4, 0xb9, 0x82],
+            [0xd5, 0x9b, 0x62],
+            [0xbd, 0x7a, 0x48],
+            [0x9a, 0x5a, 0x35],
+            [0x6e, 0x3b, 0x24]
+          ],
+          sun: [0xff, 0xf6, 0xd2],
+          sunGlow: [255, 230, 160, 0.75],
+          haze: [248, 220, 164, 0.45],
+          stars: 0.0,
+          sunOpacity: 1.0
+        },
+        {
+          t: 0.35,
+          skyTop: [0x3f, 0x5e, 0x8c],
+          skyMid: [0xe3, 0x89, 0x4e],
+          skyHorizon: [0xf6, 0xb9, 0x75],
+          dunes: [
+            [0xde, 0xb8, 0x85],
+            [0xce, 0x98, 0x62],
+            [0xba, 0x7a, 0x48],
+            [0xa2, 0x5b, 0x35],
+            [0x80, 0x40, 0x25],
+            [0x58, 0x29, 0x18]
+          ],
+          sun: [0xff, 0xee, 0xa8],
+          sunGlow: [255, 195, 120, 0.65],
+          haze: [246, 185, 117, 0.40],
+          stars: 0.0,
+          sunOpacity: 1.0
+        },
+        {
+          t: 0.62,
+          skyTop: [0x26, 0x30, 0x5a],
+          skyMid: [0xb2, 0x49, 0x6a],
+          skyHorizon: [0xef, 0x8a, 0x5a],
+          dunes: [
+            [0xaa, 0x7c, 0x72],
+            [0x95, 0x5e, 0x60],
+            [0x7f, 0x46, 0x52],
+            [0x68, 0x34, 0x44],
+            [0x52, 0x24, 0x36],
+            [0x3c, 0x16, 0x27]
+          ],
+          sun: [0xff, 0xca, 0x78],
+          sunGlow: [239, 138, 90, 0.50],
+          haze: [239, 138, 90, 0.35],
+          stars: 0.32,
+          sunOpacity: 0.88
+        },
+        {
+          t: 0.82,
+          skyTop: [0x12, 0x1a, 0x3b],
+          skyMid: [0x5a, 0x2f, 0x5a],
+          skyHorizon: [0xc9, 0x61, 0x3f],
+          dunes: [
+            [0x7a, 0x5b, 0x5d],
+            [0x66, 0x47, 0x4d],
+            [0x53, 0x35, 0x3f],
+            [0x40, 0x25, 0x31],
+            [0x2e, 0x17, 0x24],
+            [0x1f, 0x0c, 0x19]
+          ],
+          sun: [0xff, 0xb2, 0x6a],
+          sunGlow: [201, 97, 63, 0.35],
+          haze: [201, 97, 63, 0.25],
+          stars: 0.74,
+          sunOpacity: 0.35
+        },
+        {
+          t: 1.0,
+          skyTop: [0x07, 0x0a, 0x1a],
+          skyMid: [0x1c, 0x18, 0x37],
+          skyHorizon: [0x4a, 0x2a, 0x3a],
+          dunes: [
+            [0x5c, 0x4a, 0x4a],
+            [0x4c, 0x3b, 0x40],
+            [0x3d, 0x2d, 0x37],
+            [0x2d, 0x20, 0x2e],
+            [0x1e, 0x15, 0x20],
+            [0x12, 0x0c, 0x10]
+          ],
+          sun: [0xff, 0x90, 0x45],
+          sunGlow: [74, 42, 58, 0.0],
+          haze: [74, 42, 58, 0.20],
+          stars: 1.0,
+          sunOpacity: 0.0
+        }
+      ];
+
+      function smoothstep(t) {
+        const c = Math.max(0, Math.min(1, t));
+        return c * c * (3 - 2 * c);
+      }
+
+      function lerp(a, b, factor) {
+        return a + (b - a) * factor;
+      }
+
+      function lerpColor(c1, c2, factor) {
+        const s = smoothstep(factor);
+        return [
+          Math.round(lerp(c1[0], c2[0], s)),
+          Math.round(lerp(c1[1], c2[1], s)),
+          Math.round(lerp(c1[2], c2[2], s))
+        ];
+      }
+
+      function rgbStr(c) {
+        return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+      }
+
+      function rgbaStr(c, a) {
+        return `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a.toFixed(3)})`;
+      }
+
+      // Interpolate scene state at progress p in [0, 1]
+      let currentPaleSandColor = [0xf1, 0xd9, 0xa8];
+
+      function updateSceneColors(p) {
+        // Find adjacent keyframes
+        let i = 0;
+        while (i < keyframes.length - 2 && keyframes[i + 1].t < p) {
+          i++;
+        }
+        const k1 = keyframes[i];
+        const k2 = keyframes[i + 1];
+        const segT = (p - k1.t) / (k2.t - k1.t);
+
+        const skyTop = lerpColor(k1.skyTop, k2.skyTop, segT);
+        const skyMid = lerpColor(k1.skyMid, k2.skyMid, segT);
+        const skyHorizon = lerpColor(k1.skyHorizon, k2.skyHorizon, segT);
+
+        const duneCols = [];
+        for (let d = 0; d < 6; d++) {
+          duneCols.push(lerpColor(k1.dunes[d], k2.dunes[d], segT));
+        }
+
+        const sunCol = lerpColor(k1.sun, k2.sun, segT);
+        const sunGlowRgb = lerpColor(k1.sunGlow.slice(0, 3), k2.sunGlow.slice(0, 3), segT);
+        const sunGlowAlpha = lerp(k1.sunGlow[3], k2.sunGlow[3], smoothstep(segT));
+
+        const hazeRgb = lerpColor(k1.haze.slice(0, 3), k2.haze.slice(0, 3), segT);
+        const hazeAlpha = lerp(k1.haze[3], k2.haze[3], smoothstep(segT));
+
+        const starOpacity = lerp(k1.stars, k2.stars, smoothstep(segT));
+
+        // Sun position travels diagonally from (66%, 22%) to (42%, 70%)
+        const sunX = lerp(66, 42, p);
+        const sunY = lerp(22, 70, p);
+
+        // Sun opacity: fades out just before it drops behind far dunes
+        let sunOpacity = 1.0;
+        if (p > 0.65) {
+          const fadeP = (p - 0.65) / (0.88 - 0.65);
+          sunOpacity = Math.max(0, 1.0 - smoothstep(fadeP));
+        }
+
+        currentPaleSandColor = duneCols[0];
+
+        // Write CSS Custom Properties
+        const root = document.documentElement;
+        root.style.setProperty('--sky-top', rgbStr(skyTop));
+        root.style.setProperty('--sky-mid', rgbStr(skyMid));
+        root.style.setProperty('--sky-horizon', rgbStr(skyHorizon));
+        root.style.setProperty('--haze-color', rgbaStr(hazeRgb, hazeAlpha));
+        root.style.setProperty('--sun-color', rgbStr(sunCol));
+        root.style.setProperty('--sun-glow', rgbaStr(sunGlowRgb, sunGlowAlpha));
+        root.style.setProperty('--sun-x', `${sunX.toFixed(2)}%`);
+        root.style.setProperty('--sun-y', `${sunY.toFixed(2)}%`);
+        root.style.setProperty('--sun-opacity', sunOpacity.toFixed(3));
+        root.style.setProperty('--star-opacity', starOpacity.toFixed(3));
+        root.style.setProperty('--dune-1', rgbStr(duneCols[0]));
+        root.style.setProperty('--dune-2', rgbStr(duneCols[1]));
+        root.style.setProperty('--dune-3', rgbStr(duneCols[2]));
+        root.style.setProperty('--dune-4', rgbStr(duneCols[3]));
+        root.style.setProperty('--dune-5', rgbStr(duneCols[4]));
+        root.style.setProperty('--dune-6', rgbStr(duneCols[5]));
+        root.style.setProperty('--caravan-color', rgbStr(duneCols[3]));
+        root.style.setProperty('--sand-color', rgbStr(duneCols[0]));
+
+        // Update clock: 16:40 (1000m) to 20:12 (1212m)
+        const totalMinutes = 1000 + p * 212;
+        const hh = Math.floor(totalMinutes / 60);
+        const mm = Math.floor(totalMinutes % 60);
+        const clockEl = document.getElementById('clockDisplay');
+        if (clockEl) {
+          clockEl.textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+        }
+      }
+
+      // --- 2. TIME CYCLE & PING-PONG PLAYBACK ---
+      const CYCLE_DURATION = 60000; // 60-second ping-pong cycle
+      let cycleTime = 0; // 0 to 60000 ms
+      let isPaused = false;
+      let lastTimestamp = performance.now();
+
+      const timeSlider = document.getElementById('timeSlider');
+      const cycleBtn = document.getElementById('cycleBtn');
+      const btnSymbol = document.getElementById('btnSymbol');
+      const btnLabel = document.getElementById('btnLabel');
+
+      function updatePlayPauseUI() {
+        if (isPaused) {
+          btnSymbol.textContent = '▶';
+          btnLabel.textContent = 'RESUME';
+          cycleBtn.setAttribute('aria-label', 'Resume time cycle');
+        } else {
+          btnSymbol.textContent = '❚❚';
+          btnLabel.textContent = 'PAUSE';
+          cycleBtn.setAttribute('aria-label', 'Pause time cycle');
+        }
+      }
+
+      cycleBtn.addEventListener('click', () => {
+        isPaused = !isPaused;
+        if (!isPaused) {
+          lastTimestamp = performance.now();
+        }
+        updatePlayPauseUI();
+      });
+
+      timeSlider.addEventListener('input', (e) => {
+        if (!isPaused) {
+          isPaused = true;
+          updatePlayPauseUI();
+        }
+        const p = parseFloat(e.target.value) / 100;
+        // Map slider progress back to ping-pong cycleTime
+        cycleTime = p * (CYCLE_DURATION / 2);
+        updateSceneColors(p);
+      });
+
+      // --- 3. PREFERS-REDUCED-MOTION ---
+      const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      function handleReducedMotion(e) {
+        if (e.matches) {
+          isPaused = true;
+          cycleTime = 0;
+          timeSlider.value = 0;
+          updatePlayPauseUI();
+          updateSceneColors(0);
+        }
+      }
+      if (reducedMotionQuery.matches) {
+        handleReducedMotion(reducedMotionQuery);
+      }
+      reducedMotionQuery.addEventListener('change', handleReducedMotion);
+
+      // --- 4. PARALLAX SYSTEM ---
+      let targetMouseX = 0;
+      let targetMouseY = 0;
+      let currentMouseX = 0;
+      let currentMouseY = 0;
+
+      window.addEventListener('pointermove', (e) => {
+        targetMouseX = (e.clientX / window.innerWidth) * 2 - 1;
+        targetMouseY = (e.clientY / window.innerHeight) * 2 - 1;
+      });
+
+      window.addEventListener('deviceorientation', (e) => {
+        if (e.gamma !== null && e.beta !== null) {
+          targetMouseX = Math.max(-1, Math.min(1, e.gamma / 28));
+          targetMouseY = Math.max(-1, Math.min(1, (e.beta - 40) / 28));
+        }
+      });
+
+      const titleBlock = document.getElementById('titleBlock');
+      const layer1 = document.getElementById('layer1');
+      const layer2 = document.getElementById('layer2');
+      const layer3 = document.getElementById('layer3');
+      const layer4 = document.getElementById('layer4');
+      const layer5 = document.getElementById('layer5');
+      const layer6 = document.getElementById('layer6');
+      const starCanvasEl = document.getElementById('starCanvas');
+      const sunWrapperEl = document.getElementById('sunWrapper');
+
+      // --- 5. STAR FIELD RENDERING ---
+      function initStars() {
+        const canvas = document.getElementById('starCanvas');
+        const ctx = canvas.getContext('2d');
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(window.innerWidth * dpr);
+        canvas.height = Math.floor(window.innerHeight * dpr);
+        ctx.scale(dpr, dpr);
+
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const numStars = 220;
+
+        ctx.clearRect(0, 0, w, h);
+
+        // Deterministic pseudo-random seed
+        let seed = 42;
+        function rnd() {
+          seed = (seed * 9301 + 49297) % 233280;
+          return seed / 233280;
+        }
+
+        for (let i = 0; i < numStars; i++) {
+          const sx = rnd() * w;
+          const sy = rnd() * h * 0.68; // sky area
+          const r = 0.5 + rnd() * 1.5;
+          const alpha = 0.35 + rnd() * 0.65;
+          
+          let col = '#ffffff';
+          const t = rnd();
+          if (t < 0.2) col = '#ffeacc'; // warm star
+          else if (t < 0.4) col = '#d8ebff'; // crisp blue star
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(sx, sy, r, 0, Math.PI * 2);
+          ctx.fillStyle = col;
+          ctx.globalAlpha = alpha;
+          ctx.shadowBlur = r > 1.2 ? 6 : 0;
+          ctx.shadowColor = col;
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      window.addEventListener('resize', initStars);
+      initStars();
+
+      // --- 6. DEVICE-PIXEL-RATIO AWARE SAND PARTICLES ---
+      const sandCanvas = document.getElementById('sandCanvas');
+      const sandCtx = sandCanvas.getContext('2d');
+      const NUM_STREAKS = 260;
+      const streaks = [];
+
+      function resizeSandCanvas() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        sandCanvas.width = Math.floor(window.innerWidth * dpr);
+        sandCanvas.height = Math.floor(window.innerHeight * dpr);
+        sandCanvas.style.width = window.innerWidth + 'px';
+        sandCanvas.style.height = window.innerHeight + 'px';
+        sandCtx.setTransform(1, 0, 0, 1, 0, 0);
+        sandCtx.scale(dpr, dpr);
+      }
+      window.addEventListener('resize', resizeSandCanvas);
+      resizeSandCanvas();
+
+      for (let i = 0; i < NUM_STREAKS; i++) {
+        streaks.push({
+          x: Math.random() * (window.innerWidth + 100) - 50,
+          y: window.innerHeight * (0.36 + Math.random() * 0.62),
+          baseSpeed: 3.8 + Math.random() * 5.2,
+          baseLength: 18 + Math.random() * 30,
+          thickness: 0.8 + Math.random() * 1.4,
+          baseAlpha: 0.14 + Math.random() * 0.42,
+          swayPhase: Math.random() * Math.PI * 2,
+          swaySpeed: 0.02 + Math.random() * 0.04,
+          swayAmp: 0.5 + Math.random() * 1.5,
+          fade: Math.random()
+        });
+      }
+
+      // Wind gust factor and readout updates
+      let currentGust = 1.0;
+      let lastWindUpdate = 0;
+      const windReadoutEl = document.getElementById('windReadout');
+      const windDirections = ['WIND ESE', 'WIND ESE', 'WIND E', 'WIND ESE', 'WIND SE'];
+
+      // --- 7. MAIN ANIMATION & PARALLAX RENDER LOOP ---
+      function animate(now) {
+        requestAnimationFrame(animate);
+
+        const dt = Math.min(now - lastTimestamp, 100);
+        lastTimestamp = now;
+
+        // Advance 60s ping-pong cycle if not paused
+        if (!isPaused) {
+          cycleTime = (cycleTime + dt) % CYCLE_DURATION;
+          const norm = cycleTime / CYCLE_DURATION; // 0 to 1
+          const pingPong = norm < 0.5 ? norm * 2 : (1 - norm) * 2;
+          timeSlider.value = (pingPong * 100).toFixed(1);
+          updateSceneColors(pingPong);
+        }
+
+        // Ease mouse parallax
+        currentMouseX += (targetMouseX - currentMouseX) * 0.05;
+        currentMouseY += (targetMouseY - currentMouseY) * 0.05;
+
+        // Apply Parallax: Title moves opposite (-12px), Dunes move 8px to 80px
+        const mx = currentMouseX;
+        const my = currentMouseY;
+
+        titleBlock.style.transform = `translate3d(${(-mx * 12).toFixed(2)}px, ${(-my * 6).toFixed(2)}px, 0)`;
+        sunWrapperEl.style.transform = `translate3d(calc(-50% + ${(mx * 6).toFixed(2)}px), calc(-50% + ${(my * 3).toFixed(2)}px), 0)`;
+        starCanvasEl.style.transform = `translate3d(${(mx * 4).toFixed(2)}px, ${(my * 2).toFixed(2)}px, 0)`;
+
+        layer1.style.transform = `translate3d(${(mx * 8).toFixed(2)}px, ${(my * 4).toFixed(2)}px, 0)`;
+        layer2.style.transform = `translate3d(${(mx * 18).toFixed(2)}px, ${(my * 8).toFixed(2)}px, 0)`;
+        layer3.style.transform = `translate3d(${(mx * 30).toFixed(2)}px, ${(my * 13).toFixed(2)}px, 0)`;
+        layer4.style.transform = `translate3d(${(mx * 45).toFixed(2)}px, ${(my * 19).toFixed(2)}px, 0)`;
+        layer5.style.transform = `translate3d(${(mx * 62).toFixed(2)}px, ${(my * 26).toFixed(2)}px, 0)`;
+        layer6.style.transform = `translate3d(${(mx * 80).toFixed(2)}px, ${(my * 34).toFixed(2)}px, 0)`;
+
+        // Skip sand animation if prefers-reduced-motion
+        if (reducedMotionQuery.matches) {
+          return;
+        }
+
+        // Wandering gust factor
+        const timeSec = now * 0.001;
+        const gustTarget = 1.15 + 0.38 * Math.sin(timeSec * 0.42) + 0.22 * Math.cos(timeSec * 0.88 + 1.2);
+        currentGust += (gustTarget - currentGust) * 0.025;
+
+        // Update wind readout every 2 seconds
+        if (now - lastWindUpdate > 2000) {
+          lastWindUpdate = now;
+          const knots = Math.round(10 + currentGust * 4.2);
+          const dir = windDirections[Math.floor(Math.random() * windDirections.length)];
+          windReadoutEl.textContent = `${dir} · ${knots} kn`;
+        }
+
+        // Render sand streaks with screen blending
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        sandCtx.clearRect(0, 0, w, h);
+        sandCtx.globalCompositeOperation = 'screen';
+
+        const r = currentPaleSandColor[0];
+        const g = currentPaleSandColor[1];
+        const b = currentPaleSandColor[2];
+
+        for (let i = 0; i < NUM_STREAKS; i++) {
+          const s = streaks[i];
+          s.x += s.baseSpeed * currentGust;
+          s.swayPhase += s.swaySpeed;
+          const sway = Math.sin(s.swayPhase) * s.swayAmp;
+
+          if (s.fade < 1) {
+            s.fade = Math.min(1, s.fade + 0.035);
+          }
+
+          const len = s.baseLength * (0.8 + 0.45 * currentGust);
+          const alpha = s.baseAlpha * s.fade;
+
+          sandCtx.lineWidth = s.thickness;
+          sandCtx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`;
+          sandCtx.beginPath();
+          sandCtx.moveTo(s.x, s.y + sway);
+          sandCtx.lineTo(s.x - len, s.y + sway - 0.75);
+          sandCtx.stroke();
+
+          // Respawn streak on left when exiting right
+          if (s.x - len > w + 25) {
+            s.x = -Math.random() * 70 - 15;
+            s.y = h * (0.36 + Math.random() * 0.62);
+            s.fade = 0;
+            s.swayPhase = Math.random() * Math.PI * 2;
+          }
+        }
+      }
+
+      // Initialize golden hour state immediately
+      updateSceneColors(0);
+      requestAnimationFrame(animate);
+    })();
+  </script>
+</body>
+</html>

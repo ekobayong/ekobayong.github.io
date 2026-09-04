@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Elements Arranged — Elegant Periodic Table</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    background: radial-gradient(ellipse 90% 60% at 50% 0%, #222a3b, #1b2130);
+    color: #d8dee9;
+    font-family: ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    padding: 30px 26px 40px;
+  }
+  header { margin-bottom: 22px; }
+  header h1 {
+    font-family: Georgia, 'Iowan Old Style', Palatino, serif;
+    font-weight: normal; font-size: clamp(26px, 3.4vw, 44px); color: #e8edf5;
+  }
+  header h1 em { font-style: italic; color: #8b95a8; }
+
+  .controls {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px;
+  }
+  .search {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(140,155,185,.25);
+    border-radius: 999px; padding: 7px 16px;
+  }
+  .search input {
+    background: transparent; border: 0; outline: 0; color: #e8edf5;
+    font-family: inherit; font-size: 13px; letter-spacing: .03em; width: 180px;
+  }
+  .seg { display: inline-flex; border: 1px solid rgba(140,155,185,.3); border-radius: 999px; overflow: hidden; }
+  .seg button {
+    background: transparent; border: 0; color: #9aa6bc; padding: 6px 14px; cursor: pointer;
+    font-family: inherit; font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+  }
+  .seg button.sel { background: rgba(160,175,210,.18); color: #e8edf5; }
+  .temp-ctl { display: inline-flex; align-items: center; gap: 10px; font-size: 11px; letter-spacing: .08em; color: #9aa6bc; }
+  #temp { -webkit-appearance: none; appearance: none; width: 200px; height: 4px; border-radius: 2px;
+    background: linear-gradient(90deg, #8fa3b8, #5aa7e0, #f0b46a); cursor: pointer; }
+  #temp::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+  #temp::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; border: none; background: #fff; }
+  #tempVal { font-family: 'Courier New', monospace; color: #e8edf5; min-width: 64px; }
+
+  #legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #aab4c8;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(140,155,185,.2);
+    border-radius: 999px; padding: 4px 11px; cursor: pointer; font-family: inherit;
+  }
+  .chip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .chip.hl, .chip:hover { border-color: rgba(200,215,240,.6); color: #e8edf5; }
+  .chip[aria-pressed="true"] { background: rgba(160,175,210,.22); color: #fff; border-color: rgba(200,215,240,.8); }
+
+  .table-wrap { overflow-x: auto; padding-bottom: 10px; }
+  #table {
+    display: grid;
+    grid-template-columns: repeat(18, minmax(46px, 1fr));
+    grid-template-rows: repeat(7, auto) 14px repeat(2, auto);
+    gap: 4px; min-width: 920px; position: relative;
+  }
+  .tile {
+    grid-row: var(--row); grid-column: var(--col);
+    position: relative;
+    background: color-mix(in srgb, var(--cc) 16%, #232a3a);
+    border: 1px solid color-mix(in srgb, var(--cc) 28%, transparent);
+    border-top: 2px solid var(--cc);
+    border-radius: 5px;
+    color: #dde4ef; cursor: pointer;
+    font-family: inherit;
+    padding: 4px 5px 3px; text-align: left;
+    display: flex; flex-direction: column; justify-content: space-between;
+    aspect-ratio: 1 / 1.06;
+    transition: transform .45s cubic-bezier(.22,1,.36,1), box-shadow .45s cubic-bezier(.22,1,.36,1), opacity .3s;
+    min-height: 44px;
+  }
+  .tile:hover, .tile:focus-visible, .tile.sel {
+    transform: translateY(-5px) scale(1.07);
+    box-shadow: 0 10px 22px rgba(0,0,0,.5), 0 0 0 1px var(--cc);
+    z-index: 3; outline: none;
+  }
+  .tile.dim { opacity: .18; }
+  .tile .num { font-size: 8px; font-variant-numeric: tabular-nums; color: rgba(220,228,240,.6); line-height: 1; }
+  .tile .sym {
+    font-family: Georgia, 'Iowan Old Style', Palatino, serif;
+    font-size: clamp(15px, 1.5vw, 19px); line-height: 1.1;
+  }
+  .tile .nm { font-size: 7.5px; color: rgba(200,210,225,.65); line-height: 1.15; letter-spacing: .02em; }
+  @media (max-width: 900px) { .tile .nm { display: none; } }
+  .placeholder {
+    grid-row: var(--row); grid-column: var(--col);
+    border: 1px dashed rgba(150,165,195,.35); border-radius: 5px;
+    color: rgba(180,192,212,.6); font-size: 9px; display: flex; align-items: center; justify-content: center;
+    aspect-ratio: 1 / 1.06; letter-spacing: .04em;
+  }
+
+  /* detail card */
+  #detail {
+    grid-row: 1 / 4; grid-column: 3 / 13;
+    background: rgba(30,37,52,.92);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(140,155,185,.2); border-radius: 12px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.4);
+    display: flex; gap: 18px; padding: 18px 20px; z-index: 2;
+    aspect-ratio: 3.15 / 1; overflow: hidden;
+  }
+  #detail .bohr { flex: 0 0 34%; display: flex; align-items: center; justify-content: center; }
+  #detail svg { width: 100%; height: 100%; }
+  #detail .shell-g { transform-origin: 100px 100px; }
+  #detail .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  #detail .sym-line { display: flex; align-items: baseline; gap: 12px; }
+  #detail .dsym {
+    font-family: Georgia, 'Iowan Old Style', Palatino, serif;
+    font-size: 40px; color: var(--cc, #9fb0c8); line-height: 1;
+  }
+  #detail .dname { font-size: 17px; color: #eef2f8; }
+  #detail .dnum { font-size: 12px; color: #8b95a8; font-variant-numeric: tabular-nums; }
+  #detail .dcat { font-size: 9.5px; letter-spacing: .24em; text-transform: uppercase; color: #8b95a8; margin-top: 2px; }
+  #detail dl {
+    display: grid; grid-template-columns: auto 1fr; gap: 2px 14px;
+    font-size: 11.5px; margin-top: 8px;
+  }
+  #detail dt { color: #8b95a8; letter-spacing: .04em; }
+  #detail dd { color: #d8dee9; }
+  #detail dd .state-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px;
+    box-shadow: 0 0 6px currentColor;
+  }
+  @media (max-width: 900px) {
+    #detail {
+      position: fixed; left: 0; right: 0; bottom: -80%; z-index: 20;
+      aspect-ratio: auto; max-height: 62vh; overflow-y: auto;
+      border-radius: 16px 16px 0 0; padding-bottom: 26px;
+      transition: bottom .5s cubic-bezier(.22,1,.36,1);
+    }
+    #detail.open { bottom: 0; }
+    body.sheet-open::after {
+      content: ""; position: fixed; inset: 0; z-index: 15; background: rgba(10,14,22,.5);
+    }
+  }
+  footer { margin-top: 18px; font-size: 12px; color: #8b95a8; letter-spacing: .03em; }
+  @media (prefers-reduced-motion: reduce) {
+    .tile, #detail { transition: none !important; }
+    #detail .shell-g { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>The Elements <em>arranged</em></h1>
+</header>
+
+<div class="controls">
+  <label class="search">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#8b95a8" stroke-width="1.4"><circle cx="6" cy="6" r="4.4"/><path d="M9.4 9.4 L13 13"/></svg>
+    <input id="searchInput" type="text" placeholder="Search elements…" autocomplete="off">
+  </label>
+  <div class="seg" id="modeSeg">
+    <button data-mode="category" class="sel">Category</button>
+    <button data-mode="state">State</button>
+  </div>
+  <div class="temp-ctl">
+    <span>Temperature</span>
+    <input type="range" id="temp" min="0" max="6000" step="1" value="293">
+    <span id="tempVal">293 K</span>
+  </div>
+</div>
+
+<div id="legend"></div>
+
+<div class="table-wrap">
+  <div id="table">
+    <div class="placeholder" style="--row: 9; --col: 3;">57–71</div>
+    <div class="placeholder" style="--row: 10; --col: 3;">89–103</div>
+    <div id="detail"></div>
+  </div>
+</div>
+
+<footer id="count"></footer>
+
+<script>
+(function () {
+  "use strict";
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* categories */
+  var CAT = {
+    alk: ["Alkali metal", "#c98a7a"],
+    ae: ["Alkaline earth", "#d4b483"],
+    tm: ["Transition metal", "#8fa3b8"],
+    pt: ["Post-transition", "#9bb0a5"],
+    md: ["Metalloid", "#b8a1c9"],
+    nm: ["Reactive nonmetal", "#7fb5a6"],
+    hal: ["Halogen", "#c9c07a"],
+    ng: ["Noble gas", "#a38ec2"],
+    lan: ["Lanthanide", "#d69ea8"],
+    act: ["Actinide", "#c48bb0"],
+    unk: ["Unknown", "#6f7580"]
+  };
+  var STATES = { solid: "#8fa3b8", liquid: "#5aa7e0", gas: "#f0b46a" };
+
+  /* data: [symbol, name, mass, category, meltK, boilK]  (null = unknown) */
+  var E = [
+    ["H","Hydrogen",1.008,"nm",14,20],["He","Helium",4.0026,"ng",1,4],
+    ["Li","Lithium",6.94,"alk",454,1615],["Be","Beryllium",9.0122,"ae",1560,2742],
+    ["B","Boron",10.81,"md",2349,4200],["C","Carbon",12.011,"nm",3823,4098],
+    ["N","Nitrogen",14.007,"nm",63,77],["O","Oxygen",15.999,"nm",54,90],
+    ["F","Fluorine",18.998,"hal",53,85],["Ne","Neon",20.180,"ng",25,27],
+    ["Na","Sodium",22.990,"alk",371,1156],["Mg","Magnesium",24.305,"ae",923,1363],
+    ["Al","Aluminium",26.982,"pt",933,2792],["Si","Silicon",28.085,"md",1687,3538],
+    ["P","Phosphorus",30.974,"nm",317,554],["S","Sulfur",32.06,"nm",388,718],
+    ["Cl","Chlorine",35.45,"hal",172,239],["Ar","Argon",39.948,"ng",84,87],
+    ["K","Potassium",39.098,"alk",337,1032],["Ca","Calcium",40.078,"ae",1115,1757],
+    ["Sc","Scandium",44.956,"tm",1814,3109],["Ti","Titanium",47.867,"tm",1941,3560],
+    ["V","Vanadium",50.942,"tm",2183,3680],["Cr","Chromium",51.996,"tm",2180,2944],
+    ["Mn","Manganese",54.938,"tm",1519,2334],["Fe","Iron",55.845,"tm",1811,3134],
+    ["Co","Cobalt",58.933,"tm",1768,3200],["Ni","Nickel",58.693,"tm",1728,3186],
+    ["Cu","Copper",63.546,"tm",1358,2835],["Zn","Zinc",65.38,"tm",693,1180],
+    ["Ga","Gallium",69.723,"pt",303,2477],["Ge","Germanium",72.630,"md",1211,3106],
+    ["As","Arsenic",74.922,"md",1090,887],["Se","Selenium",78.971,"nm",494,958],
+    ["Br","Bromine",79.904,"hal",266,332],["Kr","Krypton",83.798,"ng",116,120],
+    ["Rb","Rubidium",85.468,"alk",312,961],["Sr","Strontium",87.62,"ae",1050,1655],
+    ["Y","Yttrium",88.906,"tm",1799,3609],["Zr","Zirconium",91.224,"tm",2128,4682],
+    ["Nb","Niobium",92.906,"tm",2750,5017],["Mo","Molybdenum",95.95,"tm",2896,4912],
+    ["Tc","Technetium",98,"tm",2430,4538],["Ru","Ruthenium",101.07,"tm",2607,4423],
+    ["Rh","Rhodium",102.91,"tm",2237,3968],["Pd","Palladium",106.42,"tm",1828,3236],
+    ["Ag","Silver",107.87,"tm",1235,2435],["Cd","Cadmium",112.41,"tm",594,1040],
+    ["In","Indium",114.82,"pt",430,2345],["Sn","Tin",118.71,"pt",505,2875],
+    ["Sb","Antimony",121.76,"md",904,1860],["Te","Tellurium",127.60,"md",723,1261],
+    ["I","Iodine",126.90,"hal",387,457],["Xe","Xenon",131.29,"ng",161,165],
+    ["Cs","Caesium",132.91,"alk",302,944],["Ba","Barium",137.33,"ae",1000,2170],
+    ["La","Lanthanum",138.91,"lan",1193,3737],["Ce","Cerium",140.12,"lan",1068,3716],
+    ["Pr","Praseodymium",140.91,"lan",1208,3793],["Nd","Neodymium",144.24,"lan",1297,3347],
+    ["Pm","Promethium",145,"lan",1315,3273],["Sm","Samarium",150.36,"lan",1345,2067],
+    ["Eu","Europium",151.96,"lan",1099,1802],["Gd","Gadolinium",157.25,"lan",1585,3546],
+    ["Tb","Terbium",158.93,"lan",1629,3503],["Dy","Dysprosium",162.50,"lan",1680,2840],
+    ["Ho","Holmium",164.93,"lan",1734,2993],["Er","Erbium",167.26,"lan",1802,3141],
+    ["Tm","Thulium",168.93,"lan",1818,2223],["Yb","Ytterbium",173.05,"lan",1097,1469],
+    ["Lu","Lutetium",174.97,"lan",1925,3675],
+    ["Hf","Hafnium",178.49,"tm",2506,4876],["Ta","Tantalum",180.95,"tm",3290,5731],
+    ["W","Tungsten",183.84,"tm",3695,5828],["Re","Rhenium",186.21,"tm",3459,5869],
+    ["Os","Osmium",190.23,"tm",3306,5285],["Ir","Iridium",192.22,"tm",2719,4701],
+    ["Pt","Platinum",195.08,"tm",2041,4098],["Au","Gold",196.97,"tm",1337,3129],
+    ["Hg","Mercury",200.59,"tm",234,630],["Tl","Thallium",204.38,"pt",577,1746],
+    ["Pb","Lead",207.2,"pt",601,2022],["Bi","Bismuth",208.98,"pt",544,1837],
+    ["Po","Polonium",209,"pt",527,1235],["At","Astatine",210,"hal",575,610],
+    ["Rn","Radon",222,"ng",202,211],["Fr","Francium",223,"alk",300,950],
+    ["Ra","Radium",226,"ae",973,2010],
+    ["Ac","Actinium",227,"act",1323,3471],["Th","Thorium",232.04,"act",2115,5061],
+    ["Pa","Protactinium",231.04,"act",1841,4300],["U","Uranium",238.03,"act",1405,4404],
+    ["Np","Neptunium",237,"act",917,4273],["Pu","Plutonium",244,"act",913,3501],
+    ["Am","Americium",243,"act",1449,2880],["Cm","Curium",247,"act",1613,3383],
+    ["Bk","Berkelium",247,"act",1259,2900],["Cf","Californium",251,"act",1173,1743],
+    ["Es","Einsteinium",252,"act",1133,1269],["Fm","Fermium",257,"act",1800,null],
+    ["Md","Mendelevium",258,"act",1100,null],["No","Nobelium",259,"act",1100,null],
+    ["Lr","Lawrencium",266,"act",1900,null],
+    ["Rf","Rutherfordium",267,"tm",null,null],["Db","Dubnium",268,"tm",null,null],
+    ["Sg","Seaborgium",269,"tm",null,null],["Bh","Bohrium",270,"tm",null,null],
+    ["Hs","Hassium",269,"tm",null,null],["Mt","Meitnerium",278,"unk",null,null],
+    ["Ds","Darmstadtium",281,"unk",null,null],["Rg","Roentgenium",282,"unk",null,null],
+    ["Cn","Copernicium",285,"tm",283,340],["Nh","Nihonium",286,"unk",700,1430],
+    ["Fl","Flerovium",289,"unk",340,420],["Mc","Moscovium",290,"unk",700,1400],
+    ["Lv","Livermorium",293,"unk",709,1085],["Ts","Tennessine",294,"hal",723,883],
+    ["Og","Oganesson",294,"ng",325,450]
+  ];
+
+  function posOf(z) {
+    var row, col;
+    if (z === 1) { row = 1; col = 1; }
+    else if (z === 2) { row = 1; col = 18; }
+    else if (z <= 4) { row = 2; col = z - 2; }
+    else if (z <= 10) { row = 2; col = z + 8; }
+    else if (z <= 12) { row = 3; col = z - 10; }
+    else if (z <= 18) { row = 3; col = z; }
+    else if (z <= 20) { row = 4; col = z - 18; }
+    else if (z <= 30) { row = 4; col = z - 18; }
+    else if (z <= 36) { row = 4; col = z; }
+    else if (z <= 38) { row = 5; col = z - 36; }
+    else if (z <= 48) { row = 5; col = z - 18; }
+    else if (z <= 54) { row = 5; col = z; }
+    else if (z <= 56) { row = 6; col = z - 54; }
+    else if (z <= 71) { row = 9; col = z - 57 + 3; }
+    else if (z <= 86) { row = 6; col = z - 68; }
+    else if (z <= 88) { row = 7; col = z - 86; }
+    else if (z <= 103) { row = 10; col = z - 89 + 3; }
+    else { row = 7; col = z - 100; }
+    return { row: row, col: col };
+  }
+  function periodOf(z) {
+    if (z <= 2) return z === 1 ? 1 : 1;
+    if (z <= 10) return 2;
+    if (z <= 18) return 3;
+    if (z <= 36) return 4;
+    if (z <= 54) return 5;
+    if (z <= 86) return 6;
+    return 7;
+  }
+
+  var table = document.getElementById("table");
+  var tiles = [];
+  E.forEach(function (el, i) {
+    var z = i + 1;
+    var p = posOf(z);
+    var b = document.createElement("button");
+    b.className = "tile";
+    b.style.setProperty("--row", p.row);
+    b.style.setProperty("--col", p.col);
+    var catColor = CAT[el[3]][1];
+    b.style.setProperty("--cc", catColor);
+    b.innerHTML =
+      '<span class="num">' + z + '</span>' +
+      '<span class="sym">' + el[0] + '</span>' +
+      '<span class="nm">' + el[1] + '</span>';
+    b.addEventListener("click", function () { openDetail(z); });
+    table.appendChild(b);
+    tiles.push({ z: z, el: b, data: el, pos: p });
+  });
+
+  /* ---------- legend ---------- */
+  var legend = document.getElementById("legend");
+  var pinnedCat = null, hoverCat = null;
+  Object.keys(CAT).forEach(function (k) {
+    var c = document.createElement("button");
+    c.className = "chip";
+    c.setAttribute("aria-pressed", "false");
+    c.innerHTML = '<i style="background:' + CAT[k][1] + '"></i>' + CAT[k][0];
+    c.addEventListener("mouseenter", function () { hoverCat = k; paint(); });
+    c.addEventListener("mouseleave", function () { hoverCat = null; paint(); });
+    c.addEventListener("click", function () {
+      pinnedCat = pinnedCat === k ? null : k;
+      c.setAttribute("aria-pressed", pinnedCat === k ? "true" : "false");
+      paint();
+    });
+    legend.appendChild(c);
+  });
+
+  /* ---------- state ---------- */
+  var mode = "category";
+  var tempK = 293;
+  function stateOf(el) {
+    var melt = el[4], boil = el[5];
+    if (melt == null) return "solid";
+    if (tempK >= boil) return "gas";
+    if (tempK >= melt) return "liquid";
+    return "solid";
+  }
+
+  function paint() {
+    var activeCat = pinnedCat || hoverCat;
+    var counts = { solid: 0, liquid: 0, gas: 0 };
+    tiles.forEach(function (t) {
+      var el = t.data;
+      var show = true;
+      if (mode === "category" && activeCat) show = el[3] === activeCat;
+      if (mode === "state") {
+        var st = stateOf(el);
+        counts[st]++;
+        t.el.style.setProperty("--cc", STATES[st]);
+      } else {
+        t.el.style.setProperty("--cc", CAT[el[3]][1]);
+      }
+      t.el.classList.toggle("dim", !show);
+    });
+    if (mode === "state") {
+      legend.innerHTML = "";
+      Object.keys(STATES).forEach(function (s) {
+        var c = document.createElement("span");
+        c.className = "chip";
+        c.innerHTML = '<i style="background:' + STATES[s] + '"></i>' + s + " · " + counts[s];
+        legend.appendChild(c);
+      });
+    } else {
+      buildLegendCats();
+    }
+    updateCount();
+  }
+  function buildLegendCats() {
+    legend.innerHTML = "";
+    Object.keys(CAT).forEach(function (k) {
+      var c = document.createElement("button");
+      c.className = "chip";
+      c.setAttribute("aria-pressed", String(pinnedCat === k));
+      c.innerHTML = '<i style="background:' + CAT[k][1] + '"></i>' + CAT[k][0];
+      c.addEventListener("mouseenter", function () { hoverCat = k; paint(); });
+      c.addEventListener("mouseleave", function () { hoverCat = null; paint(); });
+      c.addEventListener("click", function () {
+        pinnedCat = pinnedCat === k ? null : k;
+        paint();
+      });
+      legend.appendChild(c);
+    });
+  }
+
+  var modeSeg = document.getElementById("modeSeg");
+  modeSeg.addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    mode = b.dataset.mode;
+    modeSeg.querySelectorAll("button").forEach(function (x) { x.classList.toggle("sel", x === b); });
+    pinnedCat = null;
+    paint();
+  });
+  var tempEl = document.getElementById("temp");
+  tempEl.addEventListener("input", function () {
+    tempK = +tempEl.value;
+    document.getElementById("tempVal").textContent = tempK + " K";
+    if (mode !== "state") {
+      mode = "state";
+      modeSeg.querySelectorAll("button").forEach(function (x) { x.classList.toggle("sel", x.dataset.mode === "state"); });
+      pinnedCat = null;
+    }
+    paint();
+  });
+
+  /* ---------- search ---------- */
+  var searchInput = document.getElementById("searchInput");
+  var query = "";
+  searchInput.addEventListener("input", function () {
+    query = searchInput.value.trim().toLowerCase();
+    tiles.forEach(function (t) {
+      var el = t.data;
+      var match = !query ||
+        el[1].toLowerCase().indexOf(query) >= 0 ||
+        el[0].toLowerCase() === query ||
+        el[0].toLowerCase().indexOf(query) === 0 ||
+        String(t.z) === query;
+      t.el.classList.toggle("dim", !match);
+    });
+    updateCount();
+  });
+
+  function updateCount() {
+    var visible = tiles.filter(function (t) { return !t.el.classList.contains("dim"); }).length;
+    document.getElementById("count").textContent =
+      visible + " of 118 elements shown · everything computed locally, no libraries";
+  }
+
+  /* ---------- detail card + Bohr model ---------- */
+  var detail = document.getElementById("detail");
+  var SHELLS = [2, 8, 18, 32, 32, 18, 8];
+  function shellsFor(z) {
+    var out = [], left = z;
+    for (var i = 0; i < SHELLS.length && left > 0; i++) {
+      var n = Math.min(SHELLS[i], left);
+      out.push(n); left -= n;
+    }
+    return out;
+  }
+  function bohrSVG(z, color) {
+    var shells = shellsFor(z);
+    var maxR = 92, minR = 18;
+    var s = '<svg viewBox="0 0 200 200">';
+    s += '<defs><radialGradient id="nuc" cx="42%" cy="38%"><stop offset="0%" stop-color="#fff"/><stop offset="55%" stop-color="' + color + '"/><stop offset="100%" stop-color="#20242e"/></radialGradient></defs>';
+    var radii = [];
+    for (var i = 0; i < shells.length; i++) {
+      var r = shells.length === 1 ? (minR + maxR) / 2 : minR + (maxR - minR) * (i / (shells.length - 1));
+      radii.push(r);
+      s += '<circle cx="100" cy="100" r="' + r.toFixed(1) + '" fill="none" stroke="rgba(150,165,195,.28)" stroke-width="0.7"/>';
+    }
+    shells.forEach(function (n, si) {
+      var dur = 6 + 3.5 * si;
+      var dir = si % 2 ? "reverse" : "normal";
+      var g = '<g class="shell-g" style="animation:orbit ' + dur + 's linear infinite ' + dir + '">';
+      for (var e = 0; e < n; e++) {
+        var ang = (e / n) * Math.PI * 2;
+        var x = 100 + radii[si] * Math.cos(ang);
+        var y = 100 + radii[si] * Math.sin(ang);
+        g += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.6" fill="' + color + '" style="filter:drop-shadow(0 0 3px ' + color + ')"/>';
+      }
+      g += "</g>";
+      s += g;
+    });
+    s += '<circle cx="100" cy="100" r="7" fill="url(#nuc)" stroke="rgba(255,255,255,.4)" stroke-width="0.5"/></svg>';
+    s += '<style>@keyframes orbit{to{transform:rotate(360deg)}}</style>';
+    return s;
+  }
+  var currentZ = 1;
+  function openDetail(z) {
+    currentZ = z;
+    var t = tiles[z - 1], el = t.data;
+    var color = mode === "state" ? STATES[stateOf(el)] : CAT[el[3]][1];
+    var shells = shellsFor(z);
+    var st = stateOf(el);
+    detail.innerHTML =
+      '<div class="bohr">' + bohrSVG(z, color) + '</div>' +
+      '<div class="info">' +
+        '<div class="sym-line"><span class="dsym">' + el[0] + '</span>' +
+        '<span><span class="dname">' + el[1] + '</span><br><span class="dnum">' + z + ' · ' + el[2] + ' u</span></span></div>' +
+        '<div class="dcat">' + CAT[el[3]][0] + '</div>' +
+        '<dl>' +
+          '<dt>Electrons</dt><dd>' + shells.join(" · ") + '</dd>' +
+          '<dt>Melting</dt><dd>' + (el[4] == null ? "unknown" : el[4] + " K") + '</dd>' +
+          '<dt>Boiling</dt><dd>' + (el[5] == null ? "unknown" : el[5] + " K") + '</dd>' +
+          '<dt>At ' + tempK + ' K</dt><dd><span class="state-dot" style="background:' + STATES[st] + ';color:' + STATES[st] + '"></span>' + st + '</dd>' +
+        '</dl>' +
+      '</div>';
+    detail.classList.add("open");
+    document.body.classList.add("sheet-open");
+  }
+  detail.addEventListener("click", function (e) {
+    if (window.innerWidth <= 900 && !e.target.closest("svg")) closeDetail();
+  });
+  function closeDetail() {
+    detail.classList.remove("open");
+    document.body.classList.remove("sheet-open");
+  }
+  document.addEventListener("click", function (e) {
+    if (window.innerWidth <= 900 && document.body.classList.contains("sheet-open") &&
+        !e.target.closest("#detail") && !e.target.closest(".tile")) {
+      closeDetail();
+    }
+  });
+
+  paint();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Little Meridian — An Isometric CSS City Block</title>
+<style>
+  :root{
+    --sky1:#0c1028; --sky2:#1e2246; --night:1; --s:1;
+    --shx:60; --shy:40; --sho:.5;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; overflow:hidden; }
+  body{
+    background:linear-gradient(180deg, var(--sky1), var(--sky2));
+    font-family:ui-sans-serif, system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color:#20242c;
+  }
+  #stars{ position:fixed; inset:0; z-index:0; opacity:calc(var(--night) * .9); pointer-events:none; }
+  #sun,#moon{ position:fixed; z-index:1; width:54px; height:54px; border-radius:50%; pointer-events:none; }
+  #sun{ background:radial-gradient(circle at 40% 40%, #fff3c0, #ffd257 60%, #ff9d2e);
+    box-shadow:0 0 40px 18px rgba(255,210,90,.55), 0 0 120px 60px rgba(255,180,60,.25); }
+  #moon{ background:radial-gradient(circle at 40% 38%, #f4f2ea, #cfd2dd 55%, #9aa0b4);
+    box-shadow:0 0 26px 10px rgba(220,226,255,.4); width:40px; height:40px; }
+  .cloud{
+    position:fixed; z-index:1; pointer-events:none; opacity:.8;
+    width:140px; height:38px; border-radius:40px;
+    background:radial-gradient(closest-side, rgba(255,255,255,.95), rgba(255,255,255,.75) 60%, transparent);
+    filter:blur(5px);
+    animation:drift var(--dur,110s) linear infinite; top:var(--ct,12%);
+  }
+  .cloud::after{ content:''; position:absolute; left:22%; top:-58%; width:52%; height:120%; border-radius:50%;
+    background:inherit; }
+  @keyframes drift{ from{ transform:translateX(-25vw); } to{ transform:translateX(125vw); } }
+  /* ---------- isometric scene ---------- */
+  #viewport{ position:fixed; inset:0; z-index:2; display:grid; place-items:center; }
+  #ground{
+    position:relative; width:540px; height:540px;
+    transform:scale3d(var(--s),var(--s),var(--s)) rotateX(60deg) rotateZ(45deg);
+    transform-style:preserve-3d;
+    background:
+      repeating-linear-gradient(0deg, transparent 0 26px, rgba(233,228,216,.85) 26px 29px) ,
+      #b9d59a;
+    box-shadow:0 0 0 8px #c9c2b4, 0 0 0 9px rgba(120,112,98,.5), 30px 40px 60px rgba(6,10,30,.45);
+    outline:8px solid #c9c2b4;
+  }
+  #groundDim{ position:absolute; inset:0; background:rgba(18,24,66,.55); opacity:var(--night); pointer-events:none; z-index:40; }
+  .road{ position:absolute; background:#5b5f6b; }
+  .road.h{ left:0; top:225px; width:540px; height:90px;
+    background-image:repeating-linear-gradient(90deg, rgba(240,230,190,.8) 0 18px, transparent 18px 34px);
+    background-size:100% 2px; background-position:0 50%; background-repeat:no-repeat; }
+  .road.v{ left:225px; top:0; width:90px; height:540px;
+    background-image:repeating-linear-gradient(180deg, rgba(240,230,190,.8) 0 18px, transparent 18px 34px);
+    background-size:2px 100%; background-position:50% 0; background-repeat:no-repeat; }
+  .walk{ position:absolute; background:#d9d3c7; }
+  /* trees */
+  .tree{ position:absolute; transform-style:preserve-3d; }
+  .tree .canopy{
+    position:absolute; left:-13px; top:-13px; width:26px; height:26px; border-radius:50%;
+    background:radial-gradient(circle at 38% 34%, #8ac27a, #4f8a48 75%);
+    transform:translateZ(12px);
+    box-shadow:0 0 0 0 rgba(0,0,0,0), inset -3px -4px 6px rgba(20,60,20,.4);
+  }
+  .tree .trunk{
+    position:absolute; left:-1.5px; top:-1.5px; width:3px; height:12px;
+    background:#7a5a3a; transform:translateZ(6px) rotateX(-90deg); transform-origin:0 0;
+  }
+  /* buildings */
+  .slot{ position:absolute; transform-style:preserve-3d; outline:none; }
+  .slot .b{ position:absolute; inset:0; transform-style:preserve-3d; transition:transform .45s cubic-bezier(.2,1.3,.3,1); }
+  .slot:hover .b, .slot:focus .b{ transform:translateZ(24px); }
+  .face{ position:absolute; transform-origin:0 0; overflow:hidden; }
+  .face.top{ left:0; top:0; width:var(--w); height:var(--d);
+    background:linear-gradient(rgba(255,255,255,.32), rgba(255,255,255,.18)),
+      var(--col);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.25);
+    transform:translateZ(var(--h)); }
+  .face.south{ left:0; top:0; width:var(--w); height:var(--h);
+    background:linear-gradient(rgba(0,0,0,.05), rgba(0,0,0,.05)), var(--col);
+    transform:translateY(var(--d)) translateZ(var(--h)) rotateX(-90deg); }
+  .face.east{ left:0; top:0; width:var(--d); height:var(--h);
+    background:linear-gradient(rgba(0,0,0,.28), rgba(0,0,0,.28)), var(--col);
+    transform:translateX(var(--w)) translateZ(var(--h)) rotateZ(90deg) rotateX(-90deg); }
+  .face.south::after, .face.east::after{
+    content:''; position:absolute; inset:0; background:rgba(18,24,66,.55); opacity:var(--night); pointer-events:none;
+  }
+  .wins{ position:absolute; inset:6px 8px 18px 8px; display:grid;
+    grid-template-columns:repeat(var(--cols), 1fr); grid-template-rows:repeat(var(--rows), 1fr); gap:4px; }
+  .cell{ position:relative; background:linear-gradient(160deg, #a7bce0 0%, #5a6f96 90%);
+    box-shadow:inset 0 0 2px rgba(10,20,40,.5); border-radius:1px; }
+  .cell::after{ content:''; position:absolute; inset:0; opacity:0; transition:opacity .8s;
+    background:var(--glow, #ffd58a); box-shadow:0 0 8px 2px var(--glow, #ffd58a); }
+  .cell.on::after{ opacity:var(--night); }
+  .door{ position:absolute; left:0; right:0; bottom:0; height:16px; margin:0 26%;
+    background:#2c2a30; border-radius:2px 2px 0 0; }
+  .footshadow{ position:absolute; left:-6px; top:-6px; width:calc(var(--w) + 12px); height:calc(var(--d) + 12px);
+    background:rgba(8,12,34,.5); filter:blur(5px); border-radius:6px;
+    transform:translate(calc(var(--shx) * var(--hu) / 100 * 1px), calc(var(--shy) * var(--hu) / 100 * 1px));
+    opacity:var(--sho); }
+  /* hover tag */
+  .tag{
+    position:absolute; left:50%; top:0; z-index:5;
+    padding:7px 10px; border-radius:6px; min-width:110px;
+    background:rgba(255,255,252,.92); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
+    box-shadow:0 6px 16px rgba(6,10,30,.3), inset 0 0 0 1px rgba(255,255,255,.6);
+    transform:translate(-50%,-130%) rotateZ(-45deg) rotateX(-60deg);
+    opacity:0; pointer-events:none; transition:opacity .25s;
+  }
+  .slot:hover .tag, .slot:focus .tag{ opacity:1; }
+  .tag b{ display:block; font-size:11px; letter-spacing:.02em; }
+  .tag span{ font-size:9px; color:#5c6068; letter-spacing:.06em; }
+  /* cars */
+  .car{ position:absolute; width:16px; height:7px; border-radius:3px; z-index:2; }
+  .car .hl, .car .tl{ position:absolute; top:1px; width:3px; height:5px; border-radius:1px; }
+  .car .hl{ background:#fff; box-shadow:0 0 6px 2px rgba(255,255,240, calc(.35 + var(--night)*.65)); }
+  .car .tl{ background:#ff4a3a; box-shadow:0 0 6px 2px rgba(255,60,40, calc(.25 + var(--night)*.7)); }
+  .carX{ animation:carX var(--dur,10s) linear infinite; }
+  .carX.rev{ animation-name:carXr; }
+  @keyframes carX{ from{ transform:translateZ(2px) translateX(-40px); } to{ transform:translateZ(2px) translateX(590px); } }
+  @keyframes carXr{ from{ transform:translateZ(2px) translateX(590px) rotate(180deg); } to{ transform:translateZ(2px) translateX(-40px) rotate(180deg); } }
+  .carY{ animation:carY var(--dur,10s) linear infinite; }
+  .carY.rev{ animation-name:carYr; }
+  @keyframes carY{ from{ transform:translateZ(2px) translateY(-40px); } to{ transform:translateZ(2px) translateY(590px); } }
+  @keyframes carYr{ from{ transform:translateZ(2px) translateY(590px) rotate(90deg); } to{ transform:translateZ(2px) translateY(-40px) rotate(90deg); } }
+  /* neon marquee */
+  .neon{
+    position:absolute; left:50%; top:0; z-index:6; padding:8px 14px;
+    background:#2a2038; border-radius:6px; transform-origin:50% 100%;
+    transform:translate(-50%,-115%) rotateZ(-45deg) rotateX(-60deg);
+    animation:bob 3.4s ease-in-out infinite;
+  }
+  .neon i{
+    font-family:Georgia, "Times New Roman", serif; font-style:italic; font-size:15px;
+    color:#ff5fb8; letter-spacing:.08em; white-space:nowrap;
+    text-shadow:0 0 6px rgba(255,95,184,.9), 0 0 14px rgba(255,95,184,.6), 0 0 24px rgba(255,95,184,.4);
+    animation:flick 4s steps(1,end) infinite;
+  }
+  @keyframes bob{ 0%,100%{ margin-top:0; } 50%{ margin-top:-7px; } }
+  @keyframes flick{ 0%,88%{ opacity:1; } 89%{ opacity:.4; } 90%{ opacity:1; } 94%{ opacity:.6; } 95%{ opacity:1; } }
+  /* ---------- chrome ---------- */
+  #clock{
+    position:fixed; z-index:10; top:16px; right:22px;
+    font-family:Georgia, "Iowan Old Style", Palatino, serif; font-size:20px; color:#fff;
+    text-shadow:0 1px 6px rgba(0,0,0,.5); text-align:right;
+  }
+  #clock small{ display:block; font-size:11px; letter-spacing:.2em; text-transform:uppercase; opacity:.75; font-family:ui-sans-serif,system-ui,sans-serif; }
+  #toolbar{
+    position:fixed; z-index:10; left:50%; bottom:16px; transform:translateX(-50%);
+    display:flex; gap:8px; padding:8px 10px; border-radius:999px;
+    background:rgba(255,255,255,.82); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+    box-shadow:0 8px 24px rgba(6,10,30,.3);
+  }
+  #toolbar button{
+    font:inherit; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    border:1px solid rgba(20,24,40,.3); background:rgba(255,255,255,.6); color:#23262e;
+    border-radius:999px; padding:7px 13px; cursor:pointer; transition:background .2s;
+  }
+  #toolbar button:hover{ background:#fff; }
+  #toolbar button[aria-pressed="true"]{ background:#23262e; color:#fff; }
+  #rain{ position:fixed; inset:-10%; z-index:8; pointer-events:none; display:none;
+    background:
+      repeating-linear-gradient(112deg, rgba(190,210,255,.28) 0 1.5px, transparent 1.5px 9px),
+      repeating-linear-gradient(112deg, rgba(190,210,255,.14) 0 1px, transparent 1px 17px);
+    background-size:9px 120px, 17px 190px;
+    animation:fall .5s linear infinite;
+  }
+  @keyframes fall{ from{ background-position:0 0, 0 0; } to{ background-position:-34px 120px, -60px 190px; } }
+  body.raining #rain{ display:block; }
+  #rainDim{ position:fixed; inset:0; z-index:7; pointer-events:none; background:rgba(10,16,40,.25); opacity:0; transition:opacity .8s; }
+  body.raining #rainDim{ opacity:1; }
+  #caption{ position:fixed; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+  @media (prefers-reduced-motion: reduce){
+    .cloud, .neon, .neon i, .carX, .carX.rev, .carY, .carY.rev, #rain{ animation:none !important; }
+    .slot .b{ transition:none; }
+  }
+</style>
+</head>
+<body>
+  <div id="stars"></div>
+  <div id="sun"></div><div id="moon"></div>
+  <div id="rain"></div><div id="rainDim"></div>
+  <div id="clock"><span>00:00</span><small>midnight</small></div>
+
+  <div id="viewport">
+    <div id="ground">
+      <div class="walk" style="left:213px;top:0;width:114px;height:540px"></div>
+      <div class="walk" style="left:0;top:213px;width:540px;height:114px"></div>
+      <div class="road h"></div><div class="road v"></div>
+    </div>
+  </div>
+
+  <div id="toolbar">
+    <button id="pause" aria-pressed="false">Pause cycle</button>
+    <button id="rainBtn" aria-pressed="false">Rain</button>
+    <button id="skip">Skip to night</button>
+  </div>
+  <div id="caption" aria-live="polite"></div>
+
+<script>
+(function(){
+  'use strict';
+  var RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var ground = document.getElementById('ground');
+  var root = document.documentElement;
+
+  /* ---------- scale to fit ---------- */
+  function fit(){
+    var s = Math.min(Math.max(Math.min(innerWidth, innerHeight) / 800, .42), 1.7);
+    root.style.setProperty('--s', s.toFixed(3));
+  }
+  fit(); addEventListener('resize', fit);
+
+  /* ---------- stars ---------- */
+  var stars = document.getElementById('stars');
+  (function(){
+    var sh = [];
+    for (var i = 0; i < 140; i++){
+      sh.push((Math.random()*100).toFixed(2) + 'vw ' + (Math.random()*100).toFixed(2) + 'vh 0 ' + (Math.random()<.2 ? 1 : 0) + 'px rgba(255,255,255,' + (.3 + Math.random()*.6).toFixed(2) + ')');
+    }
+    stars.style.width = '2px'; stars.style.height = '2px';
+    stars.style.borderRadius = '50%';
+    stars.style.background = 'transparent';
+    stars.style.boxShadow = sh.join(',');
+  })();
+
+  /* ---------- trees ---------- */
+  [[18,180],[200,18],[352,200],[200,352],[318,318],[80,318],[318,80],[480,200]].forEach(function(t){
+    var el = document.createElement('div');
+    el.className = 'tree';
+    el.style.left = t[0] + 'px'; el.style.top = t[1] + 'px';
+    el.innerHTML = '<div class="trunk"></div><div class="canopy"></div>';
+    ground.appendChild(el);
+  });
+
+  /* ---------- buildings ---------- */
+  var BUILDINGS = [
+    { name:'Harbor Tower',    use:'offices',        x:30,  y:26,  w:70, d:70,  h:220, col:'#a9b7c9', rows:9, cols:3 },
+    { name:'Marigold Flats',  use:'apartments',     x:120, y:36,  w:80, d:58,  h:95,  col:'#e9c1a0', rows:4, cols:4 },
+    { name:'Linden Court',    use:'housing',        x:36,  y:120, w:60, d:72,  h:115, col:'#b9d4c2', rows:5, cols:3 },
+    { name:'The Prism',       use:'studios',        x:340, y:26,  w:70, d:58,  h:130, col:'#c9bfe0', rows:5, cols:4 },
+    { name:'Cobalt Works',    use:'workshop',       x:428, y:36,  w:72, d:70,  h:160, col:'#9fb8d8', rows:7, cols:3 },
+    { name:'Night Market',    use:'market hall',    x:120, y:348, w:96, d:56,  h:38,  col:'#e6a49a', rows:2, cols:5, neon:true },
+    { name:'Pillow Bank',     use:'bank',           x:30,  y:340, w:70, d:58,  h:70,  col:'#e8dcc4', rows:3, cols:3 },
+    { name:'Ferris Apartments',use:'apartments',    x:330, y:120, w:88, d:58,  h:85,  col:'#dcb3b8', rows:4, cols:4 },
+    { name:'Saltbox Studios', use:'studios',        x:34,  y:424, w:70, d:58,  h:60,  col:'#c3ccb0', rows:3, cols:3 },
+    { name:'Aurora Spire',    use:'hotel',          x:352, y:340, w:64, d:64,  h:260, col:'#a8cfd0', rows:10, cols:3 },
+    { name:'Tin Roof Diner',  use:'diner',          x:440, y:340, w:58, d:56,  h:45,  col:'#ecd9a1', rows:2, cols:3 },
+    { name:'Meridian House',  use:'townhouse',      x:340, y:428, w:76, d:60,  h:78,  col:'#cfc5d6', rows:3, cols:4 }
+  ];
+  var caption = document.getElementById('caption');
+  var allCells = [];
+  BUILDINGS.forEach(function(B){
+    var slot = document.createElement('div');
+    slot.className = 'slot'; slot.tabIndex = 0;
+    slot.setAttribute('role','img');
+    slot.setAttribute('aria-label', B.name + ', ' + B.h/26 + ' floors, ' + B.use);
+    slot.style.cssText = 'left:' + B.x + 'px;top:' + B.y + 'px;width:' + B.w + 'px;height:' + B.d + 'px;' +
+      '--w:' + B.w + 'px;--d:' + B.d + 'px;--h:' + B.h + 'px;--hu:' + B.h + ';--col:' + B.col;
+    var b = document.createElement('div'); b.className = 'b';
+    var shadow = document.createElement('div'); shadow.className = 'footshadow';
+
+    function face(cls, rows, cols, withDoor){
+      var f = document.createElement('div'); f.className = 'face ' + cls;
+      if (rows){
+        var wins = document.createElement('div'); wins.className = 'wins';
+        wins.style.setProperty('--rows', rows); wins.style.setProperty('--cols', cols);
+        for (var i = 0; i < rows * cols; i++){
+          var c = document.createElement('div'); c.className = 'cell';
+          var r = Math.random();
+          c.style.setProperty('--glow', r < .72 ? '#ffd58a' : r < .88 ? '#ffe9b8' : '#cfe6ff');
+          wins.appendChild(c); allCells.push(c);
+        }
+        f.appendChild(wins);
+      }
+      if (withDoor){
+        var door = document.createElement('div'); door.className = 'door';
+        f.appendChild(door);
+      }
+      return f;
+    }
+    var top = document.createElement('div'); top.className = 'face top';
+    var south = face('south', B.rows, B.cols, true);
+    var east = face('east', B.rows, Math.max(2, B.cols - 1), false);
+    var tag = document.createElement('div'); tag.className = 'tag';
+    tag.innerHTML = '<b>' + B.name + '</b><span>' + Math.round(B.h/26) + ' floors · ' + B.use + '</span>';
+    if (B.neon){
+      var n = document.createElement('div'); n.className = 'neon';
+      n.innerHTML = '<i>NIGHT MARKET · OPEN</i>';
+      b.appendChild(n);
+    }
+    b.appendChild(top); b.appendChild(south); b.appendChild(east); b.appendChild(tag);
+    slot.appendChild(shadow); slot.appendChild(b);
+    ground.appendChild(slot);
+    function say(){ caption.textContent = B.name + ' — ' + Math.round(B.h/26) + ' floors — ' + B.use; }
+    slot.addEventListener('mouseenter', say);
+    slot.addEventListener('focus', say);
+  });
+  setInterval(function(){
+    for (var i = 0; i < 6; i++){
+      var c = allCells[(Math.random() * allCells.length) | 0];
+      c.classList.toggle('on');
+    }
+  }, 380);
+  /* a few windows pre-lit */
+  for (var i = 0; i < 30; i++) allCells[(Math.random()*allCells.length)|0].classList.add('on');
+
+  /* ---------- cars ---------- */
+  var CARS = [
+    { cls:'carX',     lane:'top:250px;left:0',   col:'#ff7f6e', dur:9 },
+    { cls:'carX rev', lane:'top:286px;left:0',   col:'#5fd8c8', dur:11 },
+    { cls:'carY',     lane:'left:250px;top:0',   col:'#ffd977', dur:8 },
+    { cls:'carY rev', lane:'left:286px;top:0',   col:'#a9b8ff', dur:12 }
+  ];
+  CARS.forEach(function(c){
+    var el = document.createElement('div');
+    el.className = 'car ' + c.cls;
+    el.style.cssText = c.lane + ';background:' + c.col + ';--dur:' + c.dur + 's';
+    el.innerHTML = '<span class="hl"></span><span class="tl"></span>';
+    ground.appendChild(el);
+  });
+
+  /* ---------- day/night cycle ---------- */
+  var KEYS = [
+    { t:0.00, s1:[12,16,40],  s2:[30,34,70],   n:1.0 },
+    { t:0.10, s1:[12,16,40],  s2:[30,34,70],   n:1.0 },
+    { t:0.16, s1:[42,35,80],  s2:[90,58,110],  n:.7 },
+    { t:0.22, s1:[255,150,110], s2:[255,215,170], n:.35 },
+    { t:0.32, s1:[95,170,255], s2:[225,242,255], n:0 },
+    { t:0.60, s1:[95,170,255], s2:[225,242,255], n:0 },
+    { t:0.72, s1:[224,138,90], s2:[242,183,110], n:.3 },
+    { t:0.80, s1:[58,42,94],  s2:[110,74,126], n:.7 },
+    { t:0.88, s1:[12,16,40],  s2:[30,34,70],   n:1.0 },
+    { t:1.00, s1:[12,16,40],  s2:[30,34,70],   n:1.0 }
+  ];
+  var PHASES = [[0,'night'],[0.16,'dawn'],[0.22,'sunrise'],[0.32,'day'],[0.72,'dusk'],[0.8,'evening'],[0.88,'night']];
+  var CYCLE = 120000; // two minutes
+  var p = 0.42, paused = false, last = performance.now();
+
+  function lerp(a, b, k){ return a + (b - a) * k; }
+  function smooth(x){ x = Math.min(Math.max(x,0),1); return x*x*(3-2*x); }
+  function sample(p){
+    for (var i = 0; i < KEYS.length - 1; i++){
+      if (p >= KEYS[i].t && p <= KEYS[i+1].t){
+        var k = smooth((p - KEYS[i].t) / (KEYS[i+1].t - KEYS[i].t));
+        return {
+          s1: [lerp(KEYS[i].s1[0],KEYS[i+1].s1[0],k), lerp(KEYS[i].s1[1],KEYS[i+1].s1[1],k), lerp(KEYS[i].s1[2],KEYS[i+1].s1[2],k)],
+          s2: [lerp(KEYS[i].s2[0],KEYS[i+1].s2[0],k), lerp(KEYS[i].s2[1],KEYS[i+1].s2[1],k), lerp(KEYS[i].s2[2],KEYS[i+1].s2[2],k)],
+          n: lerp(KEYS[i].n, KEYS[i+1].n, k)
+        };
+      }
+    }
+    return KEYS[0];
+  }
+  var sun = document.getElementById('sun'), moon = document.getElementById('moon');
+  var clockEl = document.getElementById('clock');
+  var clockSpan = clockEl.querySelector('span'), clockSmall = clockEl.querySelector('small');
+  function tick(t){
+    if (!paused && !RM) p = (p + (t - last) / CYCLE) % 1;
+    last = t;
+    var c = sample(p);
+    root.style.setProperty('--sky1', 'rgb(' + c.s1.map(Math.round).join(',') + ')');
+    root.style.setProperty('--sky2', 'rgb(' + c.s2.map(Math.round).join(',') + ')');
+    root.style.setProperty('--night', c.n.toFixed(3));
+    /* sun arc 0.14 → 0.78 */
+    var sa = (p - .14) / .64;
+    var sx = 50 - Math.cos(sa * Math.PI) * 42, sy = 78 - Math.sin(sa * Math.PI) * 66;
+    var svis = sa > -.05 && sa < 1.05;
+    sun.style.opacity = svis ? '1' : '0';
+    sun.style.left = 'calc(' + sx + 'vw - 27px)';
+    sun.style.top = 'calc(' + sy + 'vh - 27px)';
+    /* moon arc */
+    var ma = ((p + .5) % 1 - .14) / .64;
+    var mx = 50 - Math.cos(ma * Math.PI) * 42, my = 78 - Math.sin(ma * Math.PI) * 66;
+    var mvis = ma > -.05 && ma < 1.05;
+    moon.style.opacity = mvis ? '1' : '0';
+    moon.style.left = 'calc(' + mx + 'vw - 20px)';
+    moon.style.top = 'calc(' + my + 'vh - 20px)';
+    /* shadows: long at dawn/dusk, none at night */
+    var alt = Math.sin(sa * Math.PI);
+    var len = alt > .08 ? Math.min(3, .6 + (1 - alt) * 2.2) : 2.6;
+    root.style.setProperty('--shx', (-Math.cos(sa * Math.PI) * len * 60).toFixed(1));
+    root.style.setProperty('--shy', (len * 42).toFixed(1));
+    root.style.setProperty('--sho', (alt > .08 ? .28 + alt * .2 : .06).toFixed(3));
+    /* clock */
+    var mins = Math.round(p * 24 * 60);
+    var hh = String(Math.floor(mins / 60)).padStart(2,'0'), mm = String(mins % 60).padStart(2,'0');
+    clockSpan.textContent = hh + ':' + mm;
+    var ph = 'night';
+    for (var i = PHASES.length - 1; i >= 0; i--){ if (p >= PHASES[i][0]){ ph = PHASES[i][1]; break; } }
+    clockSmall.textContent = ph;
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  /* ---------- toolbar ---------- */
+  var pauseBtn = document.getElementById('pause');
+  pauseBtn.addEventListener('click', function(){
+    paused = !paused;
+    this.setAttribute('aria-pressed', String(paused));
+    this.textContent = paused ? 'Resume cycle' : 'Pause cycle';
+  });
+  var rainBtn = document.getElementById('rainBtn');
+  function setRain(on){
+    document.body.classList.toggle('raining', on);
+    rainBtn.setAttribute('aria-pressed', String(on));
+  }
+  rainBtn.addEventListener('click', function(){ setRain(!document.body.classList.contains('raining')); });
+  document.getElementById('skip').addEventListener('click', function(){
+    p = p < .5 ? 0.02 : 0.45;
+    this.textContent = p > .3 ? 'Skip to day' : 'Skip to night';
+  });
+  addEventListener('keydown', function(e){
+    if (e.key === ' '){ e.preventDefault(); pauseBtn.click(); }
+    if (e.key === 'r' || e.key === 'R'){ setRain(!document.body.classList.contains('raining')); }
+  });
+})();
+</script>
+</body>
+</html>

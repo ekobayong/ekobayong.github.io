@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breathe — a living gradient</title>
+<style>
+  :root{
+    --base:#1a1030;
+    --c1:#ff6b57; --c2:#7b4dff; --c3:#14b8a6; --c4:#f5b942;
+    --fade:2.2s;
+    --serif:'Iowan Old Style',Palatino,'Book Antiqua',Georgia,serif;
+    --sans:ui-sans-serif,-apple-system,"Helvetica Neue",Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,Menlo,Consolas,"Courier New",monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden}
+  body{background:var(--base);transition:background-color var(--fade) ease;font-family:var(--sans);color:#fff}
+
+  .mesh{
+    position:fixed;left:-20%;top:-20%;width:140%;height:140%;
+    filter:blur(clamp(50px,7vw,120px)) saturate(1.15);
+    overflow:hidden;pointer-events:none;
+  }
+  .blob{
+    position:absolute;border-radius:50%;
+    mix-blend-mode:screen;opacity:.85;
+    will-change:transform;
+  }
+  .blob.b1{width:64vmax;height:64vmax;left:8%;top:6%;background:var(--c1);transition:background-color var(--fade) ease}
+  .blob.b2{width:58vmax;height:58vmax;left:48%;top:0%;background:var(--c2);transition:background-color var(--fade) ease}
+  .blob.b3{width:52vmax;height:52vmax;left:2%;top:48%;background:var(--c3);transition:background-color var(--fade) ease}
+  .blob.b4{width:70vmax;height:70vmax;left:42%;top:44%;background:var(--c4);transition:background-color var(--fade) ease}
+  .blob.b5{width:48vmax;height:48vmax;left:28%;top:26%;background:linear-gradient(0deg,var(--c2),var(--c3));transition:background var(--fade) ease}
+
+  #grain{
+    position:fixed;inset:0;width:100%;height:100%;z-index:4;pointer-events:none;
+    opacity:.22;mix-blend-mode:overlay;
+  }
+  .vignette{
+    position:fixed;inset:0;z-index:5;pointer-events:none;
+    background:radial-gradient(120% 105% at 50% 45%, transparent 52%, rgba(0,0,0,.5) 100%);
+  }
+
+  /* ---------- type ---------- */
+  .word-stage{
+    position:fixed;inset:0;z-index:6;display:grid;place-items:center;pointer-events:none;
+    perspective:none;
+  }
+  .wordwrap{position:relative;height:1.2em;min-width:60vw;display:grid;place-items:center}
+  .word{
+    position:absolute;
+    font-family:var(--serif);font-style:italic;font-weight:300;
+    font-size:clamp(3.4rem,15vw,15rem);letter-spacing:-.02em;line-height:1.1;
+    color:#fff;
+    text-shadow:0 0 42px rgba(255,255,255,.4), 0 0 90px rgba(255,255,255,.18);
+    opacity:0;
+  }
+  .word.live{opacity:1;animation:wordIn 1.6s ease-out forwards}
+  .word.dead{animation:wordOut 1.6s ease-out forwards}
+  @keyframes wordIn{
+    from{opacity:0;transform:translateY(12px) scale(.985);filter:blur(8px)}
+    to{opacity:1;transform:none;filter:blur(0)}
+  }
+  @keyframes wordOut{
+    from{opacity:1;transform:none;filter:blur(0)}
+    to{opacity:0;transform:translateY(-12px) scale(1.015);filter:blur(10px)}
+  }
+  .caption{
+    position:fixed;left:0;right:0;top:calc(50% + clamp(2.6rem,9vw,9.5rem));z-index:6;
+    text-align:center;pointer-events:none;
+    font-family:var(--sans);font-size:.7rem;letter-spacing:.42em;text-transform:uppercase;
+    color:rgba(255,255,255,.62);
+    transition:opacity .6s ease;
+  }
+  .caption.fading{opacity:0}
+
+  header.hud{
+    position:fixed;top:0;left:0;right:0;z-index:7;
+    display:flex;justify-content:space-between;align-items:baseline;gap:20px;
+    padding:22px 28px;font-family:var(--mono);font-size:.68rem;letter-spacing:.22em;text-transform:uppercase;
+    color:rgba(255,255,255,.62);
+  }
+  header.hud .name{color:#fff;letter-spacing:.3em}
+  #palName{color:rgba(255,255,255,.85)}
+
+  footer.hud{
+    position:fixed;bottom:0;left:0;right:0;z-index:7;
+    display:flex;justify-content:center;align-items:center;gap:22px;
+    padding:20px 28px;flex-wrap:wrap;
+  }
+  .hint{font-family:var(--mono);font-size:.62rem;letter-spacing:.26em;text-transform:uppercase;color:rgba(255,255,255,.45)}
+  .pill{
+    display:flex;gap:4px;padding:5px;border-radius:999px;
+    background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  }
+  .pal{
+    display:inline-flex;align-items:center;gap:9px;cursor:pointer;
+    border:none;background:transparent;color:rgba(255,255,255,.62);
+    font-family:var(--sans);font-size:.64rem;letter-spacing:.24em;text-transform:uppercase;
+    padding:9px 16px;border-radius:999px;transition:background .4s,color .4s;
+  }
+  .pal.active{background:rgba(255,255,255,.16);color:#fff}
+  .dot{
+    width:14px;height:14px;border-radius:50%;flex:none;
+    transition:transform .5s cubic-bezier(.34,1.6,.5,1);
+  }
+  .pal:hover .dot{transform:scale(1.45) rotate(140deg)}
+  .pp{
+    width:44px;height:44px;border-radius:50%;cursor:pointer;
+    background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.2);color:#fff;
+    display:grid;place-items:center;
+    transition:transform .5s cubic-bezier(.34,1.6,.5,1), background .3s;
+  }
+  .pp:hover{transform:scale(1.12);background:rgba(255,255,255,.16)}
+
+  @media (max-width:640px){
+    header.hud .second, .hint{display:none}
+    .pal{padding:8px 12px}
+    header.hud{padding:16px 18px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .word.live,.word.dead{animation-duration:.9s}
+  }
+</style>
+</head>
+<body>
+
+<div class="mesh" id="mesh">
+  <div class="blob b1"></div>
+  <div class="blob b2"></div>
+  <div class="blob b3"></div>
+  <div class="blob b4"></div>
+  <div class="blob b5"></div>
+</div>
+<canvas id="grain"></canvas>
+<div class="vignette"></div>
+
+<header class="hud">
+  <span class="name">Breathe</span>
+  <span class="second">A living gradient · no. 009</span>
+  <span>palette · <span id="palName">Dawn</span></span>
+</header>
+
+<div class="word-stage">
+  <div class="wordwrap">
+    <span class="word live" id="wA">breathe</span>
+    <span class="word" id="wB"></span>
+  </div>
+</div>
+<div class="caption" id="caption">in through the nose, four counts</div>
+
+<footer class="hud">
+  <div class="pill" id="pill">
+    <button class="pal active" data-p="dawn"><span class="dot" style="background:conic-gradient(var(--pc1) 0 25%,var(--pc2) 0 50%,var(--pc3) 0 75%,var(--pc4) 0);--pc1:#ff6b57;--pc2:#7b4dff;--pc3:#14b8a6;--pc4:#f5b942"></span>Dawn</button>
+    <button class="pal" data-p="reef"><span class="dot" style="background:conic-gradient(var(--pc1) 0 25%,var(--pc2) 0 50%,var(--pc3) 0 75%,var(--pc4) 0);--pc1:#00c2c7;--pc2:#2748ff;--pc3:#5be7a9;--pc4:#ff7ab6"></span>Reef</button>
+    <button class="pal" data-p="ember"><span class="dot" style="background:conic-gradient(var(--pc1) 0 25%,var(--pc2) 0 50%,var(--pc3) 0 75%,var(--pc4) 0);--pc1:#ff4d2e;--pc2:#9c1a5b;--pc3:#ff9f1c;--pc4:#ffd166"></span>Ember</button>
+  </div>
+  <button class="pp" id="ppBtn" aria-label="pause">
+    <svg id="icPause" width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="2" y="1" width="3.4" height="12" rx="1"/><rect x="8.6" y="1" width="3.4" height="12" rx="1"/></svg>
+    <svg id="icPlay" width="14" height="14" viewBox="0 0 14 14" fill="currentColor" style="display:none"><path d="M3 1.5v11l9-5.5z"/></svg>
+  </button>
+  <span class="hint">space · pause&nbsp;&nbsp;1 2 3 · palette</span>
+</footer>
+
+<script>
+(function(){
+"use strict";
+var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- palettes ---------- */
+var PAL = {
+  dawn: {base:"#1a1030", c:["#ff6b57","#7b4dff","#14b8a6","#f5b942"], name:"Dawn"},
+  reef: {base:"#03131f", c:["#00c2c7","#2748ff","#5be7a9","#ff7ab6"], name:"Reef"},
+  ember:{base:"#1c0a0a", c:["#ff4d2e","#9c1a5b","#ff9f1c","#ffd166"], name:"Ember"}
+};
+var r = document.documentElement.style;
+var palBtns = Array.prototype.slice.call(document.querySelectorAll(".pal"));
+function setPalette(key){
+  var p = PAL[key];
+  r.setProperty("--base", p.base);
+  r.setProperty("--c1", p.c[0]);
+  r.setProperty("--c2", p.c[1]);
+  r.setProperty("--c3", p.c[2]);
+  r.setProperty("--c4", p.c[3]);
+  document.getElementById("palName").textContent = p.name;
+  palBtns.forEach(function(b){ b.classList.toggle("active", b.dataset.p === key); });
+}
+palBtns.forEach(function(b){
+  b.addEventListener("click", function(){ setPalette(b.dataset.p); });
+});
+document.addEventListener("keydown", function(e){
+  if (e.key === "1") setPalette("dawn");
+  if (e.key === "2") setPalette("reef");
+  if (e.key === "3") setPalette("ember");
+});
+
+/* ---------- blob orbits ---------- */
+var blobs = Array.prototype.slice.call(document.querySelectorAll(".blob"));
+var cfg = blobs.map(function(el, i){
+  return {
+    el:el,
+    ax:(10 + Math.random()*14),  /* % travel */
+    ay:(10 + Math.random()*14),
+    px:(23 + Math.random()*30),  /* seconds */
+    py:(23 + Math.random()*30),
+    phx:Math.random()*6.283, phy:Math.random()*6.283,
+    rot:(Math.random()*2-1) * 22,
+    sc:(8 + Math.random()*6)     /* % pulse */
+  };
+});
+function eased(x){ var s = Math.sin(x); return (s < 0 ? -1 : 1) * Math.pow(Math.abs(s), 0.8); }
+var paused = false, t = 0, lastT = performance.now();
+function place(dt){
+  if (!paused) t += dt;
+  cfg.forEach(function(c, i){
+    var x = eased(t/c.px + c.phx) * c.ax;
+    var y = eased(t/c.py + c.phy) * c.ay;
+    var s = 1 + eased(t/17 + i*1.3) * c.sc/100;
+    c.el.style.transform = "translate(" + x.toFixed(2) + "%," + y.toFixed(2) + "%) rotate(" + (c.rot*t/40).toFixed(2) + "deg) scale(" + s.toFixed(3) + ")";
+  });
+}
+if (reduce){
+  for (var s0 = 0; s0 < 30; s0++) place(0.35);
+} else {
+  (function loop(now){
+    var dt = Math.min((now - lastT)/1000, .12);
+    lastT = now;
+    if (!paused) place(dt);
+    requestAnimationFrame(loop);
+  })(lastT);
+}
+
+/* ---------- film grain ---------- */
+var gcv = document.getElementById("grain");
+var gctx = gcv.getContext("2d");
+var frames = [];
+var FI = 0;
+function buildGrain(){
+  var dpr = Math.min(devicePixelRatio||1, 1.5);
+  var w = Math.max(2, Math.round(innerWidth*dpr));
+  var h = Math.max(2, Math.round(innerHeight*dpr));
+  gcv.width = w; gcv.height = h;
+  frames = [];
+  for (var f = 0; f < 4; f++){
+    var id = gctx.createImageData(w, h);
+    var d = id.data;
+    for (var i = 0; i < d.length; i += 4){
+      var v = 110 + Math.random()*90;
+      d[i] = d[i+1] = d[i+2] = v;
+      d[i+3] = 255;
+    }
+    frames.push(id);
+  }
+  gctx.putImageData(frames[0], 0, 0);
+}
+buildGrain();
+var gto;
+window.addEventListener("resize", function(){
+  clearTimeout(gto);
+  gto = setTimeout(buildGrain, 200);
+});
+var gLast = 0;
+function grainLoop(now){
+  if (now - gLast > 50){
+    gLast = now;
+    FI = (FI + 1) % 4;
+    gctx.putImageData(frames[FI], 0, 0);
+  }
+  if (!paused) requestAnimationFrame(grainLoop);
+}
+if (!reduce) requestAnimationFrame(grainLoop);
+
+/* ---------- words ---------- */
+var WORDS = [
+  ["breathe","in through the nose, four counts"],
+  ["drift","let the thought pass like weather"],
+  ["soften","unclench the jaw, drop the shoulders"],
+  ["become","nothing to hold, nothing to defend"],
+  ["linger","stay a while in the in-between"],
+  ["unfold","one layer at a time, no hurry"],
+  ["return","back to the breath, always the breath"]
+];
+var wA = document.getElementById("wA"), wB = document.getElementById("wB");
+var cap = document.getElementById("caption");
+var live = wA, other = wB, wi = 0;
+function swapWord(){
+  wi = (wi + 1) % WORDS.length;
+  other.textContent = WORDS[wi][0];
+  other.classList.remove("dead");
+  other.classList.add("live");
+  live.classList.remove("live");
+  live.classList.add("dead");
+  var tmp = live; live = other; other = tmp;
+  cap.classList.add("fading");
+  setTimeout(function(){
+    cap.textContent = WORDS[wi][1];
+    cap.classList.remove("fading");
+  }, 600);
+}
+function cycle(){
+  return setInterval(swapWord, reduce ? 9000 : 5200);
+}
+var wordTimer = cycle();
+
+/* ---------- pause / play ---------- */
+var ppBtn = document.getElementById("ppBtn");
+function togglePause(){
+  paused = !paused;
+  document.getElementById("icPause").style.display = paused ? "none" : "";
+  document.getElementById("icPlay").style.display = paused ? "" : "none";
+  clearInterval(wordTimer);
+  if (!paused) wordTimer = cycle();
+}
+ppBtn.addEventListener("click", togglePause);
+document.addEventListener("keydown", function(e){
+  if (e.code === "Space" && e.target === document.body){ e.preventDefault(); togglePause(); }
+});
+})();
+</script>
+</body>
+</html>

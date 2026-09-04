@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Constellation — field study no. 006</title>
+<style>
+  :root{
+    --peri:#a9b4ff;
+    --panel-bg:rgba(6,11,31,.55);
+    --panel-br:rgba(236,239,255,.18);
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Courier New",monospace;
+    --serif:'Iowan Old Style',Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden}
+  body{
+    background:#060b1f;
+    font-family:var(--serif);
+    color:#ecefff;
+  }
+  .washes{position:fixed;inset:0;pointer-events:none;
+    background:
+      radial-gradient(80% 55% at 50% 115%, rgba(66,79,160,.22), transparent 70%),
+      radial-gradient(55% 45% at 8% 6%, rgba(120,90,200,.10), transparent 70%),
+      radial-gradient(140% 120% at 50% 50%, transparent 58%, rgba(3,6,26,.85) 100%);
+  }
+  canvas#field{position:fixed;inset:0;display:block;cursor:crosshair}
+
+  /* ---------- cursor halo ---------- */
+  .halo{
+    position:fixed;width:120px;height:120px;border-radius:50%;
+    pointer-events:none;z-index:3;transform:translate(-50%,-50%);
+    background:radial-gradient(circle, rgba(169,180,255,.14), transparent 70%);
+    opacity:0;transition:opacity .4s;
+  }
+  .halo.on{opacity:1;animation:haloPulse 3.2s ease-in-out infinite}
+  @keyframes haloPulse{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.35)}}
+
+  /* ---------- type ---------- */
+  header{position:fixed;top:34px;left:40px;z-index:5;pointer-events:none}
+  h1{
+    font-weight:300;font-size:clamp(2.6rem,8vw,7.5rem);
+    letter-spacing:.18em;line-height:1;
+    text-shadow:0 0 28px rgba(169,180,255,.35);
+  }
+  .sub{
+    font-family:var(--mono);font-size:.68rem;text-transform:uppercase;
+    letter-spacing:.42em;color:rgba(169,180,255,.75);margin-top:14px;
+  }
+  .stamp{
+    position:fixed;top:38px;right:40px;z-index:5;pointer-events:none;
+    font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;
+    color:rgba(169,180,255,.7);text-align:right;line-height:2;
+  }
+  .legend{
+    position:fixed;bottom:36px;left:40px;z-index:5;pointer-events:none;
+    display:flex;flex-direction:column;gap:10px;
+    font-family:var(--mono);font-size:.64rem;letter-spacing:.22em;text-transform:uppercase;
+    color:rgba(236,239,255,.6);
+  }
+  .legend .li{display:flex;align-items:center;gap:12px}
+  .lg-dot{width:8px;height:8px;border-radius:50%;background:#fff;box-shadow:0 0 8px rgba(169,180,255,.9)}
+  .lg-line{width:22px;height:1px;background:var(--peri);opacity:.8}
+  .lg-ring{width:14px;height:14px;border:1px solid var(--peri);border-radius:50%;opacity:.9}
+
+  /* ---------- control panel ---------- */
+  .panel{
+    position:fixed;bottom:32px;right:36px;z-index:6;
+    width:280px;padding:20px 22px 22px;
+    background:var(--panel-bg);
+    border:1px solid var(--panel-br);
+    border-radius:4px;
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
+    font-family:var(--mono);
+  }
+  .panel label{
+    display:block;font-size:.62rem;letter-spacing:.26em;text-transform:uppercase;
+    color:rgba(236,239,255,.65);margin-bottom:12px;
+  }
+  .panel .val{color:var(--peri);float:right}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:pointer;display:block;
+  }
+  input[type=range]:focus{outline:none}
+  input[type=range]::-webkit-slider-runnable-track{
+    height:1px;
+    background:linear-gradient(to right, var(--peri) var(--fill,45%), rgba(236,239,255,.22) var(--fill,45%));
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#fff;
+    margin-top:-5.5px;box-shadow:0 0 10px rgba(169,180,255,.9);
+    transition:transform .35s cubic-bezier(.3,1.6,.5,1);
+  }
+  input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.35)}
+  input[type=range]::-moz-range-track{height:1px;background:rgba(236,239,255,.22)}
+  input[type=range]::-moz-range-progress{height:1px;background:var(--peri)}
+  input[type=range]::-moz-range-thumb{
+    width:12px;height:12px;border:none;border-radius:50%;background:#fff;
+    box-shadow:0 0 10px rgba(169,180,255,.9);
+    transition:transform .35s cubic-bezier(.3,1.6,.5,1);
+  }
+  input[type=range]:hover::-moz-range-thumb{transform:scale(1.35)}
+  .seg{
+    position:relative;display:flex;margin-top:18px;border:1px solid var(--panel-br);border-radius:3px;overflow:hidden;
+  }
+  .seg button{
+    flex:1;position:relative;z-index:2;border:none;background:transparent;cursor:pointer;
+    font-family:var(--mono);font-size:.62rem;letter-spacing:.24em;text-transform:uppercase;
+    color:rgba(236,239,255,.65);padding:10px 0;transition:color .3s;
+  }
+  .seg button.act{color:#060b1f}
+  .seg .pill{
+    position:absolute;top:0;bottom:0;left:0;width:50%;z-index:1;
+    background:var(--peri);border-radius:3px;
+    transition:transform .45s ease-out;transform:translateX(0);
+  }
+  .seg.repel .pill{transform:translateX(100%)}
+
+  /* ---------- settle entrance ---------- */
+  .settle{opacity:0;transform:translateY(14px);filter:blur(6px)}
+  .settle.in{
+    opacity:1;transform:none;filter:blur(0);
+    transition:opacity 1.1s ease-out var(--d,0s), transform 1.1s ease-out var(--d,0s), filter 1.1s ease-out var(--d,0s);
+  }
+  header.settle.in{transition-duration:1.4s}
+
+  @media (max-width:640px){
+    header{left:20px;top:20px}
+    .stamp{display:none}
+    .legend{display:none}
+    .panel{left:14px;right:14px;width:auto;bottom:14px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .settle{opacity:1;transform:none;filter:none}
+    .halo.on{animation:none}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="field"></canvas>
+<div class="washes"></div>
+<div class="halo" id="halo"></div>
+
+<header class="settle" style="--d:.1s">
+  <h1>Constellation</h1>
+  <div class="sub">Field study no. 006 · a slow gravity</div>
+</header>
+
+<div class="stamp settle" style="--d:.4s">
+  particles <span id="stP">0</span><br>
+  threads <span id="stT">0</span><br>
+  fps <span id="stF">0</span>
+</div>
+
+<div class="legend settle" style="--d:.7s">
+  <span class="li"><span class="lg-dot"></span> particle · always drifting</span>
+  <span class="li"><span class="lg-line"></span> thread · near pairs glow</span>
+  <span class="li"><span class="lg-ring"></span> ripple · pushes the field</span>
+</div>
+
+<div class="panel settle" style="--d:1s">
+  <label>Connection distance <span class="val" id="cdVal">120</span></label>
+  <input type="range" id="conn" min="40" max="260" value="120" aria-label="Connection distance">
+  <div class="seg" id="seg">
+    <span class="pill"></span>
+    <button class="act" data-m="attract">Attract</button>
+    <button data-m="repel">Repel</button>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+var cv = document.getElementById("field");
+var ctx = cv.getContext("2d");
+var DPR = Math.min(devicePixelRatio || 1, 2);
+var W = 0, H = 0;
+
+var parts = [], ripples = [];
+var connDist = 120, mode = "attract";
+var mx = -9999, my = -9999;
+var REPULSE = false;
+
+function resize(){
+  W = innerWidth; H = innerHeight;
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  populate();
+}
+function populate(){
+  var target = Math.round(W * H / 5200);
+  target = Math.max(90, Math.min(420, target));
+  parts = [];
+  for (var i = 0; i < target; i++) parts.push(makePart(Math.random()*W, Math.random()*H));
+}
+function makePart(x, y){
+  return {
+    x:x, y:y,
+    vx:0, vy:0,
+    r: 0.9 + Math.random()*1.5,
+    ph: Math.random()*Math.PI*2,
+    tw: 0.5 + Math.random()*1.2,
+    peri: Math.random() < 0.45,
+    dx: 0, dy: 0
+  };
+}
+resize();
+window.addEventListener("resize", resize);
+
+/* ---------- ripples ---------- */
+function ripple(x, y){
+  ripples.push({x:x, y:y, t:0});
+  for (var i = 0; i < 4; i++){
+    var a = Math.random()*Math.PI*2;
+    var p = makePart(x, y);
+    p.vx = Math.cos(a)*(2.2+Math.random()*2);
+    p.vy = Math.sin(a)*(2.2+Math.random()*2);
+    parts.push(p);
+  }
+}
+
+/* ---------- input ---------- */
+var halo = document.getElementById("halo");
+window.addEventListener("pointermove", function(e){
+  mx = e.clientX; my = e.clientY;
+  halo.style.left = mx + "px"; halo.style.top = my + "px";
+  halo.classList.add("on");
+});
+window.addEventListener("pointerleave", function(){ halo.classList.remove("on"); mx = -9999; });
+cv.addEventListener("pointerdown", function(e){ ripple(e.clientX, e.clientY); });
+
+/* ---------- controls ---------- */
+var conn = document.getElementById("conn");
+function updFill(){
+  var pct = (conn.value - 40)/220*100;
+  conn.style.setProperty("--fill", pct + "%");
+  document.getElementById("cdVal").textContent = conn.value;
+}
+conn.addEventListener("input", function(){ connDist = +conn.value; updFill(); });
+updFill();
+var seg = document.getElementById("seg");
+seg.querySelectorAll("button").forEach(function(b){
+  b.addEventListener("click", function(){
+    REPULSE = b.dataset.m === "repel";
+    seg.classList.toggle("repel", REPULSE);
+    seg.querySelectorAll("button").forEach(function(x){ x.classList.toggle("act", x === b); });
+  });
+});
+
+/* ---------- spatial hash ---------- */
+function update(dt){
+  var cell = Math.max(connDist, 80);
+  var grid = new Map();
+  function key(cx, cy){ return cx + "," + cy; }
+  parts.forEach(function(p, i){
+    var cx = Math.floor(p.x/cell), cy = Math.floor(p.y/cell);
+    var k = key(cx, cy);
+    (grid.get(k) || grid.set(k, []).get(k)).push(i);
+  });
+  /* drift */
+  parts.forEach(function(p){
+    var a = Math.sin(p.x*0.006 + p.ph)*2.4 + Math.cos(p.y*0.004 - p.ph)*2.4;
+    var b = Math.cos(p.x*0.0045 - p.ph*1.3)*2.4 + Math.sin(p.y*0.0055 + p.ph)*2.4;
+    if (!reduce){ p.vx += Math.cos(a)*0.006; p.vy += Math.sin(b)*0.006; }
+    /* cursor gravity well */
+    var dx = mx - p.x, dy = my - p.y;
+    var d = Math.hypot(dx, dy);
+    if (d < 220 && d > 1){
+      var f = (1 - d/220);
+      f = f*f * 0.06;
+      var s = REPULSE ? -1 : 1;
+      p.vx += dx/d * f * s;
+      p.vy += dy/d * f * s;
+    }
+    if (reduce && false){}
+    /* ripple push */
+    ripples.forEach(function(r){
+      var rdx = p.x - r.x, rdy = p.y - r.y;
+      var rd = Math.hypot(rdx, rdy) || 1;
+      var front = r.t * 420;
+      if (Math.abs(rd - front) < 40){
+        var push = (1 - r.t/1.6) * 1.4;
+        p.vx += rdx/rd * push * 0.25;
+        p.vy += rdy/rd * push * 0.25;
+      }
+    });
+    p.vx *= 0.94; p.vy *= 0.94;
+    if (reduce && ripples.length === 0){ /* frozen */ p.vx = 0; p.vy = 0; }
+    p.x += p.vx; p.y += p.vy;
+    /* wrap with 20px margin */
+    if (p.x < -20) p.x = W + 20; if (p.x > W + 20) p.x = -20;
+    if (p.y < -20) p.y = H + 20; if (p.y > H + 20) p.y = -20;
+  });
+  /* threads via hash */
+  var threads = [];
+  parts.forEach(function(p, i){
+    var cx = Math.floor(p.x/cell), cy = Math.floor(p.y/cell);
+    for (var ox = -1; ox <= 1; ox++)
+      for (var oy = -1; oy <= 1; oy++){
+        var bucket = grid.get(key(cx+ox, cy+oy));
+        if (!bucket) continue;
+        bucket.forEach(function(j){
+          if (j <= i) return;
+          var q = parts[j];
+          var dx = q.x - p.x, dy = q.y - p.y;
+          var d2 = dx*dx + dy*dy;
+          if (d2 < connDist*connDist){
+            var t = Math.sqrt(d2);
+            var a = Math.pow(1 - t/connDist, 2);
+            threads.push([p.x, p.y, q.x, q.y, a]);
+          }
+        });
+      }
+  });
+  return threads;
+}
+
+/* ---------- draw ---------- */
+var stP = document.getElementById("stP"), stT = document.getElementById("stT"), stF = document.getElementById("stF");
+var fpsT = performance.now(), frames = 0;
+function draw(now){
+  var dt = 1/60;
+  var threads = update(dt);
+  ctx.clearRect(0, 0, W, H);
+  /* threads */
+  ctx.lineWidth = 0.8;
+  threads.forEach(function(t){
+    ctx.strokeStyle = "rgba(169,180,255," + (t[4]*0.55).toFixed(3) + ")";
+    ctx.beginPath(); ctx.moveTo(t[0], t[1]); ctx.lineTo(t[2], t[3]); ctx.stroke();
+  });
+  /* ripples */
+  for (var i = ripples.length - 1; i >= 0; i--){
+    var r = ripples[i];
+    r.t += dt;
+    var k = r.t/1.6;
+    if (k >= 1){ ripples.splice(i,1); continue; }
+    var fade = 1 - k;
+    var rad = k * 420;
+    ctx.strokeStyle = "rgba(169,180,255," + (fade*0.8).toFixed(3) + ")";
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(r.x, r.y, rad, 0, Math.PI*2); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255," + (fade*0.32).toFixed(3) + ")";
+    ctx.beginPath(); ctx.arc(r.x, r.y, rad*0.62, 0, Math.PI*2); ctx.stroke();
+    ctx.lineWidth = 0.8;
+  }
+  /* particles */
+  parts.forEach(function(p){
+    var tw = 0.55 + 0.45*Math.sin(now*0.001*p.tw + p.ph);
+    var col = p.peri ? "169,180,255" : "255,255,255";
+    var haloR = p.r*6;
+    var g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, haloR);
+    g.addColorStop(0, "rgba(" + col + "," + (0.5*tw).toFixed(3) + ")");
+    g.addColorStop(1, "rgba(" + col + ",0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(p.x, p.y, haloR, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "rgba(" + col + "," + (0.55 + 0.45*tw).toFixed(3) + ")";
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+  });
+  /* stats */
+  frames++;
+  if (now - fpsT > 500){
+    stP.textContent = parts.length;
+    stT.textContent = threads.length;
+    stF.textContent = Math.round(frames*1000/(now - fpsT));
+    frames = 0; fpsT = now;
+  }
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+/* ---------- settle entrance ---------- */
+if (reduce){
+  document.querySelectorAll(".settle").forEach(function(s){ s.classList.add("in"); });
+} else {
+  setTimeout(function(){
+    document.querySelectorAll(".settle").forEach(function(s){ s.classList.add("in"); });
+  }, 250);
+}
+})();
+</script>
+</body>
+</html>

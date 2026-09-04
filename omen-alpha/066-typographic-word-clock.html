@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Typographic Word Clock &amp; Time Poem</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-a: #4f7fc4; --bg-b: #9fc3e8; --bg-c: #f6d9b2;
+    --accent: #ffd68a; --glow: rgba(255,214,138,.55);
+  }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Helvetica Neue', 'Avenir Next', Futura, 'Segoe UI', system-ui, sans-serif;
+    color: #fff; overflow-x: hidden;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 26px 12px 40px; min-height: 100vh;
+    background:
+      radial-gradient(ellipse 90% 55% at 50% 100%, var(--bg-c), transparent 70%),
+      linear-gradient(180deg, var(--bg-a), var(--bg-b));
+    transition: background 2s;
+  }
+  #stars {
+    position: fixed; inset: 0; pointer-events: none; opacity: var(--star-o, .0); transition: opacity 2s;
+    background-image:
+      radial-gradient(1px 1px at 10% 12%, rgba(255,255,255,.9), transparent),
+      radial-gradient(1.2px 1.2px at 30% 6%, rgba(255,255,255,.8), transparent),
+      radial-gradient(1px 1px at 52% 16%, rgba(255,255,255,.85), transparent),
+      radial-gradient(1px 1px at 74% 9%, rgba(255,255,255,.8), transparent),
+      radial-gradient(1.1px 1.1px at 90% 20%, rgba(255,255,255,.9), transparent),
+      radial-gradient(.9px .9px at 44% 24%, rgba(255,255,255,.7), transparent),
+      radial-gradient(1px 1px at 66% 28%, rgba(255,255,255,.65), transparent),
+      radial-gradient(1px 1px at 18% 32%, rgba(255,255,255,.7), transparent);
+  }
+  #grain {
+    position: fixed; inset: 0; pointer-events: none; opacity: .045; z-index: 5;
+  }
+  .frame-wrap { position: relative; z-index: 1; margin-top: 8px; }
+  .frame {
+    position: relative;
+    background: rgba(8,10,20,.36);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 18px;
+    padding: clamp(12px, 2.4vw, 30px);
+    box-shadow: 0 40px 90px rgba(0,4,20,.5);
+    cursor: pointer;
+  }
+  .bracket { position: absolute; width: 26px; height: 26px; border: 2px solid var(--accent); opacity: .85; pointer-events: none; }
+  .bracket.tl { top: -3px; left: -3px; border-right: 0; border-bottom: 0; border-radius: 6px 0 0 0; }
+  .bracket.tr { top: -3px; right: -3px; border-left: 0; border-bottom: 0; border-radius: 0 6px 0 0; }
+  .bracket.bl { bottom: -3px; left: -3px; border-right: 0; border-top: 0; border-radius: 0 0 0 6px; }
+  .bracket.br { bottom: -3px; right: -3px; border-left: 0; border-top: 0; border-radius: 0 0 6px 0; }
+
+  #clockGrid {
+    display: grid; grid-template-columns: repeat(11, 1fr);
+    gap: 2px;
+  }
+  #clockGrid span {
+    font-weight: 800; text-transform: uppercase; text-align: center;
+    font-size: clamp(16px, min(5.2vw, 6.2vh), 58px);
+    line-height: 1.15;
+    color: rgba(255,255,255,.1);
+    transition: color .6s, text-shadow .6s;
+    user-select: none;
+  }
+  #clockGrid span.lit {
+    color: var(--accent);
+    text-shadow: 0 0 6px var(--glow), 0 0 18px var(--glow), 0 0 34px var(--glow);
+  }
+  .corner-dots { display: flex; justify-content: space-between; margin-top: 10px; padding: 0 6px; }
+  .corner-dots i {
+    width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.12); transition: background .4s, box-shadow .4s;
+  }
+  .corner-dots i.on { background: var(--accent); box-shadow: 0 0 8px var(--glow); }
+
+  /* header labels */
+  .hud-row {
+    position: relative; z-index: 1;
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: center;
+    margin-bottom: 20px; font-size: 10px; letter-spacing: .28em; text-transform: uppercase; color: rgba(255,255,255,.75);
+  }
+  #digital { font-variant-numeric: tabular-nums; letter-spacing: .2em; font-family: 'Courier New', monospace; font-size: 12px; }
+  .seg { display: inline-flex; border: 1px solid rgba(255,255,255,.3); border-radius: 999px; overflow: hidden; }
+  .seg button {
+    background: transparent; border: 0; color: rgba(255,255,255,.7); padding: 4px 12px;
+    font-size: 10px; letter-spacing: .2em; cursor: pointer; font-family: inherit; text-transform: uppercase;
+  }
+  .seg button.sel { background: rgba(255,255,255,.2); color: #fff; }
+  .theme-btn { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,.4); cursor: pointer; }
+
+  /* poem */
+  .poem-area {
+    position: relative; height: clamp(58px, 9vh, 90px); width: min(720px, 94vw); margin-top: 22px;
+  }
+  .poem-area p {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    text-align: center;
+    font-family: Georgia, 'Iowan Old Style', Palatino, serif; font-style: italic;
+    font-size: clamp(16px, 2.2vw, 26px); color: rgba(255,255,255,.95);
+    opacity: 0; transition: opacity 2.4s ease, transform 2.4s ease, filter 2.4s ease;
+    filter: blur(4px); transform: translateY(10px); pointer-events: none;
+  }
+  .poem-area p.show { opacity: 1; filter: blur(0); transform: translateY(0); }
+  .poem-area .period {
+    font-family: 'Helvetica Neue', 'Avenir Next', Futura, 'Segoe UI', system-ui, sans-serif;
+    font-style: normal; font-size: 10px; letter-spacing: .28em; text-transform: uppercase;
+    color: rgba(255,255,255,.6); margin-top: 8px;
+    font-variant: small-caps;
+  }
+
+  .bottom-controls {
+    display: flex; align-items: center; gap: 14px; margin-top: 26px; flex-wrap: wrap; justify-content: center;
+    position: relative; z-index: 1;
+    font-size: 10px; letter-spacing: .28em; text-transform: uppercase; color: rgba(255,255,255,.7);
+  }
+  #travel {
+    -webkit-appearance: none; appearance: none; width: min(340px, 60vw); height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,.25); cursor: pointer;
+  }
+  #travel::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff;
+    box-shadow: 0 0 8px rgba(255,255,255,.8);
+  }
+  #travel::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; border: none; background: #fff; }
+  .now-btn {
+    background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.3);
+    border-radius: 999px; padding: 5px 16px; cursor: pointer; font-size: 10px; letter-spacing: .24em;
+    text-transform: uppercase; font-family: inherit;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="stars"></div>
+<svg id="grain" xmlns="http://www.w3.org/2000/svg" width="300" height="300">
+  <filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/></filter>
+  <rect width="300" height="300" filter="url(#n)" opacity="1"/>
+</svg>
+
+<div class="hud-row">
+  <span id="digital">--:--</span>
+  <div class="seg" id="modeSeg">
+    <button data-mode="24" class="sel">24h</button>
+    <button data-mode="12">12h</button>
+  </div>
+  <button class="theme-btn" data-theme="ember" style="background:#ffd68a" title="Ember"></button>
+  <button class="theme-btn" data-theme="moon" style="background:#e6f0ff" title="Moon"></button>
+  <button class="theme-btn" data-theme="verdigris" style="background:#a8f0d4" title="Verdigris"></button>
+</div>
+
+<div class="frame-wrap">
+  <div class="frame" id="frame">
+    <div class="bracket tl"></div><div class="bracket tr"></div>
+    <div class="bracket bl"></div><div class="bracket br"></div>
+    <div id="clockGrid"></div>
+    <div class="corner-dots">
+      <i></i><i></i><i></i><i></i>
+    </div>
+  </div>
+</div>
+
+<div class="poem-area">
+  <p id="poemA"></p>
+  <p id="poemB"></p>
+</div>
+
+<div class="bottom-controls">
+  <span>Time travel</span>
+  <input type="range" id="travel" min="0" max="1439" step="1" value="-1">
+  <button class="now-btn" id="nowBtn">Now</button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ============ grid ============ */
+  var ROWS = [
+    "ITLISASAMPM", "ACQUARTERDC", "TWENTYFIVEX", "HALFSTENFTO",
+    "PASTERUNINE", "ONESIXTHREE", "FOURFIVETWO", "EIGHTELEVEN",
+    "SEVENTWELVE", "TENSEOCLOCK"
+  ];
+  var grid = document.getElementById("clockGrid");
+  var cells = [];
+  ROWS.forEach(function (row) {
+    for (var c = 0; c < 11; c++) {
+      var s = document.createElement("span");
+      s.textContent = row[c];
+      grid.appendChild(s);
+      cells.push({ el: s, r: cells.length / 11 | 0, c: c, ch: row[c] });
+    }
+  });
+  function lit(word) {
+    /* find word in grid rows, sequential scan */
+    var flat = ROWS.join("");
+    var idx = flat.indexOf(word);
+    if (idx < 0) return [];
+    var out = [];
+    for (var i = 0; i < word.length; i++) out.push(cells[idx + i]);
+    return out;
+  }
+
+  var MINWORDS = ["FIVE", "TEN", "QUARTER", "TWENTY", "TWENTYFIVE", "HALF"];
+  function wordsFor(h24, m) {
+    var words = ["IT", "IS"];
+    var mm = m - (m % 5); /* round down to 5 */
+    var nextHour = h24;
+    var h12 = h24 % 12; if (h12 === 0) h12 = 12;
+    var offset = 0;
+    if (mm === 0) { words = words.concat(["", "OCLOCK"]); }
+    else if (mm === 5) { words = words.concat(["FIVE", "PAST"]); }
+    else if (mm === 10) { words = words.concat(["TEN", "PAST"]); }
+    else if (mm === 15) { words = words.concat(["A", "QUARTER", "PAST"]); }
+    else if (mm === 20) { words = words.concat(["TWENTY", "PAST"]); }
+    else if (mm === 25) { words = words.concat(["TWENTYFIVE", "PAST"]); }
+    else if (mm === 30) { words = words.concat(["HALF", "PAST"]); }
+    else if (mm === 35) { words = words.concat(["TWENTYFIVE", "TO"]); nextHour = h24 + 1; }
+    else if (mm === 40) { words = words.concat(["TWENTY", "TO"]); nextHour = h24 + 1; }
+    else if (mm === 45) { words = words.concat(["A", "QUARTER", "TO"]); nextHour = h24 + 1; }
+    else if (mm === 50) { words = words.concat(["TEN", "TO"]); nextHour = h24 + 1; }
+    else if (mm === 55) { words = words.concat(["FIVE", "TO"]); nextHour = h24 + 1; }
+    var hh = nextHour % 12; if (hh === 0) hh = 12;
+    var hourWords = { 1: "ONE", 2: "SIX", 3: "THREE", 4: "FOUR", 5: "FIVE", 6: "SIX", 7: "SEVEN", 8: "EIGHT", 9: "NINE", 10: "TEN", 11: "ELEVEN", 12: "TWELVE" };
+    words.push(hourWords[hh]);
+    if (mm === 0) words.push("OCLOCK");
+    var extra = m - mm;
+    return { words: words, extra: extra, h24: h24 };
+  }
+
+  function renderClock(h24, m) {
+    cells.forEach(function (c) { c.el.classList.remove("lit"); });
+    var info = wordsFor(h24, m);
+    var litCells = [];
+    info.words.forEach(function (w) {
+      if (!w) return;
+      litCells = litCells.concat(lit(w));
+    });
+    litCells.forEach(function (c) { if (c) c.el.classList.add("lit"); });
+    /* corner dots for extra minutes */
+    var dots = document.querySelectorAll(".corner-dots i");
+    dots.forEach(function (d, i) { d.classList.toggle("on", i < info.extra); });
+    /* am/pm letters */
+    var pm = h24 >= 12;
+    ["ITLISASAMPM"].forEach(function () {});
+    var rowFlat = ROWS[0];
+    if (mode === "12") {
+      litCells = litCells.concat(lit(pm ? "PM" : "AM"));
+      litCells.forEach(function (c) { if (c) c.el.classList.add("lit"); });
+    }
+    /* digital */
+    var dh = mode === "24" ? h24 : (h24 % 12 === 0 ? 12 : h24 % 12);
+    digitalEl.textContent = ("0" + dh).slice(-2) + ":" + ("0" + m).slice(-2) + (mode === "12" ? (pm ? " PM" : " AM") : "");
+  }
+
+  /* ============ sky ============ */
+  var SKY = [
+    { t: 0, a: [7,10,22], b: [15,22,48], c: [36,28,61] },
+    { t: 4 * 60, a: [10,15,34], b: [27,33,64], c: [59,42,79] },
+    { t: 6 * 60, a: [43,42,85], b: [141,79,109], c: [242,160,107] },
+    { t: 8 * 60, a: [79,127,196], b: [159,195,232], c: [246,217,178] },
+    { t: 12 * 60, a: [74,138,216], b: [143,192,238], c: [219,233,245] },
+    { t: 16 * 60, a: [62,111,176], b: [169,160,200], c: [240,180,138] },
+    { t: 18 * 60, a: [38,49,79], b: [107,61,102], c: [224,105,63] },
+    { t: 20 * 60, a: [14,20,48], b: [42,35,80], c: [90,42,74] },
+    { t: 24 * 60, a: [7,10,22], b: [15,22,48], c: [36,28,61] }
+  ];
+  function hex(c) { return "#" + c.map(function (n) { return ("0" + Math.round(n).toString(16)).slice(-2); }).join(""); }
+  function applySky(mins) {
+    var i = 0;
+    while (i < SKY.length - 2 && mins > SKY[i + 1].t) i++;
+    var a = SKY[i], b = SKY[i + 1];
+    var t = (mins - a.t) / (b.t - a.t);
+    function mx(k) {
+      return [a[k][0] + (b[k][0] - a[k][0]) * t, a[k][1] + (b[k][1] - a[k][1]) * t, a[k][2] + (b[k][2] - a[k][2]) * t];
+    }
+    var rs = document.documentElement.style;
+    rs.setProperty("--bg-a", hex(mx("a")));
+    rs.setProperty("--bg-b", hex(mx("b")));
+    rs.setProperty("--bg-c", hex(mx("c")));
+    var night = Math.max(0, Math.min(1, 1 - Math.abs(mins - 0) / 90)) + Math.max(0, Math.min(1, 1 - Math.abs(mins - 1440) / 90)) + Math.max(0, Math.min(1, (mins > 20 * 60 ? (mins - 20 * 60) / 60 : 0)));
+    if (mins < 6 * 60) night = Math.max(night, 1 - mins / (6 * 60));
+    else if (mins > 19.5 * 60) night = Math.max(night, Math.min(1, (mins - 19.5 * 60) / 60));
+    else night = 0;
+    rs.setProperty("--star-o", (night * 0.9).toFixed(2));
+  }
+
+  /* ============ poem ============ */
+  var PERIODS = [
+    { name: "Deep night", from: 23 * 60 + 30, to: 4 * 60 + 30 },
+    { name: "Dawn", from: 4 * 60 + 30, to: 7 * 60 },
+    { name: "Morning", from: 7 * 60, to: 11 * 60 },
+    { name: "Midday", from: 11 * 60, to: 14 * 60 },
+    { name: "Afternoon", from: 14 * 60, to: 17 * 60 },
+    { name: "Dusk", from: 17 * 60, to: 19 * 60 },
+    { name: "Evening", from: 19 * 60, to: 23 * 60 + 30 }
+  ];
+  var POOLS = {
+    "Deep night": ["the city holds its breath between streetlamps.", "only the moon is awake, counting the sleepless.", "the stars rehearse their slow, silent choreography."],
+    "Dawn": ["the sky unbuttons its first pale button.", "birds are drafting the day's first sentences.", "the light arrives like a rumour of coffee."],
+    "Morning": ["the light climbs the rooftops one tile at a time.", "the day sharpens itself on the edge of the horizon.", "windows are learning to shine again."],
+    "Midday": ["the sun signs its name in the middle of the page.", "shadows stand as close as they can to their owners.", "the noon bell rinses the streets in brightness."],
+    "Afternoon": ["the light is leaving the rooftops one tile at a time.", "the day loosens its collar and slows its stride.", "long shadows begin their quiet negotiation."],
+    "Dusk": ["the light is leaving the rooftops one tile at a time.", "the sky is closing its amber ledger for the night.", "the horizon folds itself into violet paper."],
+    "Evening": ["the lamps take over where the sun left off.", "the city switches to its softer alphabet.", "the day exhales into blue."],
+    "Night": ["the city holds its breath between streetlamps."]
+  };
+  var poemA = document.getElementById("poemA");
+  var poemB = document.getElementById("poemB");
+  var poemFront = poemA, poemBack = poemB;
+  var lastPoemKey = "";
+  function showPoem(mins) {
+    var key = mins < 4.5 * 60 || mins >= 23.5 * 60 ? "Deep night" :
+      PERIODS.find(function (p) { return mins >= p.from && mins < p.to; }).name;
+    var sentence;
+    do {
+      var pool = POOLS[key] || POOLS["Night"];
+      sentence = pool[Math.floor(Math.random() * pool.length)];
+    } while (sentence === lastPoemKey && pool.length > 1);
+    lastPoemKey = sentence;
+    var per = document.createElement("span");
+    per.className = "period"; per.textContent = key;
+    poemBack.innerHTML = "";
+    poemBack.appendChild(document.createTextNode(sentence));
+    poemBack.appendChild(per);
+    poemBack.classList.add("show");
+    poemFront.classList.remove("show");
+    var tmp = poemFront; poemFront = poemBack; poemBack = tmp;
+  }
+  [poemA, poemB].forEach(function (p) {
+    p.appendChild(document.createTextNode(""));
+    var per = document.createElement("span");
+    per.className = "period";
+    p.appendChild(per);
+  });
+  showPoem(12 * 60); poemFront.classList.remove("show"); /* prime */
+
+  /* ============ letter rain ============ */
+  var rainCanvas = document.createElement("canvas");
+  rainCanvas.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:20;";
+  document.body.appendChild(rainCanvas);
+  var rctx = rainCanvas.getContext("2d");
+  var letters = [];
+  var rainActive = false;
+  function rain() {
+    if (reduced) return;
+    rainCanvas.width = window.innerWidth; rainCanvas.height = window.innerHeight;
+    var accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ffd68a";
+    var GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for (var i = 0; i < 90; i++) {
+      letters.push({
+        x: Math.random() * window.innerWidth, y: -20 - Math.random() * 100,
+        vy: 60 + Math.random() * 160, vx: (Math.random() - .5) * 40,
+        rot: Math.random() * Math.PI * 2, vr: (Math.random() - .5) * 4,
+        ch: GLYPHS[Math.floor(Math.random() * 26)], size: 14 + Math.random() * 26,
+        alpha: 0.6 + Math.random() * 0.4, accent: accent
+      });
+    }
+    if (!rainActive) { rainActive = true; rainLoop(); }
+  }
+  var lastRain = performance.now();
+  function rainLoop(now) {
+    var dt = Math.min((performance.now() - lastRain) / 1000, 0.05);
+    lastRain = performance.now();
+    rctx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
+    for (var i = letters.length - 1; i >= 0; i--) {
+      var L = letters[i];
+      L.vy += 300 * dt;
+      L.x += L.vx * dt; L.y += L.vy * dt; L.rot += L.vr * dt;
+      if (L.y > window.innerHeight * 0.62) L.alpha -= dt * 1.4;
+      if (L.alpha <= 0 || L.y > window.innerHeight + 40) { letters.splice(i, 1); continue; }
+      rctx.save();
+      rctx.translate(L.x, L.y);
+      rctx.rotate(L.rot);
+      rctx.font = "800 " + L.size + "px 'Helvetica Neue', Futura, 'Segoe UI', system-ui, sans-serif";
+      rctx.fillStyle = L.accent;
+      rctx.globalAlpha = L.alpha;
+      rctx.shadowColor = L.accent; rctx.shadowBlur = 12;
+      rctx.fillText(L.ch, 0, 0);
+      rctx.restore();
+    }
+    if (letters.length) requestAnimationFrame(rainLoop);
+    else rainActive = false;
+  }
+
+  /* ============ time state ============ */
+  var mode = "24";
+  var travelMins = null; /* null = live */
+  var digitalEl = document.getElementById("digital");
+  var travel = document.getElementById("travel");
+  var poemTimer = 0;
+
+  function update() {
+    var mins;
+    if (travelMins !== null) mins = travelMins;
+    else {
+      var d = new Date();
+      mins = d.getHours() * 60 + d.getMinutes();
+    }
+    var h24 = Math.floor(mins / 60), m = mins % 60;
+    applySky(mins);
+    renderClock(h24, m);
+  }
+
+  /* minute change detection */
+  var lastMin = -1;
+  setInterval(function () {
+    if (travelMins !== null) return;
+    var d = new Date();
+    var mins = d.getHours() * 60 + d.getMinutes();
+    if (mins !== lastMin) {
+      if (lastMin !== -1) rain();
+      lastMin = mins;
+    }
+  }, 1000);
+
+  /* poem rotation */
+  setInterval(function () {
+    poemTimer++;
+    if (travelMins !== null) showPoem(travelMins);
+    else {
+      var d = new Date();
+      showPoem(d.getHours() * 60 + d.getMinutes());
+    }
+  }, 18000);
+
+  /* interactions */
+  document.getElementById("frame").addEventListener("click", function () {
+    if (travelMins !== null) showPoem(travelMins);
+    else { var d = new Date(); showPoem(d.getHours() * 60 + d.getMinutes()); }
+  });
+  document.querySelectorAll(".seg button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      mode = b.dataset.mode;
+      document.querySelectorAll(".seg button").forEach(function (x) { x.classList.toggle("sel", x === b); });
+      update();
+    });
+  });
+  var THEMES = {
+    ember: { accent: "#ffd68a", glow: "rgba(255,214,138,.55)" },
+    moon: { accent: "#e6f0ff", glow: "rgba(230,240,255,.55)" },
+    verdigris: { accent: "#a8f0d4", glow: "rgba(168,240,212,.55)" }
+  };
+  document.querySelectorAll(".theme-btn").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var t = THEMES[b.dataset.theme];
+      var rs = document.documentElement.style;
+      rs.setProperty("--accent", t.accent);
+      rs.setProperty("--glow", t.glow);
+    });
+  });
+  travel.addEventListener("input", function () {
+    travelMins = +travel.value;
+    update();
+    showPoem(travelMins);
+  });
+  document.getElementById("nowBtn").addEventListener("click", function () {
+    travelMins = null;
+    travel.value = -1;
+    update();
+  });
+
+  update();
+  if (reduced) { /* instant transitions handled by CSS */ }
+  /* prime first poem properly */
+  (function () {
+    var d = new Date();
+    showPoem(d.getHours() * 60 + d.getMinutes());
+  })();
+})();
+</script>
+</body>
+</html>

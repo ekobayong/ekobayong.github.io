@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karesansui — A Garden of Raked Sand</title>
+<style>
+  :root{
+    --ink:#2b241c; --sand:#e9dcc3; --verm:#b3402a;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; overflow:hidden; }
+  body{
+    font-family:"Iowan Old Style", Palatino, Georgia, ui-serif, serif;
+    background:var(--sand); color:var(--ink);
+  }
+  #cv{ position:fixed; inset:0; width:100%; height:100%; display:block; cursor:none; }
+  #frame{ position:fixed; inset:0; pointer-events:none; box-shadow:inset 0 0 90px 24px rgba(96,74,46,.28), inset 0 0 24px 6px rgba(96,74,46,.14); }
+  /* chrome fades up */
+  .chrome{ opacity:0; transform:translateY(8px); animation:rise 1.1s cubic-bezier(.22,1,.36,1) .25s both; }
+  @keyframes rise{ to{ opacity:1; transform:none; } }
+  /* heading */
+  #head{ position:fixed; z-index:5; top:26px; left:32px; pointer-events:none; }
+  #head h1{ font-size:clamp(22px, 2.6vw, 34px); font-weight:500; letter-spacing:.08em; }
+  #head p{ font-style:italic; font-size:14px; color:rgba(43,36,28,.66); margin-top:6px; }
+  /* vertical label */
+  #vlabel{
+    position:fixed; z-index:5; top:26px; right:30px; pointer-events:none;
+    writing-mode:vertical-rl; font-size:12px; letter-spacing:.42em;
+    color:rgba(43,36,28,.55); padding-right:10px;
+    border-right:1px solid rgba(43,36,28,.35);
+    -webkit-mask-image:linear-gradient(180deg, transparent, #000 12%, #000 88%, transparent);
+    mask-image:linear-gradient(180deg, transparent, #000 12%, #000 88%, transparent);
+  }
+  /* seal */
+  #seal{
+    position:fixed; z-index:5; right:34px; bottom:34px; width:44px; height:44px;
+    background:var(--verm); color:#f3e9d8; display:grid; place-items:center;
+    font-size:22px; transform:rotate(-3deg);
+    box-shadow:0 2px 10px rgba(120,40,20,.35), inset 0 0 0 2px rgba(243,233,216,.85), inset 0 0 0 4px var(--verm);
+    pointer-events:none;
+  }
+  /* toolbar */
+  #bar{
+    position:fixed; z-index:5; left:28px; bottom:26px; display:flex; align-items:stretch; gap:8px;
+    opacity:0; transform:translateY(8px); animation:rise 1.1s cubic-bezier(.22,1,.36,1) .4s both;
+  }
+  .tgroup{ display:flex; border:1px solid rgba(43,36,28,.5); border-radius:999px; overflow:hidden; }
+  .tbtn{
+    font:inherit; background:none; border:none; cursor:pointer; padding:9px 15px;
+    display:flex; align-items:flex-end; gap:2.5px; height:100%;
+    transition:background .2s;
+  }
+  .tbtn i{ display:block; width:2px; background:var(--ink); border-radius:1px; transition:background .2s; }
+  .tbtn[aria-pressed="true"]{ background:var(--ink); }
+  .tbtn[aria-pressed="true"] i{ background:var(--sand); }
+  .smooth{
+    position:relative; overflow:hidden; font:inherit; cursor:pointer;
+    background:none; border:1px solid rgba(43,36,28,.5); border-radius:999px;
+    padding:9px 18px; color:var(--ink); font-size:14px; z-index:0; transition:color .25s;
+  }
+  .smooth::before{
+    content:''; position:absolute; inset:0; z-index:-1; background:var(--ink);
+    transform:translateX(-101%); transition:transform .3s cubic-bezier(.22,1,.36,1);
+  }
+  .smooth:hover{ color:var(--sand); }
+  .smooth:hover::before{ transform:translateX(0); }
+  /* hint */
+  #hint{
+    position:fixed; z-index:5; left:50%; bottom:88px; transform:translateX(-50%);
+    font-style:italic; font-size:14px; color:rgba(43,36,28,.6); white-space:nowrap;
+    transition:opacity .7s; pointer-events:none;
+    opacity:0; animation:rise 1.1s cubic-bezier(.22,1,.36,1) .6s both;
+  }
+  body.touched #hint{ opacity:0 !important; }
+  /* custom cursor */
+  #cur{ position:fixed; z-index:6; pointer-events:none; left:0; top:0; will-change:transform; }
+  #cur circle{ stroke:rgba(43,36,28,.65); transition:stroke .2s; }
+  #cur.drag circle{ stroke:var(--verm); }
+  @media (max-width:640px){
+    #head p, #hint, #cur{ display:none; }
+    #vlabel{ top:auto; bottom:84px; right:28px; border-right:none; border-left:1px solid rgba(43,36,28,.35); padding:0 0 0 10px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .chrome, #bar, #hint{ animation:none; opacity:1; transform:none; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="cv"></canvas>
+  <div id="frame"></div>
+
+  <div id="head" class="chrome">
+    <h1>Karesansui</h1>
+    <p>rake the sand slowly — the garden remembers nothing</p>
+  </div>
+  <div id="vlabel" class="chrome">枯山水 raked sand · three stones · one afternoon</div>
+  <div id="seal" class="chrome">静</div>
+
+  <div id="bar">
+    <div class="tgroup" role="group" aria-label="Tines">
+      <button class="tbtn" data-t="1" aria-pressed="false" aria-label="1 tine"><i style="height:14px"></i></button>
+      <button class="tbtn" data-t="3" aria-pressed="true" aria-label="3 tines"><i style="height:10px"></i><i style="height:16px"></i><i style="height:10px"></i></button>
+      <button class="tbtn" data-t="5" aria-pressed="false" aria-label="5 tines"><i style="height:8px"></i><i style="height:13px"></i><i style="height:18px"></i><i style="height:13px"></i><i style="height:8px"></i></button>
+    </div>
+    <button class="smooth" id="smooth">Smooth sand</button>
+  </div>
+  <div id="hint" class="chrome">drag to rake · move the stones · let it be</div>
+  <svg id="cur" width="60" height="60" viewBox="0 0 60 60" aria-hidden="true">
+    <g id="curTines" stroke="rgba(43,36,28,.5)" stroke-width="1.4" stroke-linecap="round"></g>
+    <circle id="curRing" cx="30" cy="30" r="18" fill="none" stroke-width="1.3"/>
+  </svg>
+
+<script>
+(function(){
+  'use strict';
+  var RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  var W = 0, H = 0, dpr = 1;
+  var sand = document.createElement('canvas'), sandCtx = sand.getContext('2d');
+  var groove = document.createElement('canvas'), gctx = groove.getContext('2d');
+  var stones = [], tines = 3, dragging = null;
+  var lastP = null, prevQ = [];
+
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ---------- sand layer ---------- */
+  function buildSand(){
+    sand.width = Math.round(W * dpr); sand.height = Math.round(H * dpr);
+    var c = sandCtx;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var g = c.createLinearGradient(0, H, W, 0);
+    g.addColorStop(0, '#e9dcc3'); g.addColorStop(.55, '#e4d4b8'); g.addColorStop(1, '#dccbab');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    /* six soft washes */
+    var rand = mulberry32(7);
+    for (var i = 0; i < 6; i++){
+      var wx = rand() * W, wy = rand() * H, wr = Math.min(W, H) * (.3 + rand() * .3);
+      var warm = i % 2 === 0;
+      var wg = c.createRadialGradient(wx, wy, 0, wx, wy, wr);
+      wg.addColorStop(0, warm ? 'rgba(255,246,224,.30)' : 'rgba(126,104,72,.16)');
+      wg.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = wg; c.fillRect(0, 0, W, H);
+    }
+    /* grain tile 256, power-2.4 alpha */
+    var tile = document.createElement('canvas'); tile.width = 256; tile.height = 256;
+    var tc = tile.getContext('2d'), img = tc.createImageData(256, 256), d = img.data;
+    for (var p = 0; p < d.length; p += 4){
+      var dark = rand() < .5;
+      var a = Math.pow(rand(), 2.4) * 90;
+      d[p] = dark ? 74 : 255; d[p+1] = dark ? 58 : 250; d[p+2] = dark ? 38 : 236;
+      d[p+3] = a;
+    }
+    tc.putImageData(img, 0, 0);
+    c.fillStyle = c.createPattern(tile, 'repeat');
+    c.fillRect(0, 0, W, H);
+  }
+
+  /* ---------- stones ---------- */
+  function buildStones(){
+    var m = Math.min(W, H);
+    stones = [
+      { x:W*.28, y:H*.40, rx:m*.052, ry:m*.040, rot:-.35 },
+      { x:W*.62, y:H*.60, rx:m*.040, ry:m*.031, rot:.6 },
+      { x:W*.44, y:H*.76, rx:m*.036, ry:m*.030, rot:.1 }
+    ];
+  }
+  function inStone(x, y, pad){
+    for (var i = 0; i < stones.length; i++){
+      var s = stones[i];
+      var dx = x - s.x, dy = y - s.y;
+      var c = Math.cos(-s.rot), si = Math.sin(-s.rot);
+      var lx = dx * c - dy * si, ly = dx * si + dy * c;
+      if ((lx*lx)/(s.rx*s.rx) + (ly*ly)/(s.ry*s.ry) <= 1) return s;
+    }
+    return null;
+  }
+  function stoneAt(x, y, pad){
+    for (var i = 0; i < stones.length; i++){
+      var s = stones[i];
+      var dx = x - s.x, dy = y - s.y;
+      var c = Math.cos(-s.rot), si = Math.sin(-s.rot);
+      var lx = dx * c - dy * si, ly = dx * si + dy * c;
+      var rr = (lx*lx)/((s.rx+pad)*(s.rx+pad)) + (ly*ly)/((s.ry+pad)*(s.ry+pad));
+      if (rr <= 1) return s;
+    }
+    return null;
+  }
+  function drawStones(){
+    stones.forEach(function(s){
+      ctx.save();
+      ctx.translate(s.x, s.y); ctx.rotate(s.rot);
+      /* contact shadow */
+      ctx.save();
+      ctx.shadowColor = 'rgba(74,56,34,.5)';
+      ctx.shadowBlur = 22; ctx.shadowOffsetX = 6; ctx.shadowOffsetY = 10;
+      ctx.fillStyle = 'rgba(74,56,34,.01)';
+      ctx.beginPath(); ctx.ellipse(0, 2, s.rx, s.ry, 0, 0, 7); ctx.fill();
+      ctx.restore();
+      /* sand ring at base */
+      ctx.strokeStyle = 'rgba(255,250,236,.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(0, 2, s.rx + 4, s.ry + 3, 0, 0, 7); ctx.stroke();
+      /* body */
+      var g = ctx.createRadialGradient(-s.rx*.4, -s.ry*.5, s.rx*.1, 0, 0, s.rx*1.4);
+      g.addColorStop(0, '#655c52'); g.addColorStop(.55, '#5b544b'); g.addColorStop(1, '#1e1a16');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.ellipse(0, 0, s.rx, s.ry, 0, 0, 7); ctx.fill();
+      /* specular sheen */
+      ctx.fillStyle = 'rgba(255,255,255,.18)';
+      ctx.beginPath(); ctx.ellipse(-s.rx*.35, -s.ry*.45, s.rx*.34, s.ry*.22, -.5, 0, 7); ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  /* ---------- emboss grooves ---------- */
+  function emboss(x1, y1, x2, y2){
+    var c = gctx;
+    c.lineCap = 'round';
+    c.strokeStyle = 'rgba(96,74,46,.30)'; c.lineWidth = 3.2;
+    c.beginPath(); c.moveTo(x1 + .78, y1 + .78); c.lineTo(x2 + .78, y2 + .78); c.stroke();
+    c.strokeStyle = 'rgba(255,250,236,.55)'; c.lineWidth = 2.2;
+    c.beginPath(); c.moveTo(x1 - .92, y1 - .92); c.lineTo(x2 - .92, y2 - .92); c.stroke();
+    c.strokeStyle = 'rgba(120,96,62,.28)'; c.lineWidth = 1.6;
+    c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+  }
+  function rakeSeg(x1, y1, x2, y2){
+    var dx = x2 - x1, dy = y2 - y1;
+    var dist = Math.hypot(dx, dy);
+    if (dist < .5) return;
+    var nx = -dy / dist, ny = dx / dist;
+    var steps = Math.max(1, Math.ceil(dist / 4));
+    var half = (tines - 1) / 2;
+    for (var s = 1; s <= steps; s++){
+      var t = s / steps;
+      var px = x1 + dx * t, py = y1 + dy * t;
+      for (var k = 0; k < tines; k++){
+        var off = (k - half) * 9;
+        var qx = px + nx * off, qy = py + ny * off;
+        var p = prevQ[k];
+        if (p && !inStone(qx, qy, 6) && !inStone(p[0], p[1], 6)){
+          emboss(p[0], p[1], qx, qy);
+        }
+        prevQ[k] = inStone(qx, qy, 6) ? null : [qx, qy];
+      }
+    }
+  }
+
+  /* ---------- pre-raked décor ---------- */
+  function preRake(){
+    gctx.clearRect(0, 0, groove.width, groove.height);
+    var oldT = tines;
+    /* concentric ripples around stones */
+    tines = 1;
+    stones.forEach(function(s){
+      var base = Math.max(s.rx, s.ry) + 12;
+      for (var ring = 0; ring < 3; ring++){
+        var rr = base + ring * 11;
+        var prev = null;
+        for (var a = 0; a <= Math.PI * 2 + .01; a += .09){
+          var x = s.x + Math.cos(a) * rr * 1.15;
+          var y = s.y + Math.sin(a) * rr * .85;
+          if (prev && !inStone(x, y, 6) && !inStone(prev[0], prev[1], 6)) emboss(prev[0], prev[1], x, y);
+          prev = [x, y];
+        }
+      }
+    });
+    /* slow 3-tine sine wave across upper fifth */
+    tines = 3;
+    prevQ = [null, null, null];
+    var y0 = H * .14;
+    for (var x = W * .08; x < W * .92; x += 4){
+      for (var k = 0; k < 3; k++){
+        var yy = y0 + Math.sin(x * .012 + k * 9) * 9 + k * 0;
+        var q = [x, yy + 0];
+        var off = (k - 1) * 9;
+        q = [x, y0 + Math.sin(x * .012) * 10 + off];
+        var p = prevQ[k];
+        if (p) emboss(p[0], p[1], q[0], q[1]);
+        prevQ[k] = q;
+      }
+    }
+    tines = oldT; prevQ = [];
+  }
+
+  /* ---------- branch shadow ---------- */
+  function drawBranch(t){
+    ctx.save();
+    ctx.globalAlpha = .16;
+    ctx.strokeStyle = '#3a2c1a'; ctx.fillStyle = '#3a2c1a';
+    ctx.lineCap = 'round';
+    var blurOK = false;
+    try { ctx.filter = 'blur(9px)'; blurOK = true; } catch(e){}
+    if (!blurOK){ ctx.shadowColor = '#3a2c1a'; ctx.shadowBlur = 12; }
+    var s1 = RM ? 0 : Math.sin(t / 59000 * 2 * Math.PI) * 9;
+    var s2 = RM ? 0 : Math.sin(t / 131000 * 2 * Math.PI) * 14;
+    var s3 = RM ? 0 : Math.sin(t / 227000 * 2 * Math.PI) * 6;
+    var ax = W + 40 + s2, ay = -60 + s1;
+    var bx = W * .72 + s1, by = H * .10 + s3;
+    var ex = W * .55 + s2, ey = H * .24 + s1;
+    ctx.lineWidth = 26;
+    ctx.beginPath(); ctx.moveTo(ax, ay);
+    ctx.bezierCurveTo(W * .92 + s1, H * .04, W * .80 + s2, H * .07, bx, by);
+    ctx.stroke();
+    ctx.lineWidth = 12;
+    ctx.beginPath(); ctx.moveTo(bx, by);
+    ctx.quadraticCurveTo(W * .64 + s3, H * .16, ex, ey); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx, by);
+    ctx.quadraticCurveTo(W * .78 + s1, H * .17, W * .70 + s2, H * .26); ctx.stroke();
+    /* leaf clusters */
+    var leaves = [[ex, ey], [W * .70 + s2, H * .26], [W * .80 + s1, H * .05], [W * .66 + s3, H * .14], [W * .84 + s2, H * .16]];
+    leaves.forEach(function(l, i){
+      ctx.beginPath();
+      ctx.ellipse(l[0], l[1], 22 + i * 3, 13 + i * 2, i * .8 + s1 * .02, 0, 7);
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  /* ---------- render ---------- */
+  function render(t){
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.drawImage(sand, 0, 0, W, H);
+    ctx.drawImage(groove, 0, 0, W, H);
+    drawBranch(t || 0);
+    drawStones();
+  }
+
+  /* ---------- sizing ---------- */
+  function resize(){
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    groove.width = cv.width; groove.height = cv.height;
+    gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    buildSand();
+    var had = stones.length > 0;
+    var old = stones;
+    buildStones();
+    if (had) old.forEach(function(o, i){ if (stones[i]){ stones[i].x = o.x; stones[i].y = o.y; } });
+    preRake();
+  }
+  var rsT = null;
+  addEventListener('resize', function(){
+    clearTimeout(rsT); rsT = setTimeout(resize, 200);
+  });
+
+  /* ---------- pointer ---------- */
+  function pos(e){ return [e.clientX, e.clientY]; }
+  cv.addEventListener('pointerdown', function(e){
+    var p = pos(e);
+    document.body.classList.add('touched');
+    var s = stoneAt(p[0], p[1], 10);
+    if (s){
+      dragging = { s:s, ox:s.x - p[0], oy:s.y - p[1] };
+      cur.classList.add('drag');
+    } else {
+      lastP = p; prevQ = [];
+      for (var k = 0; k < tines; k++) prevQ.push(null);
+      rakeSeg(p[0], p[1], p[0] + .01, p[1] + .01);
+    }
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove', function(e){
+    var p = pos(e);
+    cur.style.transform = 'translate(' + (p[0] - 30) + 'px,' + (p[1] - 30) + 'px)';
+    if (dragging){
+      dragging.s.x = Math.min(Math.max(p[0] + dragging.ox, dragging.s.rx), W - dragging.s.rx);
+      dragging.s.y = Math.min(Math.max(p[1] + dragging.oy, dragging.s.ry), H - dragging.s.ry);
+      return;
+    }
+    if (e.buttons > 0 && lastP){
+      rakeSeg(lastP[0], lastP[1], p[0], p[1]);
+      lastP = p;
+    }
+  });
+  addEventListener('pointerup', function(){
+    dragging = null; lastP = null; prevQ = [];
+    cur.classList.remove('drag');
+  });
+
+  /* ---------- toolbar ---------- */
+  var cur = document.getElementById('cur');
+  var curTines = document.getElementById('curTines');
+  var curRing = document.getElementById('curRing');
+  function buildCursor(){
+    var span = (tines - 1) * 9;
+    curRing.setAttribute('r', Math.max(10, span / 2 + 5));
+    curTines.innerHTML = '';
+    var half = (tines - 1) / 2;
+    for (var k = 0; k < tines; k++){
+      var off = (k - half) * 9;
+      var l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      l.setAttribute('x1', 30 + off); l.setAttribute('y1', 30 - 9);
+      l.setAttribute('x2', 30 + off); l.setAttribute('y2', 30 + 9);
+      curTines.appendChild(l);
+    }
+  }
+  document.querySelectorAll('.tbtn').forEach(function(b){
+    b.addEventListener('click', function(){
+      tines = +this.dataset.t;
+      document.querySelectorAll('.tbtn').forEach(function(x){
+        x.setAttribute('aria-pressed', String(x === b));
+      });
+      buildCursor();
+      prevQ = [];
+    });
+  });
+  document.getElementById('smooth').addEventListener('click', function(){
+    gctx.clearRect(0, 0, W, H);
+  });
+
+  /* ---------- boot ---------- */
+  resize();
+  buildCursor();
+  if (!RM){
+    (function loop(t){ render(t); requestAnimationFrame(loop); })(0);
+  } else {
+    render(0);
+    /* still re-render on interaction */
+    cv.addEventListener('pointerup', function(){ render(0); });
+  }
+})();
+</script>
+</body>
+</html>

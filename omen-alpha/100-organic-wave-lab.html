@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Organic Wave Lab</title>
+<style>
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%; overflow:hidden;}
+body{
+  font-family:"Helvetica Neue","Avenir Next","Segoe UI",ui-sans-serif,system-ui,sans-serif;
+  background:#0b0d14;
+}
+#stage{position:fixed; inset:0; display:block; width:100vw; height:100vh; cursor:crosshair; touch-action:none;}
+/* panel */
+#panel{
+  position:fixed; top:18px; right:18px; bottom:18px; width:340px; z-index:10;
+  background:rgba(14,16,24,.42); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+  border:1px solid rgba(255,255,255,.12); border-radius:18px;
+  box-shadow:0 30px 70px -20px rgba(0,0,0,.65);
+  color:#e8eaf2; padding:24px 22px; overflow-y:auto; scrollbar-width:thin;
+  transition:transform .5s cubic-bezier(.3,1.1,.4,1), opacity .5s, background .6s;
+}
+body.light #panel{background:rgba(250,246,238,.72); color:#26221c; border-color:rgba(60,50,40,.2);}
+body.panel-hidden #panel{transform:translateX(calc(100% + 40px)); opacity:0;}
+#panel h1{
+  font-size:24px; font-weight:200; letter-spacing:.02em; margin-bottom:20px; line-height:1.1;
+}
+#panel h1 em{font-style:normal; color:#f0c98a; font-weight:200;}
+.sect{font-size:10px; letter-spacing:.26em; text-transform:uppercase; opacity:.55; margin:20px 0 9px; font-variant:small-caps; letter-spacing:.22em;}
+.pills{display:flex; flex-wrap:wrap; gap:7px;}
+.pill{
+  border:1px solid rgba(255,255,255,.22); background:transparent; color:inherit; font-family:inherit;
+  font-size:12px; font-weight:300; letter-spacing:.06em; padding:7px 13px; border-radius:20px; cursor:pointer;
+  transition:all .25s;
+}
+.pill[aria-pressed="true"]{background:rgba(240,201,138,.2); border-color:#f0c98a; color:#f0c98a;}
+body.light .pill[aria-pressed="true"]{border-color:#b98a3a; color:#8a5a22; background:rgba(240,201,138,.3);}
+.togs{display:flex; gap:16px;}
+.tog{display:flex; align-items:center; gap:9px; font-size:13px; cursor:pointer; font-weight:300;}
+.tog input{display:none;}
+.knob{
+  width:32px; height:17px; border-radius:9px; background:rgba(255,255,255,.15); position:relative; transition:background .3s;
+}
+.knob::after{
+  content:""; position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%;
+  background:rgba(255,255,255,.75); transition:left .25s;
+}
+.tog input:checked + .knob{background:rgba(240,201,138,.45);}
+.tog input:checked + .knob::after{left:17px; background:#f0c98a;}
+/* layer chips */
+.chip{
+  display:flex; align-items:center; gap:9px; padding:8px 10px; border:1px solid rgba(255,255,255,.12);
+  border-radius:11px; margin-bottom:7px; cursor:grab; transition:border-color .25s, background .25s;
+}
+body.light .chip{border-color:rgba(60,50,40,.18);}
+.chip.sel{border-color:#f0c98a; background:rgba(240,201,138,.08);}
+.chip.ghosting{opacity:.4;}
+.chip .grip{opacity:.4; font-size:12px; cursor:grab; user-select:none;}
+.chip .sw{
+  width:15px; height:15px; border-radius:50%; flex:none;
+  box-shadow:0 0 9px 1px currentColor;
+}
+.chip .nm{flex:1; font-size:13px; font-weight:300;}
+.chip .ro{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:10px; opacity:.6; font-variant-numeric:tabular-nums;}
+.chip button{
+  background:transparent; border:0; color:inherit; opacity:.55; cursor:pointer; font-size:12px;
+  padding:2px 4px; border-radius:5px; font-family:inherit;
+}
+.chip button:hover{opacity:1;}
+/* controls */
+.ctl{margin-bottom:12px;}
+.ctl label{display:flex; justify-content:space-between; font-size:11px; letter-spacing:.14em; text-transform:uppercase; opacity:.7; margin-bottom:5px; font-variant:small-caps;}
+.ctl output{font-family:ui-monospace,monospace; opacity:.9; letter-spacing:0;}
+input[type=range]{width:100%; accent-color:#f0c98a; height:14px;}
+input[type=color]{
+  width:100%; height:34px; border:1px solid rgba(255,255,255,.2); border-radius:8px; background:transparent; cursor:pointer; padding:2px;
+}
+.hexro{font-family:ui-monospace,monospace; font-size:11px; opacity:.65; margin-top:4px;}
+.btnrow{display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:14px;}
+.wbtn{
+  background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.25); color:inherit;
+  font-family:inherit; font-weight:300; letter-spacing:.08em; font-size:12px; padding:11px 6px; border-radius:11px; cursor:pointer;
+  transition:background .25s, transform .15s;
+}
+.wbtn:hover{background:rgba(240,201,138,.16); border-color:#f0c98a;}
+.wbtn:active{transform:scale(.97);}
+.hint{font-size:10px; opacity:.45; margin-top:12px; line-height:1.7; letter-spacing:.04em;}
+/* floating button */
+#hideBtn{
+  position:fixed; top:18px; right:18px; z-index:11; width:42px; height:42px; border-radius:50%;
+  background:rgba(14,16,24,.5); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.22);
+  color:#f0c98a; font-size:17px; cursor:pointer; transition:opacity .4s, right .5s;
+  display:flex; align-items:center; justify-content:center;
+}
+body.panel-hidden #hideBtn{right:calc(100% - 60px);}
+#toast{
+  position:fixed; left:50%; bottom:26px; transform:translate(-50%, 90px); z-index:20;
+  background:rgba(20,22,30,.85); border:1px solid rgba(240,201,138,.5); color:#f0c98a;
+  backdrop-filter:blur(12px); padding:10px 22px; border-radius:30px; font-size:12px; letter-spacing:.08em;
+  transition:transform .5s cubic-bezier(.3,1.4,.4,1); pointer-events:none; font-weight:300;
+}
+#toast.show{transform:translate(-50%,0);}
+@media (max-width:720px){
+  #panel{top:auto; left:10px; right:10px; bottom:10px; width:auto; max-height:52vh;}
+  body.panel-hidden #panel{transform:translateY(calc(100% + 30px));}
+  body.panel-hidden #hideBtn{right:18px;}
+}
+@media (prefers-reduced-motion:reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body class="">
+<canvas id="stage"></canvas>
+<button id="hideBtn" aria-label="Hide panel">✦</button>
+
+<div id="panel">
+  <h1>Organic <em>Wave</em> Lab</h1>
+
+  <div class="sect">Preset</div>
+  <div class="pills" id="pills"></div>
+
+  <div class="sect">Motion</div>
+  <div class="togs">
+    <label class="tog">Harmony <input type="checkbox" id="tHarmony"><span class="knob"></span></label>
+    <label class="tog">Flow <input type="checkbox" id="tFlow" checked><span class="knob"></span></label>
+  </div>
+  <div class="ctl" id="fundWrap" style="display:none; margin-top:10px;">
+    <label>Fundamental <output id="oFund">0.30</output></label>
+    <input type="range" id="sFund" min="5" max="120" value="30">
+  </div>
+
+  <div class="sect">Layers</div>
+  <div id="layerList"></div>
+  <button class="wbtn" id="addLayer" style="width:100%; margin-top:4px;">＋ Add layer</button>
+
+  <div class="sect">Selected layer</div>
+  <div id="layerCtl">
+    <div class="ctl"><label>Amplitude <output id="oAmp"></output></label>
+      <input type="range" id="cAmp" min="2" max="60" value="20"></div>
+    <div class="ctl"><label>Frequency <output id="oFreq"></output></label>
+      <input type="range" id="cFreq" min="5" max="120" value="30"></div>
+    <div class="ctl"><label>Phase <output id="oPhase"></output> π</label>
+      <input type="range" id="cPhase" min="0" max="200" value="0"></div>
+    <div class="ctl"><label>Speed <output id="oSpeed"></output></label>
+      <input type="range" id="cSpeed" min="0" max="100" value="20"></div>
+    <div class="ctl"><label>Baseline <output id="oBase"></output>%</label>
+      <input type="range" id="cBase" min="10" max="95" value="50"></div>
+    <div class="ctl"><label>Colour</label>
+      <input type="color" id="cCol">
+      <div class="hexro" id="oHex">#e9cfa8</div></div>
+  </div>
+
+  <div class="btnrow">
+    <button class="wbtn" id="surprise">Surprise me</button>
+    <button class="wbtn" id="export">Export SVG</button>
+  </div>
+  <div class="hint">drag the canvas to bend the waves · space pauses the flow · alt+arrow keys reorder layers · H hides this panel</div>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+(function(){
+"use strict";
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var stage = document.getElementById("stage");
+var ctx = stage.getContext("2d");
+var W = 0, H = 0, dpr = 1;
+
+/* ---------------- presets ---------------- */
+var PRESETS = {
+  dunes:{
+    label:"Dunes", bg:["#f2e4cf","#c9a27a"], blend:"normal", style:"shade", ink:"dark", fund:0.3,
+    layers:[
+      {name:"Crest",   col:"#e9cfa8", a:16, f:0.22, ph:0.0, sp:0.06, base:34},
+      {name:"Swell",   col:"#d4a86f", a:22, f:0.16, ph:0.6, sp:0.04, base:48},
+      {name:"Drift",   col:"#b7804a", a:26, f:0.12, ph:1.2, sp:0.03, base:60},
+      {name:"Undertow",col:"#8a5a33", a:30, f:0.09, ph:1.9, sp:0.02, base:74},
+      {name:"Bed",     col:"#5b3a22", a:34, f:0.06, ph:2.6, sp:0.014, base:90}
+    ]
+  },
+  aurora:{
+    label:"Aurora", bg:["#03050f","#0b1b2b"], blend:"screen", style:"fade", ink:"light", fund:0.3,
+    layers:[
+      {name:"Crest",  col:"#36f2b5", a:30, f:0.3, ph:0.2, sp:0.1, base:26},
+      {name:"Swell",  col:"#3ac8ff", a:36, f:0.22, ph:1.1, sp:0.07, base:38},
+      {name:"Drift",  col:"#a86cff", a:40, f:0.17, ph:2.0, sp:0.05, base:50},
+      {name:"Undertow",col:"#ff6ad5", a:44, f:0.13, ph:2.8, sp:0.035, base:64},
+      {name:"Haze",   col:"#1ef0d8", a:48, f:0.08, ph:3.6, sp:0.02, base:80}
+    ]
+  },
+  tide:{
+    label:"Tide", bg:["#dfeaf1","#7fa4bd"], blend:"multiply", style:"shade", ink:"dark", fund:0.3,
+    layers:[
+      {name:"Crest",  col:"#bcd8e6", a:18, f:0.26, ph:0.4, sp:0.09, base:30},
+      {name:"Swell",  col:"#93b9cf", a:24, f:0.19, ph:1.3, sp:0.06, base:44},
+      {name:"Drift",  col:"#5f92b0", a:28, f:0.14, ph:2.1, sp:0.04, base:58},
+      {name:"Undertow",col:"#33607e", a:32, f:0.1, ph:2.9, sp:0.03, base:72},
+      {name:"Bed",    col:"#123a52", a:36, f:0.07, ph:3.7, sp:0.018, base:88}
+    ]
+  },
+  silk:{
+    label:"Silk", bg:["#1a1520","#3a2740"], blend:"screen", style:"fade", ink:"light", fund:0.3,
+    layers:[
+      {name:"Crest",  col:"#f7c9d8", a:26, f:0.28, ph:0.1, sp:0.08, base:28},
+      {name:"Swell",  col:"#c9b8f5", a:32, f:0.21, ph:1.0, sp:0.06, base:40},
+      {name:"Drift",  col:"#9fd6f0", a:36, f:0.16, ph:1.8, sp:0.045, base:54},
+      {name:"Undertow",col:"#f6e3b4", a:40, f:0.12, ph:2.5, sp:0.03, base:68},
+      {name:"Haze",   col:"#e9a5c9", a:44, f:0.09, ph:3.3, sp:0.02, base:82}
+    ]
+  },
+  nebula:{
+    label:"Nebula", bg:["#050208","#150a26"], blend:"lighter", style:"fade", ink:"light", fund:0.3,
+    layers:[
+      {name:"Crest",  col:"#5a1a8c", a:30, f:0.3, ph:0.0, sp:0.1, base:24},
+      {name:"Swell",  col:"#c026a6", a:34, f:0.24, ph:0.9, sp:0.07, base:36},
+      {name:"Drift",  col:"#ff4f7a", a:38, f:0.19, ph:1.7, sp:0.055, base:48},
+      {name:"Undertow",col:"#3b3cff", a:42, f:0.14, ph:2.4, sp:0.04, base:60},
+      {name:"Haze",   col:"#ffb26a", a:46, f:0.1, ph:3.1, sp:0.028, base:74},
+      {name:"Bed",    col:"#22e0ff", a:50, f:0.07, ph:3.9, sp:0.018, base:88}
+    ]
+  }
+};
+var JUST = [1, 1.5, 2, 1.25, 5/3, 2.5];
+var NAMES = ["Crest","Swell","Drift","Undertow","Haze","Bed"];
+
+var state = {
+  preset:"dunes", harmony:false, fund:0.3, flow:true,
+  layers:[], sel:0, time:0, hidden:false
+};
+var bumps = []; // {x,y,s,birth}
+
+function layerFrom(def){
+  return {name:def.name, col:def.col, a:def.a, f:def.f, ph:def.ph, sp:def.sp, base:def.base, vis:true};
+}
+function setPreset(key){
+  state.preset = key;
+  var P = PRESETS[key];
+  state.layers = P.layers.map(layerFrom);
+  state.sel = 0;
+  document.body.classList.toggle("light", P.ink === "dark");
+  document.querySelectorAll("#pills .pill").forEach(function(p){
+    p.setAttribute("aria-pressed", String(p.dataset.k === key));
+  });
+  buildLayerList(); syncLayerCtl();
+  toast(P.label + " loaded");
+}
+
+/* ---------------- wave surface ---------------- */
+function surfaceY(layer, x, t){
+  var f = layer.f;
+  if (state.harmony){
+    f = state.fund * JUST[Math.min(JUST.length - 1, layerIdx(layer) % JUST.length)];
+  }
+  var ph = layer.ph * Math.PI + t * layer.sp * 0.35;
+  var bend = bumpAt(x, layer);
+  return H * layer.base/100
+    + Math.sin(x/W * f * Math.PI * 2 + ph) * layer.a
+    + Math.sin(x/W * f * 2.17 * Math.PI * 2 + ph * 1.4 + 1.3) * layer.a * 0.38
+    + Math.sin(x/W * f * 4.3 * Math.PI * 2 + ph * 1.9 + 2.6) * layer.a * 0.16
+    + bend;
+}
+function layerIdx(layer){ return state.layers.indexOf(layer); }
+function bumpAt(x, layer){
+  var s = 0;
+  var w = W/H;
+  for (var i = 0; i < bumps.length; i++){
+    var b = bumps[i];
+    var age = (performance.now() - b.birth)/1000;
+    if (age > 1){ continue; }
+    var decay = Math.exp(-age * 3.2);
+    var prox = 1 - Math.min(1, Math.abs(layer.base/100*H - b.y)/(H*0.6));
+    if (prox <= 0) continue;
+    var dx = (x - b.x)/110, dy = (b.y - layer.base/100*H)/160;
+    s += b.s * Math.exp(-(dx*dx*0.5 + dy*dy*0.5)) * decay * prox;
+  }
+  return s;
+}
+
+function drawLayer(layer, t){
+  if (!layer.vis) return null;
+  var P = PRESETS[state.preset];
+  var pts = [];
+  var n = Math.round((W/H) * 150) || 150;
+  for (var i = 0; i <= n; i++){
+    var x = i/n * W;
+    pts.push([x, surfaceY(layer, x, t)]);
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = P.blend;
+  var g = ctx.createLinearGradient(0, H*layer.base/100 - layer.a*1.6, 0, H);
+  var c = layer.col;
+  if (P.style === "fade"){
+    g.addColorStop(0, hexA(c, 0.85));
+    g.addColorStop(1, hexA(c, 0));
+  } else {
+    g.addColorStop(0, shade(c, -0.12));
+    g.addColorStop(1, shade(c, -0.45));
+  }
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (var j = 1; j < pts.length - 1; j++){
+    var xc = (pts[j][0] + pts[j+1][0])/2, yc = (pts[j][1] + pts[j+1][1])/2;
+    ctx.quadraticCurveTo(pts[j][0], pts[j][1], xc, yc);
+  }
+  ctx.lineTo(W, pts[pts.length-1][1]);
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+  ctx.fillStyle = g;
+  ctx.fill();
+  // crest highlight
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (var k = 1; k < pts.length - 1; k++){
+    var xc2 = (pts[k][0] + pts[k+1][0])/2, yc2 = (pts[k][1] + pts[k+1][1])/2;
+    ctx.quadraticCurveTo(pts[k][0], pts[k][1], xc2, yc2);
+  }
+  ctx.strokeStyle = "rgba(255,255,255," + (0.22 + (layerIdx(layer)%2)*0.03) + ")";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+  return pts;
+}
+function hexA(hex, a){
+  var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return "rgba(" + r + "," + g + "," + b + "," + a + ")";
+}
+function shade(hex, amt){
+  var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  function sh(v){ return Math.max(0, Math.min(255, Math.round(v * (1 + amt)))); }
+  return "rgb(" + sh(r) + "," + sh(g) + "," + sh(b) + ")";
+}
+
+function draw(t){
+  var P = PRESETS[state.preset];
+  var bg = ctx.createLinearGradient(0, 0, W*0.4, H);
+  bg.addColorStop(0, P.bg[0]); bg.addColorStop(1, P.bg[1]);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  // soft radial light upper-left + vignette
+  var light = ctx.createRadialGradient(W*0.18, H*0.12, 0, W*0.18, H*0.12, H*0.9);
+  light.addColorStop(0, P.ink === "dark" ? "rgba(255,255,255,.18)" : "rgba(255,240,214,.25)");
+  light.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = light; ctx.fillRect(0, 0, W, H);
+  var order = state.layers.slice().reverse(); // back to front: last listed behind? draw from last to first
+  for (var i = order.length - 1; i >= 0; i--) drawLayer(order[i], t);
+  var vig = ctx.createRadialGradient(W/2, H/2, H*0.42, W/2, H/2, H*1.1);
+  vig.addColorStop(0, "rgba(0,0,0,0)"); vig.addColorStop(1, "rgba(0,0,0,.28)");
+  ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+}
+
+/* ---------------- bumps from dragging ---------------- */
+var lastP = null;
+stage.addEventListener("pointerdown", function(e){ lastP = [e.clientX, e.clientY]; });
+stage.addEventListener("pointermove", function(e){
+  if (!lastP || e.buttons !== 1) return;
+  var dy = e.clientY - lastP[1];
+  if (Math.abs(dy) < 2 && Math.abs(e.clientX - lastP[0]) < 2) return;
+  bumps.push({x:e.clientX, y:e.clientY, s:Math.max(-40, Math.min(40, dy*0.9)), birth:performance.now()});
+  if (bumps.length > 60) bumps.shift();
+  lastP = [e.clientX, e.clientY];
+});
+stage.addEventListener("pointerup", function(){ lastP = null; });
+
+/* ---------------- main loop ---------------- */
+function loop(t){
+  // decay bumps
+  var now = performance.now();
+  bumps = bumps.filter(function(b){ return now - b.birth < 1100; });
+  if (state.flow && !reduced) state.time += 0.016;
+  draw(state.time);
+  requestAnimationFrame(loop);
+}
+
+/* ---------------- resize ---------------- */
+function resize(){
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  stage.width = W*dpr; stage.height = H*dpr;
+}
+addEventListener("resize", resize);
+
+/* ---------------- UI ---------------- */
+var toastTimer = null;
+function toast(msg){
+  var el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ el.classList.remove("show"); }, 2400);
+}
+/* pills */
+var pillsEl = document.getElementById("pills");
+Object.keys(PRESETS).forEach(function(k){
+  var b = document.createElement("button");
+  b.className = "pill"; b.textContent = PRESETS[k].label; b.dataset.k = k;
+  b.setAttribute("aria-pressed", "false");
+  b.onclick = function(){ setPreset(k); };
+  pillsEl.appendChild(b);
+});
+/* layer list */
+var listEl = document.getElementById("layerList");
+function buildLayerList(){
+  listEl.innerHTML = "";
+  state.layers.forEach(function(L, i){
+    var chip = document.createElement("div");
+    chip.className = "chip" + (i === state.sel ? " sel" : "");
+    chip.draggable = true;
+    chip.innerHTML =
+      '<span class="grip">⠿</span>' +
+      '<span class="sw" style="background:' + L.col + '; color:' + L.col + '"></span>' +
+      '<span class="nm">' + L.name + '</span>' +
+      '<span class="ro">ƒ' + L.f.toFixed(2) + ' a' + L.a + '</span>' +
+      '<button class="visb" aria-label="Toggle visibility">' + (L.vis ? "◉" : "◌") + '</button>' +
+      '<button class="delb" aria-label="Delete layer">✕</button>';
+    chip.addEventListener("click", function(e){
+      if (e.target.classList.contains("visb")){ L.vis = !L.vis; buildLayerList(); return; }
+      if (e.target.classList.contains("delb")){ removeLayer(i); return; }
+      state.sel = i; buildLayerList(); syncLayerCtl();
+    });
+    chip.addEventListener("dragstart", function(e){
+      chip.classList.add("ghosting");
+      e.dataTransfer.setData("text/plain", String(i));
+    });
+    chip.addEventListener("dragend", function(){ chip.classList.remove("ghosting"); });
+    chip.addEventListener("dragover", function(e){ e.preventDefault(); });
+    chip.addEventListener("drop", function(e){
+      e.preventDefault();
+      var from = +e.dataTransfer.getData("text/plain");
+      if (from === i) return;
+      var moved = state.layers.splice(from, 1)[0];
+      state.layers.splice(i, 0, moved);
+      state.sel = state.layers.indexOf(moved);
+      buildLayerList(); syncLayerCtl();
+    });
+    listEl.appendChild(chip);
+  });
+}
+function removeLayer(i){
+  if (state.layers.length <= 1){ toast("The last wave refuses to leave."); return; }
+  state.layers.splice(i, 1);
+  if (state.sel >= state.layers.length) state.sel = state.layers.length - 1;
+  buildLayerList(); syncLayerCtl();
+  toast("Layer washed away");
+}
+document.getElementById("addLayer").addEventListener("click", function(){
+  if (state.layers.length >= 6){ toast("Six is already a crowd."); return; }
+  var c = randomCol();
+  state.layers.push(layerFrom({
+    name:NAMES[state.layers.length % NAMES.length], col:c,
+    a:10 + Math.random()*30, f:0.06 + Math.random()*0.25, ph:Math.random()*2,
+    sp:0.015 + Math.random()*0.07, base:20 + Math.random()*70
+  }));
+  state.sel = state.layers.length - 1;
+  buildLayerList(); syncLayerCtl();
+  toast("A new wave rolls in");
+});
+/* selected layer controls */
+function syncLayerCtl(){
+  var L = state.layers[state.sel];
+  if (!L) return;
+  document.getElementById("cAmp").value = L.a; document.getElementById("oAmp").textContent = L.a;
+  document.getElementById("cFreq").value = Math.round(L.f*100); document.getElementById("oFreq").textContent = L.f.toFixed(2);
+  document.getElementById("cPhase").value = Math.round((L.ph % 2)*100); document.getElementById("oPhase").textContent = (L.ph % 2).toFixed(2);
+  document.getElementById("cSpeed").value = Math.round(L.sp*500); document.getElementById("oSpeed").textContent = L.sp.toFixed(3);
+  document.getElementById("cBase").value = L.base; document.getElementById("oBase").textContent = L.base;
+  document.getElementById("cCol").value = L.col; document.getElementById("oHex").textContent = L.col;
+}
+function bindCtl(id, outId, fmt, apply){
+  document.getElementById(id).addEventListener("input", function(){
+    var L = state.layers[state.sel];
+    if (!L) return;
+    apply(L, +this.value);
+    document.getElementById(outId).textContent = fmt(+this.value, L);
+    var chips = listEl.children;
+    if (chips[state.sel]) buildLayerList();
+  });
+}
+bindCtl("cAmp", "oAmp", function(v){ return v; }, function(L, v){ L.a = v; });
+bindCtl("cFreq", "oFreq", function(v){ return (v/100).toFixed(2); }, function(L, v){ L.f = v/100; });
+bindCtl("cPhase", "oPhase", function(v){ return (v/100).toFixed(2); }, function(L, v){ L.ph = v/100; });
+bindCtl("cSpeed", "oSpeed", function(v){ return (v/500).toFixed(3); }, function(L, v){ L.sp = v/500; });
+bindCtl("cBase", "oBase", function(v){ return v; }, function(L, v){ L.base = v; });
+document.getElementById("cCol").addEventListener("input", function(){
+  var L = state.layers[state.sel];
+  if (!L) return;
+  L.col = this.value;
+  document.getElementById("oHex").textContent = this.value;
+  buildLayerList();
+});
+/* toggles */
+document.getElementById("tHarmony").addEventListener("change", function(){
+  state.harmony = this.checked;
+  document.getElementById("fundWrap").style.display = this.checked ? "" : "none";
+  if (this.checked){
+    state.layers.forEach(function(L, i){ L.userF = L.f; L.f = state.fund; });
+    toast("Waves locked to just intonation");
+  } else {
+    state.layers.forEach(function(L, i){ L.f = Math.max(0.05, state.fund * JUST[i % JUST.length] / (i+1) * (i+1) / JUST[i % JUST.length]); });
+    toast("Frequencies freed");
+  }
+});
+document.getElementById("sFund").addEventListener("input", function(){
+  state.fund = +this.value/100;
+  document.getElementById("oFund").textContent = state.fund.toFixed(2);
+});
+document.getElementById("tFlow").addEventListener("change", function(){
+  state.flow = this.checked;
+  toast(state.flow ? "Flow resumed" : "Flow paused");
+});
+document.addEventListener("keydown", function(e){
+  if (e.target.tagName === "INPUT") return;
+  if (e.code === "Space"){
+    e.preventDefault();
+    state.flow = !state.flow;
+    document.getElementById("tFlow").checked = state.flow;
+    toast(state.flow ? "Flow resumed" : "Flow paused");
+  }
+  if (e.key === "h" || e.key === "H") togglePanel();
+  if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")){
+    e.preventDefault();
+    var i = state.sel, j = e.key === "ArrowUp" ? i - 1 : i + 1;
+    if (j < 0 || j >= state.layers.length) return;
+    var tmp = state.layers[i]; state.layers[i] = state.layers[j]; state.layers[j] = tmp;
+    state.sel = j;
+    buildLayerList(); syncLayerCtl();
+  }
+});
+function togglePanel(){
+  state.hidden = !state.hidden;
+  document.body.classList.toggle("panel-hidden", state.hidden);
+  toast(state.hidden ? "Panel hidden · H brings it back" : "Panel restored");
+}
+document.getElementById("hideBtn").addEventListener("click", togglePanel);
+/* surprise + export */
+function randomCol(){
+  var h = Math.floor(Math.random()*360);
+  var s = 45 + Math.random()*40, l = 45 + Math.random()*25;
+  return hslToHex(h, s, l);
+}
+function hslToHex(h, s, l){
+  s /= 100; l /= 100;
+  var k = function(n){ return (n + h/30) % 12; };
+  var a = s * Math.min(l, 1 - l);
+  var f = function(n){ return Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1))))); };
+  var hex = function(v){ return v.toString(16).padStart(2, "0"); };
+  return "#" + hex(f(0)) + hex(f(8)) + hex(f(4));
+}
+document.getElementById("surprise").addEventListener("click", function(){
+  var bgA = randomCol(), bgB = randomCol();
+  var P = PRESETS[state.preset];
+  P.bg = [bgA, bgB];
+  state.layers.forEach(function(L, i){
+    L.col = randomCol();
+    L.a = 8 + Math.random()*40;
+    L.f = 0.05 + Math.random()*0.28;
+    L.ph = Math.random()*2;
+    L.sp = 0.012 + Math.random()*0.08;
+    L.base = 18 + (i/(state.layers.length))*74 + Math.random()*6;
+    L.vis = true;
+  });
+  buildLayerList(); syncLayerCtl();
+  toast("Surprised. The waves approved.");
+});
+document.getElementById("export").addEventListener("click", function(){
+  var P = PRESETS[state.preset];
+  var svg = [];
+  svg.push('<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">');
+  svg.push('<defs>');
+  svg.push('<linearGradient id="bg" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="' + P.bg[0] + '"/><stop offset="1" stop-color="' + P.bg[1] + '"/></linearGradient>');
+  state.layers.forEach(function(L, i){
+    var stopA = P.style === "fade" ? hexA(L.col, 0.85) : shade(L.col, -0.12);
+    var stopB = P.style === "fade" ? hexA(L.col, 0) : shade(L.col, -0.45);
+    svg.push('<linearGradient id="g' + i + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + stopA + '"/><stop offset="1" stop-color="' + stopB + '"/></linearGradient>');
+  });
+  svg.push('</defs>');
+  svg.push('<rect width="' + W + '" height="' + H + '" fill="url(#bg)"/>');
+  state.layers.forEach(function(L, i){
+    if (!L.vis) return;
+    var n = 150;
+    var d = "M0," + surfaceY(L, 0, state.time).toFixed(1);
+    var prev = [0, surfaceY(L, 0, state.time)];
+    for (var j = 1; j <= n; j++){
+      var x = j/n*W, y = surfaceY(L, x, state.time);
+      var xc = (prev[0] + x)/2, yc = (prev[1] + y)/2;
+      d += " Q" + prev[0].toFixed(1) + "," + prev[1].toFixed(1) + " " + xc.toFixed(1) + "," + yc.toFixed(1);
+      prev = [x, y];
+    }
+    d += " L" + W + "," + H + " L0," + H + " Z";
+    svg.push('<path d="' + d + '" fill="url(#g' + i + ')" style="mix-blend-mode:' + P.blend + '"/>');
+  });
+  svg.push('</svg>');
+  var blob = new Blob([svg.join("\n")], {type:"image/svg+xml"});
+  var a = document.createElement("a");
+  a.download = "organic-wave-lab.svg";
+  a.href = URL.createObjectURL(blob);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+  toast("Frame exported as SVG");
+});
+
+/* go */
+resize();
+setPreset("dunes");
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

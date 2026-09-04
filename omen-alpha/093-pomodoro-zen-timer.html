@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stillwater — Zen Pomodoro Focus Timer</title>
+<style>
+:root{ --h:200; }
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  min-height:100vh;
+  background:radial-gradient(120% 120% at 50% 20%, hsl(calc(var(--h) + 40) 28% 16%), hsl(var(--h) 30% 10%));
+  color:hsl(var(--h) 30% 94%);
+  font-family:ui-sans-serif,system-ui,"Helvetica Neue",Arial,sans-serif;
+  transition:background 3s linear, color 3s linear;
+  overflow-x:hidden; position:relative;
+}
+#stars{position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.7;}
+main{
+  position:relative; z-index:1; display:grid; grid-template-columns:minmax(0,1fr) 360px;
+  gap:clamp(24px,4vw,70px); align-items:start; max-width:1400px; margin:0 auto;
+  padding:clamp(24px,5vh,60px) clamp(20px,4vw,50px);
+}
+/* ring */
+.ringwrap{display:flex; flex-direction:column; align-items:center; gap:26px; padding-top:2vh;}
+.ringbox{position:relative; width:min(78vw,440px); aspect-ratio:1;}
+#halo{
+  position:absolute; inset:-18%; border-radius:50%; opacity:0; transition:opacity 2.5s; pointer-events:none;
+  background:radial-gradient(circle, hsl(calc(var(--h) + 50) 70% 55% / .18), transparent 70%);
+}
+body.break #halo{opacity:1; animation:breathe 7s ease-in-out infinite;}
+@keyframes breathe{0%,100%{transform:scale(.92);}50%{transform:scale(1.08);}}
+svg.ring{width:100%; height:100%; display:block;}
+.ring .track{stroke:hsl(var(--h) 30% 94% / .12); fill:none; stroke-width:4;}
+.ring .prog{stroke-width:6; stroke-linecap:round; fill:none; transition:stroke-dashoffset .9s linear, stroke 3s linear;}
+.ring .tick{stroke:hsl(var(--h) 30% 94% / .14); stroke-width:1;}
+#gleam{transition:opacity .8s; opacity:1;}
+body.paused #gleam{opacity:0;}
+/* inside */
+.dial{
+  position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:6px; cursor:pointer;
+}
+.mode-label{
+  font-size:11px; letter-spacing:.34em; text-transform:uppercase; color:hsl(var(--h) 30% 94% / .6);
+}
+.numerals{
+  font-size:clamp(64px,16vw,124px); font-weight:200; font-variant-numeric:tabular-nums;
+  letter-spacing:.02em; line-height:1; user-select:none;
+}
+.edit-hint{font-size:10px; letter-spacing:.14em; color:hsl(var(--h) 30% 94% / .35); text-transform:uppercase;}
+/* dots */
+.dots{display:flex; gap:14px;}
+.sdot{
+  width:11px; height:11px; border-radius:50%; border:1px solid hsl(var(--h) 30% 94% / .3);
+  transition:all .5s;
+}
+.sdot.done{
+  background:var(--ringcol); border-color:transparent;
+  box-shadow:0 0 12px var(--ringcol);
+}
+.sdot.current{transform:scale(1.35);}
+/* controls */
+.controls{display:flex; align-items:center; gap:18px;}
+.cbtn{
+  width:58px; height:58px; border-radius:50%; border:1px solid hsl(var(--h) 30% 94% / .2);
+  background:hsl(var(--h) 30% 94% / .05); backdrop-filter:blur(8px); cursor:pointer;
+  display:flex; align-items:center; justify-content:center; transition:transform .3s, background .3s;
+}
+.cbtn:hover{transform:scale(1.07); background:hsl(var(--h) 30% 94% / .1);}
+#resetBtn:hover svg{transform:rotate(-90deg);}
+#resetBtn svg{transition:transform .5s;}
+#mainBtn{width:76px; height:76px; background:hsl(var(--h) 30% 94% / .12); border-color:hsl(var(--h) 30% 94% / .3);}
+#mainIcon{transition:d .4s ease, transform .3s;}
+.kbds{display:flex; gap:14px; flex-wrap:wrap; justify-content:center; color:hsl(var(--h) 30% 94% / .4); font-size:11px;}
+kbd{
+  border:1px solid hsl(var(--h) 30% 94% / .25); border-radius:5px; padding:2px 7px;
+  font-family:ui-monospace,"Courier New",monospace; font-size:10px; margin-right:5px;
+}
+/* tasks card */
+.card{
+  background:hsl(var(--h) 30% 94% / .05); border:1px solid hsl(var(--h) 30% 94% / .12);
+  backdrop-filter:blur(14px); border-radius:20px; padding:26px 26px 20px;
+}
+.card h2{
+  font-family:Georgia,"Iowan Old Style",serif; font-weight:400; font-size:20px; margin-bottom:18px;
+}
+.taskadd{display:flex; gap:8px; margin-bottom:14px;}
+.taskadd input{
+  flex:1; background:transparent; border:0; border-bottom:1px solid hsl(var(--h) 30% 94% / .2);
+  color:hsl(var(--h) 30% 94%); font-family:Georgia,serif; font-size:15px; padding:7px 2px; outline:none;
+}
+.taskadd input::placeholder{color:hsl(var(--h) 30% 94% / .35);}
+.taskadd button{
+  width:32px; height:32px; border-radius:50%; border:1px solid hsl(var(--h) 30% 94% / .25);
+  background:transparent; color:hsl(var(--h) 30% 94%); font-size:18px; cursor:pointer; line-height:1;
+  transition:all .3s; flex:none;
+}
+.taskadd button:hover{background:hsl(var(--h) 30% 94% / .1);}
+ul.tasks{list-style:none; display:grid; gap:4px; max-height:340px; overflow:auto;}
+.task{display:flex; align-items:center; gap:12px; padding:7px 4px; border-radius:10px; position:relative; transition:background .25s;}
+.task:hover{background:hsl(var(--h) 30% 94% / .05);}
+.cb{
+  width:20px; height:20px; border-radius:50%; border:1.5px solid hsl(var(--h) 30% 94% / .35);
+  flex:none; cursor:pointer; display:flex; align-items:center; justify-content:center; background:transparent; padding:0;
+}
+.cb i{
+  width:8px; height:8px; border-radius:50%; background:var(--ringcol); transform:scale(0);
+  transition:transform .3s cubic-bezier(.3,1.6,.5,1);
+}
+.task.done .cb i{transform:scale(1);}
+.tlabel{
+  flex:1; font-family:Georgia,serif; font-size:15px; position:relative; width:fit-content;
+  transition:opacity .4s; overflow-wrap:anywhere;
+}
+.tlabel::after{
+  content:""; position:absolute; left:0; top:52%; height:1.5px; width:100%;
+  background:hsl(var(--h) 30% 94% / .6); transform:scaleX(0); transform-origin:left;
+  transition:transform .45s cubic-bezier(.4,0,.2,1);
+}
+.task.done .tlabel{opacity:.45;}
+.task.done .tlabel::after{transform:scaleX(1);}
+.del{
+  background:transparent; border:0; color:hsl(var(--h) 30% 94% / .5); font-size:15px; cursor:pointer;
+  opacity:0; transition:opacity .25s; padding:2px 6px; flex:none;
+}
+.task:hover .del{opacity:1;}
+.del:hover{color:hsl(var(--h) 30% 94%);}
+.stats{
+  margin-top:14px; padding-top:14px; border-top:1px solid hsl(var(--h) 30% 94% / .12);
+  font-size:12px; color:hsl(var(--h) 30% 94% / .55); letter-spacing:.04em; display:flex; justify-content:space-between;
+}
+/* bloom + toast */
+#bloom{
+  position:fixed; left:50%; top:50%; width:60vmax; height:60vmax; border-radius:50%; pointer-events:none; z-index:80;
+  background:radial-gradient(circle, hsl(calc(var(--h) + 50) 85% 75% / .8), hsl(var(--h) 80% 65% / .3) 45%, transparent 70%);
+  filter:blur(30px); transform:translate(-50%,-50%) scale(.2); opacity:0; display:none;
+}
+#bloom.play{display:block; animation:bloom 3.2s ease-out forwards;}
+@keyframes bloom{
+  0%{transform:translate(-50%,-50%) scale(.2); opacity:0;}
+  25%{opacity:1;}
+  100%{transform:translate(-50%,-50%) scale(9); opacity:0;}
+}
+#toast{
+  position:fixed; left:50%; bottom:34px; transform:translate(-50%,140%); z-index:90;
+  background:hsl(var(--h) 30% 94% / .1); border:1px solid hsl(var(--h) 30% 94% / .25);
+  backdrop-filter:blur(14px); padding:13px 24px; border-radius:40px; font-size:13px;
+  transition:transform .5s cubic-bezier(.3,1.3,.4,1); white-space:nowrap;
+}
+#toast.show{transform:translate(-50%,0);}
+@media (max-width:1000px){ main{grid-template-columns:1fr;} }
+@media (prefers-reduced-motion:reduce){
+  #halo, #bloom.play, #gleam{animation:none !important;}
+  .ring .prog{transition:none;}
+  *{transition-duration:.01s !important;}
+}
+</style>
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+
+<main>
+  <div class="ringwrap">
+    <div class="ringbox">
+      <div id="halo"></div>
+      <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+        <defs>
+          <linearGradient id="pg" x1="0" y1="0" x2="1" y2="1">
+            <stop id="pstop1" offset="0"/>
+            <stop id="pstop2" offset="1"/>
+          </linearGradient>
+          <radialGradient id="gg">
+            <stop offset="0" stop-color="white" stop-opacity=".95"/>
+            <stop offset="1" stop-color="white" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <g id="ticks"></g>
+        <circle class="track" cx="100" cy="100" r="88"/>
+        <circle class="prog" id="prog" cx="100" cy="100" r="88" stroke="url(#pg)"
+          transform="rotate(-90 100 100)"/>
+        <circle id="gleam" cx="100" cy="12" r="5" fill="url(#gg)"/>
+      </svg>
+      <div class="dial" id="dial" role="button" tabindex="0" aria-label="Session length, click to edit">
+        <div class="mode-label" id="modeLabel">Focus</div>
+        <div class="numerals" id="numerals">25:00</div>
+        <div class="edit-hint">click the numerals to edit</div>
+      </div>
+    </div>
+    <div class="dots" id="dots" aria-label="Focus sessions"></div>
+    <div class="controls">
+      <button class="cbtn" id="resetBtn" aria-label="Reset session" title="Reset (r)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4h4"/>
+        </svg>
+      </button>
+      <button class="cbtn" id="mainBtn" aria-label="Start or pause" title="Start / pause (space)">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor">
+          <path id="mainIcon" d="M8 5 L18 12 L8 19 Z"/>
+        </svg>
+      </button>
+      <button class="cbtn" id="skipBtn" aria-label="Skip session" title="Skip (n)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 5 L14 12 L6 19 Z"/><rect x="15" y="5" width="2.6" height="14" rx="1.3"/>
+        </svg>
+      </button>
+    </div>
+    <div class="kbds">
+      <span><kbd>space</kbd>start / pause</span>
+      <span><kbd>r</kbd>reset</span>
+      <span><kbd>n</kbd>skip</span>
+      <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>modes</span>
+    </div>
+  </div>
+
+  <aside class="card">
+    <h2>What deserves your attention?</h2>
+    <div class="taskadd">
+      <input id="taskInput" type="text" placeholder="Name the thing…">
+      <button id="taskAdd" aria-label="Add task">+</button>
+    </div>
+    <ul class="tasks" id="tasks"></ul>
+    <div class="stats">
+      <span id="statDone">0 / 3 done</span>
+      <span id="statMin">0 focus min today</span>
+    </div>
+  </aside>
+</main>
+
+<div id="bloom" aria-hidden="true"></div>
+<div id="toast" role="status"></div>
+
+<script>
+(function(){
+"use strict";
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var root = document.documentElement;
+
+/* ---- stars field ---- */
+(function(){
+  var c = document.getElementById("stars"), ctx = c.getContext("2d");
+  function paint(){
+    var dpr = Math.min(devicePixelRatio || 1, 2);
+    c.width = innerWidth * dpr; c.height = innerHeight * dpr;
+    c.style.width = innerWidth + "px"; c.style.height = innerHeight + "px";
+    ctx.clearRect(0,0,c.width,c.height);
+    var seed = 7;
+    function rnd(){ seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    for (var i = 0; i < 90; i++){
+      var x = rnd() * c.width, y = rnd() * c.height, r = (0.4 + rnd() * 0.9) * dpr;
+      var g = ctx.createRadialGradient(x,y,0,x,y,r*3);
+      g.addColorStop(0,"rgba(255,255,255,.5)"); g.addColorStop(1,"rgba(255,255,255,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x,y,r*3,0,7); ctx.fill();
+    }
+  }
+  paint(); addEventListener("resize", paint);
+})();
+
+/* ---- modes & state ---- */
+var MODES = {
+  focus:{label:"Focus", hue:200, len:25},
+  short:{label:"Short break", hue:150, len:5},
+  long:{label:"Long break", hue:270, len:15}
+};
+var mode = "focus";
+var lengths = {focus:25, short:5, long:15};
+var running = false, paused = false;
+var endAt = 0, remainMs = 0;
+var hueStart = 200, hueTarget = 200;
+var completedFocus = 0;
+var focusMinutesToday = 0;
+var audioCtx = null;
+var tickTimer = null, gleamAngle = 0;
+
+var prog = document.getElementById("prog");
+var CIRC = 2 * Math.PI * 88;
+prog.style.strokeDasharray = CIRC;
+prog.style.strokeDashoffset = 0;
+
+/* ticks */
+(function(){
+  var g = document.getElementById("ticks");
+  for (var i = 0; i < 60; i++){
+    var a = i / 60 * Math.PI * 2;
+    var r1 = 97, r2 = i % 5 === 0 ? 92 : 94.5;
+    var l = document.createElementNS("http://www.w3.org/2000/svg","line");
+    l.setAttribute("x1", 100 + Math.cos(a) * r1); l.setAttribute("y1", 100 + Math.sin(a) * r1);
+    l.setAttribute("x2", 100 + Math.cos(a) * r2); l.setAttribute("y2", 100 + Math.sin(a) * r2);
+    l.setAttribute("class","tick");
+    g.appendChild(l);
+  }
+})();
+
+/* dots */
+var dotsEl = document.getElementById("dots");
+for (var i = 0; i < 4; i++){
+  var d = document.createElement("span");
+  d.className = "sdot"; dotsEl.appendChild(d);
+}
+function renderDots(){
+  Array.prototype.forEach.call(dotsEl.children, function(d, idx){
+    d.classList.toggle("done", idx < (completedFocus % 4));
+    d.classList.toggle("current", idx === (completedFocus % 4) && mode === "focus");
+  });
+}
+
+/* hue */
+function applyHue(h){
+  root.style.setProperty("--h", h.toFixed(1));
+  var s1 = document.getElementById("pstop1"), s2 = document.getElementById("pstop2");
+  s1.setAttribute("stop-color", "hsl(" + (h - 20) + " 80% 72%)");
+  s2.setAttribute("stop-color", "hsl(" + (h + 60) + " 80% 70%)");
+  document.documentElement.style.setProperty("--ringcol", "hsl(" + (h + 20) + " 80% 70%)");
+}
+applyHue(200);
+
+/* gleam orbit */
+(function orbit(){
+  if (!document.body.classList.contains("paused") && running && !reduced){
+    gleamAngle = (gleamAngle + (14 * 1000 / 60) / 1000 / 14 * 360 * (1/60) * 60) % 360;
+    gleamAngle = (gleamAngle + 360 / (14 * 60)) % 360;
+    var g = document.getElementById("gleam");
+    var rad = gleamAngle * Math.PI / 180;
+    g.setAttribute("cx", (100 + Math.cos(rad) * 88).toFixed(2));
+    g.setAttribute("cy", (100 + Math.sin(rad) * 88).toFixed(2));
+  }
+  requestAnimationFrame(orbit);
+})();
+
+/* display */
+function fmt(ms){
+  var s = Math.max(0, Math.ceil(ms / 1000));
+  return String(Math.floor(s / 60)).padStart(2,"0") + ":" + String(s % 60).padStart(2,"0");
+}
+function totalMs(){ return lengths[mode] * 60000; }
+function elapsedFrac(){ return 1 - remainMs / totalMs(); }
+
+function render(){
+  document.getElementById("numerals").textContent = fmt(remainMs);
+  document.getElementById("modeLabel").textContent = MODES[mode].label;
+  var frac = 1 - remainMs / totalMs();
+  prog.style.strokeDashoffset = (CIRC * frac).toFixed(2);
+  document.title = fmt(remainMs) + " · " + MODES[mode].label + " — Stillwater";
+  var hue = hueStart + (hueTarget - hueStart) * Math.min(1, frac);
+  applyHue(hue);
+  document.getElementById("statMin").textContent = focusMinutesToday + " focus min today";
+  renderDots();
+}
+
+/* ticking */
+function tick(){
+  if (!running) return;
+  remainMs = Math.max(0, endAt - Date.now());
+  render();
+  if (remainMs <= 0) complete();
+}
+function startTimer(){
+  remainMs = lengths[mode] * 60000;
+  endAt = Date.now() + remainMs;
+  hueStart = MODES[mode].hue; hueTarget = MODES[mode].hue + 50;
+  running = true; paused = false;
+  document.body.classList.remove("paused");
+  render();
+  tickTimer = setInterval(tick, 250);
+}
+function stopTimer(){
+  running = false; clearInterval(tickTimer); tickTimer = null;
+}
+function toggleMain(){
+  if (running){
+    if (paused){
+      endAt = Date.now() + remainMs; paused = false;
+      document.body.classList.remove("paused");
+      tickTimer = setInterval(tick, 250);
+    } else {
+      paused = true; clearInterval(tickTimer);
+      remainMs = Math.max(0, endAt - Date.now());
+      document.body.classList.add("paused");
+    }
+  } else {
+    if (!audioCtx) initAudio();
+    startTimer();
+    setIcon(true);
+  }
+  setIcon(!paused && running);
+}
+function setIcon(playing){
+  var p = document.getElementById("mainIcon");
+  var playD = "M8 5 L18 12 L8 19 Z";
+  var pauseD = "M7 5 H10.6 V19 H7 Z M13.4 5 H17 V19 H13.4 Z";
+  try { p.style.d = playing ? "path('" + pauseD + "')" : "path('" + playD + "')"; } catch(e){}
+  if (!CSS.supports("d","path('" + playD + "')")){
+    p.setAttribute("d", playing ? pauseD : playD);
+  } else {
+    p.setAttribute("d", playing ? pauseD : playD);
+  }
+  document.getElementById("mainBtn").setAttribute("aria-label", playing ? "Pause" : "Start");
+}
+function resetSession(){
+  stopTimer(); paused = false;
+  document.body.classList.remove("paused","break");
+  remainMs = lengths[mode] * 60000;
+  hueStart = MODES[mode].hue; hueTarget = MODES[mode].hue;
+  render(); setIcon(false);
+}
+function skipSession(){
+  stopTimer();
+  var wasFocus = mode === "focus";
+  advance(wasFocus);
+}
+function advance(fromFocus){
+  document.body.classList.remove("break");
+  var next;
+  if (fromFocus){
+    completedFocus++;
+    next = (completedFocus % 4 === 0) ? "long" : "short";
+    focusMinutesToday += lengths.focus;
+  } else {
+    next = "focus";
+  }
+  mode = next;
+  showToast(fromFocus ? "Session complete. Time to rest." : "Break over. Back to it.");
+  setMode(mode, true);
+  renderDots();
+}
+function complete(){
+  stopTimer();
+  if (!reduced){
+    var b = document.getElementById("bloom");
+    b.classList.remove("play"); void b.offsetWidth; b.classList.add("play");
+  }
+  if (mode === "focus") chime();
+  setTimeout(function(){ advance(mode === "focus"); }, reduced ? 50 : 1400);
+}
+function setMode(m, auto){
+  mode = m;
+  document.body.classList.toggle("break", m !== "focus");
+  remainMs = lengths[m] * 60000;
+  hueStart = MODES[m].hue;
+  hueTarget = auto ? MODES[m].hue + 50 : MODES[m].hue;
+  running = false; paused = false;
+  document.body.classList.remove("paused");
+  render(); setIcon(false);
+}
+
+/* edit length */
+var dial = document.getElementById("dial");
+dial.addEventListener("click", function(){
+  var v = prompt("Set " + MODES[mode].label + " length in minutes (1–120):", lengths[mode]);
+  if (v === null) return;
+  var n = parseInt(v, 10);
+  if (isNaN(n) || n < 1 || n > 120){ showToast("Between 1 and 120 minutes, gently."); return; }
+  lengths[mode] = n;
+  resetSession();
+});
+
+/* toast */
+var toastTimer = null;
+function showToast(msg){
+  var t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove("show"); }, 3200);
+}
+
+/* ---- audio chime ---- */
+function initAudio(){ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+function chime(){
+  if (!audioCtx) return;
+  var t0 = audioCtx.currentTime + 0.05;
+  var master = audioCtx.createGain();
+  master.gain.setValueAtTime(0.0001, t0);
+  master.gain.exponentialRampToValueAtTime(0.5, t0 + 0.08);
+  master.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.6);
+  master.connect(audioCtx.destination);
+  var freqs = [523.25, 659.25, 783.99, 1046.5];
+  freqs.forEach(function(f, i){
+    var t = t0 + i * 0.18;
+    var o = audioCtx.createOscillator(); o.type = "sine"; o.frequency.value = f;
+    var g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.9);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + 2);
+  });
+  var tri = audioCtx.createOscillator(); tri.type = "triangle";
+  tri.frequency.value = 1046.5 * 1.003;
+  var tg = audioCtx.createGain();
+  tg.gain.setValueAtTime(0.0001, t0);
+  tg.gain.exponentialRampToValueAtTime(0.06, t0 + 0.1);
+  tg.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.4);
+  tri.connect(tg); tg.connect(master);
+  tri.start(t0); tri.stop(t0 + 2.6);
+}
+
+/* ---- tasks ---- */
+var tasks = [
+  {t:"Read one chapter, slowly", done:false},
+  {t:"Write three honest sentences", done:false},
+  {t:"Water the fern on the sill", done:true}
+];
+var tasksEl = document.getElementById("tasks");
+function renderTasks(){
+  tasksEl.innerHTML = "";
+  tasks.forEach(function(task, i){
+    var li = document.createElement("li");
+    li.className = "task" + (task.done ? " done" : "");
+    li.innerHTML =
+      '<button class="cb" aria-label="Toggle task"><i></i></button>' +
+      '<span class="tlabel"></span>' +
+      '<button class="del" aria-label="Remove task">×</button>';
+    li.querySelector(".tlabel").textContent = task.t;
+    li.querySelector(".cb").addEventListener("click", function(){
+      task.done = !task.done; renderTasks();
+    });
+    li.querySelector(".del").addEventListener("click", function(){
+      tasks.splice(i, 1); renderTasks();
+    });
+    tasksEl.appendChild(li);
+  });
+  var done = tasks.filter(function(t){ return t.done; }).length;
+  document.getElementById("statDone").textContent = done + " / " + tasks.length + " done";
+}
+function addTask(){
+  var inp = document.getElementById("taskInput");
+  if (!inp.value.trim()) return;
+  tasks.push({t:inp.value.trim(), done:false});
+  inp.value = ""; renderTasks();
+}
+document.getElementById("taskAdd").addEventListener("click", addTask);
+document.getElementById("taskInput").addEventListener("keydown", function(e){
+  if (e.key === "Enter") addTask();
+});
+renderTasks();
+
+/* ---- wiring ---- */
+document.getElementById("mainBtn").addEventListener("click", toggleMain);
+document.getElementById("resetBtn").addEventListener("click", resetSession);
+document.getElementById("skipBtn").addEventListener("click", skipSession);
+document.addEventListener("keydown", function(e){
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  if (e.key === " "){ e.preventDefault(); toggleMain(); }
+  else if (e.key === "r") resetSession();
+  else if (e.key === "n") skipSession();
+  else if (e.key === "1") setMode("focus");
+  else if (e.key === "2") setMode("short");
+  else if (e.key === "3") setMode("long");
+});
+
+remainMs = lengths.focus * 60000;
+render();
+})();
+</script>
+</body>
+</html>

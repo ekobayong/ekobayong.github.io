@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vellmar Metro — Live Network Map</title>
+<style>
+  :root{
+    --bg:#f5f2ea; --panel:#ebe7dc; --ink:#1b1e24; --sec:#5a5f6b; --rule:#d5d0c4;
+    --river:#cfe3ec; --disc:#ffffff; --disc-stroke:#1b1e24;
+  }
+  html.night{
+    --bg:#0f1318; --panel:#151a21; --ink:#e9ecf1; --sec:#9aa3b2; --rule:#252c36;
+    --river:#17232e; --disc:#0f1318; --disc-stroke:#e9ecf1;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:var(--bg);color:var(--ink);transition:background .5s,color .5s;
+    font-family:ui-sans-serif,system-ui,'Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:500;
+  }
+  header{
+    display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;
+    padding:1rem 1.6rem;border-bottom:1px solid var(--rule);transition:border-color .5s}
+  .wordmark{font-weight:700;font-size:1.15rem}
+  .wordmark span{color:#1f6fd6}
+  .legend{display:flex;gap:.8rem;flex-wrap:wrap;font-size:.72rem}
+  .legend button{display:flex;align-items:center;gap:.4rem;border:0;background:transparent;
+    color:var(--sec);cursor:pointer;font:inherit;font-size:.72rem;padding:.2rem .3rem;border-radius:4px}
+  .legend button:hover{color:var(--ink)}
+  .pip{width:14px;height:6px;border-radius:3px;display:inline-block}
+  header .spacer{flex:1}
+  #nightBtn{border:1px solid var(--rule);background:transparent;color:var(--ink);
+    padding:.4rem 1rem;border-radius:999px;cursor:pointer;font:inherit;font-size:.72rem;transition:.3s}
+  #nightBtn:hover{border-color:var(--sec)}
+
+  main{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:1.2rem;
+    padding:1.2rem 1.6rem;max-width:1500px;margin:0 auto}
+  .map-card{background:var(--panel);border-radius:12px;padding:.8rem;position:relative;transition:background .5s}
+  .caption{position:absolute;left:1.6rem;bottom:.9rem;font-size:.68rem;color:var(--sec)}
+  #clock{position:absolute;right:1.6rem;bottom:.9rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Courier New',monospace;
+    font-variant-numeric:tabular-nums;font-size:.78rem;color:var(--sec)}
+  svg#map{display:block;width:100%;height:auto}
+
+  aside{display:flex;flex-direction:column;gap:1.2rem}
+  .card{background:var(--panel);border-radius:12px;padding:1.1rem 1.2rem;transition:background .5s}
+  .card h2{font-size:.66rem;letter-spacing:.28em;text-transform:uppercase;color:var(--sec);
+    font-weight:700;margin-bottom:.8rem}
+  #stName{font-weight:700;font-size:1.05rem;margin-bottom:.5rem}
+  .linepips{display:flex;gap:.35rem;margin-bottom:.9rem}
+  .arr{display:flex;align-items:baseline;gap:.6rem;padding:.42rem 0;border-top:1px solid var(--rule);font-size:.82rem}
+  .arr:first-of-type{border-top:0}
+  .arr .lp{width:10px;height:10px;border-radius:50%;flex:none;align-self:center}
+  .arr .dest{color:var(--sec);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .arr .eta{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Courier New',monospace;
+    font-variant-numeric:tabular-nums;font-size:.8rem}
+  .arr .eta.due{color:#1e9e5a;font-weight:700}
+  .arr .note{color:#f0a020;font-size:.68rem}
+  .muted{color:var(--sec);font-size:.8rem;font-style:italic}
+
+  .status-row{display:flex;align-items:center;gap:.7rem;padding:.5rem 0;border-top:1px solid var(--rule)}
+  .status-row:first-of-type{border-top:0}
+  .status-row .lp{width:16px;height:6px;border-radius:3px}
+  .status-row .nm{flex:1;font-size:.82rem}
+  .badge{font-size:.62rem;letter-spacing:.08em;padding:.22rem .6rem;border-radius:999px;
+    background:rgba(30,158,90,.14);color:#1e9e5a}
+  .badge.delay{background:rgba(240,160,32,.16);color:#c07f10;animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.55}}
+
+  /* map svg */
+  .line{fill:none;stroke-linejoin:round;stroke-linecap:round;transition:opacity .3s,stroke-width .3s}
+  .hit{fill:none;stroke:transparent;cursor:pointer}
+  .st-disc{transition:opacity .3s}
+  .st-disc circle.core{fill:var(--disc);stroke:var(--disc-stroke);transition:fill .5s,stroke .5s}
+  .label{font-size:11.5px;fill:var(--ink);font-weight:500;paint-order:stroke;
+    stroke:var(--bg);stroke-width:3px;stroke-linejoin:round;transition:fill .5s,stroke .5s;cursor:pointer}
+  .label.sel{font-weight:700}
+  .sel-ring{fill:none;stroke:#f0a020;stroke-width:2.5;pointer-events:none;opacity:0}
+  .sel-ring.on{opacity:1}
+  @media(max-width:860px){
+    main{grid-template-columns:1fr}
+    header{gap:.6rem}
+  }
+  @media(prefers-reduced-motion:reduce){
+    .badge.delay{animation:none}
+    *{transition-duration:.01s!important}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wordmark">Vellmar <span>Metro</span></div>
+  <div class="legend" id="legend"></div>
+  <div class="spacer"></div>
+  <button id="nightBtn" aria-pressed="false">Night mode</button>
+</header>
+
+<main>
+  <div class="map-card">
+    <svg id="map" viewBox="0 0 1000 740" role="img" aria-label="Vellmar Metro network diagram"></svg>
+    <div class="caption">Vellmar Metro · Network Diagram · 2026</div>
+    <div id="clock">00:00:00</div>
+  </div>
+  <aside>
+    <div class="card" id="arrCard">
+      <h2>Next arrivals</h2>
+      <div id="stName">Select a station</div>
+      <div class="linepips" id="stLines"></div>
+      <div id="arrList"><div class="muted">Tap any station on the map to see live arrivals.</div></div>
+    </div>
+    <div class="card">
+      <h2>Service status</h2>
+      <div id="statusList"></div>
+    </div>
+  </aside>
+</main>
+
+<script>
+(function(){
+'use strict';
+var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (window.matchMedia('(prefers-color-scheme: dark)').matches) toggleNight(true);
+document.getElementById('nightBtn').addEventListener('click', function(){
+  toggleNight(document.documentElement.classList.contains('night') ? false : true);
+});
+function toggleNight(on){
+  document.documentElement.classList.toggle('night', on);
+  document.getElementById('nightBtn').setAttribute('aria-pressed', on);
+}
+
+/* palette */
+var C = { crimson:'#d9363e', cobalt:'#1f6fd6', emerald:'#1e9e5a', amber:'#f0a020', violet:'#7b4fbf', slate:'#3a8c96' };
+
+/* network data: each line = array of [x,y] polyline points, stations = subset indices with name/label anchor */
+var LINES = [
+  { id:'crimson', color:C.crimson, name:'Crimson Line', pts:[[70,140],[240,140],[340,140],[340,250],[340,380],[420,460],[420,560],[420,660],[300,660]],
+    stations:{0:['Westgate Quay','above'],1:['Harbor Mills','above'],2:['Museum Quarter','above'],4:['Central Vellmar','right'],6:['Kingsrow','right'],7:['Eastmoor Terminal','above']} },
+  { id:'cobalt', color:C.cobalt, name:'Cobalt Line', pts:[[120,420],[240,420],[340,380],[470,380],[560,290],[560,190],[680,190],[780,190],[880,190]],
+    stations:{0:['Ferry Landing','below'],2:['Central Vellmar','left'],3:['Aurora Park','above'],4:['Lantern Court','above'],6:['Priory Gate','above'],8:['Foundry Square','above']} },
+  { id:'emerald', color:C.emerald, name:'Emerald Line', pts:[[70,620],[220,620],[340,560],[420,460],[560,380],[700,380],[820,380],[920,300]],
+    stations:{0:['Saltmarsh','below'],2:['Riverside','below'],3:['Central Vellmar','below'],5:['Botanic Gardens','above'],7:['Kingsrow','left'],8:['Old Docks','above']} },
+  { id:'amber', color:C.amber, name:'Amber Line', pts:[[140,60],[140,200],[140,340],[240,420],[340,560],[340,660],[470,690],[620,690]],
+    stations:{0:['Tannery Steps','right'],2:['Weaver\u2019s Row','left'],3:['Aurora Park','below'],5:['Eastmoor Terminal','right'],7:['Harbor Mills','right']} },
+  { id:'violet', color:C.violet, name:'Violet Line', pts:[[560,60],[560,190],[560,290],[500,380],[420,460],[300,560],[200,560]],
+    stations:{0:['Northgate','right'],2:['Lantern Court','left'],4:['Central Vellmar','above'],6:['Riverside','above']} },
+  { id:'slate', color:C.slate, name:'Slate Line', pts:[[80,300],[200,300],[340,250],[470,250],[620,190],[680,190],[760,110],[900,110]],
+    stations:{0:['Westgate Quay','below'],2:['Museum Quarter','below'],4:['Priory Gate','below'],5:['Lantern Court','right'],7:['Northgate','left']} }
+];
+
+var svg = document.getElementById('map');
+var NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent){
+  var e = document.createElementNS(NS, tag);
+  for (var k in attrs) e.setAttribute(k, attrs[k]);
+  (parent || svg).appendChild(e);
+  return e;
+}
+
+/* defs & river & grid */
+var defs = el('defs', {});
+/* grid */
+var gridG = el('g', { opacity:0.35 }, svg);
+for (var gx = 0; gx <= 1000; gx += 100)
+  el('line', { x1:gx, y1:0, x2:gx, y2:740, stroke:'var(--rule)', 'stroke-width':0.5 }, gridG);
+for (var gy = 0; gy <= 740; gy += 100)
+  el('line', { x1:0, y1:gy, x2:1000, y2:gy, stroke:'var(--rule)', 'stroke-width':0.5 }, gridG);
+
+/* river */
+el('path', { d:'M0 430 C 120 400, 220 470, 340 430 S 560 480, 660 440 S 860 470, 1000 420 L 1000 500 C 860 550, 700 520, 580 560 S 340 540, 220 590 S 80 560, 0 600 Z',
+  fill:'var(--river)', opacity:0.9 });
+
+/* interchange stations: dedupe by name */
+var stationIndex = {}; /* name -> {x,y,lines:[],node,ring,label} */
+LINES.forEach(function(L, li){
+  L.stations = Object.keys(L.stations).map(Number).sort(function(a,b){return a-b;}).map(function(k){
+    var arr = L.stations[k]; return { idx:k, name:arr[0], anchor:arr[1] };
+  });
+  L.stations.forEach(function(s){
+    s.x = L.pts[s.idx][0]; s.y = L.pts[s.idx][1];
+    s.lineIdx = li;
+    if (!stationIndex[s.name]) stationIndex[s.name] = { name:s.name, x:s.x, y:s.y, lines:[], anchors:[] };
+    var st = stationIndex[s.name];
+    if (st.lines.indexOf(li) < 0) { st.lines.push(li); st.anchors.push(s.anchor); }
+  });
+});
+
+/* draw lines */
+var lineGroups = [];
+LINES.forEach(function(L){
+  var g = el('g', {});
+  var d = 'M' + L.pts.map(function(p){ return p[0] + ' ' + p[1]; }).join(' L ');
+  var hit = el('path', { d:d, 'class':'hit', 'stroke-width':26 }, g);
+  var vis = el('path', { d:d, 'class':'line', stroke:L.color, 'stroke-width':9 }, g);
+  L.vis = vis; L.g = g;
+  hit.addEventListener('mouseenter', function(){ highlight(li); });
+  hit.addEventListener('mouseleave', function(){ highlight(-1); });
+  lineGroups.push(g);
+});
+
+/* draw station ticks + discs + labels */
+var TICK = 5;
+Object.keys(stationIndex).forEach(function(name){
+  var st = stationIndex[name];
+  var interchange = st.lines.length > 1;
+  var terminus = false;
+  st.lines.forEach(function(li){
+    var L = LINES[li];
+    L.stations.forEach(function(s){ if (s.name === name && (s.idx === 0 || s.idx === L.pts.length - 1)) terminus = true; });
+  });
+  var g = el('g', { 'class':'st-disc', tabindex:0, role:'button' });
+  if (interchange) {
+    el('circle', { cx:st.x, cy:st.y, r:7, 'class':'core', 'stroke-width':3 }, g);
+  } else {
+    /* tick perpendicular: use anchor side */
+    var a = st.anchors[0];
+    var dx = 0, dy = 0;
+    if (a === 'above') { dy = -1; } else if (a === 'below') { dy = 1; }
+    else { dx = (a === 'left') ? -1 : 1; }
+    el('line', { x1:st.x - dx*TICK*0 + (dx? dx*4:0), y1:st.y - dy*4 - (dx?0:0),
+      x2:st.x + (dx? dx*8:0), y2:st.y + (dy? dy*8:0), stroke:'var(--disc-stroke)', 'stroke-width':2.5 }, g);
+    el('circle', { cx:st.x, cy:st.y, r:3.4, 'class':'core', 'stroke-width':2 }, g);
+    if (terminus) el('circle', { cx:st.x, cy:st.y, r:5.4, 'class':'core', 'stroke-width':2 }, g);
+  }
+  /* selection ring */
+  st.ring = el('circle', { cx:st.x, cy:st.y, r:12, 'class':'sel-ring' }, g);
+  /* label with hand-tuned offsets */
+  var a2 = st.anchors[0];
+  var lx = st.x, ly = st.y, anchor = 'middle', base = 'auto';
+  if (a2 === 'above'){ ly = st.y - 13; }
+  else if (a2 === 'below'){ ly = st.y + 20; }
+  else if (a2 === 'left'){ lx = st.x - 12; anchor = 'end'; ly = st.y + 4; }
+  else { lx = st.x + 12; anchor = 'start'; ly = st.y + 4; }
+  var t = el('text', { x:lx, y:ly, 'class':'label', 'text-anchor':anchor }, g);
+  t.textContent = name;
+  st.label = t;
+  st.node = g;
+  function activate(){
+    selectStation(name);
+  }
+  g.addEventListener('click', activate);
+  g.addEventListener('keydown', function(e){ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); } });
+  t.addEventListener('click', activate);
+});
+
+/* header legend */
+var legend = document.getElementById('legend');
+LINES.forEach(function(L, li){
+  var b = document.createElement('button');
+  b.innerHTML = '<span class="pip" style="background:' + L.color + '"></span>' + L.name;
+  b.addEventListener('mouseenter', function(){ highlight(li); });
+  b.addEventListener('mouseleave', function(){ highlight(-1); });
+  legend.appendChild(b);
+});
+
+/* highlight */
+function highlight(hi){
+  LINES.forEach(function(L, li){
+    var dim = hi >= 0 && hi !== li;
+    L.vis.setAttribute('opacity', dim ? 0.13 : 1);
+    L.vis.setAttribute('stroke-width', hi === li ? 12 : 9);
+  });
+  Object.keys(stationIndex).forEach(function(name){
+    var st = stationIndex[name];
+    var dim = hi >= 0 && st.lines.indexOf(hi) < 0;
+    st.node.setAttribute('opacity', dim ? 0.13 : 1);
+    st.label.setAttribute('opacity', dim ? 0.13 : 1);
+  });
+  trainEls.forEach(function(te, ti){
+    var li = Math.floor(ti / 4);
+    te.setAttribute('opacity', (hi >= 0 && li !== hi) ? 0.13 : 1);
+  });
+}
+
+/* trains: 4 per line */
+var trains = []; /* {li,dir,pos,speed...} */
+var trainEls = [];
+var PATHS = LINES.map(function(L){
+  var p = el('path', { d:'M' + L.pts.map(function(p2){ return p2[0] + ' ' + p2[1]; }).join(' L '), fill:'none' });
+  var len = p.getTotalLength();
+  /* station positions along path: nearest-point search */
+  var stPos = L.stations.map(function(s){
+    var best = 0, bestD = 1e9;
+    for (var d2 = 0; d2 <= len; d2 += 2) {
+      var pt = p.getPointAtLength(d2);
+      var dd = (pt.x - s.x) * (pt.x - s.x) + (pt.y - s.y) * (pt.y - s.y);
+      if (dd < bestD) { bestD = dd; best = d2; }
+    }
+    return { name:s.name, d:best };
+  });
+  return { p:p, len:len, stPos:stPos };
+});
+
+var trainLayer = el('g', {});
+LINES.forEach(function(L, li){
+  for (var i = 0; i < 4; i++) {
+    var dir = i < 2 ? 1 : -1;
+    var t = { li:li, dir:dir, d:(i % 2) * (PATHS[li].len / 2), dwell:0, terminated:false };
+    trains.push(t);
+    var g = el('g', {}, trainLayer);
+    el('circle', { r:8, fill:L.color, opacity:0.25, cx:0, cy:0 }, g);
+    el('circle', { r:4.6, fill:L.color, stroke:'#fff', 'stroke-width':1.6, cx:0, cy:0 }, g);
+    trainEls.push(g);
+  }
+});
+
+/* delay state */
+var delayed = LINES.map(function(){ return 0; }); /* remaining seconds */
+var statusList = document.getElementById('statusList');
+var badges = [];
+LINES.forEach(function(L, li){
+  var row = document.createElement('div');
+  row.className = 'status-row';
+  row.innerHTML = '<span class="lp" style="background:' + L.color + '"></span>' +
+    '<span class="nm">' + L.name + '</span><span class="badge" data-i="' + li + '">Good service</span>';
+  row.addEventListener('mouseenter', function(){ highlight(li); });
+  row.addEventListener('mouseleave', function(){ highlight(-1); });
+  statusList.appendChild(row);
+  badges.push(row.querySelector('.badge'));
+});
+
+var nextDelayAt = performance.now() + (18 + Math.random() * 22) * 1000;
+
+/* station selection */
+var selected = null;
+function selectStation(name){
+  if (selected) { stationIndex[selected].ring.classList.remove('on'); stationIndex[selected].label.classList.remove('sel'); }
+  selected = name;
+  var st = stationIndex[name];
+  st.ring.classList.add('on'); st.label.classList.add('sel');
+  document.getElementById('stName').textContent = name;
+  var pips = document.getElementById('stLines');
+  pips.innerHTML = '';
+  st.lines.forEach(function(li){
+    var s = document.createElement('span');
+    s.className = 'pip'; s.style.background = LINES[li].color;
+    pips.appendChild(s);
+  });
+}
+
+/* arrivals recompute 4x/sec */
+var arrList = document.getElementById('arrList');
+function updateArrivals(){
+  if (!selected) return;
+  var st = stationIndex[selected];
+  var rows = [];
+  trains.forEach(function(t, ti){
+    var L = LINES[t.li];
+    if (st.lines.indexOf(t.li) < 0) return;
+    var P = PATHS[t.li];
+    var stop = null;
+    P.stPos.forEach(function(sp){ if (sp.name === selected) stop = sp; });
+    if (!stop) return;
+    var pos = t.d;
+    var diff;
+    if (t.dir > 0) diff = stop.d - pos; else diff = pos - stop.d;
+    if (diff < -2) { /* passed: wrap via terminus turn */ diff += 2 * P.len; }
+    if (diff < -1 || diff > P.len) return;
+    var speed = delayed[t.li] > 0 ? 62 * 0.45 : 62;
+    var eta = diff / speed + (t.dwell > 0 ? t.dwell : 0);
+    /* destination: terminus in travel direction */
+    var terminus = null;
+    L.stations.forEach(function(s){
+      if (s.idx === 0 || s.idx === L.pts.length - 1) {
+        var sp2 = null;
+        P.stPos.forEach(function(sp){ if (sp.name === s.name) sp2 = sp; });
+        if (sp2 && ((t.dir > 0 && sp2.d > pos) || (t.dir < 0 && sp2.d < pos))) terminus = terminus || s.name;
+      }
+    });
+    rows.push({ eta:eta, li:t.li, dest:terminus || 'Terminates here', term:!terminus });
+  });
+  rows.sort(function(a, b){ return a.eta - b.eta; });
+  rows = rows.slice(0, 6);
+  arrList.innerHTML = '';
+  if (!rows.length) { arrList.innerHTML = '<div class="muted">No trains approaching.</div>'; return; }
+  rows.forEach(function(r){
+    var div = document.createElement('div');
+    div.className = 'arr';
+    var etaTxt, cls = 'eta';
+    if (r.eta < 3) { etaTxt = 'Due'; cls += ' due'; }
+    else if (r.eta < 60) etaTxt = Math.round(r.eta) + 's';
+    else etaTxt = Math.floor(r.eta / 60) + ':' + String(Math.floor(r.eta % 60)).padStart(2, '0');
+    div.innerHTML = '<span class="lp" style="background:' + LINES[r.li].color + '"></span>' +
+      '<span class="dest">' + (r.term ? 'Terminates here' : 'towards ' + r.dest) +
+      (delayed[r.li] > 0 ? ' <span class="note">· delayed</span>' : '') + '</span>' +
+      '<span class="' + cls + '">' + etaTxt + '</span>';
+    arrList.appendChild(div);
+  });
+}
+
+/* sim step */
+function step(dt, now){
+  trains.forEach(function(t, ti){
+    var P = PATHS[t.li];
+    var speed = (reduced ? 62 * 0.6 : 62) * (delayed[t.li] > 0 ? 0.45 : 1);
+    if (t.dwell > 0) { t.dwell -= dt; }
+    else {
+      t.d += t.dir * speed * dt;
+      /* snap & dwell at stations */
+      for (var i = 0; i < P.stPos.length; i++) {
+        var sp = P.stPos[i];
+        if (Math.abs(sp.d - t.d) < 3) {
+          t.d = sp.d;
+          var isTerm = i === 0 || i === P.stPos.length - 1;
+          t.dwell = (delayed[t.li] > 0 ? 3.2 : 1.6) * (isTerm ? 2 : 1);
+          if (isTerm) t.dir *= -1;
+          break;
+        }
+      }
+      if (t.d >= P.len) { t.d = P.len; t.dir = -1; t.dwell = delayed[t.li] > 0 ? 6.4 : 3.2; }
+      if (t.d <= 0) { t.d = 0; t.dir = 1; t.dwell = delayed[t.li] > 0 ? 6.4 : 3.2; }
+    }
+    var pt = P.p.getPointAtLength(Math.max(0, Math.min(P.len, t.d)));
+    var g = trainEls[ti];
+    g.setAttribute('transform', 'translate(' + pt.x.toFixed(1) + ',' + pt.y.toFixed(1) + ')');
+  });
+  /* random delays */
+  if (now > nextDelayAt) {
+    var li = Math.floor(Math.random() * LINES.length);
+    if (delayed[li] <= 0) {
+      delayed[li] = 14 + Math.random() * 16;
+      badges[li].textContent = 'Minor delays';
+      badges[li].classList.add('delay');
+    }
+    nextDelayAt = now + (18 + Math.random() * 22) * 1000;
+  }
+  for (var i = 0; i < delayed.length; i++) {
+    if (delayed[i] > 0) {
+      delayed[i] -= dt;
+      if (delayed[i] <= 0) {
+        delayed[i] = 0;
+        badges[i].textContent = 'Good service';
+        badges[i].classList.remove('delay');
+      }
+    }
+  }
+}
+
+/* clock */
+var clockEl = document.getElementById('clock');
+function updateClock(){
+  var d = new Date();
+  clockEl.textContent = [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(function(n){ return String(n).padStart(2, '0'); }).join(':');
+}
+updateClock();
+
+/* main loop */
+var last = performance.now(), acc = 0, arrivalsT = 0;
+function loop(now){
+  requestAnimationFrame(loop);
+  var dt = Math.min((now - last) / 1000, 0.1);
+  last = now;
+  step(dt, now);
+  arrivalsT += dt;
+  if (arrivalsT > 0.25) { arrivalsT = 0; updateArrivals(); }
+}
+requestAnimationFrame(loop);
+setInterval(updateClock, 1000);
+})();
+</script>
+</body>
+</html>

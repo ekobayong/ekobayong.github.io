@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Valley of Paper — a cut-paper dusk</title>
+<style>
+  :root{
+    --sky1:#3b2a5c; --sky2:#c9698a; --sky3:#f7b26a;
+    --sun:#ffd28a; --cloud:#f7d5c4;
+    --s5:#8b6a9c; --s6:#6a4f83; --s7:#4f3a6b; --s8:#3a2a54; --s9:#2b1f44; --s10:#1c1533; --s11:#130f26;
+    --stars:0; --sun-y:0px; --moon-y:700px;
+    --win:rgba(255,200,110,.15);
+    --uiB:1;
+    --paper:#f6ead6; --pink:#3b2a2a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden}
+  body{
+    background:linear-gradient(to bottom, var(--sky1), var(--sky2) 55%, var(--sky3));
+    transition:none;
+    font-family:ui-rounded,"SF Pro Rounded","Hiragino Maru Gothic ProN","Arial Rounded MT Bold","Segoe UI",system-ui,sans-serif;
+    color:var(--pink);
+  }
+  .scene{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  svg{width:100%;height:100%;display:block}
+
+  /* ---------- layers ---------- */
+  .sky1{fill:var(--sky1)} .sky2{fill:var(--sky2)} .sky3{fill:var(--sky3)}
+  .sunfill{fill:var(--sun)} .cloudfill{fill:var(--cloud)}
+  .f5{fill:var(--s5)} .f6{fill:var(--s6)} .f7{fill:var(--s7)} .f8{fill:var(--s8)}
+  .f9{fill:var(--s9)} .f10{fill:var(--s10)} .f11{fill:var(--s11)}
+  .winfill{fill:var(--win)}
+  .sheet{transition:fill .6s ease}
+  .sunG{transform:translateY(var(--sun-y))}
+  .moonG{transform:translateY(var(--moon-y))}
+  .starG{opacity:var(--stars)}
+  .star{animation:tw 3.2s ease-in-out infinite}
+  @keyframes tw{0%,100%{opacity:.25}50%{opacity:1}}
+
+  .cloud{animation:drift linear infinite}
+  .cloud.c1{animation-duration:145s}
+  .cloud.c2{animation-duration:170s;animation-delay:-60s}
+  .cloud.c3{animation-duration:190s;animation-delay:-110s}
+  @keyframes drift{from{transform:translateX(-90px)}to{transform:translateX(90px)}}
+
+  .sway{transform-box:fill-box;transform-origin:50% 100%;animation:sway 6s ease-in-out infinite alternate}
+  @keyframes sway{from{transform:rotate(-.8deg)}to{transform:rotate(.8deg)}}
+
+  /* ---------- paper UI ---------- */
+  .ui{position:fixed;z-index:10;filter:brightness(var(--uiB))}
+  .label{
+    top:22px;left:22px;
+    background:var(--paper);color:var(--pink);
+    border-radius:6px;padding:18px 24px 16px;
+    box-shadow:0 18px 40px rgba(20,10,40,.45);
+    transform:rotate(-1.2deg);
+    transition:transform .5s cubic-bezier(.34,1.56,.64,1), filter .6s;
+    position:relative;max-width:min(420px,80vw);
+  }
+  .label:hover{transform:rotate(0) translateY(-2px)}
+  .label .tape{
+    position:absolute;top:-10px;left:50%;transform:translateX(-50%) rotate(1.6deg);
+    width:92px;height:22px;background:rgba(246,234,214,.62);
+    box-shadow:0 2px 6px rgba(20,10,40,.25);
+  }
+  .label h1{font-size:clamp(1.5rem,3.4vw,2.4rem);letter-spacing:-.01em;line-height:1.1}
+  .label .sub{
+    font-family:ui-sans-serif,system-ui,sans-serif;
+    font-size:.62rem;letter-spacing:.28em;text-transform:uppercase;
+    color:rgba(59,42,42,.66);margin-top:6px;
+  }
+  .panel{
+    right:22px;bottom:22px;
+    background:var(--paper);color:var(--pink);
+    border-radius:10px;padding:18px 22px 16px;
+    box-shadow:0 18px 40px rgba(20,10,40,.5);
+    transform:rotate(.8deg);
+    transition:transform .5s cubic-bezier(.34,1.56,.64,1), filter .6s;
+    width:min(360px,calc(100vw - 44px));
+  }
+  .panel .prow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+  .panel .ptitle{
+    font-family:ui-sans-serif,system-ui,sans-serif;
+    font-size:.62rem;letter-spacing:.26em;text-transform:uppercase;color:rgba(59,42,42,.66);
+  }
+  #clock{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:1.05rem}
+  #slider{
+    -webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:999px;outline:none;
+    background:linear-gradient(to right,#f7b26a,#e9859b 34%,#8a5aa8 66%,#131033 100%);
+    box-shadow:inset 0 1px 3px rgba(20,10,40,.4);
+    cursor:pointer;
+  }
+  #slider::-webkit-slider-thumb{
+    -webkit-appearance:none;width:22px;height:22px;border-radius:50%;
+    background:var(--paper);border:3px solid rgba(59,42,42,.85);
+    box-shadow:0 3px 8px rgba(20,10,40,.4);
+    transition:transform .3s cubic-bezier(.34,1.56,.64,1);
+  }
+  #slider::-webkit-slider-thumb:hover{transform:scale(1.2)}
+  #slider::-moz-range-thumb{
+    width:22px;height:22px;border-radius:50%;
+    background:var(--paper);border:3px solid rgba(59,42,42,.85);
+    box-shadow:0 3px 8px rgba(20,10,40,.4);
+  }
+  .ticks{display:flex;justify-content:space-between;margin-top:8px;
+    font-family:ui-sans-serif,system-ui,sans-serif;
+    font-size:.56rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(59,42,42,.6)}
+  .panel .hint{
+    margin-top:10px;font-family:ui-sans-serif,system-ui,sans-serif;
+    font-size:.6rem;letter-spacing:.14em;color:rgba(59,42,42,.55);
+  }
+  #tiltBtn{
+    display:none;margin-top:12px;width:100%;
+    border:none;border-radius:8px;padding:10px 14px;cursor:pointer;
+    background:var(--pink);color:var(--paper);
+    font-family:inherit;font-size:.72rem;letter-spacing:.08em;
+  }
+  .settle{opacity:0;transform:translateY(26px) rotate(var(--tilt,0deg));animation:settle 1.2s ease-out forwards}
+  .label.settle{--tilt:-1.2deg;animation-delay:.3s}
+  .panel.settle{--tilt:.8deg;animation-delay:.55s}
+  @keyframes settle{to{opacity:1;transform:translateY(0) rotate(var(--tilt))}}
+  .label.settle{animation-name:settleL}
+  @keyframes settleL{from{opacity:0;transform:translateY(26px) rotate(-3deg)}to{opacity:1;transform:translateY(0) rotate(-1.2deg)}}
+  .panel.settle{animation-name:settleP}
+  @keyframes settleP{from{opacity:0;transform:translateY(26px) rotate(2.4deg)}to{opacity:1;transform:translateY(0) rotate(.8deg)}}
+  .label.settle:hover{transform:rotate(0) translateY(-2px)}
+
+  @media (max-width:640px){
+    .panel{left:22px;right:22px;width:auto}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .cloud,.sway,.star,.settle{animation:none!important}
+    .settle{opacity:1;transform:rotate(var(--tilt,0deg))}
+  }
+</style>
+</head>
+<body>
+
+<svg class="scene" id="scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice" aria-label="Valley of Paper">
+  <defs>
+    <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="var(--sun)" stop-opacity=".55"/>
+      <stop offset="45%" stop-color="var(--sun)" stop-opacity=".22"/>
+      <stop offset="100%" stop-color="var(--sun)" stop-opacity="0"/>
+    </radialGradient>
+    <symbol id="pine" viewBox="0 0 60 90">
+      <path d="M30 2 L14 34 L21 32 L8 58 L17 55 L4 84 L56 84 L43 55 L52 58 L39 32 L46 34 Z"/>
+      <rect x="26" y="82" width="8" height="8"/>
+    </symbol>
+    <mask id="bite">
+      <rect x="-200" y="-200" width="2000" height="1300" fill="#fff"/>
+      <circle cx="1248" cy="152" r="58" fill="#000"/>
+    </mask>
+  </defs>
+
+  <g transform="translate(-48,-27) scale(1.06)">
+    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" class="sky1" style="stop-color:var(--sky1)"/>
+      <stop offset="55%" class="sky2" style="stop-color:var(--sky2)"/>
+      <stop offset="100%" class="sky3" style="stop-color:var(--sky3)"/>
+    </linearGradient>
+    <rect x="-200" y="-200" width="2200" height="1500" fill="url(#skyGrad)"/>
+
+    <g data-layer style="--p:.1">
+      <g class="starG" id="starField"></g>
+    </g>
+
+    <g data-layer style="--p:.2">
+      <g class="sunG">
+        <circle cx="330" cy="250" r="150" fill="url(#sunGlow)"/>
+        <circle class="sunfill sheet" cx="330" cy="250" r="70"/>
+      </g>
+      <g class="moonG">
+        <g mask="url(#bite)">
+          <circle class="sunfill sheet" cx="1210" cy="170" r="60" style="fill:var(--sun)"/>
+        </g>
+      </g>
+    </g>
+
+    <g data-layer style="--p:.3">
+      <g class="cloud c1"><path class="cloudfill sheet" d="M180 210 C160 178 200 152 240 162 C252 132 316 128 336 156 C382 146 412 172 400 200 C432 206 430 232 396 236 L212 240 C176 238 168 226 180 210 Z"/></g>
+      <g class="cloud c2"><path class="cloudfill sheet" d="M760 150 C744 122 780 100 814 108 C826 84 880 82 898 104 C936 96 962 118 952 142 C978 148 976 168 948 172 L792 176 C762 174 752 164 760 150 Z" opacity=".9"/></g>
+      <g class="cloud c3"><path class="cloudfill sheet" d="M1120 300 C1106 276 1138 258 1168 264 C1178 244 1224 242 1240 260 C1272 254 1294 272 1286 292 C1308 298 1306 314 1282 318 L1152 322 C1126 320 1114 312 1120 300 Z" opacity=".85"/></g>
+    </g>
+
+    <g data-layer style="--p:.4">
+      <path class="f5 sheet" d="M-100 560 L60 430 L180 520 L300 400 L440 540 L560 460 L700 580 L840 430 L980 560 L1100 470 L1240 590 L1380 480 L1520 580 L1700 470 L1700 940 L-100 940 Z"/>
+    </g>
+    <g data-layer style="--p:.55">
+      <path class="f6 sheet" d="M-100 640 L90 520 L240 620 L400 500 L560 640 L720 550 L900 660 L1060 540 L1220 650 L1400 560 L1600 660 L1700 610 L1700 940 L-100 940 Z"/>
+    </g>
+    <g data-layer style="--p:.7">
+      <path class="f7 sheet" d="M-100 720 C200 640 420 700 700 660 C980 620 1240 700 1700 640 L1700 940 L-100 940 Z"/>
+      <g class="f7 sheet" id="pinesRow"></g>
+    </g>
+    <g data-layer style="--p:.85">
+      <path class="f8 sheet" d="M-100 790 C260 720 540 780 860 730 C1180 680 1420 760 1700 710 L1700 940 L-100 940 Z"/>
+      <g class="f8 sheet" id="pinesNear"></g>
+    </g>
+    <g data-layer style="--p:1">
+      <path class="f9 sheet" d="M-100 860 C300 800 620 850 940 800 C1260 760 1480 830 1700 780 L1700 940 L-100 940 Z"/>
+      <g class="f9 sheet" id="pinesFront"></g>
+      <g class="f10 sheet">
+        <g id="cabin">
+          <rect x="770" y="762" width="110" height="72" rx="2"/>
+          <path d="M756 768 L825 716 L894 768 Z"/>
+          <rect x="862" y="706" width="12" height="30" rx="2"/>
+          <rect class="winfill sheet" x="786" y="780" width="24" height="24" rx="2"/>
+          <rect class="winfill sheet" x="840" y="780" width="24" height="24" rx="2"/>
+          <rect x="812" y="792" width="26" height="42" rx="2"/>
+        </g>
+      </g>
+    </g>
+    <g data-layer style="--p:1.15">
+      <path class="f11 sheet" d="M-100 905 C400 862 900 890 1700 855 L1700 940 L-100 940 Z"/>
+      <g class="f11 sheet" style="color:var(--s11)">
+        <use href="#pine" x="60" y="640" width="120" height="180"/>
+        <use href="#pine" x="1420" y="650" width="120" height="180"/>
+        <g id="deer" transform="translate(1120,0)">
+          <ellipse cx="90" cy="852" rx="46" ry="24"/>
+          <path d="M124 842 C132 820 136 810 138 798"/>
+          <ellipse cx="140" cy="794" rx="14" ry="10"/>
+          <path d="M132 786 C130 778 126 772 122 768 M148 786 C150 778 154 772 158 768" fill="none" stroke-width="4" stroke="currentColor" stroke-linecap="round"/>
+          <path d="M124 792 L134 782 M156 792 L146 782" fill="none" stroke-width="3"/>
+          <path d="M58 850 L54 878 M74 856 L72 878 M108 858 L106 878 M122 850 L128 878" fill="none" stroke-width="9" stroke-linecap="round"/>
+          <path d="M46 842 C40 834 38 828 40 820" fill="none" stroke-width="6" stroke-linecap="round"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>
+
+<div class="ui label settle" id="labelCard">
+  <div class="tape"></div>
+  <h1>Valley of Paper</h1>
+  <div class="sub">A cut-paper dusk · move to look around</div>
+</div>
+
+<div class="ui panel settle" id="panelCard">
+  <div class="prow">
+    <span class="ptitle">Time of day</span>
+    <span id="clock">18:40</span>
+  </div>
+  <input type="range" id="slider" min="0" max="1000" value="0" aria-label="Time of day">
+  <div class="ticks"><span>Golden dusk</span><span>Twilight</span><span>Blue night</span></div>
+  <div class="hint">Drag the slider to move the valley toward night</div>
+  <button id="tiltBtn">Enable tilt parallax</button>
+</div>
+
+<script>
+(function(){
+"use strict";
+var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+var clamp = function(v,a,b){ return v<a?a:v>b?b:v; };
+
+/* ---------- seeded random ---------- */
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+var rnd = mulberry32(1409);
+var NS = "http://www.w3.org/2000/svg";
+
+/* ---------- stars ---------- */
+var starField = document.getElementById("starField");
+for (var i = 0; i < 140; i++){
+  var c = document.createElementNS(NS,"circle");
+  c.setAttribute("cx", (rnd()*1700 - 50).toFixed(1));
+  c.setAttribute("cy", (rnd()*480).toFixed(1));
+  c.setAttribute("r", (0.6 + rnd()*1.4).toFixed(2));
+  c.setAttribute("fill", "#f6ead6");
+  c.setAttribute("class", "star");
+  c.style.animationDelay = (rnd()*3).toFixed(2) + "s";
+  c.style.animationDuration = (2.4 + rnd()*2.8).toFixed(2) + "s";
+  starField.appendChild(c);
+}
+
+/* ---------- pines ---------- */
+function plantPine(container, x, y, w, h, sway, delay){
+  var u = document.createElementNS(NS, "use");
+  u.setAttribute("href", "#pine");
+  u.setAttribute("x", x); u.setAttribute("y", y);
+  u.setAttribute("width", w); u.setAttribute("height", h);
+  if (sway && !reduce){
+    var g = document.createElementNS(NS, "g");
+    g.setAttribute("class", "sway");
+    g.style.animationDelay = delay + "s";
+    g.appendChild(u);
+    container.appendChild(g);
+  } else container.appendChild(u);
+}
+var row = document.getElementById("pinesRow");
+for (var p = 0; p < 14; p++) plantPine(row, 40 + p*118 + rnd()*30, 618 + rnd()*14, 34 + rnd()*14, 50 + rnd()*22, false, 0);
+var near = document.getElementById("pinesNear");
+for (var q = 0; q < 9; q++) plantPine(near, 60 + q*176 + rnd()*50, 688 + rnd()*16, 48 + rnd()*20, 72 + rnd()*30, true, q*0.7);
+var front = document.getElementById("pinesFront");
+plantPine(front, 380, 758, 64, 96, true, 0.2);
+plantPine(front, 990, 745, 60, 92, true, 1.1);
+
+/* ---------- colour interpolation ---------- */
+function hex(c){
+  return [parseInt(c.slice(1,3),16), parseInt(c.slice(3,5),16), parseInt(c.slice(5,7),16)];
+}
+var PAIRS = [
+  ["--sky1", "#3b2a5c", "#050a1e"],
+  ["--sky2", "#c9698a", "#0f1c44"],
+  ["--sky3", "#f7b26a", "#24356a"],
+  ["--sun",  "#ffd28a", "#ff9a5a"],
+  ["--cloud","#f7d5c4", "#3a4a7a"],
+  ["--s5",   "#8b6a9c", "#2b3a6b"],
+  ["--s6",   "#6a4f83", "#1f2c55"],
+  ["--s7",   "#4f3a6b", "#182243"],
+  ["--s8",   "#3a2a54", "#111935"],
+  ["--s9",   "#2b1f44", "#0c122a"],
+  ["--s10",  "#1c1533", "#080c1f"],
+  ["--s11",  "#130f26", "#050815"]
+];
+var WIN = [[255,200,110,.15],[255,160,70,1]];
+var root = document.documentElement.style;
+var slider = document.getElementById("slider");
+var clockEl = document.getElementById("clock");
+function smooth(t){ return t*t*(3-2*t); }
+function update(){
+  var t = +slider.value/1000;
+  var e = smooth(t);
+  PAIRS.forEach(function(pr){
+    var a = hex(pr[1]), b = hex(pr[2]);
+    var c = a.map(function(v,i){ return Math.round(v + (b[i]-v)*e); });
+    root.setProperty(pr[0], "rgb(" + c[0] + "," + c[1] + "," + c[2] + ")");
+  });
+  root.setProperty("--stars", clamp((t - .35)/.5, 0, 1).toFixed(3));
+  root.setProperty("--sun-y", (e*620).toFixed(1) + "px");
+  root.setProperty("--moon-y", (700 - e*700).toFixed(1) + "px");
+  var w = WIN[0].map(function(v,i){ return v + (WIN[1][i]-v)*e; });
+  root.setProperty("--win", "rgba(" + Math.round(w[0]) + "," + Math.round(w[1]) + "," + Math.round(w[2]) + "," + w[3].toFixed(3) + ")");
+  root.setProperty("--uiB", (1 - e*0.22).toFixed(3));
+  var m0 = 18*60+40, m1 = 23*60+59;
+  var mm = Math.round(m0 + (m1-m0)*t);
+  clockEl.textContent = String(Math.floor(mm/60)).padStart(2,"0") + ":" + String(mm%60).padStart(2,"0");
+}
+slider.addEventListener("input", update);
+update();
+
+/* release settle animation so hover transforms work afterwards */
+["labelCard","panelCard"].forEach(function(id){
+  var el = document.getElementById(id);
+  el.addEventListener("animationend", function(){
+    el.classList.remove("settle");
+    el.style.animation = "none";
+    el.style.opacity = "1";
+  });
+});
+
+/* ---------- parallax ---------- */
+var scene = document.getElementById("scene");
+var layers = Array.prototype.slice.call(scene.querySelectorAll("[data-layer]"));
+var tx = 0, ty = 0, cx = 0, cy = 0;
+function setTarget(nx, ny){
+  tx = clamp(nx, -1, 1) * 40;
+  ty = clamp(ny, -1, 1) * 24;
+}
+window.addEventListener("pointermove", function(e){
+  if (!tiltActive){
+    setTarget((e.clientX/innerWidth - .5)*2, (e.clientY/innerHeight - .5)*2);
+  }
+});
+function smoothLoop(){
+  cx += (tx - cx) * 0.06;
+  cy += (ty - cy) * 0.06;
+  root.setProperty("--mx", cx.toFixed(2) + "px");
+  root.setProperty("--my", cy.toFixed(2) + "px");
+  requestAnimationFrame(smoothLoop);
+}
+if (!reduce){
+  layers.forEach(function(l){
+    l.style.transition = "transform .9s ease-out";
+    l.style.transform = "translate(calc(var(--mx,0px) * var(--p)), calc(var(--my,0px) * var(--p) * .6))";
+  });
+  requestAnimationFrame(smoothLoop);
+}
+
+/* ---------- tilt parallax ---------- */
+var tiltActive = false;
+var tiltBtn = document.getElementById("tiltBtn");
+function attachTilt(){
+  tiltActive = true;
+  window.addEventListener("deviceorientation", function(e){
+    if (e.gamma == null) return;
+    var gamma = clamp(e.gamma, -30, 30);
+    var beta = clamp(e.beta - 45, -30, 30);
+    setTarget(gamma/30, beta/30);
+  });
+}
+if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function"){
+  tiltBtn.style.display = "block";
+  tiltBtn.addEventListener("click", function(){
+    DeviceOrientationEvent.requestPermission().then(function(state){
+      if (state === "granted"){ attachTilt(); tiltBtn.style.display = "none"; }
+    }).catch(function(){});
+  });
+} else if ("DeviceOrientationEvent" in window && matchMedia("(pointer: coarse)").matches){
+  tiltBtn.style.display = "block";
+  tiltBtn.addEventListener("click", function(){
+    attachTilt(); tiltBtn.style.display = "none";
+  });
+}
+
+/* ---------- touch-drag pan ---------- */
+var dragging = false, lx = 0, ly = 0;
+scene.addEventListener("pointerdown", function(e){
+  if (e.pointerType !== "touch") return;
+  dragging = true; lx = e.clientX; ly = e.clientY;
+});
+window.addEventListener("pointermove", function(e){
+  if (!dragging || tiltActive) return;
+  setTarget(tx/40 + (e.clientX - lx)/120, ty/24 + (e.clientY - ly)/120);
+  lx = e.clientX; ly = e.clientY;
+});
+window.addEventListener("pointerup", function(){ dragging = false; });
+})();
+</script>
+</body>
+</html>

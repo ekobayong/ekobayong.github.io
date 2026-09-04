@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Night Window — Rain on Glass</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: #05070f;
+    color: #e9e4da;
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  canvas#glass { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+  /* vignette */
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 4;
+    background: radial-gradient(ellipse 120% 100% at 50% 45%, rgba(0,0,0,0) 55%, rgba(2,3,8,0.55) 100%);
+  }
+  /* wooden sash frame */
+  .sash {
+    position: fixed; inset: 0; pointer-events: none; z-index: 6;
+    --wood-a: #241812; --wood-b: #170f0b; --wood-c: #2e2018;
+    padding: 22px;
+  }
+  .sash::before {
+    content: ""; position: absolute; inset: 0;
+    border: 26px solid transparent;
+    border-image: linear-gradient(160deg, var(--wood-c), var(--wood-b) 40%, var(--wood-a) 70%, var(--wood-b)) 1;
+    box-shadow:
+      inset 0 0 0 3px rgba(0,0,0,0.8),
+      inset 0 0 0 4px rgba(120,90,60,0.25),
+      inset 0 0 40px rgba(0,0,0,0.75),
+      0 0 0 3px rgba(0,0,0,0.9);
+  }
+  .sash::after {
+    content: ""; position: absolute; inset: 0;
+    background: repeating-linear-gradient(94deg, rgba(0,0,0,0.22) 0 2px, rgba(255,220,180,0.05) 2px 4px, rgba(0,0,0,0) 4px 9px),
+                repeating-linear-gradient(88deg, rgba(90,60,35,0.15) 0 6px, rgba(0,0,0,0) 6px 14px);
+    -webkit-mask: linear-gradient(#000,#000);
+    mask: linear-gradient(#000,#000);
+    opacity: 0.5;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 22px, calc(100% - 0px) 0, 100% 26px, 26px 26px, 26px calc(100% - 26px), calc(100% - 26px) calc(100% - 26px), calc(100% - 26px) 26px, 26px 26px, 0 26px);
+  }
+  /* room reflection: lamp + glow */
+  .reflection {
+    position: fixed; left: -30px; bottom: -40px; z-index: 5; pointer-events: none;
+    width: 260px; height: 420px;
+    opacity: 0.32;
+    filter: blur(1.5px);
+    mix-blend-mode: screen;
+    transform: scaleX(-1);
+  }
+  .room-glow {
+    position: fixed; left: -140px; bottom: -160px; z-index: 5; pointer-events: none;
+    width: 560px; height: 560px;
+    background: radial-gradient(circle at 40% 60%, rgba(255,178,92,0.30), rgba(255,140,60,0.10) 45%, rgba(255,140,60,0) 70%);
+    mix-blend-mode: screen;
+    filter: blur(6px);
+  }
+  @keyframes breath7 {
+    0%, 100% { opacity: 0.26; }
+    50% { opacity: 0.40; }
+  }
+  .reflection, .room-glow { animation: breath7 7s ease-in-out infinite; }
+  /* HUD */
+  .hud {
+    position: fixed; top: 34px; left: 40px; z-index: 8; pointer-events: none;
+    text-shadow: 0 1px 8px rgba(0,0,0,0.8);
+  }
+  .hud h1 {
+    font-family: Georgia, "Iowan Old Style", Palatino, serif;
+    font-style: italic; font-weight: 400;
+    font-size: 30px; letter-spacing: 0.01em; color: #e9e4da;
+  }
+  .hud .sub {
+    margin-top: 5px;
+    font: 600 10px/1 ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0.34em; text-transform: uppercase; color: rgba(233,228,218,0.62);
+  }
+  .hud .clock {
+    margin-top: 14px;
+    font: 400 15px/1.5 ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    color: #ffb35c;
+  }
+  .hud .weather {
+    font: 400 12px/1.5 ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+    color: rgba(233,228,218,0.55);
+  }
+  /* frosted controls */
+  .controls {
+    position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%);
+    z-index: 9;
+    display: flex; align-items: center; gap: 18px;
+    padding: 12px 20px;
+    background: rgba(12,16,26,0.42);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border: 1px solid rgba(233,228,218,0.14);
+    border-radius: 999px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    transition: opacity 700ms ease;
+  }
+  .controls.idle { opacity: 0.35; }
+  .controls:hover, .controls:focus-within { opacity: 1; }
+  .controls label {
+    display: flex; align-items: center; gap: 10px;
+    font: 600 10px/1 ui-monospace, Consolas, monospace;
+    letter-spacing: 0.18em; text-transform: uppercase; color: #6f777f;
+  }
+  .controls input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 130px; height: 18px; background: transparent; cursor: pointer;
+  }
+  .controls input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: rgba(233,228,218,0.25); }
+  .controls input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 13px; height: 13px; margin-top: -5.5px; border-radius: 50%;
+    background: #ffb35c; box-shadow: 0 0 8px rgba(255,179,92,0.7);
+  }
+  .controls input[type="range"]::-moz-range-track { height: 2px; background: rgba(233,228,218,0.25); }
+  .controls input[type="range"]::-moz-range-thumb {
+    width: 12px; height: 12px; border-radius: 50%; border: none;
+    background: #ffb35c; box-shadow: 0 0 8px rgba(255,179,92,0.7);
+  }
+  .controls button {
+    -webkit-appearance: none; appearance: none;
+    font: 600 10px/1 ui-monospace, Consolas, monospace;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: #e9e4da; background: transparent;
+    border: 1px solid rgba(233,228,218,0.3);
+    border-radius: 999px;
+    padding: 8px 16px; cursor: pointer;
+    transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+  }
+  .controls button:hover { border-color: #ffb35c; color: #ffb35c; background: rgba(255,179,92,0.08); }
+  @media (max-width: 640px) {
+    .hud h1 { font-size: 22px; }
+    .controls { gap: 10px; padding: 10px 14px; }
+    .controls input[type="range"] { width: 84px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reflection, .room-glow { animation: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="glass"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<div class="sash" aria-hidden="true"></div>
+<div class="room-glow" aria-hidden="true"></div>
+<div class="reflection" aria-hidden="true">
+  <svg viewBox="0 0 120 190" width="260" height="420" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="shade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffd9a3"/><stop offset="1" stop-color="#ff9b3c"/>
+      </linearGradient>
+      <radialGradient id="bulb" cx="0.5" cy="0.42" r="0.6">
+        <stop offset="0" stop-color="#fff6dd"/>
+        <stop offset="0.35" stop-color="#ffdf9e"/>
+        <stop offset="1" stop-color="#ffb35c" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <polygon points="38,18 82,18 104,52 16,52" fill="url(#shade)" stroke="#7a4a20" stroke-width="1.5"/>
+    <ellipse cx="60" cy="52" rx="46" ry="8" fill="#c97a2e"/>
+    <circle cx="60" cy="66" r="30" fill="url(#bulb)"/>
+    <circle cx="60" cy="64" r="9" fill="#fff3cf"/>
+    <rect x="57" y="70" width="6" height="90" rx="3" fill="#1c1410"/>
+    <path d="M 20 162 Q 60 148 100 162 L 100 170 Q 60 158 20 170 Z" fill="#241a12"/>
+    <rect x="12" y="168" width="96" height="10" rx="4" fill="#170f0b"/>
+  </svg>
+</div>
+
+<header class="hud">
+  <h1>Night Window</h1>
+  <p class="sub">rain on glass · city beyond</p>
+  <p class="clock" id="clock">00:00:00</p>
+  <p class="weather" id="weather">drizzle · 11°C</p>
+</header>
+
+<div class="controls" id="controls">
+  <label>Intensity
+    <input type="range" id="intensity" min="0" max="100" value="38">
+  </label>
+  <button type="button" id="wipeAll">Wipe all</button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var canvas = document.getElementById("glass");
+  var ctx = canvas.getContext("2d");
+  var intensityInput = document.getElementById("intensity");
+  var wipeBtn = document.getElementById("wipeAll");
+  var weatherEl = document.getElementById("weather");
+  var clockEl = document.getElementById("clock");
+  var controls = document.getElementById("controls");
+
+  var W = 0, H = 0, DPR = 1;
+  var cityC, cityCtx;        // 0.5x live layer
+  var skylineC;              // static blurred skyline layer
+  var fogC, fogCtx;          // full-res condensation
+  var CW = 0, CH = 0;        // city canvas dims
+
+  var beads = [], movers = [];
+  var lights = [];
+  var buildings = [];
+  var sprites = {};
+
+  var SPRITE_COLORS = [
+    "rgb(255,178,82)", "rgb(255,233,190)", "rgb(110,180,255)",
+    "rgb(255,96,140)", "rgb(90,240,190)", "rgb(200,120,255)",
+    "rgb(255,120,60)", "rgb(150,255,255)"
+  ];
+
+  function fit() {
+    var pw = window.innerWidth, ph = window.innerHeight;
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    if (pw * ph * DPR * DPR > 7e6) DPR = Math.max(1, Math.sqrt(7e6 / (pw * ph)));
+    W = Math.round(pw * DPR); H = Math.round(ph * DPR);
+    canvas.width = W; canvas.height = H;
+    buildCity();
+    buildFog();
+    beads.length = 0; movers.length = 0;
+  }
+
+  function makeSprite(color, r) {
+    var s = document.createElement("canvas");
+    var pad = r * 2;
+    s.width = s.height = r * 2 + pad;
+    var c = s.getContext("2d");
+    var g = c.createRadialGradient(s.width / 2, s.height / 2, 0, s.width / 2, s.height / 2, r);
+    g.addColorStop(0, color);
+    g.addColorStop(0.55, color.replace("rgb", "rgba").replace(")", ",0.5)"));
+    g.addColorStop(1, color.replace("rgb", "rgba").replace(")", ",0)"));
+    c.fillStyle = g;
+    c.fillRect(0, 0, s.width, s.height);
+    return s;
+  }
+
+  function buildCity() {
+    CW = Math.max(2, Math.round(W * 0.5));
+    CH = Math.max(2, Math.round(H * 0.5));
+    cityC = document.createElement("canvas");
+    cityC.width = CW; cityC.height = CH;
+    cityCtx = cityC.getContext("2d");
+
+    // static blurred skyline layer (same 0.5x scale, drawn once)
+    skylineC = document.createElement("canvas");
+    skylineC.width = CW; skylineC.height = CH;
+    var sc = skylineC.getContext("2d");
+    var sky = sc.createLinearGradient(0, 0, 0, CH);
+    sky.addColorStop(0, "#04060f");
+    sky.addColorStop(0.5, "#0b1024");
+    sky.addColorStop(0.8, "#2a1b2c");
+    sky.addColorStop(1, "#3a2418");
+    sc.fillStyle = sky;
+    sc.fillRect(0, 0, CW, CH);
+
+    buildings = [];
+    lights = [];
+    var x = -10;
+    var horizon = CH * 0.94;
+    var seedR = 1;
+    function rr() { seedR = (seedR * 16807) % 2147483647; return seedR / 2147483647; }
+    while (x < CW + 10) {
+      var bw = 22 + rr() * 60;
+      var bh = (0.18 + rr() * 0.55) * CH * 0.72;
+      var by = horizon - bh;
+      buildings.push({ x: x, y: by, w: bw, h: bh });
+      // windows lattice 14x18
+      if (rr() < 0.85) {
+        for (var wy = by + 8; wy < horizon - 8; wy += 18) {
+          for (var wx = x + 5; wx < x + bw - 6; wx += 14) {
+            if (rr() < 0.16) {
+              lights.push({ x: wx, y: wy, r: 4 + rr() * 2.4,
+                c: SPRITE_COLORS[(rr() * SPRITE_COLORS.length) | 0],
+                ph: rr() * Math.PI * 2, tw: 0.4 + rr() * 0.6, flick: rr() < 0.06 });
+            }
+          }
+        }
+      }
+      x += bw + 2 + rr() * 8;
+    }
+    // street/signage discs
+    for (var i = 0; i < 46; i++) {
+      lights.push({ x: rr() * CW, y: CH * (0.8 + rr() * 0.18), r: 9 + rr() * 17,
+        c: SPRITE_COLORS[(rr() * SPRITE_COLORS.length) | 0],
+        ph: rr() * Math.PI * 2, tw: 0.5 + rr() * 0.5, flick: rr() < 0.1, big: true });
+    }
+    // high beacons
+    for (var j = 0; j < 12; j++) {
+      lights.push({ x: rr() * CW, y: CH * (0.06 + rr() * 0.3), r: 5 + rr() * 4,
+        c: SPRITE_COLORS[(rr() * 4) | 0],
+        ph: rr() * Math.PI * 2, tw: 1.2 + rr() * 1.5, flick: rr() < 0.2 });
+    }
+    // pre-render sprites
+    sprites = {};
+    for (var k = 0; k < SPRITE_COLORS.length; k++) sprites[SPRITE_COLORS[k]] = makeSprite(SPRITE_COLORS[k], 26);
+
+    // draw dark buildings blurred
+    sc.filter = "blur(7px)";
+    for (var b = 0; b < buildings.length; b++) {
+      var bu = buildings[b];
+      var shade = 8 + Math.floor(rr() * 10);
+      sc.fillStyle = "rgb(" + shade + "," + (shade + 1) + "," + (shade + 3) + ")";
+      sc.fillRect(bu.x, bu.y, bu.w, bu.h);
+    }
+    sc.filter = "none";
+  }
+
+  function buildFog() {
+    fogC = document.createElement("canvas");
+    fogC.width = W; fogC.height = H;
+    fogCtx = fogC.getContext("2d");
+    fogCtx.fillStyle = "rgb(206,219,232)";
+    fogCtx.fillRect(0, 0, W, H);
+    // slightly thinner near the centre
+    fogCtx.globalCompositeOperation = "destination-out";
+    var g = fogCtx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.5);
+    g.addColorStop(0, "rgba(0,0,0,0.28)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    fogCtx.fillStyle = g;
+    fogCtx.fillRect(0, 0, W, H);
+    fogCtx.globalCompositeOperation = "source-over";
+  }
+
+  // ————— drops —————
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  function intensity() { return parseInt(intensityInput.value, 10) / 100; }
+
+  function addBead(x, y, r) {
+    beads.push({ x: x, y: y, r: r || rand(1.2, 2.3), grow: 0, release: rand(4.6, 7.5), wob: rand(0, 6.28) });
+  }
+
+  function spawnFromTop(dt) {
+    var rate = intensity() * 90 * dt;
+    var n = Math.floor(rate) + (Math.random() < rate % 1 ? 1 : 0);
+    for (var i = 0; i < n; i++) {
+      if (beads.length < 900) addBead(Math.random() * W, Math.random() * H * 0.35);
+    }
+  }
+
+  function releaseBead(b) {
+    movers.push({ x: b.x, y: b.y, r: b.r, vx: 0, vy: 12, wob: Math.random() * 6.28, stretch: 1 });
+  }
+
+  function areaR(r1, r2) { return Math.sqrt(r1 * r1 + r2 * r2); }
+
+  function updateDrops(dt) {
+    spawnFromTop(dt);
+    var i, j;
+    for (i = beads.length - 1; i >= 0; i--) {
+      var b = beads[i];
+      b.grow += intensity() * 3.4 * dt * (0.4 + Math.random());
+      if (b.grow > 1) { b.grow = 0; b.r += 0.14 + Math.random() * 0.2; }
+      if (b.r > b.release) { releaseBead(b); beads.splice(i, 1); }
+    }
+    for (i = movers.length - 1; i >= 0; i--) {
+      var m = movers[i];
+      var term = 40 + m.r * 55;
+      m.vy += 320 * dt;
+      if (m.vy > term) m.vy = term;
+      m.wob += dt * (2.5 + m.r * 0.4);
+      m.vx = Math.sin(m.wob) * (6 + m.r * 1.6);
+      var px = m.x, py = m.y;
+      m.x += m.vx * dt;
+      m.y += m.vy * dt;
+      m.stretch = Math.min(2.6, 1 + m.vy / 260);
+      // trail
+      m.trailT = (m.trailT || 0) + dt;
+      if (m.trailT > 0.045) {
+        m.trailT = 0;
+        beads.push({ x: m.x, y: m.y - m.r, r: Math.max(1.1, m.r * 0.45), grow: 0, release: 999 });
+        m.r *= 0.975;
+      }
+      // absorb beads
+      for (j = beads.length - 1; j >= 0; j--) {
+        var bb = beads[j];
+        var dx = bb.x - m.x, dy = bb.y - m.y;
+        if (dx * dx + dy * dy < (m.r + bb.r) * (m.r + bb.r) * 0.9) {
+          m.r = areaR(m.r, bb.r * 0.85);
+          beads.splice(j, 1);
+        }
+      }
+      // absorb other movers
+      for (j = movers.length - 1; j >= 0; j--) {
+        if (j === i) continue;
+        var o = movers[j];
+        var ddx = o.x - m.x, ddy = o.y - m.y;
+        if (ddx * ddx + ddy * ddy < (m.r + o.r) * (m.r + o.r) * 0.6) {
+          m.r = areaR(m.r, o.r);
+          movers.splice(j, 1); if (j < i) i--;
+        }
+      }
+      // clear fog along path
+      clearFogPath(px, py, m.x, m.y, m.r * 1.4);
+      if (m.r < 2.4) {
+        addBead(m.x, m.y, m.r);
+        movers.splice(i, 1);
+      } else if (m.y > H + 30 || m.x < -40 || m.x > W + 40) {
+        movers.splice(i, 1);
+      }
+    }
+  }
+
+  function clearFogPath(x0, y0, x1, y1, r) {
+    fogCtx.globalCompositeOperation = "destination-out";
+    var steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / (r * 0.6)));
+    for (var s = 0; s <= steps; s++) {
+      var t = s / steps;
+      var x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
+      fogCtx.beginPath();
+      fogCtx.ellipse(x, y, r, r * 1.15, 0, 0, 6.284);
+      fogCtx.fill();
+    }
+    fogCtx.globalCompositeOperation = "source-over";
+  }
+
+  function drawBead(b) {
+    if (b.r < 2.4) {
+      ctx.fillStyle = "rgba(215,228,240,0.55)";
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 6.284); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.beginPath(); ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.35, 0, 6.284); ctx.fill();
+      return;
+    }
+    var rx = b.r * 1.12, ry = b.r * 1.3;
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y, rx, ry, 0, 0, 6.284);
+    ctx.clip();
+    // refraction: minified, vertically flipped city
+    var scale = 1 / 2.3;
+    var dw = CW * scale * rx * 2, dh = CH * scale * ry * 2;
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.scale(1, -1);
+    try { ctx.drawImage(cityC, 0, 0, CW, CH, -dw / 2, -dh / 2, dw, dh); } catch (e) {}
+    ctx.restore();
+    // white lift
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    ctx.fillRect(b.x - rx, b.y - ry, rx * 2, ry * 2);
+    // rim shadow
+    var rim = ctx.createRadialGradient(b.x, b.y, b.r * 0.5, b.x, b.y, b.r * 1.25);
+    rim.addColorStop(0, "rgba(0,0,0,0)");
+    rim.addColorStop(1, "rgba(10,14,20,0.42)");
+    ctx.fillStyle = rim;
+    ctx.fillRect(b.x - rx, b.y - ry, rx * 2, ry * 2);
+    // specular
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    ctx.beginPath();
+    ctx.ellipse(b.x - rx * 0.34, b.y - ry * 0.38, rx * 0.2, ry * 0.13, -0.5, 0, 6.284);
+    ctx.fill();
+    ctx.restore();
+    // soft shadow under drop
+    ctx.fillStyle = "rgba(160,175,195,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(b.x + rx * 0.3, b.y + ry * 0.95, rx * 0.8, ry * 0.16, 0, 0, 6.284);
+    ctx.fill();
+  }
+
+  function drawMover(m) {
+    var rx = m.r * 0.86, ry = m.r * m.stretch;
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(m.x, m.y, rx, ry, 0, 0, 6.284);
+    ctx.clip();
+    var scale = 1 / 2.3;
+    var dw = CW * scale * rx * 2.4, dh = CH * scale * ry * 2.4;
+    ctx.save();
+    ctx.translate(m.x, m.y);
+    ctx.scale(1, -1);
+    try { ctx.drawImage(cityC, 0, 0, CW, CH, -dw / 2, -dh / 2, dw, dh); } catch (e) {}
+    ctx.restore();
+    var rim = ctx.createRadialGradient(m.x, m.y, m.r * 0.4, m.x, m.y, m.r * 1.3);
+    rim.addColorStop(0, "rgba(0,0,0,0)");
+    rim.addColorStop(1, "rgba(10,14,20,0.4)");
+    ctx.fillStyle = rim;
+    ctx.fillRect(m.x - rx, m.y - ry, rx * 2, ry * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.beginPath();
+    ctx.ellipse(m.x - rx * 0.35, m.y - ry * 0.3, rx * 0.2, ry * 0.12, -0.4, 0, 6.284);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // background rain streaks behind glass
+  var streaks = [];
+  function initStreaks() {
+    streaks = [];
+    for (var i = 0; i < 70; i++) {
+      streaks.push({ x: Math.random(), y: Math.random(), l: 0.03 + Math.random() * 0.06, s: 0.12 + Math.random() * 0.3 });
+    }
+  }
+
+  function drawCityLayer(now) {
+    // sky + static blurred skyline
+    cityCtx.fillStyle = "#04060f";
+    cityCtx.fillRect(0, 0, CW, CH);
+    cityCtx.drawImage(skylineC, 0, 0);
+    // bokeh lights with twinkle
+    for (var i = 0; i < lights.length; i++) {
+      var L = lights[i];
+      var tw = reduceMotion ? 1 : (0.72 + 0.28 * Math.sin(now * L.tw + L.ph));
+      if (L.flick && !reduceMotion && Math.sin(now * 9 + L.ph * 3) > 0.86) tw *= 0.25;
+      var sp = sprites[L.c];
+      var r = L.r * tw;
+      cityCtx.globalAlpha = Math.min(1, 0.5 + tw * 0.5);
+      cityCtx.drawImage(sp, L.x - r, L.y - r, r * 2, r * 2);
+    }
+    cityCtx.globalAlpha = 1;
+    // faint diagonal rain streaks behind glass
+    cityCtx.strokeStyle = "rgba(180,200,230,0.05)";
+    cityCtx.lineWidth = 1;
+    cityCtx.beginPath();
+    for (var s = 0; s < streaks.length; s++) {
+      var st = streaks[s];
+      var sx = st.x * CW, sy = st.y * CH;
+      cityCtx.moveTo(sx, sy);
+      cityCtx.lineTo(sx - st.l * CW * 0.08, sy + st.l * CH);
+    }
+    cityCtx.stroke();
+    if (!reduceMotion) {
+      for (var q = 0; q < streaks.length; q++) {
+        streaks[q].y += streaks[q].s * 0.016;
+        if (streaks[q].y > 1.05) { streaks[q].y = -0.05; streaks[q].x = Math.random(); }
+      }
+    }
+  }
+
+  // ————— fog wiping —————
+  var pointerPrev = null;
+  function wipeAt(x, y, x0, y0) {
+    var brush = Math.min(W, H) * 0.06;
+    var steps = 6;
+    fogCtx.globalCompositeOperation = "destination-out";
+    for (var s = 0; s <= steps; s++) {
+      var t = s / steps;
+      var ix = x0 + (x - x0) * t, iy = y0 + (y - y0) * t;
+      var g = fogCtx.createRadialGradient(ix, iy, 0, ix, iy, brush);
+      g.addColorStop(0, "rgba(0,0,0,0.85)");
+      g.addColorStop(0.7, "rgba(0,0,0,0.45)");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      fogCtx.fillStyle = g;
+      fogCtx.beginPath();
+      fogCtx.arc(ix, iy, brush, 0, 6.284);
+      fogCtx.fill();
+    }
+    fogCtx.globalCompositeOperation = "source-over";
+    // knock small beads off
+    for (var i = beads.length - 1; i >= 0; i--) {
+      var b = beads[i];
+      var dx = b.x - x, dy = b.y - y;
+      if (dx * dx + dy * dy < brush * brush && b.r < 3) beads.splice(i, 1);
+    }
+  }
+
+  var wipeBand = -1;
+  function startWipeAll() {
+    wipeBand = -40;
+  }
+  function updateWipeAll(dt) {
+    if (wipeBand < 0) return;
+    var speed = W * 1.6 * dt;
+    var prev = wipeBand;
+    wipeBand += speed;
+    fogCtx.globalCompositeOperation = "destination-out";
+    fogCtx.fillStyle = "rgba(0,0,0,1)";
+    fogCtx.fillRect(prev, 0, wipeBand - prev + 6, H);
+    fogCtx.globalCompositeOperation = "source-over";
+    var bi;
+    for (bi = beads.length - 1; bi >= 0; bi--) if (beads[bi].x < wipeBand) beads.splice(bi, 1);
+    for (bi = movers.length - 1; bi >= 0; bi--) if (movers[bi].x < wipeBand) movers.splice(bi, 1);
+    if (wipeBand > W + 60) wipeBand = -1;
+  }
+
+  // ————— pointer & click —————
+  canvas.addEventListener("pointermove", function (e) {
+    var x = e.clientX * DPR, y = e.clientY * DPR;
+    if (pointerPrev) wipeAt(x, y, pointerPrev.x, pointerPrev.y);
+    else wipeAt(x, y, x, y);
+    pointerPrev = { x: x, y: y };
+  });
+  canvas.addEventListener("pointerleave", function () { pointerPrev = null; });
+  canvas.addEventListener("pointerdown", function (e) {
+    var x = e.clientX * DPR, y = e.clientY * DPR;
+    beads.push({ x: x, y: y, r: rand(5.5, 7.4), grow: 0, release: rand(7.6, 9.4), wob: 0 });
+  });
+
+  // idle fade of controls
+  var idleTimer = 0;
+  function bumpIdle() {
+    controls.classList.remove("idle");
+    window.clearTimeout(idleTimer);
+    idleTimer = window.setTimeout(function () { controls.classList.add("idle"); }, 3500);
+  }
+  ["pointermove", "pointerdown", "keydown"].forEach(function (ev) {
+    window.addEventListener(ev, bumpIdle, { passive: true });
+  });
+  bumpIdle();
+
+  wipeBtn.addEventListener("click", startWipeAll);
+
+  var weatherWords = ["barely a mist", "light drizzle", "drizzle", "steady rain", "heavy rain", "downpour"];
+  function updateWeather() {
+    var v = parseInt(intensityInput.value, 10) / 100;
+    var idx = Math.min(weatherWords.length - 1, Math.floor(v * weatherWords.length));
+    weatherEl.textContent = weatherWords[idx] + " · 11°C";
+  }
+  intensityInput.addEventListener("input", updateWeather);
+  updateWeather();
+
+  function updateClock() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? "0" : "") + n; }
+    clockEl.textContent = p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+  }
+  window.setInterval(updateClock, 1000);
+  updateClock();
+
+  // ————— main loop —————
+  var last = performance.now();
+  function frame(now) {
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    var t = now / 1000;
+
+    drawCityLayer(t);
+    updateDrops(dt);
+    updateWipeAll(dt);
+
+    // fog slowly re-fogs
+    fogCtx.fillStyle = "rgba(206,219,232,0.0045)";
+    fogCtx.fillRect(0, 0, W, H);
+
+    ctx.drawImage(cityC, 0, 0, CW, CH, 0, 0, W, H);
+    ctx.globalAlpha = 0.7;
+    ctx.drawImage(fogC, 0, 0);
+    ctx.globalAlpha = 1;
+
+    for (var i = 0; i < beads.length; i++) drawBead(beads[i]);
+    for (var j = 0; j < movers.length; j++) drawMover(movers[j]);
+
+    requestAnimationFrame(frame);
+  }
+
+  initStreaks();
+  fit();
+  window.addEventListener("resize", function () { fit(); initStreaks(); });
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

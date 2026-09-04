@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Harmonograph — Victorian Pendulum Drawing Machine</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse 80% 40% at 50% 0%, rgba(200,160,90,.14), transparent 70%),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.015) 0 2px, transparent 2px 8px, rgba(0,0,0,.06) 8px 10px),
+      linear-gradient(180deg, #2c1810, #26140b 55%, #150a05);
+    font-family: Georgia, 'Times New Roman', serif;
+    color: #d8c49a;
+    padding: 28px 20px 60px;
+  }
+  header { text-align: center; margin-bottom: 30px; }
+  header h1 {
+    font-size: clamp(24px, 4vw, 42px); letter-spacing: .18em; text-indent: .18em;
+    text-transform: uppercase; font-weight: normal; color: #f1d98a;
+    text-shadow: 0 3px 6px rgba(0,0,0,.75);
+  }
+  header .sub { font-style: italic; color: #a8895a; margin-top: 8px; font-size: 15px; }
+  header svg { display: block; margin: 14px auto 0; }
+
+  .grid {
+    display: grid; grid-template-columns: 1fr 320px; gap: 24px;
+    max-width: 1240px; margin: 0 auto; align-items: start;
+  }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  /* drawing bed */
+  .bed {
+    background: linear-gradient(160deg, #5a3320, #3b1f12 55%, #2a150c);
+    border: 1px solid #8a6620; border-radius: 10px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.7), inset 0 0 0 3px rgba(0,0,0,.4), inset 0 1px 2px rgba(255,215,150,.2);
+    padding: 34px; position: relative;
+  }
+  .screw {
+    position: absolute; width: 18px; height: 18px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #e8cf8a, #b08840 45%, #6e4f16 80%, #4a330c);
+    box-shadow: 0 2px 4px rgba(0,0,0,.8), inset 0 -1px 2px rgba(0,0,0,.6);
+  }
+  .screw::after { content: ""; position: absolute; left: 2px; right: 2px; top: 50%; height: 2px; background: rgba(40,25,5,.85); transform: rotate(32deg); }
+  .screw.tl { top: 10px; left: 10px; } .screw.tr { top: 10px; right: 10px; }
+  .screw.bl { bottom: 10px; left: 10px; } .screw.br { bottom: 10px; right: 10px; }
+
+  .plate-wrap {
+    position: relative; border: 1px solid #9c7830; border-radius: 4px;
+    box-shadow: inset 0 0 0 4px rgba(0,0,0,.55), 0 4px 14px rgba(0,0,0,.5);
+    aspect-ratio: 1 / 1; max-width: 760px; margin: 0 auto;
+    background: radial-gradient(circle at 50% 50%, #141720, #07080c 90%);
+  }
+  #plate { display: block; width: 100%; height: 100%; }
+  #penLayer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .graticule {
+    position: absolute; inset: 0; pointer-events: none; opacity: .08; border-radius: 3px;
+    background:
+      repeating-radial-gradient(circle at 50% 50%, transparent 0 24%, #c9a24a 24% 24.4%, transparent 24.5%),
+      linear-gradient(#c9a24a, #c9a24a) 50% 0 / 1px 100% no-repeat,
+      linear-gradient(#c9a24a, #c9a24a) 0 50% / 100% 1px no-repeat;
+  }
+  .readout {
+    position: absolute; top: 10px; right: 12px; text-align: right;
+    font-family: 'Courier New', monospace; font-size: 11px; color: #c9a24a; opacity: .8;
+    line-height: 1.6; white-space: pre; pointer-events: none;
+  }
+  .plate-caption {
+    position: absolute; bottom: 8px; left: 0; right: 0; text-align: center;
+    font-size: 9.5px; letter-spacing: .3em; text-indent: .3em; color: #c9a24a; opacity: .55;
+    pointer-events: none; text-transform: uppercase;
+  }
+
+  /* control panel */
+  .panel {
+    background:
+      linear-gradient(180deg, rgba(255,235,180,.25), transparent 12%),
+      linear-gradient(180deg, #b78f3c, #8a6620 55%, #6e4f16);
+    border: 1px solid #4a330c; border-radius: 10px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.7), inset 0 1px 2px rgba(255,235,180,.5);
+    padding: 18px 16px;
+  }
+  .sub-plate {
+    background: linear-gradient(180deg, #d8c48a, #c2ab68);
+    border: 1px solid #6e4f16; border-radius: 5px;
+    box-shadow: inset 0 1px 2px rgba(255,250,220,.7), inset 0 -1px 2px rgba(80,55,10,.4), 0 2px 4px rgba(0,0,0,.35);
+    padding: 12px 12px 14px; margin-bottom: 12px;
+  }
+  .sub-plate h2 {
+    font-size: 10px; letter-spacing: .22em; text-indent: .22em; text-transform: uppercase;
+    font-weight: bold; color: #5a3f0e; text-shadow: 0 1px 0 rgba(255,245,210,.8);
+    margin-bottom: 10px;
+  }
+  .slider-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .slider-row label { font-size: 11px; color: #4a3410; width: 44px; letter-spacing: .04em; }
+  .slider-row output {
+    font-family: 'Courier New', monospace; font-size: 11px; color: #3a2808;
+    width: 46px; text-align: right;
+  }
+  input[type="range"] { flex: 1; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px;
+    background: linear-gradient(180deg, #4a3410, #6e4f16); box-shadow: inset 0 1px 3px rgba(0,0,0,.7); cursor: pointer; }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #f0daa0, #c9a24a 50%, #8a6620);
+    box-shadow: 0 1px 3px rgba(0,0,0,.7), inset 0 -1px 2px rgba(80,55,10,.5);
+    border: 1px solid #4a330c;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 15px; height: 15px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #f0daa0, #c9a24a 50%, #8a6620);
+    border: 1px solid #4a330c;
+  }
+  input[type="checkbox"] { accent-color: #6e4f16; }
+  .check-row { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #4a3410; margin-bottom: 8px; cursor: pointer; }
+  .swatches { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .swatch {
+    width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+    border: 2px solid rgba(60,40,8,.6); box-shadow: inset 0 2px 4px rgba(255,255,255,.35), 0 1px 3px rgba(0,0,0,.4);
+    transition: transform .2s;
+  }
+  .swatch.sel { transform: scale(1.18); outline: 2px solid #3a2808; outline-offset: 1px; }
+
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .btn {
+    font-family: Georgia, serif; font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+    color: #f0dca8; padding: 8px 12px; border-radius: 5px; cursor: pointer;
+    background: linear-gradient(180deg, #5a3a10, #3c2508);
+    border: 1px solid #241504;
+    box-shadow: 0 3px 0 #1c1002, inset 0 1px 2px rgba(255,225,160,.3);
+  }
+  .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #1c1002; }
+  .btn.primary {
+    width: 100%; background: linear-gradient(180deg, #8a2a1a, #5c150a);
+    border-color: #3c0c04; box-shadow: 0 3px 0 #2c0802, inset 0 1px 2px rgba(255,160,120,.3);
+    font-size: 13px; padding: 11px;
+  }
+  .footnote { font-style: italic; font-size: 12px; color: #8a6f42; margin-top: 14px; text-align: center; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>The Harmonograph</h1>
+  <div class="sub">A drawing instrument of coupled, decaying pendulums — patent of the imagination, 1874</div>
+  <svg width="220" height="16" viewBox="0 0 220 16">
+    <line x1="0" y1="8" x2="90" y2="8" stroke="#c9a24a" stroke-width="1"/>
+    <rect x="104" y="3" width="10" height="10" transform="rotate(45 109 8)" fill="none" stroke="#c9a24a" stroke-width="1"/>
+    <circle cx="130" cy="8" r="2" fill="#c9a24a"/>
+    <circle cx="140" cy="8" r="1.4" fill="#c9a24a"/>
+    <line x1="150" y1="8" x2="220" y2="8" stroke="#c9a24a" stroke-width="1"/>
+  </svg>
+</header>
+
+<div class="grid">
+  <div class="bed">
+    <div class="screw tl"></div><div class="screw tr"></div><div class="screw bl"></div><div class="screw br"></div>
+    <div class="plate-wrap">
+      <canvas id="plate"></canvas>
+      <canvas id="penLayer"></canvas>
+      <div class="graticule"></div>
+      <div class="readout" id="readout"></div>
+      <div class="plate-caption">Smoked Glass Plate · No. 7</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="sub-plate">
+      <h2>Lateral Pendulum · X</h2>
+      <div class="slider-row"><label>Freq</label><input type="range" id="f1" min="1" max="6" step="0.01" value="2"><output id="o-f1"></output></div>
+      <div class="slider-row"><label>Phase</label><input type="range" id="p1" min="0" max="6.283" step="0.001" value="0"><output id="o-p1"></output></div>
+      <div class="slider-row"><label>Damp</label><input type="range" id="d1" min="0" max="0.02" step="0.0001" value="0.004"><output id="o-d1"></output></div>
+      <div class="slider-row"><label>Ampl</label><input type="range" id="a1" min="0" max="1" step="0.01" value="0.75"><output id="o-a1"></output></div>
+    </div>
+    <div class="sub-plate">
+      <h2>Longitudinal Pendulum · Y</h2>
+      <div class="slider-row"><label>Freq</label><input type="range" id="f2" min="1" max="6" step="0.01" value="3"><output id="o-f2"></output></div>
+      <div class="slider-row"><label>Phase</label><input type="range" id="p2" min="0" max="6.283" step="0.001" value="1.57"><output id="o-p2"></output></div>
+      <div class="slider-row"><label>Damp</label><input type="range" id="d2" min="0" max="0.02" step="0.0001" value="0.004"><output id="o-d2"></output></div>
+      <div class="slider-row"><label>Ampl</label><input type="range" id="a2" min="0" max="1" step="0.01" value="0.75"><output id="o-a2"></output></div>
+    </div>
+    <div class="sub-plate">
+      <h2>Rotary Table</h2>
+      <label class="check-row"><input type="checkbox" id="rotOn"> Engage rotary table</label>
+      <div class="slider-row"><label>Freq</label><input type="range" id="f3" min="0.2" max="4" step="0.01" value="1"><output id="o-f3"></output></div>
+      <div class="slider-row"><label>Ampl</label><input type="range" id="a3" min="0" max="1" step="0.01" value="0.5"><output id="o-a3"></output></div>
+      <div class="slider-row"><label>Damp</label><input type="range" id="d3" min="0" max="0.02" step="0.0001" value="0.002"><output id="o-d3"></output></div>
+    </div>
+    <div class="sub-plate">
+      <h2>Ink &amp; Motion</h2>
+      <div class="slider-row"><label>Speed</label><input type="range" id="speed" min="1" max="40" step="1" value="14"><output id="o-speed"></output></div>
+      <div class="swatches" id="swatches"></div>
+    </div>
+    <div class="btns">
+      <button class="btn primary" id="drawBtn">Lower pen &amp; draw</button>
+      <button class="btn" id="liftBtn">Lift pen</button>
+      <button class="btn" id="replayBtn">Replay</button>
+      <button class="btn" id="randBtn">Randomize</button>
+      <button class="btn" id="clearBtn">Clear plate</button>
+      <button class="btn" id="exportBtn">Export PNG</button>
+    </div>
+    <div class="footnote">x(t) = Σ A<sub>i</sub> sin(f<sub>i</sub>t + φ<sub>i</sub>)·e<sup>(−d<sub>i</sub>t)</sup></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var plate = document.getElementById("plate");
+  var penLayer = document.getElementById("penLayer");
+  var pctx = plate.getContext("2d");
+  var nctx = penLayer.getContext("2d");
+  var readout = document.getElementById("readout");
+
+  var T_MAX = 260, DT = 0.012;
+  var penDown = false;
+  var t = 0, lastFrame = performance.now();
+  var cur = null;             /* trace in progress */
+  var history = [];           /* completed traces */
+  var inkIndex = 0;
+  var rainbowHueShift = 0;
+
+  var INKS = ["#8ef7c3", "#6fd7ff", "#ff7ab8", "#ffc46b", "#b48bff", "#f2e9d2", "rainbow"];
+
+  var params = { f1: 2, p1: 0, d1: 0.004, a1: 0.75, f2: 3, p2: 1.57, d2: 0.004, a2: 0.75, rotOn: false, f3: 1, a3: 0.5, d3: 0.002, speed: 14 };
+
+  var sliders = ["f1", "p1", "d1", "a1", "f2", "p2", "d2", "a2", "f3", "a3", "d3", "speed"];
+  sliders.forEach(function (k) {
+    var el = document.getElementById(k);
+    var out = document.getElementById("o-" + k);
+    el.value = params[k];
+    out.textContent = (+params[k]).toFixed(k === "speed" ? 0 : 3);
+    el.addEventListener("input", function () {
+      params[k] = parseFloat(el.value);
+      out.textContent = params[k].toFixed(k === "speed" ? 0 : 3);
+    });
+  });
+  var rotOn = document.getElementById("rotOn");
+  rotOn.addEventListener("change", function () { params.rotOn = rotOn.checked; });
+
+  /* sizing */
+  var size = 600, dpr = 1;
+  function resize() {
+    var wrap = plate.parentElement;
+    var w = wrap.clientWidth;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    plate.width = w * dpr; plate.height = w * dpr;
+    penLayer.width = w * dpr; penLayer.height = w * dpr;
+    size = w;
+    redrawHistory();
+  }
+  window.addEventListener("resize", resize);
+
+  function pos(t) {
+    var damp1 = Math.exp(-params.d1 * t), damp2 = Math.exp(-params.d2 * t);
+    var x = params.a1 * Math.sin(params.f1 * t + params.p1) * damp1;
+    var y = params.a2 * Math.sin(params.f2 * t + params.p2) * damp2;
+    if (params.rotOn) {
+      var damp3 = Math.exp(-params.d3 * t);
+      x += params.a3 * damp3 * Math.cos(params.f3 * t);
+      y += params.a3 * damp3 * Math.sin(params.f3 * t);
+    }
+    return [x, y];
+  }
+
+  function inkColor(t) {
+    if (INKS[inkIndex] === "rainbow") {
+      var h = (rainbowHueShift + t * 1.4) % 360;
+      return "hsl(" + h.toFixed(0) + ", 90%, 65%)";
+    }
+    return INKS[inkIndex];
+  }
+
+  var lastPt = null;
+  function stepTrace(steps) {
+    if (!cur) return;
+    for (var i = 0; i < steps && t < T_MAX; i++) {
+      t += DT;
+      var p = pos(t);
+      var px = plate.width / 2 + p[0] * plate.width * 0.36;
+      var py = plate.height / 2 + p[1] * plate.height * 0.36;
+      if (lastPt) {
+        var col = inkColor(t);
+        pctx.globalCompositeOperation = "lighter";
+        pctx.lineCap = "round";
+        pctx.strokeStyle = col;
+        pctx.globalAlpha = 0.35; pctx.lineWidth = 2.6 * dpr;
+        pctx.beginPath(); pctx.moveTo(lastPt[0], lastPt[1]); pctx.lineTo(px, py); pctx.stroke();
+        pctx.globalAlpha = 0.9; pctx.lineWidth = 0.7 * dpr;
+        pctx.beginPath(); pctx.moveTo(lastPt[0], lastPt[1]); pctx.lineTo(px, py); pctx.stroke();
+      }
+      lastPt = [px, py];
+      cur.points.push(px, py);
+    }
+    if (t >= T_MAX) { finishTrace(); }
+  }
+
+  function finishTrace() {
+    if (cur) {
+      cur.inkIndex = inkIndex;
+      history.push(cur);
+      if (history.length > 24) history.shift();
+    }
+    cur = null;
+    penDown = false;
+    drawBtn.textContent = "Lower pen & draw";
+    lastPt = null;
+  }
+
+  function redrawHistory() {
+    pctx.clearRect(0, 0, plate.width, plate.height);
+    pctx.globalCompositeOperation = "lighter";
+    pctx.lineCap = "round";
+    history.forEach(function (tr) {
+      pctx.strokeStyle = tr.color;
+      var pts = tr.points;
+      pctx.globalAlpha = 0.22; pctx.lineWidth = 2.6 * dpr;
+      pctx.beginPath(); pctx.moveTo(pts[0], pts[1]);
+      for (var i = 2; i < pts.length; i += 2) pctx.lineTo(pts[i], pts[i + 1]);
+      pctx.stroke();
+      pctx.globalAlpha = 0.62; pctx.lineWidth = 0.7 * dpr;
+      pctx.beginPath(); pctx.moveTo(pts[0], pts[1]);
+      for (var j = 2; j < pts.length; j += 2) pctx.lineTo(pts[j], pts[j + 1]);
+      pctx.stroke();
+    });
+    pctx.globalAlpha = 1;
+    /* redraw in-progress trace so it survives redraws */
+    if (cur && cur.points.length > 2) {
+      pctx.strokeStyle = cur.color;
+      var cpts = cur.points;
+      pctx.globalAlpha = 0.22; pctx.lineWidth = 2.6 * dpr;
+      pctx.beginPath(); pctx.moveTo(cpts[0], cpts[1]);
+      for (var k = 2; k < cpts.length; k += 2) pctx.lineTo(cpts[k], cpts[k + 1]);
+      pctx.stroke();
+      pctx.globalAlpha = 0.62; pctx.lineWidth = 0.7 * dpr;
+      pctx.beginPath(); pctx.moveTo(cpts[0], cpts[1]);
+      for (var m = 2; m < cpts.length; m += 2) pctx.lineTo(cpts[m], cpts[m + 1]);
+      pctx.stroke();
+    }
+  }
+
+  function drawPenHead() {
+    nctx.clearRect(0, 0, penLayer.width, penLayer.height);
+    var px, py;
+    if (penDown && lastPt) {
+      px = lastPt[0]; py = lastPt[1];
+    } else {
+      var p = pos(t);
+      px = plate.width / 2 + p[0] * plate.width * 0.36;
+      py = plate.height / 2 + p[1] * plate.height * 0.36;
+    }
+    /* pen arm */
+    nctx.strokeStyle = "rgba(201,162,74,0.85)";
+    nctx.lineWidth = 1.4 * dpr;
+    nctx.beginPath();
+    nctx.moveTo(px, py);
+    nctx.lineTo(plate.width + 10, -10);
+    nctx.stroke();
+    /* glowing head */
+    nctx.save();
+    nctx.shadowColor = "#ffffff";
+    nctx.shadowBlur = 14 * dpr;
+    nctx.fillStyle = "#ffffff";
+    nctx.beginPath();
+    nctx.arc(px, py, penDown ? 3.2 * dpr : 2 * dpr, 0, Math.PI * 2);
+    nctx.fill();
+    nctx.restore();
+  }
+
+  function updateReadout() {
+    readout.textContent =
+      "t = " + t.toFixed(2) + "\n" +
+      "f\u2081 " + params.f1.toFixed(2) + "  f\u2082 " + params.f2.toFixed(2) + (params.rotOn ? "  f\u2083 " + params.f3.toFixed(2) : "") + "\n" +
+      "d\u2081 " + params.d1.toFixed(4) + "  d\u2082 " + params.d2.toFixed(4);
+  }
+
+  function frame(now) {
+    var elapsed = Math.min((now - lastFrame) / 1000, 0.1);
+    lastFrame = now;
+    if (penDown && cur) {
+      var steps = Math.round(elapsed * 60 * params.speed);
+      stepTrace(Math.max(1, steps));
+    }
+    drawPenHead();
+    updateReadout();
+    requestAnimationFrame(frame);
+  }
+
+  /* buttons */
+  var drawBtn = document.getElementById("drawBtn");
+  function lowerPen() {
+    if (penDown) { liftPen(); return; }
+    if (t >= T_MAX) t = 0;
+    if (!cur) {
+      cur = { points: [], color: inkColor(t) };
+      rainbowHueShift = Math.random() * 360;
+      if (INKS[inkIndex] !== "rainbow") cur.color = INKS[inkIndex];
+      lastPt = null;
+    }
+    penDown = true;
+    drawBtn.textContent = "Pen down — drawing";
+  }
+  function liftPen() {
+    if (!penDown) return;
+    finishTrace();
+  }
+  drawBtn.addEventListener("click", lowerPen);
+  document.getElementById("liftBtn").addEventListener("click", liftPen);
+  document.getElementById("clearBtn").addEventListener("click", function () {
+    history.length = 0;
+    if (cur) cur = null;
+    t = 0; penDown = false; lastPt = null;
+    pctx.clearRect(0, 0, plate.width, plate.height);
+  });
+  document.getElementById("replayBtn").addEventListener("click", function () {
+    if (!history.length) return;
+    var last = history[history.length - 1];
+    history.pop();
+    redrawHistory();
+    /* re-draw last trace from t=0 with same params */
+    history.push({ points: [], color: last.color });
+    cur = history[history.length - 1];
+    t = 0; lastPt = null; penDown = true;
+  });
+  document.getElementById("exportBtn").addEventListener("click", function () {
+    var a = document.createElement("a");
+    a.download = "harmonograph-plate.png";
+    a.href = plate.toDataURL("image/png");
+    a.click();
+  });
+
+  /* randomize */
+  var RATIOS = [[3, 2], [4, 3], [5, 3], [5, 4], [3, 1], [7, 5], [8, 5], [9, 7]];
+  function rand() {
+    var r = RATIOS[Math.floor(Math.random() * RATIOS.length)];
+    var detune = 0.005;
+    params.f1 = r[0] + (Math.random() - 0.5) * detune;
+    params.f2 = r[1] + (Math.random() - 0.5) * detune;
+    params.p1 = Math.random() * Math.PI * 2;
+    params.p2 = Math.random() * Math.PI * 2;
+    params.d1 = 0.002 + Math.random() * 0.004;
+    params.d2 = 0.002 + Math.random() * 0.004;
+    params.a1 = 0.6 + Math.random() * 0.35;
+    params.a2 = 0.6 + Math.random() * 0.35;
+    params.rotOn = Math.random() < 0.5;
+    params.f3 = 0.5 + Math.random() * 2;
+    params.a3 = 0.2 + Math.random() * 0.5;
+    params.d3 = 0.001 + Math.random() * 0.003;
+    sliders.forEach(function (k) {
+      var el = document.getElementById(k), out = document.getElementById("o-" + k);
+      el.value = params[k];
+      out.textContent = params[k].toFixed(k === "speed" ? 0 : 3);
+    });
+    rotOn.checked = params.rotOn;
+    inkIndex = Math.floor(Math.random() * INKS.length);
+    swatchEls.forEach(function (s, i) { s.classList.toggle("sel", i === inkIndex); });
+    document.getElementById("clearBtn").click();
+    lowerPen();
+  }
+  document.getElementById("randBtn").addEventListener("click", rand);
+
+  /* swatches */
+  var swatchEls = [];
+  var swWrap = document.getElementById("swatches");
+  INKS.forEach(function (c, i) {
+    var s = document.createElement("div");
+    s.className = "swatch" + (i === 0 ? " sel" : "");
+    s.style.background = c === "rainbow" ? "conic-gradient(#f44,#ff4,#4f4,#4ff,#44f,#f4f,#f44)" : c;
+    s.title = c === "rainbow" ? "Hue shifts over time" : "Ink " + (i + 1);
+    s.addEventListener("click", function () {
+      inkIndex = i;
+      swatchEls.forEach(function (x, j) { x.classList.toggle("sel", j === i); });
+    });
+    swWrap.appendChild(s);
+    swatchEls.push(s);
+  });
+
+  /* keyboard */
+  document.addEventListener("keydown", function (e) {
+    if (e.target.tagName === "INPUT") return;
+    if (e.code === "Space") { e.preventDefault(); lowerPen(); }
+    if (e.key === "r" || e.key === "R") rand();
+    if (e.key === "c" || e.key === "C") document.getElementById("clearBtn").click();
+  });
+
+  resize();
+  if (reduced) {
+    document.getElementById("speed").value = 40;
+    params.speed = 40;
+    document.getElementById("o-speed").textContent = "40";
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

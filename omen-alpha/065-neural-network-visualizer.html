@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synapse — A Living Neural Network</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse 50% 40% at 0% 0%, rgba(53,240,255,.08), transparent 70%),
+      radial-gradient(ellipse 50% 40% at 100% 100%, rgba(255,63,209,.09), transparent 70%),
+      linear-gradient(180deg, #0a1230, #050a1a);
+    color: #d6e0f5;
+    font-family: ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    padding: 26px 22px 40px;
+  }
+  .gridbg {
+    position: fixed; inset: 0; pointer-events: none; opacity: 1; z-index: 0;
+    background-image:
+      linear-gradient(rgba(120,180,255,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,180,255,.05) 1px, transparent 1px);
+    background-size: 48px 48px;
+    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, black, transparent 80%);
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, black, transparent 80%);
+  }
+  header { position: relative; z-index: 1; margin-bottom: 20px; }
+  header h1 { font-size: clamp(22px, 3vw, 32px); font-weight: 700; }
+  header h1 .grad {
+    background: linear-gradient(90deg, #35f0ff, #ff3fd1);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header p { color: #7f93c4; font-size: 13.5px; margin-top: 4px; }
+
+  .layout {
+    position: relative; z-index: 1;
+    display: grid; grid-template-columns: 1fr 340px; gap: 18px; align-items: start;
+  }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+  .card {
+    background: rgba(12,20,52,.72);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(120,160,255,.14); border-radius: 14px;
+    box-shadow: 0 18px 44px rgba(0,4,20,.55), inset 0 1px 0 rgba(160,200,255,.12);
+    padding: 16px;
+  }
+  .card h2 {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 10.5px; letter-spacing: .28em; text-transform: uppercase;
+    color: #7f93c4; font-weight: 600; margin-bottom: 12px;
+  }
+  .card h2 .val { font-family: 'Courier New', monospace; color: #35f0ff; letter-spacing: .05em; font-size: 11.5px; text-transform: none; }
+  #netCanvas { width: 100%; height: 460px; display: block; border-radius: 8px; }
+  @media (max-width: 980px) { #netCanvas { height: 380px; } }
+
+  .sidebar { display: flex; flex-direction: column; gap: 18px; }
+  .controls .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .btn {
+    font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; letter-spacing: .06em;
+    color: #cfe0ff; background: rgba(30,48,110,.6); border: 1px solid rgba(120,160,255,.25);
+    border-radius: 8px; padding: 8px 14px; cursor: pointer; transition: box-shadow .3s, background .3s;
+  }
+  .btn:hover { background: rgba(45,70,150,.7); }
+  .btn.active { background: rgba(53,240,255,.16); border-color: #35f0ff; color: #bdfaff;
+    box-shadow: 0 0 14px rgba(53,240,255,.45); }
+  .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .slider-row label { font-size: 11.5px; color: #9fb2d8; width: 108px; letter-spacing: .04em; }
+  .slider-row output { font-family: 'Courier New', monospace; font-size: 11.5px; color: #35f0ff; width: 48px; text-align: right; }
+  input[type="range"] { flex: 1; -webkit-appearance: none; appearance: none; height: 5px; border-radius: 3px;
+    background: linear-gradient(90deg, #35f0ff, #ff3fd1); box-shadow: inset 0 1px 3px rgba(0,0,0,.5); cursor: pointer; }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: #fff; box-shadow: 0 0 8px rgba(255,255,255,.8); border: none;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; border: none; background: #fff;
+    box-shadow: 0 0 8px rgba(255,255,255,.8);
+  }
+  select {
+    background: rgba(30,48,110,.7); color: #cfe0ff; border: 1px solid rgba(120,160,255,.25);
+    border-radius: 8px; padding: 7px 10px; font-size: 12.5px; flex: 1;
+  }
+  #lossCanvas { width: 100%; height: 150px; display: block; }
+  #boundaryCanvas {
+    width: 100%; aspect-ratio: 1 / 1; display: block; border-radius: 8px;
+    image-rendering: auto; cursor: crosshair;
+  }
+  .pill-toggle {
+    margin-top: 10px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    color: #9fb2d8; background: rgba(30,48,110,.6); border: 1px solid rgba(120,160,255,.25);
+    border-radius: 999px; padding: 5px 14px; cursor: pointer;
+  }
+  footer { margin-top: 22px; font-size: 12px; color: #6a7da6; text-align: center; }
+  footer b { color: #9fb2d8; font-weight: 600; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="gridbg"></div>
+<header>
+  <h1><span class="grad">Synapse</span> — a living neural network</h1>
+  <p>2 → 6 → 6 → 4 → 1, tanh hidden units, sigmoid output, trained with real backpropagation in your browser.</p>
+</header>
+
+<div class="layout">
+  <div class="card">
+    <h2>Network <span class="val" id="hud">epoch 0 · acc –</span></h2>
+    <canvas id="netCanvas"></canvas>
+  </div>
+
+  <div class="sidebar">
+    <div class="card controls">
+      <h2>Controls</h2>
+      <div class="row">
+        <button class="btn" id="fwdBtn">Forward pass</button>
+        <button class="btn" id="trainBtn">Train / Pause</button>
+        <button class="btn" id="stepBtn">Step ×1 epoch</button>
+        <button class="btn" id="resetBtn">Reset weights</button>
+      </div>
+      <div class="row">
+        <select id="dataset">
+          <option value="xor">XOR quadrants</option>
+          <option value="circle">Circle in a square</option>
+          <option value="moons">Interleaving moons</option>
+        </select>
+      </div>
+      <div class="slider-row"><label>Learning rate</label><input type="range" id="lr" min="0.005" max="0.5" step="0.005" value="0.05"><output id="o-lr"></output></div>
+      <div class="slider-row"><label>Epochs / frame</label><input type="range" id="epf" min="1" max="12" step="1" value="3"><output id="o-epf"></output></div>
+    </div>
+
+    <div class="card">
+      <h2>Loss <span class="val" id="lossVal">–</span></h2>
+      <canvas id="lossCanvas"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>Decision boundary <span class="val" id="bndVal"></span></h2>
+      <canvas id="boundaryCanvas" width="72" height="72"></canvas>
+      <button class="pill-toggle" id="bndToggle">Hide boundary</button>
+    </div>
+  </div>
+</div>
+
+<footer>Everything on this page — the network, the loss, the boundary — is computed <b>live, with no libraries</b>.</footer>
+
+<script>
+(function () {
+  "use strict";
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ============ network ============ */
+  var SHAPE = [2, 6, 6, 4, 1];
+  function xavier(rows, cols) {
+    var w = new Float64Array(rows * cols);
+    var s = Math.sqrt(2 / (rows + cols));
+    for (var i = 0; i < w.length; i++) w[i] = (Math.random() * 2 - 1) * s * 1.7;
+    return w;
+  }
+  var W = [], B = [], Z = [], A = [], D = [];
+  function init() {
+    W = []; B = []; Z = []; A = []; D = [];
+    for (var l = 0; l < SHAPE.length; l++) {
+      A.push(new Float64Array(SHAPE[l]));
+      Z.push(new Float64Array(SHAPE[l]));
+      D.push(new Float64Array(SHAPE[l]));
+      if (l > 0) {
+        W.push(xavier(SHAPE[l - 1], SHAPE[l]));
+        B.push(new Float64Array(SHAPE[l]));
+      }
+    }
+  }
+  function tanh(x) { return Math.tanh(x); }
+  function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+
+  function forward(x1, x2) {
+    A[0][0] = x1; A[0][1] = x2;
+    for (var l = 1; l < SHAPE.length; l++) {
+      var prev = SHAPE[l - 1], w = W[l - 1], b = B[l - 1];
+      for (var j = 0; j < SHAPE[l]; j++) {
+        var s = b[j];
+        for (var i = 0; i < prev; i++) s += A[l - 1][i] * w[i * SHAPE[l] + j];
+        Z[l][j] = s;
+        A[l][j] = (l === SHAPE.length - 1) ? sigmoid(s) : tanh(s);
+      }
+    }
+    return A[SHAPE.length - 1][0];
+  }
+
+  function trainBatch(batch) {
+    var gW = [], gB = [];
+    for (var l = 0; l < W.length; l++) {
+      gW.push(new Float64Array(W[l].length));
+      gB.push(new Float64Array(B[l].length));
+    }
+    var loss = 0;
+    for (var n = 0; n < batch.length; n++) {
+      var pt = batch[n];
+      var out = forward(pt.x, pt.y);
+      var eps = 1e-9;
+      loss += -(pt.label * Math.log(out + eps) + (1 - pt.label) * Math.log(1 - out + eps));
+      /* output delta (sigmoid + BCE) */
+      D[SHAPE.length - 1][0] = out - pt.label;
+      for (var l = SHAPE.length - 1; l >= 1; l--) {
+        var w = W[l - 1], gw = gW[l - 1], gb = gB[l - 1];
+        for (var i = 0; i < SHAPE[l - 1]; i++) {
+          var di = D[l - 1][i];
+          for (var j = 0; j < SHAPE[l]; j++) {
+            gw[i * SHAPE[l] + j] += di * A[l - 1][i] * D[l][j];
+          }
+        }
+        for (var j2 = 0; j2 < SHAPE[l]; j2++) gb[j2] += D[l][j2];
+        if (l > 1) {
+          for (var i2 = 0; i2 < SHAPE[l - 1]; i2++) {
+            var s = 0;
+            for (var j3 = 0; j3 < SHAPE[l]; j3++) s += w[i2 * SHAPE[l] + j3] * D[l][j3];
+            D[l - 1][i2] = s * (1 - Math.pow(A[l - 1][i2], 2)); /* tanh' */
+          }
+        }
+      }
+    }
+    var lr = learningRate / batch.length;
+    for (var l2 = 0; l2 < W.length; l2++) {
+      for (var k = 0; k < W[l2].length; k++) W[l2][k] -= lr * gW[l2][k];
+      for (var k2 = 0; k2 < B[l2].length; k2++) B[l2][k2] -= lr * gB[l2][k2];
+    }
+    return loss / batch.length;
+  }
+
+  /* ============ datasets ============ */
+  var datasetKey = "xor";
+  var data = [];
+  function genData() {
+    data = [];
+    for (var i = 0; i < 200; i++) {
+      var x = Math.random() * 2 - 1, y = Math.random() * 2 - 1, label;
+      if (datasetKey === "xor") label = (x * y >= 0) ? 1 : 0;
+      else if (datasetKey === "circle") label = (x * x + y * y < 0.36) ? 1 : 0;
+      else { /* moons */
+        var m = i % 2;
+        if (m === 0) { x = Math.cos(Math.PI * (i / 200)) * 0.8 - 0.25 + (Math.random() - .5) * 0.25; y = Math.sin(Math.PI * (i / 200)) * 0.8 - 0.3 + (Math.random() - .5) * 0.25; label = 1; }
+        else { x = Math.cos(Math.PI * (i / 200) + Math.PI) * 0.8 + 0.25 + (Math.random() - .5) * 0.25; y = Math.sin(Math.PI * (i / 200) + Math.PI) * 0.8 + 0.3 + (Math.random() - .5) * 0.25; label = 0; }
+      }
+      data.push({ x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)), label: label });
+    }
+  }
+
+  /* ============ state ============ */
+  var learningRate = 0.05, epochsPerFrame = 3, epoch = 0, training = false;
+  var lossHistory = [];
+  var currentSample = null;
+  var pulses = []; /* {layer, t0} */
+  init(); genData();
+
+  /* ============ controls ============ */
+  var trainBtn = document.getElementById("trainBtn");
+  var lrEl = document.getElementById("lr"), epfEl = document.getElementById("epf");
+  document.getElementById("o-lr").textContent = (+lrEl.value).toFixed(3);
+  document.getElementById("o-epf").textContent = epfEl.value;
+  lrEl.addEventListener("input", function () { learningRate = parseFloat(lrEl.value); document.getElementById("o-lr").textContent = learningRate.toFixed(3); });
+  epfEl.addEventListener("input", function () { epochsPerFrame = +epfEl.value; document.getElementById("o-epf").textContent = epfEl.value; });
+  document.getElementById("dataset").addEventListener("change", function (e) {
+    datasetKey = e.target.value; genData(); epoch = 0; lossHistory = []; renderBoundary(true);
+  });
+  document.getElementById("resetBtn").addEventListener("click", function () {
+    init(); epoch = 0; lossHistory = []; renderBoundary(true); drawNetwork();
+  });
+  document.getElementById("stepBtn").addEventListener("click", function () { runEpoch(); });
+  trainBtn.addEventListener("click", function () {
+    training = !training;
+    trainBtn.classList.toggle("active", training);
+  });
+  var boundaryShown = true;
+  var bndToggle = document.getElementById("bndToggle");
+  var bndCard = bndToggle.parentElement;
+  bndToggle.addEventListener("click", function () {
+    boundaryShown = !boundaryShown;
+    document.getElementById("boundaryCanvas").style.display = boundaryShown ? "block" : "none";
+    bndToggle.textContent = boundaryShown ? "Hide boundary" : "Show boundary";
+  });
+  document.getElementById("boundaryCanvas").addEventListener("click", function (e) {
+    var r = this.getBoundingClientRect();
+    var bx = (e.clientX - r.left) / r.width * 2 - 1;
+    var by = -((e.clientY - r.top) / r.height * 2 - 1);
+    var near = null, nd = 0.09;
+    for (var i = 0; i < data.length; i++) {
+      var d = Math.hypot(data[i].x - bx, data[i].y - by);
+      if (d < nd) { nd = d; near = data[i]; }
+    }
+    var pt = near || { x: bx, y: by, label: 0 };
+    currentSample = pt;
+    forward(pt.x, pt.y);
+    launchPulse(pt);
+  });
+
+  function runEpoch() {
+    var batch = [];
+    for (var b = 0; b < 16; b++) batch.push(data[Math.floor(Math.random() * data.length)]);
+    var loss = trainBatch(batch);
+    lossHistory.push(loss);
+    if (lossHistory.length > 600) {
+      var ds = [];
+      for (var i = 0; i < 600; i += 2) ds.push((lossHistory[i] + lossHistory[i + 1]) / 2);
+      lossHistory = ds;
+    }
+    epoch++;
+    return loss;
+  }
+
+  /* ============ network canvas ============ */
+  var netCanvas = document.getElementById("netCanvas");
+  var nctx = netCanvas.getContext("2d");
+  var nodePos = [];
+  function layoutNodes() {
+    var w = netCanvas.clientWidth, h = netCanvas.clientHeight;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    netCanvas.width = w * dpr; netCanvas.height = h * dpr;
+    nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    nodePos = [];
+    var padX = 60, padTop = 40, padBot = 44;
+    for (var l = 0; l < SHAPE.length; l++) {
+      var col = [];
+      var n = SHAPE[l];
+      for (var i = 0; i < n; i++) {
+        var x = padX + (w - padX * 2) * (l / (SHAPE.length - 1));
+        var y = padTop + (h - padTop - padBot) * (n === 1 ? 0.5 : i / (n - 1));
+        col.push({ x: x, y: y });
+      }
+      nodePos.push(col);
+    }
+  }
+  var maxW = function () {
+    var m = 0.001;
+    for (var l = 0; l < W.length; l++) for (var i = 0; i < W[l].length; i++) m = Math.max(m, Math.abs(W[l][i]));
+    return m;
+  };
+
+  function drawNetwork() {
+    var w = netCanvas.clientWidth, h = netCanvas.clientHeight;
+    nctx.clearRect(0, 0, w, h);
+    var mw = maxW();
+    /* connections */
+    for (var l = 0; l < W.length; l++) {
+      for (var i = 0; i < SHAPE[l]; i++) {
+        for (var j = 0; j < SHAPE[l + 1]; j++) {
+          var wv = W[l][i * SHAPE[l + 1] + j];
+          var a = nodePos[l][i], b = nodePos[l + 1][j];
+          var mag = Math.abs(wv) / mw;
+          nctx.strokeStyle = wv >= 0
+            ? "rgba(53,240,255," + (0.08 + mag * 0.75).toFixed(3) + ")"
+            : "rgba(255,63,209," + (0.08 + mag * 0.75).toFixed(3) + ")";
+          nctx.lineWidth = 0.4 + 3.2 * mag;
+          var x1 = a.x, y1 = a.y, x2 = b.x, y2 = b.y;
+          var cx = (x1 + x2) / 2;
+          nctx.beginPath();
+          nctx.moveTo(x1, y1);
+          nctx.bezierCurveTo(cx, y1, cx, y2, x2, y2);
+          nctx.stroke();
+        }
+      }
+    }
+    /* nodes */
+    for (var l2 = 0; l2 < SHAPE.length; l2++) {
+      for (var i2 = 0; i2 < SHAPE[l2]; i2++) {
+        var p = nodePos[l2][i2];
+        var act = A[l2][i2];
+        var neg = act < 0;
+        var r = l2 === 0 || l2 === SHAPE.length - 1 ? 15 : 12;
+        var g = nctx.createRadialGradient(p.x - r * 0.3, p.y - r * 0.35, r * 0.1, p.x, p.y, r);
+        if (neg) { g.addColorStop(0, "#ff8fe2"); g.addColorStop(0.7, "#c02a9e"); g.addColorStop(1, "#6d1560"); }
+        else { g.addColorStop(0, "#aef7ff"); g.addColorStop(0.7, "#17b9d8"); g.addColorStop(1, "#0a5a78"); }
+        nctx.save();
+        var glow = Math.min(1, Math.abs(act)) * 26 + 4;
+        nctx.shadowColor = neg ? "rgba(255,63,209,.8)" : "rgba(53,240,255,.8)";
+        nctx.shadowBlur = glow;
+        nctx.fillStyle = g;
+        nctx.beginPath(); nctx.arc(p.x, p.y, r, 0, Math.PI * 2); nctx.fill();
+        nctx.restore();
+        nctx.strokeStyle = neg ? "rgba(255,63,209,.9)" : "rgba(53,240,255,.9)";
+        nctx.lineWidth = 1.2;
+        nctx.beginPath(); nctx.arc(p.x, p.y, r, 0, Math.PI * 2); nctx.stroke();
+        /* specular */
+        nctx.fillStyle = "rgba(255,255,255,.75)";
+        nctx.beginPath(); nctx.arc(p.x - r * 0.32, p.y - r * 0.38, r * 0.22, 0, Math.PI * 2); nctx.fill();
+        /* activation value */
+        nctx.fillStyle = "#eafcff";
+        nctx.font = "9.5px 'Courier New', monospace";
+        nctx.textAlign = "center"; nctx.textBaseline = "middle";
+        nctx.fillText(Math.abs(act).toFixed(2), p.x, p.y);
+      }
+      /* layer labels */
+      nctx.fillStyle = "#7f93c4";
+      nctx.font = "10px ui-sans-serif, system-ui, sans-serif";
+      nctx.textAlign = "center"; nctx.textBaseline = "top";
+      var names = ["Input", "Hidden 1", "Hidden 2", "Hidden 3", "Output"];
+      nctx.fillText(names[l2], nodePos[l2][0].x, h - 30);
+    }
+    /* input/output labels + target */
+    nctx.font = "10.5px 'Courier New', monospace";
+    nctx.fillStyle = "#9fb2d8";
+    nctx.textAlign = "left"; nctx.textBaseline = "middle";
+    nctx.fillText("x\u2081", nodePos[0][0].x + 22, nodePos[0][0].y);
+    nctx.fillText("x\u2082", nodePos[0][1].x + 22, nodePos[0][1].y);
+    nctx.textAlign = "right";
+    if (currentSample) {
+      var outp = nodePos[SHAPE.length - 1][0];
+      nctx.fillText("P = " + A[SHAPE.length - 1][0].toFixed(2), outp.x - 22, outp.y - 10);
+      nctx.fillText("target " + currentSample.label, outp.x - 22, outp.y + 10);
+    }
+    /* pulses */
+    var now = performance.now();
+    for (var pi = pulses.length - 1; pi >= 0; pi--) {
+      var pu = pulses[pi];
+      var k = (now - pu.t0) / 520;
+      if (k > 1) { pulses.splice(pi, 1); continue; }
+      var l3 = pu.layer;
+      if (l3 >= W.length) continue;
+      var i3 = pu.i, j3 = pu.j;
+      var wv2 = W[l3][i3 * SHAPE[l3 + 1] + j3];
+      var a2 = nodePos[l3][i3], b2 = nodePos[l3 + 1][j3];
+      var cx2 = (a2.x + b2.x) / 2;
+      var t2 = reduced ? 1 : k;
+      /* cubic bezier point at t */
+      var mt = 1 - t2;
+      var bx = mt * mt * mt * a2.x + 3 * mt * mt * t2 * cx2 + 3 * mt * t2 * t2 * cx2 + t2 * t2 * t2 * b2.x;
+      var by = mt * mt * mt * a2.y + 3 * mt * mt * t2 * a2.y + 3 * mt * t2 * t2 * b2.y + t2 * t2 * t2 * b2.y;
+      var prod = A[l3][i3] * wv2;
+      var size = 2 + Math.min(5, Math.abs(prod) * 6);
+      nctx.fillStyle = prod >= 0 ? "rgba(180,255,255,.95)" : "rgba(255,160,235,.95)";
+      nctx.shadowColor = prod >= 0 ? "rgba(53,240,255,1)" : "rgba(255,63,209,1)";
+      nctx.shadowBlur = 12;
+      nctx.beginPath(); nctx.arc(bx, by, size, 0, Math.PI * 2); nctx.fill();
+      nctx.shadowBlur = 0;
+    }
+  }
+
+  function launchPulse(pt) {
+    forward(pt.x, pt.y);
+    if (reduced) { drawNetwork(); return; }
+    pulses = [];
+    var t0 = performance.now();
+    for (var l = 0; l < W.length; l++) {
+      (function (ll) {
+        for (var i = 0; i < SHAPE[ll]; i++) {
+          for (var j = 0; j < SHAPE[ll + 1]; j++) {
+            pulses.push({ layer: ll, i: i, j: j, t0: t0 + ll * 520 });
+          }
+        }
+      })(l);
+    }
+  }
+
+  document.getElementById("fwdBtn").addEventListener("click", function () {
+    var pt = data[Math.floor(Math.random() * data.length)];
+    currentSample = pt;
+    launchPulse(pt);
+  });
+
+  /* ============ loss chart ============ */
+  var lossCanvas = document.getElementById("lossCanvas");
+  var lctx = lossCanvas.getContext("2d");
+  function drawLoss() {
+    var w = lossCanvas.clientWidth, h = lossCanvas.clientHeight;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (lossCanvas.width !== w * dpr) { lossCanvas.width = w * dpr; lossCanvas.height = h * dpr; }
+    lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    lctx.clearRect(0, 0, w, h);
+    /* grid */
+    lctx.strokeStyle = "rgba(120,160,255,.12)";
+    lctx.lineWidth = 1;
+    for (var g = 1; g <= 4; g++) {
+      var gy = (h - 18) * g / 4;
+      lctx.beginPath(); lctx.moveTo(0, gy); lctx.lineTo(w, gy); lctx.stroke();
+      lctx.fillStyle = "#5c709c";
+      lctx.font = "9px 'Courier New', monospace";
+      lctx.textAlign = "left";
+      lctx.fillText((4 - g).toFixed(1) + "", 4, gy - 3);
+    }
+    lctx.fillStyle = "#7f93c4";
+    lctx.font = "10px 'Courier New', monospace";
+    lctx.fillText("epoch " + epoch, w - 62, 12);
+    if (lossHistory.length < 2) return;
+    var maxL = Math.max(0.7, Math.max.apply(null, lossHistory));
+    var pt = function (i) {
+      return [i / (lossHistory.length - 1) * (w - 6) + 3, (h - 20) * (1 - Math.min(1, lossHistory[i] / maxL)) + 6];
+    };
+    /* filled area */
+    var grad = lctx.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0, "rgba(255,63,209,.28)");
+    grad.addColorStop(1, "rgba(53,240,255,.02)");
+    lctx.fillStyle = grad;
+    lctx.beginPath();
+    var p0 = pt(0);
+    lctx.moveTo(p0[0], h - 14);
+    for (var i = 0; i < lossHistory.length; i++) { var p = pt(i); lctx.lineTo(p[0], p[1]); }
+    lctx.lineTo(pt(lossHistory.length - 1)[0], h - 14);
+    lctx.closePath(); lctx.fill();
+    /* stroke */
+    var sg = lctx.createLinearGradient(0, 0, w, 0);
+    sg.addColorStop(0, "#ff3fd1"); sg.addColorStop(1, "#35f0ff");
+    lctx.strokeStyle = sg;
+    lctx.shadowColor = "rgba(53,240,255,.7)"; lctx.shadowBlur = 8;
+    lctx.lineWidth = 1.6;
+    lctx.beginPath();
+    var q0 = pt(0); lctx.moveTo(q0[0], q0[1]);
+    for (var j = 1; j < lossHistory.length; j++) { var q = pt(j); lctx.lineTo(q[0], q[1]); }
+    lctx.stroke();
+    lctx.shadowBlur = 0;
+    /* latest dot */
+    var last = pt(lossHistory.length - 1);
+    lctx.fillStyle = "#fff";
+    lctx.shadowColor = "rgba(53,240,255,.9)"; lctx.shadowBlur = 10;
+    lctx.beginPath(); lctx.arc(last[0], last[1], 3, 0, Math.PI * 2); lctx.fill();
+    lctx.shadowBlur = 0;
+  }
+
+  /* ============ decision boundary ============ */
+  var bndCanvas = document.getElementById("boundaryCanvas");
+  var bctx = bndCanvas.getContext("2d");
+  var N = 72;
+  var bndFrame = 0;
+  function renderBoundary(force) {
+    if (!boundaryShown) return;
+    var img = bctx.createImageData(N, N);
+    for (var y = 0; y < N; y++) {
+      for (var x = 0; x < N; x++) {
+        var wx = (x / (N - 1)) * 2 - 1;
+        var wy = -((y / (N - 1)) * 2 - 1);
+        var o = forward(wx, wy);
+        var idx = (y * N + x) * 4;
+        if (o > 0.5) {
+          var k = (o - 0.5) * 2;
+          img.data[idx] = Math.round(10 + (53 - 10) * k);
+          img.data[idx + 1] = Math.round(18 + (240 - 18) * k);
+          img.data[idx + 2] = Math.round(48 + (255 - 48) * k);
+        } else {
+          var k2 = (0.5 - o) * 2;
+          img.data[idx] = Math.round(10 + (255 - 10) * k2);
+          img.data[idx + 1] = Math.round(18 + (63 - 18) * k2);
+          img.data[idx + 2] = Math.round(48 + (209 - 48) * k2);
+        }
+        img.data[idx + 3] = 255;
+      }
+    }
+    bctx.putImageData(img, 0, 0);
+    /* training points */
+    bctx.save();
+    for (var i = 0; i < data.length; i++) {
+      var px = (data[i].x + 1) / 2 * N;
+      var py = (1 - (data[i].y + 1) / 2) * N;
+      bctx.fillStyle = data[i].label ? "#35f0ff" : "#ff3fd1";
+      bctx.strokeStyle = "rgba(5,10,26,.9)";
+      bctx.lineWidth = 0.6;
+      bctx.beginPath(); bctx.arc(px, py, 1.4, 0, Math.PI * 2); bctx.fill(); bctx.stroke();
+    }
+    if (currentSample) {
+      var cx = (currentSample.x + 1) / 2 * N;
+      var cy = (1 - (currentSample.y + 1) / 2) * N;
+      bctx.strokeStyle = "#fff";
+      bctx.lineWidth = 1.2;
+      bctx.beginPath(); bctx.arc(cx, cy, 2.6, 0, Math.PI * 2); bctx.stroke();
+    }
+    bctx.restore();
+  }
+
+  /* ============ main loop ============ */
+  function accuracy() {
+    var c = 0;
+    for (var i = 0; i < data.length; i++) {
+      var o = forward(data[i].x, data[i].y);
+      if ((o > 0.5 ? 1 : 0) === data[i].label) c++;
+    }
+    return c / data.length;
+  }
+
+  var frame = 0;
+  function loop() {
+    frame++;
+    if (training) {
+      for (var e = 0; e < epochsPerFrame; e++) runEpoch();
+    }
+    if (training && !currentSample) currentSample = data[Math.floor(Math.random() * data.length)];
+    layoutIfNeeded();
+    drawNetwork();
+    if (frame % 6 === 0) drawLoss();
+    if (frame % 3 === 0) renderBoundary();
+    if (frame % 30 === 0) {
+      document.getElementById("hud").textContent =
+        "epoch " + epoch + " · acc " + (accuracy() * 100).toFixed(0) + "%" +
+        (currentSample ? " · sample (" + currentSample.x.toFixed(2) + "," + currentSample.y.toFixed(2) + ")" : "");
+      document.getElementById("lossVal").textContent = lossHistory.length ? lossHistory[lossHistory.length - 1].toFixed(3) : "–";
+    }
+    requestAnimationFrame(loop);
+  }
+
+  var lastW = 0, lastH = 0;
+  function layoutIfNeeded() {
+    var w = netCanvas.clientWidth, h = netCanvas.clientHeight;
+    if (w !== lastW || h !== lastH) { lastW = w; lastH = h; layoutNodes(); }
+  }
+
+  layoutNodes();
+  forward(0.5, 0.5);
+  renderBoundary(true);
+  drawLoss();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

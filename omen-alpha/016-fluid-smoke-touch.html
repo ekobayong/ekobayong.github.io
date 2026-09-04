@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ether — Fluid Smoke Canvas</title>
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; overflow:hidden; }
+  body{ background:#04050a; font-family:ui-sans-serif, system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  #cv{ position:fixed; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
+  #vig{ position:fixed; inset:0; pointer-events:none; z-index:2; mix-blend-mode:multiply;
+    background:radial-gradient(75% 75% at 50% 50%, transparent 55%, rgba(0,0,0,.62) 100%); }
+  /* ---------- title ---------- */
+  #titleWrap{ position:fixed; z-index:3; top:26px; left:30px; pointer-events:none;
+    animation:rise .9s cubic-bezier(.22,1,.36,1) both; }
+  #title{
+    font-family:Georgia, "Iowan Old Style", Palatino, serif;
+    font-size:clamp(34px, 5vw, 64px); letter-spacing:.14em; line-height:1;
+    background:linear-gradient(180deg, #ffffff 0%, #b7c4ff 55%, #6d7fd6 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 4px 18px rgba(90,140,255,.35));
+  }
+  #tagline{ margin-top:8px; font-size:11px; letter-spacing:.32em; text-transform:uppercase;
+    color:rgba(232,230,242,.55); }
+  @keyframes rise{ from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:none; } }
+  /* ---------- hint ---------- */
+  #hint{
+    position:fixed; z-index:3; left:50%; bottom:26px; transform:translateX(-50%);
+    font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:rgba(232,230,242,.6);
+    animation:breathe 3.4s ease-in-out infinite, rise 1.2s .3s cubic-bezier(.22,1,.36,1) both;
+    white-space:nowrap; transition:opacity .8s;
+  }
+  @keyframes breathe{ 0%,100%{ opacity:.35; } 50%{ opacity:.85; } }
+  body.touched #hint{ opacity:0 !important; pointer-events:none; animation:none; }
+  /* ---------- HUD ---------- */
+  #hud{
+    position:fixed; z-index:4; right:22px; bottom:22px; width:280px; padding:16px 16px 14px;
+    background:rgba(14,16,28,.55); border:1px solid rgba(255,255,255,.10); border-radius:18px;
+    -webkit-backdrop-filter:blur(18px) saturate(140%); backdrop-filter:blur(18px) saturate(140%);
+    box-shadow:0 18px 50px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.12);
+    animation:rise 1s .15s cubic-bezier(.22,1,.36,1) both;
+  }
+  #hud .head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px; }
+  #hud .head b{ font-size:10px; font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:rgba(232,230,242,.7); }
+  #fps{ font-size:11px; color:#8ad4ff; font-variant-numeric:tabular-nums; }
+  .ctl{ margin-bottom:10px; }
+  .ctl label{ display:flex; justify-content:space-between; font-size:10px; letter-spacing:.16em;
+    text-transform:uppercase; color:rgba(232,230,242,.55); margin-bottom:5px; }
+  .ctl output{ font-variant-numeric:tabular-nums; color:#8ad4ff; letter-spacing:.04em; }
+  .ctl input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:14px; background:none; cursor:pointer;
+  }
+  .ctl input[type=range]::-webkit-slider-runnable-track{
+    height:2px; border-radius:1px;
+    background:linear-gradient(90deg, rgba(138,212,255,.35), rgba(138,212,255,.9));
+  }
+  .ctl input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:14px; height:14px; margin-top:-6px; border-radius:50%;
+    background:#fff; box-shadow:0 0 8px 2px rgba(138,212,255,.8); transition:transform .15s;
+  }
+  .ctl input[type=range]::-webkit-slider-thumb:hover{ transform:scale(1.25); }
+  .ctl input[type=range]::-moz-range-track{ height:2px; border-radius:1px;
+    background:linear-gradient(90deg, rgba(138,212,255,.35), rgba(138,212,255,.9)); }
+  .ctl input[type=range]::-moz-range-thumb{ width:14px; height:14px; border:none; border-radius:50%;
+    background:#fff; box-shadow:0 0 8px 2px rgba(138,212,255,.8); }
+  .actions{ display:flex; align-items:center; gap:8px; margin-top:12px; }
+  .abtn{
+    position:relative; overflow:hidden; font:inherit; font-size:10px; letter-spacing:.16em;
+    text-transform:uppercase; color:rgba(232,230,242,.85); cursor:pointer;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14);
+    border-radius:9px; padding:7px 12px; transition:border-color .2s;
+  }
+  .abtn::before{
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(60px 60px at var(--mx,50%) var(--my,50%), rgba(138,212,255,.28), transparent 70%);
+    opacity:0; transition:opacity .25s;
+  }
+  .abtn:hover::before{ opacity:1; }
+  .abtn[aria-pressed="true"]{ border-color:rgba(138,212,255,.7); color:#bfe6ff; }
+  #hueDot{ width:16px; height:16px; border-radius:50%; margin-left:auto;
+    box-shadow:0 0 10px 2px var(--hc, #37c8ff); background:var(--hc, #37c8ff); }
+  @media (max-width:480px){
+    #hud{ right:0; left:0; bottom:0; width:auto; border-radius:18px 18px 0 0; }
+    #hint{ bottom:auto; top:96px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    #titleWrap,#hud{ animation:none; }
+    #hint{ animation:none; opacity:.6; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="cv"></canvas>
+  <div id="vig"></div>
+  <div id="titleWrap">
+    <h1 id="title">ETHER</h1>
+    <div id="tagline">a fluid you can touch</div>
+  </div>
+  <div id="hint">drag anywhere to breathe color into the void</div>
+
+  <div id="hud">
+    <div class="head"><b>Stable fluids · 96²</b><span id="fps">— fps</span></div>
+    <div class="ctl">
+      <label>Brightness <output id="oB">1.40</output></label>
+      <input type="range" id="rB" min="0.4" max="3" step="0.01" value="1.4">
+    </div>
+    <div class="ctl">
+      <label>Dissipation <output id="oD">0.988</output></label>
+      <input type="range" id="rD" min="0.94" max="0.999" step="0.001" value="0.988">
+    </div>
+    <div class="actions">
+      <button class="abtn" id="bClear">Clear</button>
+      <button class="abtn" id="bAuto" aria-pressed="true">Auto</button>
+      <span id="hueDot" title="current dye hue"></span>
+    </div>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+  var RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var N = 98, SIZE = N * N; // 96 interior + boundary ring
+  var I = function(i,j){ return i + j * N; };
+
+  var u = new Float32Array(SIZE), v = new Float32Array(SIZE);
+  var u0 = new Float32Array(SIZE), v0 = new Float32Array(SIZE);
+  var r = new Float32Array(SIZE), g = new Float32Array(SIZE), b = new Float32Array(SIZE);
+  var r0 = new Float32Array(SIZE), g0 = new Float32Array(SIZE), b0 = new Float32Array(SIZE);
+  var p = new Float32Array(SIZE), div = new Float32Array(SIZE);
+
+  var VISC = 0.000003, DYE_DIFF = 0.000004, VEL_ITERS = 4, PRES_ITERS = 16, DYE_ITERS = 3;
+  var DISSIPATION = 0.988, BRIGHT = 1.4;
+
+  function setBnd(bnd, x){
+    for (var i = 1; i < N - 1; i++){
+      x[I(i, 0)]     = bnd === 2 ? -x[I(i, 1)]   : x[I(i, 1)];
+      x[I(i, N-1)]   = bnd === 2 ? -x[I(i, N-2)] : x[I(i, N-2)];
+      x[I(0, i)]     = bnd === 1 ? -x[I(1, i)]   : x[I(1, i)];
+      x[I(N-1, i)]   = bnd === 1 ? -x[I(N-2, i)] : x[I(N-2, i)];
+    }
+    x[I(0,0)] = .5*(x[I(1,0)] + x[I(0,1)]);
+    x[I(0,N-1)] = .5*(x[I(1,N-1)] + x[I(0,N-2)]);
+    x[I(N-1,0)] = .5*(x[I(N-2,0)] + x[I(N-1,1)]);
+    x[I(N-1,N-1)] = .5*(x[I(N-2,N-1)] + x[I(N-1,N-2)]);
+  }
+  function linSolve(bnd, x, x0, a, c, iters){
+    var inv = 1 / c;
+    for (var k = 0; k < iters; k++){
+      for (var j = 1; j < N - 1; j++){
+        var jm = (j-1)*N, jp = (j+1)*N, jN = j*N;
+        for (var i = 1; i < N - 1; i++){
+          x[jN + i] = (x0[jN + i] + a * (x[jN + i - 1] + x[jN + i + 1] + x[jm + i] + x[jp + i])) * inv;
+        }
+      }
+      setBnd(bnd, x);
+    }
+  }
+  function diffuse(bnd, x, x0, dt, diff, iters){
+    var a = dt * diff * N * N;
+    linSolve(bnd, x, x0, a, 1 + 4 * a, iters);
+  }
+  function advect(bnd, d, d0, uu, vv, dt){
+    var dt0 = dt * N;
+    for (var j = 1; j < N - 1; j++){
+      for (var i = 1; i < N - 1; i++){
+        var idx = I(i,j);
+        var x = i - dt0 * uu[idx], y = j - dt0 * vv[idx];
+        if (x < .5) x = .5; if (x > N - 1.5) x = N - 1.5;
+        if (y < .5) y = .5; if (y > N - 1.5) y = N - 1.5;
+        var i0 = x | 0, j0 = y | 0, i1 = i0 + 1, j1 = j0 + 1;
+        var s1 = x - i0, s0 = 1 - s1, t1 = y - j0, t0 = 1 - t1;
+        d[idx] = s0 * (t0 * d0[I(i0,j0)] + t1 * d0[I(i0,j1)]) +
+                 s1 * (t0 * d0[I(i1,j0)] + t1 * d0[I(i1,j1)]);
+      }
+    }
+    setBnd(bnd, d);
+  }
+  function project(uu, vv, pp, dv){
+    for (var j = 1; j < N - 1; j++){
+      for (var i = 1; i < N - 1; i++){
+        dv[I(i,j)] = -.5 * (uu[I(i+1,j)] - uu[I(i-1,j)] + vv[I(i,j+1)] - vv[I(i,j-1)]) / N;
+        pp[I(i,j)] = 0;
+      }
+    }
+    setBnd(0, dv); setBnd(0, pp);
+    linSolve(0, pp, dv, 1, 4, PRES_ITERS);
+    for (j = 1; j < N - 1; j++){
+      for (i = 1; i < N - 1; i++){
+        uu[I(i,j)] -= .5 * N * (pp[I(i+1,j)] - pp[I(i-1,j)]);
+        vv[I(i,j)] -= .5 * N * (pp[I(i,j+1)] - pp[I(i,j-1)]);
+      }
+    }
+    setBnd(1, uu); setBnd(2, vv);
+  }
+  function velStep(dt){
+    diffuse(1, u0, u, dt, VISC, VEL_ITERS);
+    diffuse(2, v0, v, dt, VISC, VEL_ITERS);
+    project(u0, v0, p, div);
+    advect(1, u, u0, u0, v0, dt);
+    advect(2, v, v0, u0, v0, dt);
+    project(u, v, p, div);
+    for (var i = 0; i < SIZE; i++){ u[i] *= .995; v[i] *= .995; }
+  }
+  function dyeStep(dt){
+    diffuse(0, r0, r, dt, DYE_DIFF, DYE_ITERS); advect(0, r, r0, u, v, dt);
+    diffuse(0, g0, g, dt, DYE_DIFF, DYE_ITERS); advect(0, g, g0, u, v, dt);
+    diffuse(0, b0, b, dt, DYE_DIFF, DYE_ITERS); advect(0, b, b0, u, v, dt);
+    var d = DISSIPATION;
+    for (var i = 0; i < SIZE; i++){ r[i] *= d; g[i] *= d; b[i] *= d; }
+  }
+
+  /* ---------- canvases ---------- */
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  var buf = document.createElement('canvas'); buf.width = 96; buf.height = 96;
+  var bctx = buf.getContext('2d');
+  var img = bctx.createImageData(96, 96);
+  function resize(){
+    var dpr = Math.min(devicePixelRatio || 1, 2);
+    cv.width = Math.round(innerWidth * dpr);
+    cv.height = Math.round(innerHeight * dpr);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+  }
+  resize(); addEventListener('resize', resize);
+
+  function render(){
+    var d = img.data, k = 0;
+    for (var j = 1; j < N - 1; j++){
+      for (var i = 1; i < N - 1; i++){
+        var idx = I(i, j);
+        var rr = clamp255(r[idx] * BRIGHT * 255);
+        var gg = clamp255(g[idx] * BRIGHT * 255);
+        var bb = clamp255(b[idx] * BRIGHT * 255);
+        d[k++] = rr; d[k++] = gg; d[k++] = bb; d[k++] = 255;
+      }
+    }
+    bctx.putImageData(img, 0, 0);
+    var w = cv.width, h = cv.height;
+    var s = Math.max(w / 96, h / 96);
+    ctx.fillStyle = '#04050a';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(buf, (w - 96 * s) / 2, (h - 96 * s) / 2, 96 * s, 96 * s);
+  }
+  function clamp255(v){ return v < 0 ? 0 : v > 255 ? 255 : v; }
+
+  /* ---------- splats ---------- */
+  function hsl(h, s, l){
+    h = ((h % 360) + 360) % 360 / 360;
+    var q = l < .5 ? l * (1 + s) : l + s - l * s, pp = 2 * l - q;
+    function f(t){
+      if (t < 0) t += 1; if (t > 1) t -= 1;
+      if (t < 1/6) return pp + (q - pp) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return pp + (q - pp) * (2/3 - t) * 6;
+      return pp;
+    }
+    return [f(h + 1/3), f(h), f(h - 1/3)];
+  }
+  function splat(x, y, dx, dy, cr, cg, cb, rad){
+    var cx = 1 + x * (N - 3), cy = 1 + y * (N - 3);
+    var r2 = rad * rad;
+    for (var j = Math.max(1, (cy - rad*3)|0); j < Math.min(N - 1, cy + rad*3); j++){
+      for (var i = Math.max(1, (cx - rad*3)|0); i < Math.min(N - 1, cx + rad*3); i++){
+        var dd = (i - cx) * (i - cx) + (j - cy) * (j - cy);
+        var f = Math.exp(-dd / r2);
+        var idx = I(i, j);
+        r[idx] += cr * f; g[idx] += cg * f; b[idx] += cb * f;
+        u[idx] += dx * f; v[idx] += dy * f;
+      }
+    }
+  }
+  var hue = 195;
+  function dyeSplat(x, y, dx, dy, strength){
+    var c = hsl(hue, .95, .55);
+    splat(x, y, dx * 8, dy * 8, c[0] * strength, c[1] * strength, c[2] * strength, 5.5);
+  }
+
+  /* ---------- pointer ---------- */
+  var down = false, lx = .5, ly = .5, hasPos = false, lastActive = -1e9;
+  function toNorm(e){
+    return [e.clientX / innerWidth, 1 - e.clientY / innerHeight];
+  }
+  cv.addEventListener('pointerdown', function(e){
+    down = true; hasPos = true;
+    var q = toNorm(e); lx = q[0]; ly = q[1];
+    document.body.classList.add('touched');
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove', function(e){
+    var q = toNorm(e);
+    if (hasPos){
+      var dx = q[0] - lx, dy = q[1] - ly;
+      if (down){
+        dyeSplat(q[0], q[1], dx, dy, 900);
+      } else {
+        dyeSplat(q[0], q[1], dx, dy, 60);
+      }
+      lastActive = performance.now();
+    }
+    lx = q[0]; ly = q[1]; hasPos = true;
+  });
+  addEventListener('pointerup', function(){ down = false; });
+
+  /* ---------- ambient emitters ---------- */
+  var auto = !RM;
+  function ambient(t){
+    if (!auto || performance.now() - lastActive < 2000) return;
+    var a1 = t * .0003, a2 = t * .00021 + 2.4;
+    var c1 = hsl(hue + 40, .95, .55), c2 = hsl(hue + 140, .9, .5);
+    var e1x = .5 + Math.cos(a1) * .33, e1y = .5 + Math.sin(a1 * 1.3) * .28;
+    var e2x = .5 + Math.cos(-a2) * .3, e2y = .5 + Math.sin(-a2 * 1.2) * .3;
+    splat(e1x, e1y, -Math.sin(a1) * 60, Math.cos(a1) * 45, c1[0]*30, c1[1]*30, c1[2]*30, 4.5);
+    splat(e2x, e2y, Math.sin(a2) * 50, -Math.cos(a2) * 40, c2[0]*22, c2[1]*22, c2[2]*22, 4);
+  }
+
+  /* ---------- seed ring ---------- */
+  (function seed(){
+    for (var k = 0; k < 24; k++){
+      var a = k / 24 * Math.PI * 2;
+      var x = .5 + Math.cos(a) * .3, y = .5 + Math.sin(a) * .3;
+      var c = hsl(190 + Math.random() * 40, .95, .55);
+      splat(x, y, Math.cos(a) * 400, Math.sin(a) * 400, c[0]*260, c[1]*260, c[2]*260, 6);
+    }
+  })();
+
+  /* ---------- main loop ---------- */
+  var fpsEl = document.getElementById('fps'), fpsEMA = 60, prev = performance.now();
+  var hueDot = document.getElementById('hueDot');
+  function frame(t){
+    var dt = Math.min(Math.max((t - prev) / 1000, .008), .033);
+    prev = t;
+    fpsEMA += (1 / dt - fpsEMA) * .06;
+    fpsEl.textContent = Math.round(fpsEMA) + ' fps';
+    hue += dt * 14;
+    hueDot.style.setProperty('--hc', 'hsl(' + Math.round(hue) + ',95%,55%)');
+    ambient(t);
+    velStep(dt);
+    dyeStep(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  /* ---------- HUD wiring ---------- */
+  var rB = document.getElementById('rB'), oB = document.getElementById('oB');
+  rB.addEventListener('input', function(){ BRIGHT = +this.value; oB.textContent = (+this.value).toFixed(2); });
+  var rD = document.getElementById('rD'), oD = document.getElementById('oD');
+  rD.addEventListener('input', function(){
+    DISSIPATION = +this.value;
+    oD.textContent = (+this.value).toFixed(3);
+  });
+  document.getElementById('bClear').addEventListener('click', function(){
+    r.fill(0); g.fill(0); b.fill(0); u.fill(0); v.fill(0);
+  });
+  var bAuto = document.getElementById('bAuto');
+  if (RM){ auto = false; bAuto.setAttribute('aria-pressed','false'); bAuto.title = 'disabled (reduced motion)'; }
+  bAuto.addEventListener('click', function(){
+    if (RM) return;
+    auto = !auto;
+    this.setAttribute('aria-pressed', String(auto));
+  });
+  document.querySelectorAll('.abtn').forEach(function(btn){
+    btn.addEventListener('pointermove', function(e){
+      var rc = btn.getBoundingClientRect();
+      btn.style.setProperty('--mx', (e.clientX - rc.left) + 'px');
+      btn.style.setProperty('--my', (e.clientY - rc.top) + 'px');
+    });
+  });
+})();
+</script>
+</body>
+</html>

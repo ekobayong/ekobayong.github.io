@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neon Drift — Retro CRT Arcade</title>
+<style>
+  :root{
+    --green:#39ff6a; --dim:#1f8a3c; --cyan:#2bd8ff; --magenta:#ff3cac;
+    --yellow:#fff35c; --amber:#ffb347;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    min-height:100vh;
+    background:radial-gradient(120% 90% at 50% 108%, #1b1b22 0%, #0a0a0e 52%, #050507 100%);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Courier New', ui-monospace, Menlo, monospace;
+    overflow-x:hidden; padding:28px 12px;
+  }
+  /* ---------- cabinet bezel ---------- */
+  .cabinet{
+    position:relative;
+    width:min(94vw, 780px);
+    max-height:94vh;
+    aspect-ratio:5/4;
+    border-radius:28px;
+    background:linear-gradient(165deg,#2a2a2e 0%,#141416 52%,#0b0b0d 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.16),
+      inset 0 -3px 8px rgba(0,0,0,.75),
+      inset 3px 0 4px rgba(255,255,255,.05),
+      inset -3px 0 4px rgba(0,0,0,.5),
+      0 46px 90px rgba(0,0,0,.85),
+      0 14px 34px rgba(0,0,0,.7);
+    padding:38px 52px 30px;
+  }
+  .lamp{
+    position:absolute; top:50%; width:9px; height:9px; margin-top:-4px;
+    border-radius:50%; background:var(--amber);
+    box-shadow:0 0 6px 2px rgba(255,179,71,.85), 0 0 18px 6px rgba(255,179,71,.35);
+    animation:lamp 2.6s ease-in-out infinite;
+  }
+  .lamp.l{ left:18px; } .lamp.r{ right:18px; }
+  @keyframes lamp{ 0%,100%{ opacity:1; } 50%{ opacity:.45; } }
+  .badge{
+    position:absolute; left:50%; bottom:7px; transform:translateX(-50%);
+    font-size:9px; letter-spacing:.14em; color:#4d4d55; white-space:nowrap;
+    text-shadow:0 1px 0 rgba(0,0,0,.8);
+  }
+  /* ---------- CRT screen ---------- */
+  .screen{
+    position:relative; width:100%; height:100%;
+    border-radius:12% / 14%;
+    background:#020603;
+    overflow:hidden;
+    box-shadow:inset 0 0 0 2px rgba(0,0,0,.9), inset 0 0 34px rgba(0,0,0,.9);
+  }
+  .crt{
+    position:absolute; inset:0; z-index:2;
+    display:flex; flex-direction:column; align-items:center;
+    padding:4.5% 6% 4%;
+    color:var(--green);
+    text-shadow:0 0 6px rgba(57,255,106,.55), 0 0 18px rgba(57,255,106,.25);
+    animation:flick 5.5s steps(1,end) infinite;
+  }
+  @keyframes flick{
+    0%,91%{ opacity:1; } 92%{ opacity:.9; } 93%{ opacity:1; }
+    96%{ opacity:.94; } 97%{ opacity:1; }
+  }
+  /* overlays */
+  .fx{ position:absolute; inset:0; pointer-events:none; }
+  .fx-vig{ z-index:6; box-shadow:inset 0 0 90px 40px rgba(0,0,0,.82), inset 0 0 190px 70px rgba(0,0,0,.5); border-radius:12% / 14%; }
+  .fx-scan{ z-index:4; background:repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 2px, rgba(0,0,0,.34) 2px 3px); }
+  .fx-grille{ z-index:5; opacity:.5; background:repeating-linear-gradient(90deg, rgba(255,60,60,.10) 0 1px, rgba(60,255,60,.08) 1px 2px, rgba(60,60,255,.10) 2px 3px); }
+  .fx-roll{ z-index:5; opacity:.09; background:linear-gradient(180deg, transparent 0%, #cfeee0 45%, #eafff2 55%, transparent 100%); height:22%; top:-25%; animation:roll 7s linear infinite; }
+  @keyframes roll{ from{ transform:translateY(0); } to{ transform:translateY(660%); } }
+  .fx-sheen{ z-index:7; background:linear-gradient(115deg, transparent 38%, rgba(255,255,255,.045) 43%, rgba(255,255,255,.09) 49%, transparent 56%); }
+  /* ---------- logo ---------- */
+  .logo-scale{ transform:scale(.8); margin-bottom:6px; }
+  @media (min-width:560px){ .logo-scale{ transform:scale(1); } }
+  #logo{ width:10px; height:10px; }
+  .tagline{
+    color:var(--cyan); text-shadow:0 0 7px rgba(43,216,255,.6);
+    font-size:clamp(9px,1.5vw,13px); letter-spacing:.18em; margin-bottom:4%;
+  }
+  /* ---------- panel ---------- */
+  .panel{
+    flex:1; width:100%; min-height:0;
+    display:grid; grid-template-columns:1fr 1fr; gap:4%;
+    font-size:clamp(10px,1.8vw,15px);
+  }
+  .box{
+    border:1px solid rgba(57,255,106,.4); border-radius:6px;
+    padding:10px 12px; background:rgba(6,30,12,.35);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  .box-title{ color:var(--dim); letter-spacing:.22em; font-size:.8em; margin-bottom:.7em; text-shadow:none; }
+  .opt{
+    position:relative; padding:.42em 0 .42em 1.6em; cursor:pointer;
+    color:var(--dim); white-space:nowrap; text-shadow:none;
+  }
+  .opt.sel{ color:var(--green); transform:translateX(14px); text-shadow:0 0 8px rgba(57,255,106,.7); transition:transform .12s; }
+  .opt.sel::before{
+    content:'\25B6'; position:absolute; left:0; color:var(--magenta);
+    text-shadow:0 0 8px rgba(255,60,172,.8); animation:blink 1s steps(1,end) infinite;
+  }
+  .opt.flash{ animation:inv .38s steps(1,end) 2; }
+  @keyframes inv{ 0%,49%{ background:var(--green) !important; color:#000 !important; text-shadow:none !important; } 50%,100%{ } }
+  @keyframes blink{ 0%,54%{ opacity:1; } 55%,100%{ opacity:0; } }
+  .hs-range{ color:var(--magenta); text-shadow:0 0 7px rgba(255,60,172,.6); font-size:.8em; margin-bottom:.5em; letter-spacing:.1em; }
+  .hs-viewport{ flex:1; overflow:hidden; position:relative; }
+  .hs-page{ position:absolute; inset:0; }
+  .hs-row{ display:grid; grid-template-columns:2.2em 4.2em 1fr; padding:.28em 0; animation:hsin .5s steps(4,end); }
+  .hs-rank{ color:var(--dim); } .hs-ini{ color:var(--amber); text-shadow:0 0 6px rgba(255,179,71,.55); } .hs-score{ color:var(--cyan); text-align:right; text-shadow:0 0 6px rgba(43,216,255,.5); }
+  @keyframes hsin{ from{ transform:translateY(16px); opacity:0; } to{ transform:none; opacity:1; } }
+  /* ---------- footer ---------- */
+  .footer{ display:flex; width:100%; justify-content:space-between; align-items:baseline; margin-top:3.5%; font-size:clamp(9px,1.7vw,14px); }
+  #coin{ color:var(--yellow); background:none; border:none; cursor:pointer; font:inherit; text-shadow:0 0 8px rgba(255,243,92,.7); animation:blink 1.1s steps(1,end) infinite; letter-spacing:.12em; }
+  #credits{ color:var(--amber); text-shadow:0 0 6px rgba(255,179,71,.5); letter-spacing:.14em; }
+  .copy{ color:var(--dim); text-shadow:none; font-size:.85em; }
+  /* ---------- game ---------- */
+  #game{ position:absolute; inset:0; z-index:3; display:none; width:100%; height:100%; cursor:crosshair; }
+  body.playing #game{ display:block; }
+  body.playing .panel{ display:none; }
+  #toast{
+    position:absolute; z-index:8; left:50%; top:46%; transform:translate(-50%,-50%);
+    color:var(--magenta); text-shadow:0 0 10px rgba(255,60,172,.9), 0 0 30px rgba(255,60,172,.5);
+    font-size:clamp(16px,3.4vw,30px); letter-spacing:.24em; opacity:0; pointer-events:none;
+    white-space:nowrap; transition:opacity .25s;
+  }
+  #toast.show{ opacity:1; }
+  /* ---------- reduced motion ---------- */
+  @media (prefers-reduced-motion: reduce){
+    .fx-roll{ display:none; }
+    .crt, .lamp{ animation:none; }
+    .opt.sel::before, #coin{ animation:none; }
+    .hs-row{ animation:none; }
+    .opt{ transition:none; }
+  }
+  @media (max-width:640px){
+    .panel{ grid-template-columns:1fr; overflow:hidden; }
+    .cabinet{ padding:30px 30px 24px; }
+  }
+</style>
+</head>
+<body>
+  <div class="cabinet">
+    <span class="lamp l"></span><span class="lamp r"></span>
+    <div class="screen">
+      <div class="crt">
+        <div class="logo-scale"><div id="logo" aria-label="NEON DRIFT"></div></div>
+        <div class="tagline">// ATTRACT MODE — 1987 //</div>
+        <div class="panel">
+          <div class="box">
+            <div class="box-title">SELECT</div>
+            <div id="menu">
+              <div class="opt" data-i="0">1P START — PADDLE</div>
+              <div class="opt" data-i="1">VIEW RANKINGS</div>
+              <div class="opt" data-i="2">SHUFFLE TABLE</div>
+              <div class="opt" data-i="3">CREDITS</div>
+            </div>
+          </div>
+          <div class="box">
+            <div class="box-title">TODAY'S HI-SCORES</div>
+            <div class="hs-range" id="hsRange">RANKS 01–05</div>
+            <div class="hs-viewport" id="hsView"></div>
+          </div>
+        </div>
+        <div class="footer">
+          <button id="coin">INSERT COIN</button>
+          <span id="credits">CREDIT 0</span>
+          <span class="copy">© 1987 VOLTAGE WORKS</span>
+        </div>
+      </div>
+      <canvas id="game"></canvas>
+      <div id="toast"></div>
+      <div class="fx fx-scan"></div>
+      <div class="fx fx-grille"></div>
+      <div class="fx fx-roll"></div>
+      <div class="fx fx-vig"></div>
+      <div class="fx fx-sheen"></div>
+    </div>
+    <div class="badge">VOLTAGE WORKS · MODEL VW-25 · MADE IN OSAKA</div>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+  var RM = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ================= bitmap logo ================= */
+  var GLYPHS = {
+    'N':['10001','11001','10101','10011','10001'],
+    'E':['11111','10000','11110','10000','11111'],
+    'O':['01110','10001','10001','10001','01110'],
+    'D':['11110','10001','10001','10001','11110'],
+    'R':['11110','10001','11110','10010','10001'],
+    'I':['11111','00100','00100','00100','11111'],
+    'F':['11111','10000','11110','10000','10000'],
+    'T':['11111','00100','00100','00100','00100'],
+    ' ':['00000','00000','00000','00000','00000']
+  };
+  var ACCENTS = ['#2bd8ff','#ff3cac','#fff35c','#ffb347','#39ff6a'];
+  (function buildLogo(){
+    var text = 'NEON DRIFT', cell = 9, gap = 4, step = cell + gap;
+    var el = document.getElementById('logo');
+    var shadows = [], gi = 0;
+    for (var c = 0; c < text.length; c++){
+      var g = GLYPHS[text[c]] || GLYPHS[' '];
+      var col = ACCENTS[gi % ACCENTS.length]; gi++;
+      for (var y = 0; y < 5; y++){
+        for (var x = 0; x < 5; x++){
+          if (g[y][x] === '1'){
+            var ox = (c * 6 + x) * step, oy = y * step;
+            shadows.push(ox + 'px ' + oy + 'px 0 0 ' + col);
+            shadows.push((ox+1) + 'px ' + (oy+1) + 'px 0 0 rgba(0,0,0,.55)');
+          }
+        }
+      }
+    }
+    el.style.boxShadow = shadows.join(',');
+    var anim = document.createElement('style');
+    anim.textContent = '#logo{ animation:hue 14s linear infinite; } @keyframes hue{ to{ filter:hue-rotate(360deg); } }' +
+      (RM ? '@media (prefers-reduced-motion: reduce){ #logo{ animation:none; } }' : '');
+    document.head.appendChild(anim);
+  })();
+
+  /* ================= toast ================= */
+  var toast = document.getElementById('toast'), toastT = null;
+  function showToast(msg, ms){
+    toast.textContent = msg; toast.classList.add('show');
+    clearTimeout(toastT);
+    toastT = setTimeout(function(){ toast.classList.remove('show'); }, ms || 1400);
+  }
+
+  /* ================= hi-scores ================= */
+  var INI = ['ACE','ZAP','KAT','REX','MOE','JIN','VOX','LEM','PIP','SUN','DXR','NEO','YUK','GIG','BIT'];
+  var scores = INI.map(function(n,i){
+    return { ini:n, score: 1000000 + Math.floor(Math.random()*8999999) - i*23000 };
+  }).sort(function(a,b){ return b.score - a.score; });
+  var hsPage = 0;
+  function renderHS(){
+    var view = document.getElementById('hsView');
+    var start = hsPage * 5;
+    var html = '<div class="hs-page">';
+    for (var i = 0; i < 5; i++){
+      var s = scores[start + i]; if (!s) break;
+      var sc = String(s.score).padStart(7,'0');
+      html += '<div class="hs-row" style="animation-delay:' + (i*60) + 'ms">' +
+        '<span class="hs-rank">' + String(start+i+1).padStart(2,'0') + '</span>' +
+        '<span class="hs-ini">' + s.ini + '</span>' +
+        '<span class="hs-score">' + sc + '</span></div>';
+    }
+    html += '</div>';
+    view.innerHTML = html;
+    document.getElementById('hsRange').textContent =
+      'RANKS ' + String(start+1).padStart(2,'0') + '–' + String(start+5).padStart(2,'0');
+  }
+  renderHS();
+  var hsTimer = setInterval(function(){
+    hsPage = (hsPage + 1) % 3; renderHS();
+  }, 4000);
+
+  /* ================= credits / coin ================= */
+  var credits = 0;
+  var creditsEl = document.getElementById('credits');
+  function addCredit(){
+    credits++; creditsEl.textContent = 'CREDIT ' + credits;
+    showToast('CREDIT ' + credits, 900);
+  }
+  document.getElementById('coin').addEventListener('click', addCredit);
+  document.addEventListener('keydown', function(e){
+    if ((e.key === 'c' || e.key === 'C') && !body.classList.contains('playing')){
+      e.preventDefault(); addCredit();
+    }
+  });
+
+  /* ================= menu ================= */
+  var body = document.body;
+  var opts = Array.prototype.slice.call(document.querySelectorAll('.opt'));
+  var sel = 0;
+  function select(i, fromHover){
+    sel = i;
+    opts.forEach(function(o,k){ o.classList.toggle('sel', k === i); });
+  }
+  opts.forEach(function(o){
+    o.addEventListener('mouseenter', function(){ select(+o.dataset.i, true); });
+    o.addEventListener('click', function(){ activate(+o.dataset.i); });
+  });
+  function activate(i){
+    select(i);
+    var el = opts[i];
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+    switch(i){
+      case 0:
+        if (credits < 1){ showToast('INSERT COIN', 1200); }
+        else { credits--; creditsEl.textContent = 'CREDIT ' + credits; startGame(); }
+        break;
+      case 1: showToast('RANKINGS — SEE TABLE', 1200); break;
+      case 2:
+        scores.sort(function(){ return Math.random() - .5; });
+        hsPage = 0; renderHS(); showToast('SHUFFLED', 1100); break;
+      case 3: showToast('VOLTAGE WORKS 1987', 1300); break;
+    }
+  }
+  document.addEventListener('keydown', function(e){
+    if (body.classList.contains('playing')) return;
+    if (e.key === 'ArrowDown'){ e.preventDefault(); select((sel+1) % 4); }
+    else if (e.key === 'ArrowUp'){ e.preventDefault(); select((sel+3) % 4); }
+    else if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); activate(sel); }
+  });
+
+  /* ================= paddle game ================= */
+  var canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
+  var W = 0, H = 0, dpr = 1;
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', resize);
+
+  var state = null;
+  var ROWCOL = [['#2bd8ff','#ff3cac','#fff35c'],['#39ff6a','#2bd8ff','#ff3cac'],['#fff35c','#ffb347','#2bd8ff']];
+  function newBricks(){
+    var bricks = [], cols = 8;
+    for (var r = 0; r < 3; r++) for (var c = 0; c < cols; c++){
+      bricks.push({ r:r, c:c, alive:true,
+        x: W*0.1 + c * (W*0.8/cols), y: H*0.14 + r * (H*0.07),
+        w: W*0.8/cols - 8, h: H*0.05, col: ROWCOL[r % 3][c % 3] });
+    }
+    return bricks;
+  }
+  function startGame(){
+    resize();
+    body.classList.add('playing');
+    state = {
+      score:0, lives:3, speed:250,
+      padW: Math.max(60, W*0.12), padX: W/2, padY: H*0.88,
+      ball:{ x:W/2, y:H*0.6, vx:160, vy:220, s:10 },
+      trail:[], bricks:newBricks(), over:false
+    };
+    showToast('READY', 1200);
+    last = performance.now();
+    requestAnimationFrame(loop);
+  }
+  function endGame(){
+    state = null; body.classList.remove('playing');
+  }
+  var keys = {};
+  document.addEventListener('keydown', function(e){
+    keys[e.key] = true;
+    if (body.classList.contains('playing') && (e.key===' '||e.key==='ArrowUp'||e.key==='ArrowDown')) e.preventDefault();
+  });
+  document.addEventListener('keyup', function(e){ keys[e.key] = false; });
+  var dragging = false;
+  function ptr(e){
+    var r = canvas.getBoundingClientRect();
+    var p = e.touches ? e.touches[0] : e;
+    state && (state.padX = Math.min(Math.max(p.clientX - r.left, state.padW/2), W - state.padW/2));
+  }
+  canvas.addEventListener('pointerdown', function(e){ dragging = true; ptr(e); canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointermove', function(e){ if (dragging) ptr(e); });
+  canvas.addEventListener('pointerup', function(){ dragging = false; });
+
+  var last = 0;
+  function loop(t){
+    if (!state) return;
+    var dt = Math.min((t - last)/1000, .05); last = t;
+    var s = state;
+    if (!s.over){
+      if (keys['ArrowLeft'] || keys['a'] || keys['A']) s.padX -= 460*dt;
+      if (keys['ArrowRight'] || keys['d'] || keys['D']) s.padX += 460*dt;
+      s.padX = Math.min(Math.max(s.padX, s.padW/2), W - s.padW/2);
+
+      var b = s.ball;
+      b.x += b.vx*dt; b.y += b.vy*dt;
+      if (b.x < 5){ b.x = 5; b.vx = Math.abs(b.vx); }
+      if (b.x > W-5){ b.x = W-5; b.vx = -Math.abs(b.vx); }
+      if (b.y < 5){ b.y = 5; b.vy = Math.abs(b.vy); }
+      // paddle
+      if (b.vy > 0 && b.y > s.padY - 8 && b.y < s.padY + 10 &&
+          b.x > s.padX - s.padW/2 - 5 && b.x < s.padX + s.padW/2 + 5){
+        b.vy = -Math.abs(b.vy);
+        b.vx += (b.x - s.padX) * 3;
+        s.speed *= 1.04; b.score = 0;
+        s.score += 5;
+        var mag = Math.hypot(b.vx, b.vy) || 1;
+        b.vx = b.vx/mag * s.speed; b.vy = -s.speed;
+      }
+      // bricks
+      for (var i = 0; i < s.bricks.length; i++){
+        var k = s.bricks[i];
+        if (k.alive && b.x > k.x && b.x < k.x + k.w && b.y > k.y && b.y < k.y + k.h){
+          k.alive = false; s.score += 25;
+          b.vy = -b.vy; s.speed *= 1.02;
+          var m2 = Math.hypot(b.vx, b.vy) || 1;
+          b.vx = b.vx/m2 * s.speed; b.vy = b.vy/m2 * s.speed;
+        }
+      }
+      if (s.bricks.every(function(k){ return !k.alive; })){
+        s.bricks = newBricks(); showToast('STAGE CLEAR', 1400);
+      }
+      // trail
+      s.trail.push({x:b.x, y:b.y});
+      if (s.trail.length > 14) s.trail.shift();
+      // miss
+      if (b.y > H + 12){
+        s.lives--; showToast('MISS', 1200);
+        if (s.lives <= 0){
+          s.over = true; showToast('GAME OVER', 2400);
+          setTimeout(endGame, 2500);
+        } else {
+          b.x = W/2; b.y = H*0.6; b.vx = 160; b.vy = 220; s.speed = 250; s.trail = [];
+        }
+      }
+    }
+    draw(s);
+    requestAnimationFrame(loop);
+  }
+  function draw(s){
+    ctx.clearRect(0,0,W,H);
+    // grid
+    ctx.strokeStyle = 'rgba(57,255,106,.09)'; ctx.lineWidth = 1;
+    for (var gx = 0; gx < W; gx += 40){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
+    for (var gy = 0; gy < H; gy += 40){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
+    // bricks
+    s.bricks.forEach(function(k){
+      if (!k.alive) return;
+      ctx.save(); ctx.shadowColor = k.col; ctx.shadowBlur = 10;
+      ctx.fillStyle = k.col; ctx.fillRect(k.x, k.y, k.w, k.h); ctx.restore();
+    });
+    // trail
+    s.trail.forEach(function(p, i){
+      ctx.fillStyle = 'rgba(57,255,106,' + (i/s.trail.length * .35) + ')';
+      ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
+    });
+    // ball
+    ctx.save(); ctx.shadowColor = '#fff35c'; ctx.shadowBlur = 12;
+    ctx.fillStyle = '#fff35c'; ctx.fillRect(s.ball.x - 5, s.ball.y - 5, 10, 10); ctx.restore();
+    // paddle
+    ctx.save(); ctx.shadowColor = '#39ff6a'; ctx.shadowBlur = 16;
+    ctx.fillStyle = '#39ff6a';
+    ctx.fillRect(s.padX - s.padW/2, s.padY, s.padW, 8); ctx.restore();
+    // HUD: score + lives diamonds
+    ctx.shadowBlur = 0; ctx.fillStyle = '#39ff6a';
+    ctx.font = '14px "Courier New", monospace';
+    ctx.fillText('SCORE ' + String(s.score).padStart(6,'0'), 12, 22);
+    for (var d = 0; d < s.lives; d++){
+      var cx = W - 24 - d*20, cy = 16;
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.PI/4);
+      ctx.fillStyle = '#39ff6a'; ctx.fillRect(-5,-5,10,10); ctx.restore();
+    }
+  }
+  resize();
+})();
+</script>
+</body>
+</html>

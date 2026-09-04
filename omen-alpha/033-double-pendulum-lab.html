@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Double Pendulum Laboratory — Chaos Instrument No. 7</title>
+<style>
+  :root{
+    --bg:#1b1a18;
+    --panel:#232220;
+    --panel2:#2c2a27;
+    --brass:#b8955a;
+    --brass-l:#dcc08a;
+    --copper:#b86f43;
+    --copper-l:#d9925f;
+    --cream:#e9dfcb;
+    --dim:#a89e8a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:var(--bg);color:var(--cream);
+    font-family:'Iowan Old Style', Palatino, Georgia, ui-serif, serif;
+    font-weight:300;
+    min-height:100vh;
+  }
+  .mono{font-family:ui-monospace, Menlo, 'Courier New', monospace;}
+  header{
+    padding:26px 30px 20px;
+    border-bottom:1px solid rgba(184,149,90,.25);
+    display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;
+  }
+  header h1{font-size:clamp(24px, 3.4vw, 40px);font-weight:300;letter-spacing:.01em;}
+  header .sub{font-style:italic;color:var(--brass-l);font-size:clamp(15px,1.8vw,20px);margin-left:14px;}
+  .plate{
+    font-family:ui-monospace, Menlo, 'Courier New', monospace;
+    font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--brass);
+    border:1px solid rgba(184,149,90,.35);padding:6px 12px;border-radius:2px;
+  }
+  .layout{
+    display:grid;
+    grid-template-columns:1fr 340px;
+    min-height:70vh;
+  }
+  .sidebar{
+    border-left:1px solid transparent;
+    border-image:linear-gradient(180deg, transparent, var(--brass) 20%, var(--brass) 80%, transparent) 1;
+    padding:24px 22px 40px;
+    display:flex;flex-direction:column;gap:26px;
+  }
+  @media (max-width:900px){
+    .layout{grid-template-columns:1fr;}
+    .sidebar{border-left:none;border-top:1px solid rgba(184,149,90,.25);}
+  }
+
+  /* stage */
+  .stage{
+    position:relative;
+    min-height:60vh;
+    background:var(--bg);
+  }
+  #stageCanvas{display:block;width:100%;height:100%;cursor:grab;}
+  .hud{
+    position:absolute;top:14px;left:16px;
+    font-family:ui-monospace, Menlo, 'Courier New', monospace;
+    font-size:12px;line-height:1.8;color:var(--dim);
+    pointer-events:none;
+  }
+  .hud .cu{color:var(--copper-l);}
+  .stage-btns{
+    position:absolute;top:14px;right:14px;
+    display:flex;gap:10px;
+  }
+  .stage-btns button{
+    font-family:'Iowan Old Style', Palatino, Georgia, ui-serif, serif;
+    font-size:14px;
+    background:var(--panel2);
+    color:var(--brass-l);
+    border:1px solid var(--brass);
+    padding:8px 16px;
+    cursor:pointer;
+    box-shadow:2px 2px 0 rgba(0,0,0,.55);
+    transition:box-shadow .15s, border-color .15s;
+  }
+  .stage-btns button.primary{
+    background:linear-gradient(180deg, #332c20, #29241c);
+    color:var(--brass-l);
+  }
+  .stage-btns button.copper{
+    color:var(--copper-l);border-color:var(--copper);
+  }
+  .stage-btns button:hover{
+    border-color:var(--brass-l);
+    box-shadow:2px 2px 0 rgba(0,0,0,.55), 0 0 12px rgba(184,149,90,.35);
+  }
+  .stage-btns button:active{transform:translateY(1px);box-shadow:1px 1px 0 rgba(0,0,0,.55);}
+
+  /* sidebar sections */
+  .side h2{
+    font-size:15px;font-weight:300;font-style:italic;color:var(--brass-l);
+    letter-spacing:.04em;margin-bottom:12px;
+    border-bottom:1px solid rgba(184,149,90,.25);padding-bottom:8px;
+  }
+  .param{margin-bottom:14px;}
+  .param .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
+  .param label{font-style:italic;color:var(--dim);font-size:14px;}
+  .param output{font-family:ui-monospace, Menlo, 'Courier New', monospace;font-size:12px;color:var(--cream);}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:2px;
+    background:linear-gradient(90deg, var(--copper), var(--brass));
+    outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:16px;height:16px;border-radius:50%;
+    background:radial-gradient(circle at 34% 30%, var(--brass-l), var(--brass) 60%, #6f5528);
+    border:1px solid #6f5528;box-shadow:0 2px 5px rgba(0,0,0,.5);
+    cursor:grab;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:16px;height:16px;border-radius:50%;
+    background:radial-gradient(circle at 34% 30%, var(--brass-l), var(--brass) 60%, #6f5528);
+    border:1px solid #6f5528;cursor:grab;
+  }
+
+  .readout{
+    display:grid;grid-template-columns:repeat(3, 1fr);gap:1px;
+    background:rgba(184,149,90,.25);
+    border:1px solid rgba(184,149,90,.25);
+  }
+  .readout .cell{
+    background:var(--panel);padding:10px 12px;
+  }
+  .readout .k{font-style:italic;color:var(--dim);font-size:12px;}
+  .readout .v{font-family:ui-monospace, Menlo, 'Courier New', monospace;font-size:13px;margin-top:3px;}
+  .readout .v.cu{color:var(--copper-l);}
+
+  /* notebook */
+  .notebook{
+    background:repeating-linear-gradient(180deg, transparent 0 27px, rgba(184,149,90,.18) 27px 28px);
+    background-color:var(--panel);
+    padding:18px 16px 18px 34px;
+    position:relative;
+    font-size:14px;line-height:28px;
+  }
+  .notebook::before{
+    content:"";position:absolute;top:0;bottom:0;left:22px;width:1px;
+    background:linear-gradient(180deg, var(--copper), rgba(184,111,67,.4));
+  }
+  .eq{font-style:italic;margin-bottom:8px;color:var(--cream);}
+  .eq .b{color:var(--brass-l);}
+  .eq .cu{color:var(--copper-l);}
+  .frac{display:inline-flex;flex-direction:column;text-align:center;vertical-align:middle;margin:0 4px;line-height:1.15;font-size:.85em;}
+  .frac > span:first-child{border-bottom:1px solid var(--brass);padding:0 4px;}
+  .frac > span:last-child{padding:0 4px;}
+  .dot1{position:relative;}
+  .dot1::before{content:"·";position:absolute;left:-0.35em;top:-0.55em;font-size:1.1em;}
+  .dot2{position:relative;}
+  .dot2::before{content:"¨";position:absolute;left:-0.4em;top:-0.5em;font-size:1em;}
+  .nb-note{font-style:italic;color:var(--dim);margin-top:10px;line-height:1.5;}
+  sub,sup{font-size:.7em;}
+
+  footer{
+    padding:16px 30px;border-top:1px solid rgba(184,149,90,.25);
+    font-family:ui-monospace, Menlo, 'Courier New', monospace;
+    font-size:10px;letter-spacing:.3em;color:var(--dim);text-transform:uppercase;
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div><h1>Double Pendulum Laboratory<span class="sub">Chaos Instrument No. 7</span></h1></div>
+  <div class="plate">RK4 · Δt 1/240 s · Lagrangian</div>
+</header>
+
+<div class="layout">
+  <div class="stage" id="stage">
+    <canvas id="stageCanvas"></canvas>
+    <div class="hud" id="hud"></div>
+    <div class="stage-btns">
+      <button id="btnPause" class="primary">Pause</button>
+      <button id="btnReset">Reset</button>
+      <button id="btnTwin" class="copper">Add pendulum</button>
+    </div>
+  </div>
+
+  <aside class="sidebar side">
+    <section>
+      <h2>Parameters</h2>
+      <div class="param">
+        <div class="row"><label for="p_m1">mass m₁</label><output id="o_m1">1.0 kg</output></div>
+        <input type="range" id="p_m1" min="0.2" max="4" step="0.05" value="1">
+      </div>
+      <div class="param">
+        <div class="row"><label for="p_m2">mass m₂</label><output id="o_m2">1.0 kg</output></div>
+        <input type="range" id="p_m2" min="0.2" max="4" step="0.05" value="1">
+      </div>
+      <div class="param">
+        <div class="row"><label for="p_l1">length ℓ₁</label><output id="o_l1">0.9 m</output></div>
+        <input type="range" id="p_l1" min="0.3" max="1.6" step="0.01" value="0.9">
+      </div>
+      <div class="param">
+        <div class="row"><label for="p_l2">length ℓ₂</label><output id="o_l2">0.9 m</output></div>
+        <input type="range" id="p_l2" min="0.3" max="1.6" step="0.01" value="0.9">
+      </div>
+      <div class="param">
+        <div class="row"><label for="p_g">gravity g</label><output id="o_g">9.8 m/s²</output></div>
+        <input type="range" id="p_g" min="0.5" max="25" step="0.1" value="9.8">
+      </div>
+      <div class="param">
+        <div class="row"><label for="p_damp">damping γ</label><output id="o_damp">0.00</output></div>
+        <input type="range" id="p_damp" min="0" max="0.5" step="0.005" value="0">
+      </div>
+      <div class="param">
+        <div class="row"><label for="p_trail">trail length</label><output id="o_trail">800 pts</output></div>
+        <input type="range" id="p_trail" min="50" max="2000" step="10" value="800">
+      </div>
+    </section>
+
+    <section>
+      <h2>Readout</h2>
+      <div class="readout">
+        <div class="cell"><div class="k">θ₁</div><div class="v" id="r_th1">–</div></div>
+        <div class="cell"><div class="k">θ₂</div><div class="v" id="r_th2">–</div></div>
+        <div class="cell"><div class="k">ω₁</div><div class="v" id="r_w1">–</div></div>
+        <div class="cell"><div class="k">ω₂</div><div class="v" id="r_w2">–</div></div>
+        <div class="cell"><div class="k">Steps</div><div class="v" id="r_steps">0</div></div>
+        <div class="cell"><div class="k">Divergence</div><div class="v cu" id="r_div">–</div></div>
+      </div>
+    </section>
+
+    <section class="notebook">
+      <div class="eq">(<span class="b">m₁</span>+<span class="b">m₂</span>)ℓ₁<span class="dot2 b">θ̈₁</span> + <span class="b">m₂</span>ℓ₂<span class="dot2 b">θ̈₂</span>cos Δ + <span class="b">m₂</span>ℓ₂<span class="dot1 b">θ̇₂</span>² sin Δ + (<span class="b">m₁</span>+<span class="b">m₂</span>)<span class="b">g</span> sin θ₁ = 0</div>
+      <div class="eq"><span class="b">m₂</span>ℓ₂<span class="dot2 b">θ̈₂</span> + <span class="b">m₂</span>ℓ₁<span class="dot2 b">θ̈₁</span>cos Δ − <span class="b">m₂</span>ℓ₁<span class="dot1 b">θ̇₁</span>² sin Δ + <span class="b">m₂</span><span class="b">g</span> sin θ₂ = 0</div>
+      <div class="eq" style="margin-top:6px"><span class="b">θ̈₁</span> = <span class="frac"><span>−<span class="b">g</span>(2<span class="b">m₁</span>+<span class="b">m₂</span>) sin θ₁ − <span class="b">m₂</span><span class="b">g</span> sin(θ₁−2θ₂) − 2 sin Δ · <span class="b">m₂</span>(<span class="dot1 b">θ̇₂</span>² ℓ₂ + <span class="dot1 b">θ̇₁</span>² ℓ₁ cos Δ)</span><span>ℓ₁ (2<span class="b">m₁</span> + <span class="b">m₂</span> − <span class="b">m₂</span> cos 2Δ)</span></span></div>
+      <div class="eq"><span class="b">θ̈₂</span> = <span class="frac"><span>2 sin Δ (<span class="dot1 b">θ̇₁</span>² ℓ₁ (<span class="b">m₁</span>+<span class="b">m₂</span>) + <span class="b">g</span>(<span class="b">m₁</span>+<span class="b">m₂</span>) cos θ₁ + <span class="b">m₂</span><span class="dot1 b">θ̇₂</span>² ℓ₂ cos Δ)</span><span>ℓ₂ (2<span class="b">m₁</span> + <span class="b">m₂</span> − <span class="b">m₂</span> cos 2Δ)</span></span></div>
+      <div class="eq"><span class="b">x</span><sub>n+1</sub> = <span class="b">x</span><sub>n</sub> + <span class="frac"><span>1</span><span>6</span></span>(<span class="b">k₁</span> + 2<span class="b">k₂</span> + 2<span class="b">k₃</span> + <span class="b">k₄</span>)</div>
+      <p class="nb-note">Two systems released 0.001 rad apart share the same laws yet part ways — their separation grows exponentially until the motion of one says nothing about the other. This is the fingerprint of chaos: deterministic, reproducible, unpredictable.</p>
+    </section>
+  </aside>
+</div>
+
+<footer>
+  <span>Chaos Instrument No. 7</span>
+  <span>Space — pause · R — reset · drag a bob to throw</span>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ================= state ================= */
+  var P = { m1:1, m2:1, l1:0.9, l2:0.9, g:9.8, damp:0, trail: reduced ? 200 : 800 };
+  var st = { t1: Math.PI*0.9, t2: Math.PI*0.9, w1:0, w2:0 };
+  var twin = null; // {t1,t2,w1,w2} with t1 offset 0.001
+  var paused = false, simT = 0, steps = 0;
+  var trails = [], trails2 = [];
+  var hue = 0, hue2 = 180;
+  var DT = 1/240;
+
+  /* ================= physics ================= */
+  function derivs(s){
+    var d = s.t1 - s.t2;
+    var den = 2*P.m1 + P.m2 - P.m2*Math.cos(2*d);
+    var a1 = (-P.g*(2*P.m1+P.m2)*Math.sin(s.t1)
+      - P.m2*P.g*Math.sin(s.t1-2*s.t2)
+      - 2*Math.sin(d)*P.m2*(s.w2*s.w2*P.l2 + s.w1*s.w1*P.l1*Math.cos(d)))
+      / (P.l1 * den);
+    var a2 = (2*Math.sin(d)*(s.w1*s.w1*P.l1*(P.m1+P.m2)
+      + P.g*(P.m1+P.m2)*Math.cos(s.t1)
+      + P.m2*s.w2*s.w2*P.l2*Math.cos(d)))
+      / (P.l2 * den);
+    a1 -= P.damp * s.w1;
+    a2 -= P.damp * s.w2;
+    return [s.w1, s.w2, a1, a2];
+  }
+  function rk4(s, h){
+    var k1 = derivs(s);
+    var s2 = {t1:s.t1+h/2*k1[0], t2:s.t2+h/2*k1[1], w1:s.w1+h/2*k1[2], w2:s.w2+h/2*k1[3]};
+    var k2 = derivs(s2);
+    var s3 = {t1:s.t1+h/2*k2[0], t2:s.t2+h/2*k2[1], w1:s.w1+h/2*k2[2], w2:s.w2+h/2*k2[3]};
+    var k3 = derivs(s3);
+    var s4 = {t1:s.t1+h*k3[0], t2:s.t2+h*k3[1], w1:s.w1+h*k3[2], w2:s.w2+h*k3[3]};
+    var k4 = derivs(s4);
+    s.t1 += h/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]);
+    s.t2 += h/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1]);
+    s.w1 += h/6*(k1[2]+2*k2[2]+2*k3[2]+k4[2]);
+    s.w2 += h/6*(k1[3]+2*k2[3]+2*k3[3]+k4[3]);
+  }
+  function energy(s){
+    var y1 = -P.l1*Math.cos(s.t1), y2 = y1 - P.l2*Math.cos(s.t2);
+    var v1 = P.l1*P.l1*s.w1*s.w1;
+    var vx2 = P.l1*s.w1*Math.cos(s.t1) + P.l2*s.w2*Math.cos(s.t2);
+    var vy2 = P.l1*s.w1*Math.sin(s.t1) + P.l2*s.w2*Math.sin(s.t2);
+    var v2 = vx2*vx2 + vy2*vy2;
+    var T = 0.5*P.m1*v1 + 0.5*P.m2*v2;
+    var V = P.m1*P.g*y1 + P.m2*P.g*y2;
+    return T + V;
+  }
+
+  /* ================= canvas ================= */
+  var stage = document.getElementById("stage");
+  var cv = document.getElementById("stageCanvas");
+  var c2 = cv.getContext("2d");
+  var dpr = 1, W = 0, H = 0;
+  function fit(){
+    dpr = Math.min(3, window.devicePixelRatio || 1);
+    var r = stage.getBoundingClientRect();
+    W = r.width; H = r.height;
+    cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
+  }
+  window.addEventListener("resize", fit);
+  fit();
+
+  function scales(){
+    var maxL = P.l1 + P.l2;
+    var s = Math.min(W, H) * 0.42 / maxL;
+    return { s:s, px:W/2, py:H*0.32 };
+  }
+
+  function pushTrail(arr, x, y, h){
+    arr.push({x:x, y:y, h:h});
+    while (arr.length > P.trail) arr.shift();
+  }
+
+  function drawTrails(arr, baseHue){
+    if (arr.length < 2) return;
+    for (var i=1;i<arr.length;i++){
+      var f = i/arr.length;
+      c2.strokeStyle = "hsla(" + (baseHue + (arr[i].h - arr[0].h)*40) % 360 + ",70%,55%," + (f*f*0.8) + ")";
+      c2.lineWidth = 0.6 + f*f*3.2;
+      c2.beginPath();
+      c2.moveTo(arr[i-1].x, arr[i-1].y);
+      c2.lineTo(arr[i].x, arr[i].y);
+      c2.stroke();
+    }
+  }
+
+  function drawBob(x, y, r, colA, colB, colC){
+    var g = c2.createRadialGradient(x - r*0.4, y - r*0.4, r*0.1, x, y, r);
+    g.addColorStop(0, colA);
+    g.addColorStop(0.55, colB);
+    g.addColorStop(1, colC);
+    c2.fillStyle = g;
+    c2.beginPath(); c2.arc(x, y, r, 0, 7); c2.fill();
+  }
+
+  function render(){
+    c2.setTransform(dpr,0,0,dpr,0,0);
+    c2.clearRect(0,0,W,H);
+    var sc = scales();
+    var px = sc.px, py = sc.py;
+
+    // hatched ceiling
+    c2.strokeStyle = "rgba(184,149,90,.55)";
+    c2.lineWidth = 1;
+    c2.beginPath(); c2.moveTo(px-70, py-14); c2.lineTo(px+70, py-14); c2.stroke();
+    c2.strokeStyle = "rgba(184,149,90,.3)";
+    for (var hx=-64; hx<=64; hx+=8){
+      c2.beginPath(); c2.moveTo(px+hx, py-14); c2.lineTo(px+hx-6, py-22); c2.stroke();
+    }
+    // pivot
+    c2.fillStyle = "#b8955a";
+    c2.beginPath(); c2.arc(px, py, 4, 0, 7); c2.fill();
+
+    // reference circles
+    c2.setLineDash([3,5]);
+    c2.strokeStyle = "rgba(184,149,90,.18)";
+    c2.beginPath(); c2.arc(px, py, P.l1*sc.s, 0, 7); c2.stroke();
+    c2.beginPath(); c2.arc(px, py, (P.l1+P.l2)*sc.s, 0, 7); c2.stroke();
+    c2.setLineDash([]);
+
+    var x1 = px + Math.sin(st.t1)*P.l1*sc.s, y1 = py + Math.cos(st.t1)*P.l1*sc.s;
+    var x2 = x1 + Math.sin(st.t2)*P.l2*sc.s, y2 = y1 + Math.cos(st.t2)*P.l2*sc.s;
+
+    drawTrails(trails, 0);
+    if (twin){
+      var tx1 = px + Math.sin(twin.t1)*P.l1*sc.s, ty1 = py + Math.cos(twin.t1)*P.l1*sc.s;
+      var tx2 = tx1 + Math.sin(twin.t2)*P.l2*sc.s, ty2 = ty1 + Math.cos(twin.t2)*P.l2*sc.s;
+      drawTrails(trails2, 180);
+      // twin rods
+      c2.strokeStyle = "#b86f43"; c2.lineWidth = 2.4;
+      c2.beginPath(); c2.moveTo(px,py); c2.lineTo(tx1,ty1); c2.lineTo(tx2,ty2); c2.stroke();
+      drawBob(tx1,ty1, Math.max(5, Math.sqrt(P.m1)*7), "#d9925f", "#b86f43", "#5a2e18");
+      drawBob(tx2,ty2, Math.max(5, Math.sqrt(P.m2)*7), "#d9925f", "#b86f43", "#5a2e18");
+    }
+
+    // main rods
+    c2.strokeStyle = "#b8955a"; c2.lineWidth = 2.6; c2.lineCap = "round";
+    c2.beginPath(); c2.moveTo(px,py); c2.lineTo(x1,y1); c2.lineTo(x2,y2); c2.stroke();
+
+    var r1 = Math.max(6, Math.sqrt(P.m1)*8), r2 = Math.max(6, Math.sqrt(P.m2)*8);
+    drawBob(x1,y1,r1, "#dcc08a", "#b8955a", "#54401f");
+    drawBob(x2,y2,r2, "#dcc08a", "#b8955a", "#54401f");
+
+    // store trails (positions already in canvas space)
+    pushTrail(trails, x2, y2, simT);
+    if (twin){
+      pushTrail(trails2, px + Math.sin(twin.t1)*P.l1*sc.s + Math.sin(twin.t2)*P.l2*sc.s,
+                        py + Math.cos(twin.t1)*P.l1*sc.s + Math.cos(twin.t2)*P.l2*sc.s, simT);
+    }
+    return {x2:x2, y2:y2, twinX2: twin ? px + Math.sin(twin.t1)*P.l1*sc.s + Math.sin(twin.t2)*P.l2*sc.s : null,
+            twinY2: twin ? py + Math.cos(twin.t1)*P.l1*sc.s + Math.cos(twin.t2)*P.l2*sc.s : null,
+            sc:sc, px:px, py:py};
+  }
+
+  /* ================= HUD + readout ================= */
+  var hud = document.getElementById("hud");
+  var lastHud = 0;
+  function updateHud(e2){
+    if (performance.now() - lastHud < 100) return;
+    lastHud = performance.now();
+    var div = null;
+    if (twin){
+      var dx = e2.x2 - e2.twinX2, dy = e2.y2 - e2.twinY2;
+      div = Math.sqrt(dx*dx + dy*dy) / e2.sc.s; // back to metres
+    }
+    hud.innerHTML =
+      "t = " + simT.toFixed(2) + " s<br>" +
+      "E = " + energy(st).toFixed(2) + " J" +
+      (twin ? '<br><span class="cu">Δbob = ' + fmtDiv(div) + '</span>' : '');
+    document.getElementById("r_th1").textContent = (st.t1 % (2*Math.PI)).toFixed(2);
+    document.getElementById("r_th2").textContent = (st.t2 % (2*Math.PI)).toFixed(2);
+    document.getElementById("r_w1").textContent = st.w1.toFixed(2);
+    document.getElementById("r_w2").textContent = st.w2.toFixed(2);
+    document.getElementById("r_steps").textContent = steps;
+    document.getElementById("r_div").textContent = twin ? fmtDiv(div) : "–";
+  }
+  function fmtDiv(d){
+    if (d == null) return "–";
+    if (d < 0.001) return d.toExponential(2) + " m";
+    return d.toFixed(3) + " m";
+  }
+
+  /* ================= main loop ================= */
+  var acc = 0, lastFrame = performance.now();
+  var ends = null;
+  function loop(now){
+    var dt = Math.min(0.05, (now - lastFrame)/1000);
+    lastFrame = now;
+    if (!paused){
+      acc += dt;
+      while (acc >= DT){
+        rk4(st, DT);
+        if (twin) rk4(twin, DT);
+        simT += DT; steps++; acc -= DT;
+      }
+      ends = render();
+    } else {
+      ends = render();
+    }
+    updateHud(ends);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  /* ================= controls ================= */
+  document.getElementById("btnPause").addEventListener("click", togglePause);
+  function togglePause(){
+    paused = !paused;
+    document.getElementById("btnPause").textContent = paused ? "Resume" : "Pause";
+  }
+  function reset(){
+    st.t1 = Math.PI*0.9; st.t2 = Math.PI*0.9; st.w1 = 0; st.w2 = 0;
+    if (twin){ twin.t1 = st.t1 + 0.001; twin.t2 = st.t2; twin.w1 = 0; twin.w2 = 0; }
+    simT = 0; steps = 0; trails = []; trails2 = [];
+    paused = false;
+    document.getElementById("btnPause").textContent = "Pause";
+  }
+  document.getElementById("btnReset").addEventListener("click", reset);
+  document.getElementById("btnTwin").addEventListener("click", function(){
+    if (!twin){
+      twin = {t1: st.t1 + 0.001, t2: st.t2, w1: st.w1, w2: st.w2};
+      this.textContent = "Remove twin";
+    } else {
+      twin = null; trails2 = [];
+      this.textContent = "Add pendulum";
+    }
+  });
+
+  window.addEventListener("keydown", function(e){
+    if (e.target.tagName === "INPUT") return;
+    if (e.code === "Space"){ e.preventDefault(); togglePause(); }
+    if (e.key === "r" || e.key === "R") reset();
+  });
+
+  function wire(id, out, key, fmt){
+    var el = document.getElementById(id), o = document.getElementById(out);
+    el.addEventListener("input", function(){
+      P[key] = parseFloat(el.value);
+      o.textContent = fmt(P[key]);
+    });
+  }
+  wire("p_m1","o_m1","m1", function(v){return v.toFixed(2)+" kg";});
+  wire("p_m2","o_m2","m2", function(v){return v.toFixed(2)+" kg";});
+  wire("p_l1","o_l1","l1", function(v){return v.toFixed(2)+" m";});
+  wire("p_l2","o_l2","l2", function(v){return v.toFixed(2)+" m";});
+  wire("p_g","o_g","g", function(v){return v.toFixed(1)+" m/s²";});
+  wire("p_damp","o_damp","damp", function(v){return v.toFixed(2);});
+  wire("p_trail","o_trail","trail", function(v){return Math.round(v)+" pts";});
+
+  /* ================= dragging ================= */
+  var dragging = false, dragBob = 2;
+  function evPos(e){
+    var r = cv.getBoundingClientRect();
+    return {x: e.clientX - r.left, y: e.clientY - r.top};
+  }
+  function bobPts(){
+    var sc = scales();
+    var x1 = sc.px + Math.sin(st.t1)*P.l1*sc.s, y1 = sc.py + Math.cos(st.t1)*P.l1*sc.s;
+    var x2 = x1 + Math.sin(st.t2)*P.l2*sc.s, y2 = y1 + Math.cos(st.t2)*P.l2*sc.s;
+    return {sc:sc, px:sc.px, py:sc.py, x1:x1, y1:y1, x2:x2, y2:y2};
+  }
+  cv.addEventListener("pointerdown", function(e){
+    var p = evPos(e), b = bobPts();
+    var d1 = Math.hypot(p.x-b.x1, p.y-b.y1);
+    var d2 = Math.hypot(p.x-b.x2, p.y-b.y2);
+    dragBob = (d1 <= 30 && d1 <= d2) ? 1 : 2;
+    if (d1 > 30 && d2 > 30) dragBob = 2;
+    dragging = true;
+    paused = true;
+    document.getElementById("btnPause").textContent = "Resume";
+    st.w1 = 0; st.w2 = 0;
+    trails = []; trails2 = [];
+    cv.setPointerCapture(e.pointerId);
+    dragTo(p, b);
+  });
+  function dragTo(p, b){
+    if (dragBob === 1){
+      st.t1 = Math.atan2(p.x - b.px, p.y - b.py);
+      if (twin) twin.t1 = st.t1 + 0.001;
+    } else {
+      var x1 = b.px + Math.sin(st.t1)*P.l1*b.sc.s, y1 = b.py + Math.cos(st.t1)*P.l1*b.sc.s;
+      st.t2 = Math.atan2(p.x - x1, p.y - y1);
+      if (twin) twin.t2 = st.t2;
+    }
+  }
+  cv.addEventListener("pointermove", function(e){
+    if (!dragging) return;
+    dragTo(evPos(e), bobPts());
+  });
+  window.addEventListener("pointerup", function(){
+    if (!dragging) return;
+    dragging = false;
+    simT = 0;
+    paused = false;
+    document.getElementById("btnPause").textContent = "Pause";
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mandelbrot Explorer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: #0b0d13; color: #e8e9ee;
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+    user-select: none; -webkit-user-select: none;
+  }
+  canvas#view { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+  .panel {
+    background: rgba(14,16,24,0.78);
+    border: 1px solid rgba(255,255,255,0.09);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    border-radius: 12px;
+  }
+  .progress {
+    position: fixed; top: 0; left: 0; height: 2px; width: 0%;
+    background: #f0b35a; z-index: 20;
+    box-shadow: 0 0 8px rgba(240,179,90,0.8);
+    transition: width 120ms linear, opacity 400ms ease;
+  }
+  .progress.done { opacity: 0; }
+  /* brand */
+  .brand {
+    position: fixed; top: 18px; left: 18px; z-index: 10;
+    display: flex; gap: 12px; align-items: center;
+    padding: 12px 18px 12px 14px;
+  }
+  .brand svg { display: block; }
+  .brand h1 {
+    font-family: Georgia, "Iowan Old Style", Palatino, serif;
+    font-size: 19px; font-weight: 400; letter-spacing: 0.02em;
+  }
+  .brand .sub {
+    font: 600 9px/1.6 ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0.3em; text-transform: uppercase; color: rgba(232,233,238,0.5);
+  }
+  /* HUD */
+  .hud {
+    position: fixed; top: 18px; right: 18px; z-index: 10;
+    padding: 12px 16px;
+    font: 400 11.5px/1.75 ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    color: rgba(232,233,238,0.85);
+    text-align: right;
+    min-width: 280px;
+  }
+  .hud b { color: #f0b35a; font-weight: 400; }
+  .hint {
+    position: fixed; top: 118px; right: 18px; z-index: 10;
+    padding: 8px 14px;
+    font: 400 11px/1.6 ui-sans-serif, system-ui, sans-serif;
+    color: rgba(232,233,238,0.6);
+    transition: opacity 900ms ease;
+  }
+  .hint.gone { opacity: 0; pointer-events: none; }
+  /* dock */
+  .dock {
+    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    z-index: 10;
+    display: flex; align-items: flex-end; gap: 10px;
+    padding: 12px 14px;
+    max-width: calc(100vw - 24px);
+    overflow-x: auto;
+  }
+  .dock::-webkit-scrollbar { height: 6px; }
+  .dock::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  .marks { display: flex; gap: 10px; }
+  .mark {
+    position: relative; flex: 0 0 auto;
+    width: 112px; height: 72px;
+    border-radius: 8px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: #000; cursor: pointer;
+    padding: 0;
+    transition: transform 260ms cubic-bezier(.2,.9,.3,1.3), border-color 200ms ease;
+  }
+  .mark:hover { transform: translateY(-6px); }
+  .mark.active { border-color: #f0b35a; box-shadow: 0 0 0 1px #f0b35a, 0 6px 18px rgba(240,179,90,0.25); }
+  .mark canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .mark span {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 14px 7px 5px;
+    font: 600 8.5px/1.2 ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0.08em; text-transform: uppercase; color: #f4f2ec;
+    text-align: left;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.75) 100%);
+  }
+  .tools { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+  .seg { display: flex; border: 1px solid rgba(255,255,255,0.12); border-radius: 7px; overflow: hidden; }
+  .seg button {
+    -webkit-appearance: none; appearance: none; border: none; cursor: pointer;
+    padding: 6px 9px; background: transparent; color: rgba(232,233,238,0.75);
+    font: 600 10px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.06em;
+    display: flex; align-items: center; gap: 6px;
+    transition: background 150ms ease, color 150ms ease;
+  }
+  .seg button:hover { background: rgba(255,255,255,0.07); }
+  .seg button.on { color: #f0b35a; background: rgba(240,179,90,0.12); }
+  .seg .swatch { width: 34px; height: 10px; border-radius: 2px; display: block; }
+  .row { display: flex; gap: 8px; }
+  .tbtn {
+    -webkit-appearance: none; appearance: none; cursor: pointer;
+    background: rgba(255,255,255,0.05); color: #e8e9ee;
+    border: 1px solid rgba(255,255,255,0.14); border-radius: 7px;
+    font: 600 10.5px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.06em;
+    padding: 7px 11px;
+    transition: background 150ms ease, border-color 150ms ease;
+  }
+  .tbtn:hover { background: rgba(240,179,90,0.14); border-color: rgba(240,179,90,0.5); }
+  .steppers { display: flex; align-items: center; gap: 6px; }
+  .steppers .val {
+    font: 400 11px/1 ui-monospace, Consolas, monospace; color: #f0b35a;
+    min-width: 42px; text-align: center;
+  }
+  @media (max-width: 760px) {
+    .hud {
+      top: auto; bottom: 122px; right: 12px; left: 12px;
+      text-align: left; min-width: 0; font-size: 10.5px; line-height: 1.6;
+    }
+    .hint { display: none; }
+    .brand h1 { font-size: 15px; }
+    .mark { width: 92px; height: 60px; }
+    .tools { flex-direction: row; align-items: center; }
+  }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div class="progress" id="progress"></div>
+
+<div class="panel brand">
+  <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+    <circle cx="13" cy="13" r="11" fill="none" stroke="#f0b35a" stroke-width="1.6"/>
+    <circle cx="18.5" cy="13" r="4.6" fill="none" stroke="#f0b35a" stroke-width="1.3"/>
+  </svg>
+  <div>
+    <h1>Mandelbrot Explorer</h1>
+    <div class="sub">progressive fractal renderer</div>
+  </div>
+</div>
+
+<div class="panel hud" id="hud">
+  <div>Re <b id="hRe">-0.750000000000</b></div>
+  <div>Im <b id="hIm">0.000000000000</b></div>
+  <div>zoom <b id="hZoom">1.0×</b></div>
+  <div>iter <b id="hIter">210</b> · <span id="hMs" style="color:rgba(232,233,238,0.6)">– ms</span> · <span id="hWk" style="color:rgba(232,233,238,0.6)">– threads</span></div>
+</div>
+
+<div class="panel hint" id="hint">
+  click zoom in · shift / right-click zoom out · drag pan · scroll zoom · keys: R, ±, 1–4
+</div>
+
+<div class="panel dock" id="dock">
+  <div class="marks" id="marks"></div>
+  <div class="tools">
+    <div class="seg" id="palSeg"></div>
+    <div class="row">
+      <div class="steppers">
+        <button class="tbtn" id="itMinus" type="button">−</button>
+        <span class="val" id="itMult">×1</span>
+        <button class="tbtn" id="itPlus" type="button">+</button>
+      </div>
+      <button class="tbtn" id="btnOut" type="button">Zoom out</button>
+      <button class="tbtn" id="btnReset" type="button">Reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var view = document.getElementById("view");
+  var ctx = view.getContext("2d");
+  var DPR = Math.min(2, window.devicePixelRatio || 1);
+
+  var PAL = [
+    { name: "Ultra", pts: ["#000764", "#206bcb", "#edffff", "#ffaa00", "#000200"] },
+    { name: "Ember", pts: ["#0a0402", "#5a0c06", "#c83c0a", "#ffaa28", "#fff0c8", "#3c0a14"] },
+    { name: "Ice",   pts: ["#020614", "#0a286e", "#3c8cdc", "#c8f0ff", "#ffffff", "#1e1446"] },
+    { name: "Mono",  pts: ["#08080a", "#f0eee8", "#08080a"] }
+  ];
+  var palIdx = 0;
+  var mult = 1;
+  var state = { cx: -0.75, cy: 0, span: 3.4 };
+  var OVERVIEW = { cx: -0.75, cy: 0, span: 3.4 };
+  var MARKS = [
+    { name: "Overview",       cx: -0.75,       cy: 0,        span: 3.4 },
+    { name: "Seahorse Valley",cx: -0.7435669,  cy: 0.1314023,span: 0.0022 },
+    { name: "Elephant Valley",cx: 0.2749,      cy: 0.00655,  span: 0.012 },
+    { name: "Triple Spiral",  cx: -0.088,      cy: 0.654,    span: 0.012 },
+    { name: "Spiral",         cx: -0.16070135, cy: 1.0375665,span: 0.0012 },
+    { name: "Mini-brot",      cx: -1.7548776,  cy: 0,        span: 0.028 }
+  ];
+
+  var W = 0, H = 0;
+  var snapshot = document.createElement("canvas");
+  var sctx = snapshot.getContext("2d");
+  var temp = document.createElement("canvas");
+  var tctx = temp.getContext("2d");
+
+  // ————— shared kernel string (worker + fallback) —————
+  var KERNEL =
+    "function kernel(x0, y0, maxIter) {" +
+    "  var q, x, y;" +
+    "  x = x0 - 0.25; y = y0 * y0; q = x * x + y;" +
+    "  if (q * (q + x) <= 0.25 * y0 * y0) return -1;" +
+    "  var dx = x0 + 1;" +
+    "  if (dx * dx + y0 * y0 <= 0.0625) return -1;" +
+    "  var zx = 0, zy = 0, i = 0;" +
+    "  var b = 65536;" +
+    "  while (i < maxIter) {" +
+    "    var zy2 = zy * zy;" +
+    "    var nx = zx * zx - zy2 + x0;" +
+    "    zy = 2 * zx * zy + y0;" +
+    "    zx = nx;" +
+    "    if (zx * zx + zy * zy > b) break;" +
+    "    i++;" +
+    "  }" +
+    "  if (i >= maxIter) return -1;" +
+    "  var mod = Math.sqrt(zx * zx + zy * zy);" +
+    "  var nu = i + 1 - Math.log(Math.log(mod) / Math.log(2)) / Math.log(2);" +
+    "  var idx = Math.floor(Math.sqrt(nu) * 96 + 240) % 2048;" +
+    "  if (idx < 0) idx += 2048;" +
+    "  return idx;" +
+    "}" +
+    "function hex2rgb(h) { return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]; }" +
+    "function buildPalette(pts) {" +
+    "  var n = pts.length - 1;" +
+    "  var pal = new Uint8Array(2048 * 3);" +
+    "  for (var i = 0; i < 2048; i++) {" +
+    "    var t = i / 2048 * n;" +
+    "    var seg = Math.min(n - 1, Math.floor(t));" +
+    "    var f = t - seg; f = f * f * (3 - 2 * f);" +
+    "    var a = pts[seg], b = pts[seg + 1];" +
+    "    pal[i*3]   = a[0] + (b[0]-a[0]) * f;" +
+    "    pal[i*3+1] = a[1] + (b[1]-a[1]) * f;" +
+    "    pal[i*3+2] = a[2] + (b[2]-a[2]) * f;" +
+    "  }" +
+    "  return pal;" +
+    "}" +
+    "var PALPTS = __PALPTS__;" +
+    "var PALS = PALPTS.map(buildPalette);" +
+    "function renderBand(o) {" +
+    "  var step = o.step, bw = Math.ceil(o.W / step), h = o.h;" +
+    "  var buf = new Uint8ClampedArray(bw * h * 4);" +
+    "  var pal = PALS[o.pal];" +
+    "  var sc = o.span / o.W;" +
+    "  for (var r = 0; r < h; r++) {" +
+    "    var y0 = o.cy + (o.yStart + r - o.H / 2) * sc;" +
+    "    var row = r * bw * 4;" +
+    "    for (var c = 0; c < bw; c++) {" +
+    "      var x0 = o.cx + (c * step - o.W / 2) * sc;" +
+    "      var idx = kernel(x0, y0, o.iters);" +
+    "      var p = row + c * 4;" +
+    "      if (idx < 0) { buf[p] = 0; buf[p+1] = 0; buf[p+2] = 0; }" +
+    "      else { buf[p] = pal[idx*3]; buf[p+1] = pal[idx*3+1]; buf[p+2] = pal[idx*3+2]; }" +
+    "      buf[p+3] = 255;" +
+    "    }" +
+    "  }" +
+    "  return buf;" +
+    "}";
+
+  var PALPTS_JSON = JSON.stringify(PAL.map(function (p) { return p.pts.map(hex2rgbArr); }));
+  function hex2rgbArr(h) {
+    return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  }
+
+  var WORKER_SRC =
+    "var __PAL__ = " + PALPTS_JSON + ";\n" +
+    KERNEL.replace("__PALPTS__", "__PAL__") + "\n" +
+    "self.onmessage = function(e) {" +
+    "  var o = e.data;" +
+    "  var buf = renderBand(o);" +
+    "  self.postMessage({ id: o.id, pass: o.step, yStart: o.yStart, h: o.h, bw: Math.ceil(o.W/o.step), buf: buf, tag: o.tag }, [buf.buffer]);" +
+    "};";
+
+  // ————— worker pool —————
+  var threads = Math.max(2, Math.min(8, navigator.hardwareConcurrency || 4));
+  var workers = [], workerSrcURL = null;
+  var fallbackKernel = null;
+  try {
+    var blob = new Blob([WORKER_SRC], { type: "application/javascript" });
+    workerSrcURL = URL.createObjectURL(blob);
+    for (var t = 0; t < threads; t++) workers.push(new Worker(workerSrcURL));
+  } catch (e) { workers = []; }
+  if (!workers.length) {
+    fallbackKernel = new Function(KERNEL.replace("__PALPTS__", JSON.stringify(PAL.map(function (p) { return p.pts.map(hex2rgbArr); }))) +
+      "; return { renderBand: renderBand };")();
+  }
+  document.getElementById("hWk").textContent = (workers.length ? workers.length : 1) + (workers.length ? " threads" : " (fallback)");
+
+  // ————— render scheduler —————
+  var renderId = 0;
+  var queue = [], lowQueue = [];
+  var busy = [];
+  var total = 0, done = 0;
+  var renderStart = 0;
+  var progress = document.getElementById("progress");
+
+  workers.forEach(function (wk, i) {
+    busy.push(false);
+    wk.onmessage = function (ev) {
+      busy[i] = false;
+      handleResult(ev.data);
+      pump();
+    };
+    wk.onerror = function () { busy[i] = false; pump(); };
+  });
+
+  function itersFor() {
+    var depth = Math.log2(3.4 / state.span);
+    var it = (120 + 90 * Math.pow(Math.max(depth, 0), 1.15)) * mult;
+    return Math.min(12000, Math.max(120, Math.round(it)));
+  }
+
+  function makeTasks(list, Wl, Hl, cx, cy, span, iters, tag, id) {
+    var out = [];
+    for (var k = 0; k < list.length; k++) {
+      var tk = list[k];
+      out.push({ id: id, step: tk.step, yStart: tk.yStart, h: tk.h, W: Wl, H: Hl,
+        cx: cx, cy: cy, span: span, iters: iters, pal: palIdx, tag: tag });
+    }
+    return out;
+  }
+
+  function bandPlan(Hl, step, finalPass) {
+    var n = finalPass ? threads * 4 : threads;
+    var bands = [];
+    var per = Math.ceil(Hl / n);
+    for (var i = 0; i < n && i * per < Hl; i++) {
+      var y = i * per;
+      var hh = Math.min(per, Hl - y);
+      if (hh > 0) bands.push({ step: step, yStart: y, h: hh });
+    }
+    return bands;
+  }
+
+  function render() {
+    renderId++;
+    queue = [];
+    lowQueueKeep();
+    var plan = [];
+    plan = plan.concat(bandPlan(H, 8, false), bandPlan(H, 4, false), bandPlan(H, 2, false), bandPlan(H, 1, true));
+    var iters = itersFor();
+    for (var i = 0; i < plan.length; i++) {
+      plan[i].id = renderId;
+      plan[i].tag = "main";
+      queue.push(plan[i]);
+    }
+    total = queue.length; done = 0;
+    renderStart = performance.now();
+    progress.classList.remove("done");
+    progress.style.width = "0%";
+    snap();
+    pump();
+    updateHUD();
+  }
+
+  function lowQueueKeep() { /* low queue (thumbnails) survives renders */ }
+
+  function snap() {
+    snapshot.width = view.width; snapshot.height = view.height;
+    sctx.drawImage(view, 0, 0);
+  }
+
+  function pump() {
+    var n = workers.length;
+    for (var i = 0; i < n; i++) {
+      if (busy[i]) continue;
+      var task = queue.shift() || lowQueue.shift();
+      if (!task) continue;
+      busy[i] = true;
+      workers[i].postMessage(task);
+    }
+    // fallback synchronous
+    if (!workers.length) {
+      while (queue.length) {
+        var tk = queue.shift();
+        var buf = fallbackKernel.renderBand(tk);
+        handleResult({ id: tk.id, yStart: tk.yStart, h: tk.h, bw: Math.ceil(tk.W / tk.step), buf: buf, tag: tk.tag });
+      }
+      while (lowQueue.length) {
+        var tk2 = lowQueue.shift();
+        var buf2 = fallbackKernel.renderBand(tk2);
+        handleResult({ id: tk2.id, yStart: tk2.yStart, h: tk2.h, bw: Math.ceil(tk2.W / tk2.step), buf: buf2, tag: tk2.tag });
+      }
+    }
+  }
+
+  function handleResult(d) {
+    if (d.tag === "main") {
+      if (d.id !== renderId) return;
+      done++;
+      progress.style.width = Math.round(done / total * 100) + "%";
+      if (done >= total) { progress.classList.add("done"); document.getElementById("hMs").textContent = Math.round(performance.now() - renderStart) + " ms"; }
+      temp.width = d.bw; temp.height = d.h;
+      tctx.putImageData(new ImageData(d.buf, d.bw, d.h), 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(temp, 0, d.yStart, d.bw * d.pass, d.h);
+    } else if (d.tag === "thumb") {
+      var c = document.getElementById(d.tag + "_" + d.id);
+      if (!c) return;
+      var tc = c.getContext("2d");
+      var tt = document.createElement("canvas");
+      tt.width = d.bw; tt.height = d.h;
+      tt.getContext("2d").putImageData(new ImageData(d.buf, d.bw, d.h), 0, 0);
+      tc.imageSmoothingEnabled = false;
+      tc.drawImage(tt, 0, 0, c.width, c.height);
+    }
+  }
+
+  // ————— HUD —————
+  function updateHUD() {
+    document.getElementById("hRe").textContent = state.cx.toFixed(12);
+    document.getElementById("hIm").textContent = state.cy.toFixed(12);
+    var z = 3.4 / state.span;
+    var zEl = document.getElementById("hZoom");
+    zEl.textContent = z > 1000 ? z.toExponential(2) + "×" : z.toFixed(1) + "×";
+    document.getElementById("hIter").textContent = itersFor();
+  }
+
+  // ————— gestures —————
+  var dragging = false, dragMoved = 0, dragStart = null, dragSnapReady = false;
+  var wheelTimer = 0;
+
+  view.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+  view.addEventListener("pointerdown", function (e) {
+    if (e.button === 2) { zoomAt(e.clientX, e.clientY, 1 / 2.5); return; }
+    dragging = true; dragMoved = 0;
+    dragStart = { x: e.clientX, y: e.clientY, cx: state.cx, cy: state.cy };
+    view.setPointerCapture(e.pointerId);
+  });
+
+  view.addEventListener("pointermove", function (e) {
+    if (!dragging) return;
+    var dx = (e.clientX - dragStart.x) * DPR, dy = (e.clientY - dragStart.y) * DPR;
+    dragMoved = Math.max(dragMoved, Math.abs(e.clientX - dragStart.x) + Math.abs(e.clientY - dragStart.y));
+    if (dragMoved < 4) return;
+    if (!dragSnapReady) { snap(); dragSnapReady = true; }
+    ctx.drawImage(snapshot, dx, dy);
+  });
+
+  view.addEventListener("pointerup", function (e) {
+    if (!dragging) return;
+    dragging = false;
+    var dx = (e.clientX - dragStart.x) * DPR, dy = (e.clientY - dragStart.y) * DPR;
+    if (dragMoved < 4) {
+      var f = e.shiftKey ? 1 / 2.5 : 2.5;
+      zoomAt(e.clientX, e.clientY, f);
+    } else {
+      state.cx = dragStart.cx - dx * state.span / W;
+      state.cy = dragStart.cy - dy * state.span / W;
+      render();
+    }
+    dragSnapReady = false;
+  });
+
+  view.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var f = Math.exp(-e.deltaY * 0.0018);
+    var px = e.clientX * DPR, py = e.clientY * DPR;
+    var wx = state.cx + (px - W / 2) * state.span / W;
+    var wy = state.cy + (py - H / 2) * state.span / W;
+    var ns = state.span / f;
+    state.cx = wx - (px - W / 2) * ns / W;
+    state.cy = wy - (py - H / 2) * ns / W;
+    state.span = ns;
+    // instant visual: scale previous frame about cursor
+    snap();
+    var s = f;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.scale(s, s);
+    ctx.translate(-px, -py);
+    ctx.drawImage(snapshot, 0, 0);
+    ctx.restore();
+    updateHUD();
+    window.clearTimeout(wheelTimer);
+    wheelTimer = window.setTimeout(render, 140);
+  }, { passive: false });
+
+  function zoomAt(px, py, f) {
+    px *= DPR; py *= DPR;
+    var wx = state.cx + (px - W / 2) * state.span / W;
+    var wy = state.cy + (py - H / 2) * state.span / W;
+    var ns = state.span / f;
+    var tcx = wx - (px - W / 2) * ns / W;
+    var tcy = wy - (py - H / 2) * ns / W;
+    hintUsed();
+    if (reduceMotion) {
+      state.cx = tcx; state.cy = tcy; state.span = ns;
+      render();
+      return;
+    }
+    // animated 300ms cubic ease-out from current bitmap
+    var start = performance.now();
+    var from = { cx: state.cx, cy: state.cy, span: state.span };
+    snap();
+    (function anim(now) {
+      var t = Math.min(1, (now - start) / 300);
+      var e = 1 - Math.pow(1 - t, 3);
+      state.cx = from.cx + (tcx - from.cx) * e;
+      state.cy = from.cy + (tcy - from.cy) * e;
+      state.span = from.span * Math.pow(ns / from.span, e);
+      var s = from.span / state.span;
+      var cxNow = state.cx + (px - W / 2) * state.span / W;
+      var cyNow = state.cy + (py - H / 2) * state.span / W;
+      var ox = (cxNow - (from.cx + (px - W / 2) * from.span / W));
+      var oy = (cyNow - (from.cy + (py - H / 2) * from.span / W));
+      // scale snapshot about the cursor
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, W, H);
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.scale(s, s);
+      ctx.translate(-px, -py);
+      ctx.drawImage(snapshot, 0, 0);
+      ctx.restore();
+      if (t < 1) requestAnimationFrame(anim);
+      else { state.cx = tcx; state.cy = tcy; state.span = ns; render(); }
+    })(start);
+    updateHUD();
+  }
+
+  function hintUsed() {
+    var h = document.getElementById("hint");
+    if (h && !h.classList.contains("gone")) {
+      h.classList.add("gone");
+      window.setTimeout(function () { if (h.parentNode) h.parentNode.removeChild(h); }, 1000);
+    }
+  }
+  ["pointerdown", "wheel"].forEach(function (ev) { view.addEventListener(ev, hintUsed, { passive: ev !== "wheel" }); });
+
+  // ————— bookmarks / dock —————
+  var marksEl = document.getElementById("marks");
+  MARKS.forEach(function (m, i) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "mark" + (i === 0 ? " active" : "");
+    b.innerHTML = '<span>' + m.name + '</span>';
+    var c = document.createElement("canvas");
+    c.width = 224; c.height = 144;
+    c.id = "thumb_" + i;
+    b.insertBefore(c, b.firstChild);
+    b.addEventListener("click", function () {
+      state = { cx: m.cx, cy: m.cy, span: m.span };
+      setActive(i);
+      render();
+    });
+    marksEl.appendChild(b);
+    lowQueue.push({ id: i, step: 2, yStart: 0, h: 144, W: 224, H: 144,
+      cx: m.cx, cy: m.cy, span: m.span, iters: 300, pal: palIdx, tag: "thumb" });
+  });
+  function setActive(i) {
+    var kids = marksEl.children;
+    for (var k = 0; k < kids.length; k++) kids[k].classList.toggle("active", k === i);
+  }
+
+  // palette segmented control
+  var palSeg = document.getElementById("palSeg");
+  PAL.forEach(function (p, i) {
+    var b = document.createElement("button");
+    b.type = "button";
+    if (i === 0) b.classList.add("on");
+    var sw = document.createElement("span");
+    sw.className = "swatch";
+    sw.style.background = "linear-gradient(90deg," + p.pts.join(",") + ")";
+    b.appendChild(sw);
+    b.appendChild(document.createTextNode(p.name));
+    b.addEventListener("click", function () { setPalette(i); });
+    palSeg.appendChild(b);
+  });
+  function setPalette(i) {
+    palIdx = i;
+    var kids = palSeg.children;
+    for (var k = 0; k < kids.length; k++) kids[k].classList.toggle("on", k === i);
+    render();
+  }
+
+  function setMult(m) {
+    mult = Math.max(0.5, Math.min(8, m));
+    document.getElementById("itMult").textContent = "×" + mult;
+    render();
+  }
+  document.getElementById("itPlus").addEventListener("click", function () { setMult(mult * 2); });
+  document.getElementById("itMinus").addEventListener("click", function () { setMult(mult / 2); });
+  document.getElementById("btnOut").addEventListener("click", function () { zoomAt(window.innerWidth / 2, window.innerHeight / 2, 1 / 2.5); });
+  document.getElementById("btnReset").addEventListener("click", reset);
+
+  function reset() {
+    state = { cx: OVERVIEW.cx, cy: OVERVIEW.cy, span: OVERVIEW.span };
+    setActive(0);
+    render();
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "r" || e.key === "R") reset();
+    else if (e.key === "+" || e.key === "=") setMult(mult * 2);
+    else if (e.key === "-") setMult(mult / 2);
+    else if (e.key === "Escape") zoomAt(window.innerWidth / 2, window.innerHeight / 2, 1 / 2.5);
+    else if (e.key >= "1" && e.key <= "4") setPalette(parseInt(e.key, 10) - 1);
+  });
+
+  // ————— fit & start —————
+  function fit() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = Math.round(window.innerWidth * DPR);
+    H = Math.round(window.innerHeight * DPR);
+    view.width = W; view.height = H;
+    render();
+  }
+  var resizeT = 0;
+  window.addEventListener("resize", function () {
+    window.clearTimeout(resizeT);
+    resizeT = window.setTimeout(fit, 180);
+  });
+
+  fit();
+})();
+</script>
+</body>
+</html>

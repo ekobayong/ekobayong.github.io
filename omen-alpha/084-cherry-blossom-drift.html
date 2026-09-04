@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sakura Drift — Cherry Blossom Scene</title>
+<style>
+:root{
+  --skyTop:#cfe3f5; --skyMid:#f3dfe8; --skyLow:#fbeee6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:"Iowan Old Style",Palatino,Georgia,serif;
+  background:linear-gradient(to bottom,var(--skyTop) 0%,var(--skyMid) 55%,var(--skyLow) 100%);
+  transition:none;
+}
+#sky{position:fixed;inset:0;width:100%;height:100%;display:block}
+.haze{
+  position:fixed;left:0;right:0;height:16%;top:60%;pointer-events:none;
+  background:linear-gradient(to bottom,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));
+}
+#sun{
+  position:fixed;width:130px;height:130px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,#fff7e8 0%,#fde8c0 45%,rgba(253,232,192,0) 72%);
+  opacity:.85;filter:blur(1px);
+}
+#scene{position:fixed;left:0;bottom:0;width:100vw;height:100vh;pointer-events:none}
+#scene svg{position:absolute;left:0;bottom:0;width:100vw;height:100vh;overflow:visible}
+#petals{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#ui{position:fixed;inset:0;pointer-events:none;z-index:5}
+.haiku{
+  position:absolute;top:7%;right:4%;
+  writing-mode:vertical-rl;
+  font-style:italic;font-size:clamp(15px,2.1vw,22px);
+  color:#2f2b52;letter-spacing:.34em;line-height:2.1;max-height:74vh;
+}
+.haiku span{opacity:0;display:inline-block;transform:translateY(-8px);
+  transition:opacity .7s ease,transform .7s ease}
+.haiku span.set{opacity:1;transform:none}
+.titleBox{position:absolute;left:4%;bottom:26%}
+.titleBox h1{font-weight:normal;font-size:clamp(22px,3.6vw,40px);color:#2f2b52;letter-spacing:.06em}
+.titleBox h1 em{color:#e2698c;letter-spacing:.1em}
+.titleBox p{
+  font-size:10.5px;letter-spacing:.3em;text-transform:uppercase;color:#5c5478;margin-top:6px;
+}
+.sakuraGlyph{
+  position:absolute;right:3%;bottom:18.5%;font-size:clamp(80px,16vw,200px);
+  color:rgba(47,43,82,.08);font-family:serif;user-select:none;
+}
+.hint{
+  position:absolute;left:50%;bottom:4%;transform:translateX(-50%);
+  font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:rgba(47,43,82,.55);
+  white-space:nowrap;transition:opacity 1.2s;
+}
+@media (prefers-reduced-motion: reduce){
+  .haiku span{transition:none}
+}
+</style>
+</head>
+<body>
+<canvas id="sky"></canvas>
+<div class="haze" aria-hidden="true"></div>
+<div id="sun" aria-hidden="true"></div>
+<div id="scene" aria-hidden="true">
+  <svg viewBox="0 0 1000 600" preserveAspectRatio="xMinYMax slice" id="land"></svg>
+</div>
+<canvas id="petals"></canvas>
+<div id="ui">
+  <div class="haiku" id="haiku" lang="en">petals let go first · the branch remembers nothing · the river keeps all</div>
+  <div class="titleBox">
+    <h1><em>Sakura</em> Drift</h1>
+    <p>A quiet Japanese spring afternoon</p>
+  </div>
+  <div class="sakuraGlyph" aria-hidden="true">桜</div>
+  <div class="hint" id="hint">Move to stir the breeze · click for a gust</div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- sky ---------- */
+var skyCv=document.getElementById("sky"),skx=skyCv.getContext("2d");
+var sunEl=document.getElementById("sun");
+var MORNING={top:[207,227,245],mid:[243,223,232],low:[251,238,230]};
+var GOLDEN={top:[233,201,168],mid:[246,217,180],low:[251,229,201]};
+function lerp(a,b,t){return a+(b-a)*t;}
+function mix(c1,c2,t){return [lerp(c1[0],c2[0],t)|0,lerp(c1[1],c2[1],t)|0,lerp(c1[2],c2[2],t)|0];}
+var golden=0,dayPhase=0;
+function paintSky(){
+  var c1=mix(MORNING.top,GOLDEN.top,golden),
+      c2=mix(MORNING.mid,GOLDEN.mid,golden),
+      c3=mix(MORNING.low,GOLDEN.low,golden);
+  var g=skx.createLinearGradient(0,0,0,innerHeight);
+  g.addColorStop(0,"rgb("+c1+")");g.addColorStop(.55,"rgb("+c2+")");g.addColorStop(1,"rgb("+c3+")");
+  skx.fillStyle=g;skx.fillRect(0,0,innerWidth,innerHeight);
+  /* sun along arc lower-left to upper-right */
+  var sx=innerWidth*(.12+.55*dayPhase),sy=innerHeight*(.85-.72*dayPhase);
+  var rg=skx.createRadialGradient(sx,sy,0,sx,sy,190);
+  rg.addColorStop(0,"rgba(255,250,235,"+(.5+.35*golden)+")");
+  rg.addColorStop(.4,"rgba(253,232,192,"+(.22+.25*golden)+")");
+  rg.addColorStop(1,"rgba(253,232,192,0)");
+  skx.fillStyle=rg;
+  skx.beginPath();skx.arc(sx,sy,190,0,6.2832);skx.fill();
+  sunEl.style.left=(sx-65)+"px";sunEl.style.top=(sy-65)+"px";
+  sunEl.style.opacity=(.7+.3*golden).toFixed(2);
+  return sx;
+}
+
+/* ---------- SVG landscape ---------- */
+var NS="http://www.w3.org/2000/svg";
+var svg=document.getElementById("land");
+var defs=document.createElementNS(NS,"defs");
+svg.appendChild(defs);
+function mk(name,attrs,parent){var e=document.createElementNS(NS,name);
+  for(var k in attrs)e.setAttribute(k,attrs[k]);(parent||svg).appendChild(e);return e;}
+/* mist blur filter */
+var filt=mk("filter",{id:"mist"},defs);
+mk("feGaussianBlur",{stdDeviation:"7"},filt);
+var filt2=mk("filter",{id:"mist2"},defs);
+mk("feGaussianBlur",{stdDeviation:"3.5"},filt2);
+/* blush gradients */
+[["b1","#fff3f6","#f7c8d4","#e2698c"],["b2","#fbe0e8","#f1b3c4","#c9527a"],["b3","#ffffff","#fbd9e2","#e98aa6"]]
+.forEach(function(d){
+  var g=mk("radialGradient",{id:d[0]},defs);
+  mk("stop",{offset:"0","stop-color":d[1]},g);
+  mk("stop",{offset:".6","stop-color":d[2]},g);
+  mk("stop",{offset:"1","stop-color":d[3]},g);
+});
+
+/* distant hills + pagoda */
+var hills=mk("g",{filter:"url(#mist)"});
+mk("path",{d:"M0 470 C 200 380 340 420 520 400 C 700 380 820 430 1000 400 L1000 600 L0 600 Z",fill:"#b9b3d1",opacity:".65"},hills);
+mk("path",{d:"M0 510 C 240 450 480 490 720 460 C 860 444 940 470 1000 458 L1000 600 L0 600 Z",fill:"#b9b3d1",opacity:".45"},hills);
+var pag=mk("g",{filter:"url(#mist2)"});
+var pgx=690;
+[[0,0],[26,64],[52,128],[78,192],[110,258]].forEach(function(t,i){
+  var w=132-i*24,hh=64,yy=460-t[1];
+  mk("rect",{x:pgx-w/2,y:yy-hh,width:w,height:hh,fill:"#8f88b3",opacity:".8"},pag);
+  mk("path",{d:"M"+(pgx-w/2-14)+" "+(yy-hh)+" Q"+pgx+" "+(yy-hh-16)+" "+(pgx+w/2+14)+" "+(yy-hh)+" L"+(pgx+w/2+6)+" "+(yy-hh+6)+" L"+(pgx-w/2-6)+" "+(yy-hh+6)+" Z",fill:"#8f88b3",opacity:".8"},pag);
+});
+
+/* trees: recursive branches, indigo, tapering */
+var backBlo=mk("g",{filter:"url(#mist2)"});
+var frontBlo=mk("g",{});
+function branch(g,x,y,ang,len,w,depth,tips){
+  if(depth<=0||len<8){tips.push([x,y]);return;}
+  var x2=x+Math.cos(ang)*len,y2=y+Math.sin(ang)*len;
+  var p=mk("path",{d:"M"+x.toFixed(1)+" "+y.toFixed(1)+" Q"+(x+Math.cos(ang)*len*.5+Math.sin(ang)*len*.08).toFixed(1)+" "+(y+Math.sin(ang)*len*.5).toFixed(1)+" "+x2.toFixed(1)+" "+y2.toFixed(1),
+    stroke:"#2f2b52","stroke-width":w.toFixed(1),"stroke-linecap":"round",fill:"none"},g);
+  var na=.62+Math.random()*.2;
+  branch(g,x2,y2,ang-na,len*.76,Math.max(4,w*.66),depth-1,tips);
+  branch(g,x2,y2,ang+na,len*.74,Math.max(4,w*.64),depth-1,tips);
+  if(depth===4&&Math.random()>.5)branch(g,x2,y2,ang+(Math.random()-.5),len*.5,w*.6,1,tips);
+}
+var treeG=mk("g",{});
+var tips1=[],tips2=[];
+branch(treeG,120,565,-Math.PI/2+0.12,105,28,5,tips1);   /* big tree bottom-left */
+branch(treeG,720,585,-Math.PI/2-0.25,70,14,4,tips2);    /* small tree right */
+svg.appendChild(treeG);
+/* blossom clusters */
+var gradNames=["b1","b2","b3"];
+tips1.slice(0,22).concat(tips2.slice(0,10)).forEach(function(t,i){
+  var n=6+Math.floor(Math.random()*5);
+  var layerG=(i%3===0)?frontBlo:backBlo;
+  for(var j=0;j<n;j++){
+    var bx=t[0]+(Math.random()-.5)*34,by=t[1]+(Math.random()-.5)*30;
+    mk("circle",{cx:bx.toFixed(1),cy:by.toFixed(1),
+      r:(2.6+Math.random()*3.6).toFixed(1),fill:"url(#"+gradNames[Math.floor(Math.random()*3)]+")"},layerG);
+  }
+  if(Math.random()>.5)
+    mk("ellipse",{cx:(t[0]+(Math.random()-.5)*20).toFixed(1),cy:(t[1]-4).toFixed(1),
+      rx:5.4,ry:3.1,transform:"rotate("+(-30+Math.random()*60).toFixed(0)+" "+t[0]+" "+t[1]+")",fill:"#fff"},frontBlo);
+});
+svg.appendChild(backBlo);
+svg.appendChild(frontBlo);
+
+/* ---------- petals + river canvas ---------- */
+var cv=document.getElementById("petals"),ctx=cv.getContext("2d");
+var W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=innerWidth;H=innerHeight;
+  [skyCv,cv].forEach(function(c){
+    c.width=W*DPR;c.height=H*DPR;
+    c.getContext("2d").setTransform(DPR,0,0,DPR,0,0);
+  });
+}
+var petals=[];
+function seedPetals(n){
+  petals=[];
+  for(var i=0;i<n;i++)petals.push(newPetal(true));
+}
+function newPetal(anywhere){
+  var z=.35+Math.random()*.65;
+  return {
+    x:Math.random()*W,
+    y:anywhere?Math.random()*H*.8:-20-Math.random()*80,
+    z:z,r:2.4+z*3.4,
+    rot:Math.random()*6.28,rotV:(Math.random()-.5)*1.4,
+    flip:Math.random()*6.28,flipV:.9+Math.random()*1.6,
+    ph:Math.random()*6.28,sway:.5+Math.random()*1.2,
+    vy:(14+z*30),state:"fall",bob:0
+  };
+}
+seedPetals(reduce?120:150);
+
+var pointer={x:-999,y:-999,px:-999,py:-999,vx:0,vy:0};
+var gust={x:0,power:0};
+addEventListener("pointermove",function(e){
+  pointer.vx=e.clientX-pointer.x;pointer.vy=e.clientY-pointer.y;
+  pointer.x=e.clientX;pointer.y=e.clientY;
+});
+addEventListener("click",function(e){
+  gust.x=e.clientX;gust.power=1;
+  document.getElementById("hint").style.opacity="0";
+  for(var i=0;i<36;i++){
+    var p=newPetal(false);
+    p.x=Math.max(0,Math.min(W,e.clientX+(Math.random()-.5)*160));
+    p.y=Math.max(0,e.clientY-120+Math.random()*80);
+    petals.push(p);
+  }
+});
+
+function drawRiver(sunX){
+  var top=H*.83;
+  var gold=golden>.5;
+  var g=ctx.createLinearGradient(0,top,0,H);
+  if(gold){g.addColorStop(0,"#d8b8b8");g.addColorStop(1,"#5e628c");}
+  else{g.addColorStop(0,"#c8cde0");g.addColorStop(1,"#5e628c");}
+  ctx.fillStyle=g;ctx.fillRect(0,top,W,H-top);
+  /* blossom reflection glow under big tree */
+  var rg=ctx.createRadialGradient(W*.12,top+10,0,W*.12,top+10,180);
+  rg.addColorStop(0,"rgba(226,105,140,.28)");rg.addColorStop(1,"rgba(226,105,140,0)");
+  ctx.fillStyle=rg;ctx.fillRect(0,top,360,H-top);
+  /* ripple lines */
+  for(var i=0;i<9;i++){
+    var y=top+10+i*(H-top)/10;
+    ctx.beginPath();
+    ctx.strokeStyle="rgba(255,255,255,"+(0.16-i*0.014).toFixed(3)+")";
+    ctx.lineWidth=1;
+    for(var x=0;x<=W;x+=14){
+      var yy=y+Math.sin(x*.012+i*1.7+perf*.8)*2.4;
+      if(x===0)ctx.moveTo(x,yy);else ctx.lineTo(x,yy);
+    }
+    ctx.stroke();
+  }
+  /* sun glitter */
+  if(sunX!==null){
+    ctx.save();ctx.globalCompositeOperation="lighter";
+    for(var d=0;d<16;d++){
+      var gy=top+8+Math.random()*(H-top-16),gx=sunX+(Math.random()-.5)*70;
+      ctx.fillStyle="rgba(255,240,205,"+(0.1+Math.random()*.3)+")";
+      ctx.fillRect(gx,gy,4+Math.random()*7,1.6);
+    }
+    ctx.restore();
+  }
+  return top;
+}
+
+var perf=0;
+function frame(now){
+  perf=now/1000;
+  if(!reduce){
+    dayPhase=(perf%90)/90;
+    golden=dayPhase<.5?dayPhase*2:(1-dayPhase)*2;
+  }
+  var sunX=paintSky();
+  ctx.clearRect(0,0,W,H);
+  var riverTop=drawRiver(sunX);
+  for(var i=petals.length-1;i>=0;i--){
+    var p=petals[i];
+    if(!reduce){
+      p.rot+=p.rotV*.016;
+      p.flip+=p.flipV*.016;
+      p.ph+=.016*p.sway;
+      if(p.state==="fall"){
+        p.x+=Math.sin(p.ph)*p.sway;
+        p.y+=p.vy*.016;
+        /* pointer push */
+        var dx=p.x-pointer.x,dy=p.y-pointer.y,d=Math.hypot(dx,dy);
+        if(d<180&&d>0){
+          var f=(1-d/180)*4;
+          p.x+=(pointer.vx*f+p.vy*.4*f)*.06;
+          p.y+=(pointer.vy*f)*.06-Math.abs(pointer.vx)*f*.02;
+        }
+        /* gust */
+        if(gust.power>0){
+          var gx=p.x-gust.x;
+          var infl=Math.exp(-Math.abs(gx)/260)*gust.power;
+          p.x+=Math.sign(gx||1)*infl*14;
+          p.y-=infl*6;
+          p.rotV+=infl*.1;
+        }
+        if(p.y>riverTop-6){p.state="float";p.bob=Math.random()*6.28;}
+      }else{
+        p.bob+=.016*2.2;
+        p.y+=Math.sin(p.bob)*.24-.12;
+        p.x+=.55+p.z*.4;
+        if(p.x>W+20){petals.splice(i,1);continue;}
+      }
+    }
+    gust.power*=Math.exp(-.016*2.2);
+    /* draw teardrop petal */
+    var s=p.r*(.7+p.z);
+    var fw=Math.abs(Math.cos(p.flip));
+    ctx.save();
+    ctx.translate(p.x,p.y);
+    ctx.rotate(p.rot);
+    ctx.globalAlpha=.35+p.z*.6;
+    var g2=ctx.createLinearGradient(-s*fw,0,s*fw,s);
+    g2.addColorStop(0,"#fbe0e8");g2.addColorStop(.5,"#f7c8d4");
+    g2.addColorStop(1,"#e2698c");
+    ctx.fillStyle=g2;
+    ctx.beginPath();
+    ctx.moveTo(0,-s);
+    ctx.bezierCurveTo(s*fw,-s*.3,s*fw*.7,s*.55,0,s);
+    ctx.bezierCurveTo(-s*fw*.7,s*.55,-s*fw,-s*.3,0,-s);
+    ctx.fill();
+    ctx.restore();
+  }
+  if(petals.length>210)petals.splice(0,petals.length-210);
+  if(!reduce)requestAnimationFrame(frame);
+}
+
+/* haiku letter reveal */
+function haikuReveal(){
+  var h=document.getElementById("haiku");
+  var text=h.textContent;
+  h.textContent="";
+  var parts=text.split(" · ");
+  var frag=document.createDocumentFragment();
+  parts.forEach(function(line,li){
+    if(li>0)frag.appendChild(document.createElement("br"));
+    Array.prototype.forEach.call(line,function(ch){
+      var sp=document.createElement("span");
+      sp.textContent=ch;
+      frag.appendChild(sp);
+    });
+  });
+  h.appendChild(frag);
+  var spans=h.querySelectorAll("span");
+  Array.prototype.forEach.call(spans,function(sp,i){
+    if(reduce){sp.classList.add("set");return;}
+    setTimeout(function(){sp.classList.add("set");},1400+i*80);
+  });
+}
+
+resize();
+addEventListener("resize",resize);
+if(reduce){
+  golden=.2;paintSky();frame(performance.now());
+  /* settled frame */
+  petals.forEach(function(p){
+    p.x=Math.random()*W;p.y=Math.random()*H*.85;
+    p.state=p.y>H*.83?"float":"fall";
+  });
+  ctx.clearRect(0,0,W,H);
+  drawRiver(null);
+  petals.forEach(function(p){p.rot=p.ph;p.flip=0;});
+  /* reuse draw pass with no motion */
+  (function(){var old=frame;window["__x"]=0;})();
+  requestAnimationFrame(function(){/* one settled pass */
+    frameStatic();
+  });
+}else{
+  requestAnimationFrame(frame);
+  haikuReveal();
+  setTimeout(function(){document.getElementById("hint").style.opacity="0.9";},0);
+  setTimeout(function(){document.getElementById("hint").style.opacity="0";},12000);
+}
+function frameStatic(){
+  var save=petals.map(function(p){return {x:p.x,y:p.y};});
+  petals.forEach(function(p,pi){
+    var p2=petals[pi];
+    var s=p2.r*(.7+p2.z);
+    ctx.save();ctx.translate(p2.x,p2.y);ctx.rotate(p2.ph);
+    ctx.globalAlpha=.35+p2.z*.6;
+    var g2=ctx.createLinearGradient(-s,0,s,s);
+    g2.addColorStop(0,"#fbe0e8");g2.addColorStop(1,"#e2698c");
+    ctx.fillStyle=g2;
+    ctx.beginPath();ctx.moveTo(0,-s);
+    ctx.bezierCurveTo(s,-s*.3,s*.7,s*.55,0,s);
+    ctx.bezierCurveTo(-s*.7,s*.55,-s,-s*.3,0,-s);
+    ctx.fill();ctx.restore();
+  });
+}
+if(reduce){
+  /* immediate haiku + settled petals */
+  petals.forEach(function(p){p.y=Math.random()*H*.82;p.x=Math.random()*W;p.ph=Math.random()*6.28;});
+  ctx.clearRect(0,0,W,H);drawRiver(null);
+  petals.forEach(function(p){
+    var s=p.r*(.7+p.z);
+    ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.ph);
+    ctx.globalAlpha=.35+p.z*.6;
+    var g2=ctx.createLinearGradient(-s,0,s,s);
+    g2.addColorStop(0,"#fbe0e8");g2.addColorStop(1,"#e2698c");
+    ctx.fillStyle=g2;
+    ctx.beginPath();ctx.moveTo(0,-s);
+    ctx.bezierCurveTo(s,-s*.3,s*.7,s*.55,0,s);
+    ctx.bezierCurveTo(-s*.7,s*.55,-s,-s*.3,0,-s);
+    ctx.fill();ctx.restore();
+  });
+}
+})();
+</script>
+</body>
+</html>

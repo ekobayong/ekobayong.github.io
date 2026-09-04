@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Still Water — Moonlit Ripple Reflection</title>
+<style>
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%; overflow:hidden; background:#05071a;}
+#scene{display:block; position:fixed; inset:0; width:100vw; height:100vh; opacity:0; transition:opacity 2.5s ease;}
+#scene.in{opacity:1;}
+#panel{
+  position:fixed; top:22px; right:22px; z-index:10;
+  background:rgba(10,14,40,.42); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  border:1px solid rgba(217,223,240,.25); border-radius:14px; padding:18px 20px;
+  color:#d9dff0; font-family:"Iowan Old Style",Palatino,Georgia,serif;
+  display:grid; gap:13px; width:min(300px, 78vw);
+}
+#panel h2{
+  font-size:15px; font-weight:400; font-style:italic; color:#d9dff0; letter-spacing:.03em;
+  border-bottom:1px solid rgba(217,223,240,.18); padding-bottom:9px;
+}
+.ctl label{
+  display:flex; justify-content:space-between; font-size:12px; color:rgba(217,223,240,.75);
+  margin-bottom:6px; align-items:baseline;
+}
+.ctl output{color:#ffb35c; font-size:11px; font-style:italic;}
+input[type=range]{width:100%; accent-color:#ffb35c; height:16px;}
+.btnrow{display:grid; grid-template-columns:1fr 1fr; gap:9px;}
+.gbtn{
+  background:rgba(217,223,240,.07); border:1px solid rgba(217,223,240,.3); color:#d9dff0;
+  font-family:inherit; font-size:12px; font-style:italic; padding:9px 6px; border-radius:9px; cursor:pointer;
+  transition:background .25s, border-color .25s;
+}
+.gbtn:hover{background:rgba(255,179,92,.14); border-color:#ffb35c;}
+.toggles{display:grid; gap:9px;}
+.tog{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12px; color:rgba(217,223,240,.8); cursor:pointer;}
+.tog input{display:none;}
+.knob{
+  width:36px; height:18px; border-radius:10px; background:rgba(217,223,240,.14); position:relative;
+  transition:background .3s; flex:none; border:1px solid rgba(217,223,240,.25);
+}
+.knob::after{
+  content:""; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%;
+  background:rgba(217,223,240,.7); transition:left .25s, background .25s;
+}
+.tog input:checked + .knob{background:rgba(255,179,92,.35);}
+.tog input:checked + .knob::after{left:20px; background:#ffb35c; box-shadow:0 0 8px rgba(255,179,92,.8);}
+#caption{
+  position:fixed; left:26px; bottom:22px; z-index:10; pointer-events:none;
+  font-family:"Iowan Old Style",Palatino,Georgia,serif; font-style:italic;
+  color:rgba(217,223,240,.85); font-size:clamp(13px,1.5vw,17px); max-width:min(46ch,70vw);
+  text-shadow:0 1px 8px rgba(0,0,0,.8);
+}
+#caption b{
+  font-style:normal; font-variant:small-caps; letter-spacing:.2em; font-size:11px;
+  color:#ffb35c; display:block; margin-bottom:4px;
+}
+@media (prefers-reduced-motion:reduce){
+  #scene{transition:opacity .01s;}
+  *{transition:none !important;}
+}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="panel">
+  <h2>The surface, tonight</h2>
+  <div class="ctl"><label>Restlessness <output id="oDamp">calm</output></label>
+    <input type="range" id="sDamp" min="955" max="997" value="980"></div>
+  <div class="btnrow">
+    <button class="gbtn" id="btnStone">Throw a stone</button>
+    <button class="gbtn" id="btnSettle">Let it settle</button>
+  </div>
+  <div class="toggles">
+    <label class="tog">Random raindrops <input type="checkbox" id="tRain"><span class="knob"></span></label>
+    <label class="tog">Lanterns on the shore <input type="checkbox" id="tLan" checked><span class="knob"></span></label>
+  </div>
+</div>
+<div id="caption"><b>Still Water</b>The lake keeps whatever the sky gives it, and gives it back a little softer.</div>
+
+<script>
+(function(){
+"use strict";
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var canvas = document.getElementById("scene");
+var ctx = canvas.getContext("2d");
+var W = 0, H = 0, dpr = 1;
+var SCENE_FRAC = 0.56;
+var sW = 0, sH = 0, sScale = 3;
+var sampDiv = 3;
+
+var sceneDisp = document.createElement("canvas"), dctx = sceneDisp.getContext("2d");
+var sceneSamp = document.createElement("canvas"), sctx = sceneSamp.getContext("2d", {willReadFrequently:true});
+var sceneSampBase = document.createElement("canvas"), bctx = sceneSampBase.getContext("2d");
+var waterCv = document.createElement("canvas"), wctx = waterCv.getContext("2d");
+
+var buffers = {cur:null, old:null, w:0, h:0};
+var damping = 0.980;
+var lanternsOn = true, rainOn = false;
+var lanterns = [], fireflies = [];
+var moonX = 0, moonY = 0;
+var starsSeed = 260;
+var shimmerT = 0;
+
+function mulberry(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* ---------------- static scene painter (reused at two resolutions) ---------------- */
+function paintScene(g, w, h){
+  var horizon = h * SCENE_FRAC;
+  var sky = g.createLinearGradient(0, 0, 0, horizon);
+  sky.addColorStop(0, "#05071a"); sky.addColorStop(0.62, "#0c1236"); sky.addColorStop(1, "#1a2352");
+  g.fillStyle = sky; g.fillRect(0, 0, w, horizon + 2);
+  // stars
+  var rnd = mulberry(260);
+  for (var i = 0; i < starsSeed; i++){
+    var sx = rnd()*w, sy = rnd()*horizon*0.92, sr = (0.3 + rnd()*0.9) * (w/900);
+    var a = 0.25 + rnd()*0.6;
+    g.fillStyle = "rgba(220,228,255," + a.toFixed(2) + ")";
+    g.beginPath(); g.arc(sx, sy, Math.max(0.4, sr), 0, Math.PI*2); g.fill();
+  }
+  // moon at 68% width / 32% of sky height, 7-radius glow
+  var mx = w*0.68, my = horizon*0.32, mr = Math.max(10, w*0.024);
+  moonX = mx; moonY = my;
+  for (var r = 7; r >= 1; r--){
+    var gr = g.createRadialGradient(mx, my, mr*r*0.9, mx, my, mr*r);
+    gr.addColorStop(0, "rgba(210,220,255," + (0.055/r).toFixed(3) + ")");
+    gr.addColorStop(1, "rgba(210,220,255,0)");
+    g.fillStyle = gr;
+    g.beginPath(); g.arc(mx, my, mr*r, 0, Math.PI*2); g.fill();
+  }
+  var disc = g.createRadialGradient(mx - mr*0.3, my - mr*0.3, mr*0.1, mx, my, mr);
+  disc.addColorStop(0, "#ffffff"); disc.addColorStop(1, "#c5cde8");
+  g.fillStyle = disc;
+  g.beginPath(); g.arc(mx, my, mr, 0, Math.PI*2); g.fill();
+  // maria
+  g.fillStyle = "rgba(150,160,200,.4)";
+  g.beginPath(); g.ellipse(mx - mr*0.25, my - mr*0.15, mr*0.3, mr*0.22, 0.4, 0, Math.PI*2); g.fill();
+  g.beginPath(); g.ellipse(mx + mr*0.2, my + mr*0.25, mr*0.2, mr*0.16, -0.3, 0, Math.PI*2); g.fill();
+  // far ridge from summed sines
+  g.fillStyle = "#0d1338";
+  g.beginPath(); g.moveTo(0, horizon);
+  for (var x = 0; x <= w; x += 3){
+    var f = x/w;
+    var ry = horizon - (0.05 + 0.028*Math.sin(f*9.7) + 0.02*Math.sin(f*23.1 + 2) + 0.012*Math.sin(f*41 + 5)) * h;
+    g.lineTo(x, ry);
+  }
+  g.lineTo(w, horizon); g.closePath(); g.fill();
+  // jagged treeline of alternating spikes
+  g.fillStyle = "#05071c";
+  g.beginPath(); g.moveTo(0, horizon);
+  var rnd2 = mulberry(51), px = 0;
+  var spikeW = w/110;
+  while (px < w){
+    var hh = (0.012 + rnd2()*0.028) * h;
+    g.lineTo(px + spikeW*0.5, horizon - hh);
+    g.lineTo(px + spikeW, horizon);
+    px += spikeW;
+  }
+  g.lineTo(w, horizon); g.closePath(); g.fill();
+  // mist gradient above waterline
+  var mist = g.createLinearGradient(0, horizon - h*0.06, 0, horizon);
+  mist.addColorStop(0, "rgba(120,140,200,0)");
+  mist.addColorStop(1, "rgba(150,165,220,.13)");
+  g.fillStyle = mist; g.fillRect(0, horizon - h*0.06, w, h*0.06);
+}
+
+/* ---------------- lanterns + fireflies ---------------- */
+function initLife(){
+  lanterns = []; fireflies = [];
+  var rnd = mulberry(7);
+  for (var i = 0; i < 7; i++){
+    lanterns.push({
+      x:rnd(), y:rnd(0.75, 0.98), // relative to horizon
+      big:i < 3, speed:rnd(0.006, 0.016) * (rnd() > 0.5 ? 1 : -1),
+      phase:rnd()*Math.PI*2, hue:rnd(0.85, 1.1)
+    });
+  }
+  for (var j = 0; j < 24; j++){
+    fireflies.push({x:rnd()*0.9 + 0.05, y:rnd(0.82, 1.06), phase:rnd()*Math.PI*2, sp:rnd(1.2, 3.4)});
+  }
+}
+function drawLife(g, w, h, t){
+  var horizon = h*SCENE_FRAC;
+  if (lanternsOn){
+    lanterns.forEach(function(L){
+      L.x += L.speed * 0.0006;
+      if (L.x > 1.05) L.x = -0.05;
+      if (L.x < -0.05) L.x = 1.05;
+      var lx = L.x*w, ly = horizon - h*0.012*L.y;
+      var pulse = 0.75 + 0.25*Math.sin(t*0.0016 + L.phase);
+      var rad = (L.big ? 4.5 : 2.6) * (w/1000) * L.hue;
+      var glow = g.createRadialGradient(lx, ly, 0, lx, ly, rad*6*pulse);
+      glow.addColorStop(0, "rgba(255,190,110," + (0.5*pulse) + ")");
+      glow.addColorStop(0.35, "rgba(255,170,80," + (0.18*pulse) + ")");
+      glow.addColorStop(1, "rgba(255,170,80,0)");
+      g.fillStyle = glow;
+      g.beginPath(); g.arc(lx, ly, rad*6*pulse, 0, Math.PI*2); g.fill();
+      g.fillStyle = "#ffb35c";
+      g.beginPath(); g.arc(lx, ly, rad, 0, Math.PI*2); g.fill();
+      // streak to water
+      var str = g.createLinearGradient(lx, ly, lx, horizon + (h - horizon)*0.3);
+      str.addColorStop(0, "rgba(255,190,110," + (0.28*pulse) + ")");
+      str.addColorStop(1, "rgba(255,190,110,0)");
+      g.strokeStyle = str; g.lineWidth = (L.big ? 3 : 1.6) * (w/1000);
+      g.beginPath(); g.moveTo(lx, ly); g.lineTo(lx, horizon + (h - horizon)*0.3); g.stroke();
+    });
+  }
+  if (!reduced && lanternsOn){
+    fireflies.forEach(function(F){
+      var fl = Math.pow(Math.max(0, Math.sin(t*0.001*F.sp + F.phase)), 3);
+      if (fl < 0.03) return;
+      var fx = (F.x + Math.sin(t*0.0004 + F.phase)*0.01)*w;
+      var fy = horizon + (h - horizon)*F.y;
+      g.fillStyle = "rgba(255,214,120," + (fl*0.9).toFixed(2) + ")";
+      g.beginPath(); g.arc(fx, fy, (w/1100), 0, Math.PI*2); g.fill();
+    });
+  }
+}
+
+/* ---------------- water sim ---------------- */
+function drop(x, y, r, amp){
+  var W2 = buffers.w, H2 = buffers.h;
+  for (var dy = -r; dy <= r; dy++)
+    for (var dx = -r; dx <= r; dx++){
+      var px = x + dx, py = y + dy;
+      if (px < 0 || px >= W2 || py < 0 || py >= H2) continue;
+      var d = Math.sqrt(dx*dx + dy*dy);
+      if (d <= r){
+        var f = Math.cos(d/r * Math.PI/2);
+        buffers.old[py*W2 + px] += amp * f;
+      }
+    }
+}
+function simStep(){
+  var W2 = buffers.w, H2 = buffers.h, cur = buffers.cur, old = buffers.old, damp = damping;
+  for (var y = 1; y < H2 - 1; y++){
+    var row = y*W2;
+    for (var x = 1; x < W2 - 1; x++){
+      var i = row + x;
+      cur[i] = ((old[i-1] + old[i+1] + old[i-W2] + old[i+W2]) / 2 - cur[i]) * damp;
+    }
+  }
+  var t = cur; buffers.cur = old; buffers.old = t;
+}
+
+/* ---------------- reflection render ---------------- */
+var waterImg = null;
+function renderWater(){
+  var W2 = buffers.w, H2 = buffers.h;
+  var cur = buffers.cur;
+  sctx.drawImage(sceneSampBase, 0, 0);
+  drawLife(sctx, sW, sH, shimmerT);
+  var scene = sctx.getImageData(0, 0, sW, Math.round(sH*SCENE_FRAC));
+  var sd = scene.data, sceneH = scene.height;
+  var horizon = Math.round(sH*SCENE_FRAC) - 1;
+  if (!waterImg || waterImg.width !== W2 || waterImg.height !== H2){
+    waterImg = wctx.createImageData(W2, H2);
+  }
+  var out = waterImg.data;
+  var k = 6 * sW / 900;
+  var shimmer = 0.7 + 0.3*Math.sin(shimmerT*0.0011);
+  for (var y = 0; y < H2; y++){
+    var f = y/H2;
+    var mirrorRow = horizon - Math.round(Math.pow(f, 1.6) * horizon * 0.97);
+    var dim = 1 - f*0.55;
+    for (var x = 0; x < W2; x++){
+      var i = y*W2 + x;
+      var gx = cur[i-1] - cur[i+1];
+      var gy = cur[i-W2] - cur[i+W2];
+      var sx = Math.min(sW-1, Math.max(0, Math.round(x + gx*k)));
+      var sy = Math.min(sceneH-1, Math.max(0, Math.round(mirrorRow - gy*1.6*k)));
+      var si = (sy*sW + sx)*4;
+      var r = sd[si], g2 = sd[si+1], b = sd[si+2];
+      // tint toward indigo
+      r = r*0.82; g2 = g2*0.88; b = b*1.04;
+      // dim toward near shore
+      r *= dim; g2 *= dim; b *= dim;
+      // darken steep horizontal slopes
+      var slope = Math.abs(gx);
+      if (slope > 0.8){ var dark = 1 - Math.min(0.5, (slope - 0.8)*0.06); r *= dark; g2 *= dark; b *= dark; }
+      // silver specular, gaussian around moon column, modulated by slow sine
+      var dm = (x - moonX/sW*W2)/ (W2*0.05);
+      var spec = Math.exp(-dm*dm) * Math.max(0, gy) * 14 * shimmer;
+      if (spec > 0){ r += spec*0.96; g2 += spec*0.97; b += spec; }
+      var oi = i*4;
+      out[oi] = r; out[oi+1] = g2; out[oi+2] = b; out[oi+3] = 255;
+    }
+  }
+  wctx.putImageData(waterImg, 0, 0);
+}
+
+/* ---------------- overlays ---------------- */
+function drawOverlays(g, w, h, t){
+  var horizon = h*SCENE_FRAC;
+  // horizon seam
+  g.fillStyle = "rgba(10,14,40,.5)";
+  g.fillRect(0, horizon - 1, w, 2);
+  g.fillStyle = "rgba(220,230,255,.08)";
+  g.fillRect(0, horizon, w, 1);
+  // dark shore gradient at bottom
+  var shore = g.createLinearGradient(0, h*0.88, 0, h);
+  shore.addColorStop(0, "rgba(3,4,14,0)"); shore.addColorStop(1, "rgba(3,4,14,.72)");
+  g.fillStyle = shore; g.fillRect(0, h*0.88, w, h*0.12);
+  // reeds, swaying quadratic curves in the corners
+  if (!reduced){
+    var sway = Math.sin(t*0.0006)*0.05;
+    [[0.03, 1], [0.055, -1], [0.975, 1], [0.95, -1]].forEach(function(rd, i){
+      var bx = rd[0]*w, dir = rd[1];
+      var n = 5 + (i % 2)*2;
+      for (var j = 0; j < n; j++){
+        var rx = bx + (j - n/2)*(w*0.006);
+        var baseY = h*1.005;
+        var topY = h*(0.78 + (j%3)*0.03);
+        var bend = dir * (10 + j*4) * (1 + sway*8);
+        g.strokeStyle = "rgba(4,6,22,.85)";
+        g.lineWidth = Math.max(1, w*0.0012);
+        g.beginPath();
+        g.moveTo(rx, baseY);
+        g.quadraticCurveTo(rx + bend*0.4, (baseY + topY)/2, rx + bend, topY);
+        g.stroke();
+      }
+    });
+  } else {
+    g.strokeStyle = "rgba(4,6,22,.85)"; g.lineWidth = Math.max(1, w*0.0012);
+    [[0.03, 1], [0.975, -1]].forEach(function(rd){
+      for (var j = 0; j < 6; j++){
+        var rx = rd[0]*w + (j - 3)*(w*0.006);
+        g.beginPath(); g.moveTo(rx, h*1.005); g.quadraticCurveTo(rx, h*0.9, rx + rd[1]*8, h*0.8); g.stroke();
+      }
+    });
+  }
+}
+
+/* ---------------- main frame ---------------- */
+var simTick = 0, lastDrag = 0;
+function frame(t){
+  shimmerT = t;
+  simTick++;
+  var doSim = !reduced || simTick % 2 === 0;
+  if (doSim){
+    simStep(); simStep();
+    // breeze above half restlessness
+    if (!reduced && damping > (0.955 + 0.997)/2){
+      for (var b = 0; b < 2; b++){
+        var bx2 = (Math.random()*buffers.w)|0, by2 = (Math.random()*buffers.h)|0;
+        drop(bx2, by2, 1, 1.2);
+      }
+    }
+    if (rainOn){
+      var rate = 1 + Math.round((damping - 0.955)/(0.997 - 0.955)*5);
+      for (var rr = 0; rr < rate; rr++)
+        drop((Math.random()*buffers.w)|0, (Math.random()*buffers.h)|0, 1, 22 + Math.random()*30);
+    }
+    renderWater();
+  }
+  // compose
+  ctx.drawImage(sceneDisp, 0, 0);
+  // lanterns/fireflies on display
+  drawLife(ctx, W, H, t);
+  // water upscale
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(waterCv, 0, H*SCENE_FRAC, W, H*(1 - SCENE_FRAC));
+  drawOverlays(ctx, W, H, t);
+  requestAnimationFrame(frame);
+}
+
+/* ---------------- sizing ---------------- */
+function resize(){
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sampDiv = W > 1400 ? 4 : 3;
+  sW = Math.max(160, Math.round(W/sampDiv));
+  sH = Math.max(100, Math.round(H/sampDiv));
+  sceneDisp.width = W*dpr; sceneDisp.height = H*dpr;
+  dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  paintScene(dctx, W, H);
+  sceneSamp.width = sW; sceneSamp.height = sH;
+  sceneSampBase.width = sW; sceneSampBase.height = sH;
+  paintScene(sctx, sW, sH);
+  paintScene(bctx, sW, sH);
+  waterCv.width = sW; waterCv.height = sH - Math.round(sH*SCENE_FRAC);
+  buffers.w = sW; buffers.h = waterCv.height;
+  buffers.cur = new Float32Array(buffers.w*buffers.h);
+  buffers.old = new Float32Array(buffers.w*buffers.h);
+  waterImg = null;
+  initLife();
+}
+
+/* ---------------- interactions ---------------- */
+canvas.addEventListener("pointerdown", function(e){
+  if (e.clientY < H*SCENE_FRAC) return;
+  var x = (e.clientX/W * buffers.w)|0;
+  var y = ((e.clientY - H*SCENE_FRAC)/(H*(1 - SCENE_FRAC)) * buffers.h)|0;
+  drop(x, y, 3, 90);
+});
+canvas.addEventListener("pointermove", function(e){
+  if (e.buttons !== 1 || e.clientY < H*SCENE_FRAC) return;
+  var now = performance.now();
+  if (now - lastDrag < 28) return;
+  lastDrag = now;
+  var x = (e.clientX/W * buffers.w)|0;
+  var y = ((e.clientY - H*SCENE_FRAC)/(H*(1 - SCENE_FRAC)) * buffers.h)|0;
+  drop(x, y, 2, 55);
+});
+document.getElementById("btnStone").addEventListener("click", function(){
+  drop((buffers.w*(0.3 + Math.random()*0.4))|0, (buffers.h*(0.3 + Math.random()*0.4))|0, 4, 90);
+});
+document.getElementById("btnSettle").addEventListener("click", function(){
+  buffers.cur.fill(0); buffers.old.fill(0);
+});
+document.getElementById("tRain").addEventListener("change", function(){ rainOn = this.checked; });
+document.getElementById("tLan").addEventListener("change", function(){ lanternsOn = this.checked; });
+document.getElementById("sDamp").addEventListener("input", function(){
+  damping = +this.value/1000;
+  var words = [[0.962,"glass"],[0.972,"calm"],[0.981,"stirring"],[0.99,"restless"],[2,"brooding"]];
+  for (var i = 0; i < words.length; i++)
+    if (damping < words[i][0]){ document.getElementById("oDamp").textContent = words[i][1]; break; }
+});
+
+resize();
+addEventListener("resize", resize);
+requestAnimationFrame(function(t){
+  canvas.classList.add("in");
+  requestAnimationFrame(frame);
+});
+})();
+</script>
+</body>
+</html>

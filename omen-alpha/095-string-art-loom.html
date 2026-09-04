@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tension — Generative String Art Loom</title>
+<style>
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background:
+    linear-gradient(rgba(120,100,70,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120,100,70,.05) 1px, transparent 1px),
+    radial-gradient(90% 70% at 30% 20%, rgba(255,255,255,.65), transparent 60%),
+    #efe7d8;
+  background-size:3px 3px, 3px 3px, 100% 100%, 100% 100%;
+  color:#22201c;
+  font-family:ui-sans-serif,system-ui,"Helvetica Neue",Arial,sans-serif;
+  padding:clamp(16px,3vw,44px);
+}
+.wrap{max-width:1280px; margin:0 auto;}
+header{margin-bottom:26px;}
+h1{
+  font-family:Georgia,"Iowan Old Style",serif; font-weight:400;
+  font-size:clamp(34px,5vw,58px); letter-spacing:-.01em;
+}
+h1 em{color:#2f4a3e; font-style:italic;}
+.sub{color:#7a7266; font-size:14px; margin-top:6px; font-family:Georgia,serif; font-style:italic;}
+.counters{display:flex; gap:26px; margin-top:16px; flex-wrap:wrap;}
+.counter{
+  font-family:ui-monospace,"Cascadia Mono","Courier New",monospace; font-variant-numeric:tabular-nums;
+  font-size:13px; color:#22201c;
+}
+.counter b{font-weight:700; font-size:16px;}
+.counter span{color:#7a7266; font-size:11px; text-transform:uppercase; letter-spacing:.14em; display:block;}
+.studio{display:grid; grid-template-columns:minmax(0,1fr) 350px; gap:34px; align-items:start;}
+.boardwrap{position:relative;}
+#board{
+  position:relative; width:100%; aspect-ratio:1; border-radius:14px; overflow:hidden;
+  box-shadow:0 2px 0 rgba(255,255,255,.5), 0 30px 60px -18px rgba(60,45,25,.55), 0 12px 26px -10px rgba(60,45,25,.4);
+  background:#e9dcbf;
+}
+#board canvas{position:absolute; inset:0; width:100%; height:100%;}
+#overlay{cursor:crosshair; touch-action:none;}
+#badge{
+  position:absolute; left:14px; bottom:14px; background:rgba(47,74,62,.88); color:#e2b862;
+  font-family:ui-monospace,monospace; font-size:12px; padding:7px 13px; border-radius:8px;
+  letter-spacing:.05em; pointer-events:none; font-variant-numeric:tabular-nums;
+}
+#nailTip{
+  position:fixed; z-index:30; display:none; pointer-events:none; background:#22201c; color:#efe7d8;
+  font-family:ui-monospace,monospace; font-size:11px; padding:5px 10px; border-radius:6px;
+  transform:translate(-50%,-160%); white-space:nowrap;
+}
+/* panel */
+.panel{
+  background:#2f4a3e; color:#efe7d8; border-radius:16px; padding:24px;
+  box-shadow:0 24px 50px -20px rgba(20,35,25,.6); display:grid; gap:18px;
+}
+.panel h2{
+  font-family:Georgia,serif; font-weight:400; font-size:17px; color:#e2b862;
+  letter-spacing:.02em;
+}
+.lbl{font-size:10px; text-transform:uppercase; letter-spacing:.18em; color:rgba(239,231,216,.6); margin-bottom:6px; display:flex; justify-content:space-between;}
+.lbl output{font-family:ui-monospace,monospace; color:#e2b862; font-size:12px;}
+.panel input[type=range]{width:100%; accent-color:#b98a3a;}
+.seg{display:flex; border:1px solid rgba(226,184,98,.35); border-radius:9px; overflow:hidden;}
+.seg button{
+  flex:1; background:transparent; color:rgba(239,231,216,.75); border:0; padding:8px 2px; cursor:pointer;
+  font-family:inherit; font-size:11px; text-transform:uppercase; letter-spacing:.1em; transition:background .25s;
+}
+.seg button[aria-pressed="true"]{background:#b98a3a; color:#2f4a3e;}
+.swatches{display:grid; grid-template-columns:repeat(4,1fr); gap:10px;}
+.swatch{
+  background:transparent; border:1px solid rgba(226,184,98,.35); border-radius:10px; padding:9px 4px 7px;
+  cursor:pointer; display:grid; justify-items:center; gap:6px; transition:border-color .25s;
+}
+.swatch[aria-pressed="true"]{border-color:#e2b862; background:rgba(226,184,98,.12);}
+.swatch i{width:26px; height:26px; border-radius:50%; display:block; border:1px solid rgba(0,0,0,.3);}
+.swatch span{font-size:9px; text-transform:uppercase; letter-spacing:.08em; color:rgba(239,231,216,.7);}
+.thumbrow{display:flex; align-items:center; gap:12px;}
+#thumb{width:64px; height:64px; border-radius:8px; border:1px solid rgba(226,184,98,.4); image-rendering:pixelated;}
+.thumbnote{font-family:ui-monospace,monospace; font-size:11px; color:rgba(239,231,216,.6); line-height:1.5;}
+.btnrow{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.pbtn{
+  background:#b98a3a; border:0; color:#2f4a3e; font-family:inherit; font-weight:700; font-size:12px;
+  text-transform:uppercase; letter-spacing:.08em; padding:11px 8px; border-radius:9px; cursor:pointer;
+  transition:filter .25s, transform .15s;
+}
+.pbtn:hover{filter:brightness(1.12);}
+.pbtn:active{transform:scale(.97);}
+.pbtn.ghost{background:transparent; border:1px solid rgba(226,184,98,.45); color:#e2b862;}
+.hint{font-size:11px; color:rgba(239,231,216,.55); line-height:1.6; font-family:ui-monospace,monospace;}
+/* essays */
+.essays{margin-top:44px; display:grid; grid-template-columns:repeat(3,1fr); gap:30px;}
+.essay h3{
+  font-family:Georgia,serif; font-weight:400; font-size:20px; margin-bottom:10px;
+  border-top:2px solid #22201c; padding-top:12px;
+}
+.essay p{color:#7a7266; font-size:14px; line-height:1.7; font-family:Georgia,serif;}
+@media (max-width:980px){ .studio{grid-template-columns:1fr;} .essays{grid-template-columns:1fr;} }
+@media (prefers-reduced-motion:reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Tension — <em>Ten thousand straight lines make a curve</em></h1>
+    <p class="sub">A computational loom: one greedy weaver, one board, one thread at a time.</p>
+    <div class="counters">
+      <div class="counter"><span>Threads drawn</span><b id="cThreads">0</b></div>
+      <div class="counter"><span>Nails</span><b id="cNails">0</b></div>
+      <div class="counter"><span>Thread used</span><b id="cMetres">0.0 m</b></div>
+    </div>
+  </header>
+
+  <div class="studio">
+    <div class="boardwrap">
+      <div id="board">
+        <canvas id="wood"></canvas>
+        <canvas id="threads"></canvas>
+        <canvas id="overlay"></canvas>
+      </div>
+      <div id="badge">ready</div>
+    </div>
+    <div id="nailTip"></div>
+
+    <div class="panel">
+      <div>
+        <h2>The weave</h2>
+      </div>
+      <div>
+        <div class="lbl"><span>Nails</span><output id="oNails">200</output></div>
+        <input type="range" id="sNails" min="60" max="320" value="200">
+      </div>
+      <div>
+        <div class="lbl"><span>Thread budget</span><output id="oTarget">2000</output></div>
+        <input type="range" id="sTarget" min="400" max="7000" value="2000" step="50">
+      </div>
+      <div>
+        <div class="lbl"><span>Weave rate / frame</span><output id="oRate">10</output></div>
+        <input type="range" id="sRate" min="2" max="80" value="10">
+      </div>
+      <div>
+        <div class="lbl" style="margin-bottom:8px"><span>Target image</span></div>
+        <div class="seg">
+          <button id="tPortrait" aria-pressed="true">Portrait</button>
+          <button id="tOrb" aria-pressed="false">Orb</button>
+          <button id="tRings" aria-pressed="false">Rings</button>
+        </div>
+      </div>
+      <div>
+        <div class="lbl" style="margin-bottom:8px"><span>Frame</span></div>
+        <div class="seg">
+          <button id="fCircle" aria-pressed="true">Circle</button>
+          <button id="fSquare" aria-pressed="false">Square</button>
+          <button id="fHeart" aria-pressed="false">Heart</button>
+        </div>
+      </div>
+      <div>
+        <div class="lbl" style="margin-bottom:8px"><span>Thread &amp; board</span></div>
+        <div class="swatches">
+          <button class="swatch" id="sBirch" aria-pressed="true"><i id="swBirch"></i><span>Birch</span></button>
+          <button class="swatch" id="sCharcoal" aria-pressed="false"><i id="swCharcoal"></i><span>Charcoal</span></button>
+          <button class="swatch" id="sOak" aria-pressed="false"><i id="swOak"></i><span>Oak</span></button>
+          <button class="swatch" id="sWalnut" aria-pressed="false"><i id="swWalnut"></i><span>Walnut</span></button>
+        </div>
+      </div>
+      <div class="thumbrow">
+        <canvas id="thumb" width="128" height="128"></canvas>
+        <div class="thumbnote">target map<br>256 × 256 luminance</div>
+      </div>
+      <div class="btnrow">
+        <button class="pbtn" id="btnManual">Manual mode</button>
+        <button class="pbtn ghost" id="btnPause">Pause</button>
+        <button class="pbtn ghost" id="btnClear">Clear</button>
+        <button class="pbtn" id="btnPng">Download PNG</button>
+      </div>
+      <div class="hint">click a nail to hook the thread, another to pull it across · esc release · space pause · alt: manual takes over</div>
+    </div>
+  </div>
+
+  <div class="essays">
+    <div class="essay">
+      <h3>A greedy appetite</h3>
+      <p>The weaver never plans ahead. Standing on a nail, it looks at every reachable nail, samples the residual ink along the straight line between them, and simply pulls the thread to whichever chord covers the most remaining darkness. Then the coverage is subtracted and it looks again. It is short-sighted, tireless and — as ten thousand short-sighted steps so often are — surprisingly good.</p>
+    </div>
+    <div class="essay">
+      <h3>Why straight lines read as shade</h3>
+      <p>A single taut chord is a hairline. But where a hundred hairlines cross at slightly different angles, the eye stops resolving them and starts measuring density instead: more crossings, darker tone. Curves emerge that no single thread drew. The picture lives entirely in the reader's eye, which is exactly where a picture should live.</p>
+    </div>
+    <div class="essay">
+      <h3>Building it by hand</h3>
+      <p>Mark your nails on a 60 cm board, string from the first to the greediest neighbour, keep tension gentle and constant, and loop back around the nail each time. Two thousand chords is an evening; seven thousand is a weekend and a very quiet mind. The algorithm will happily print the visiting order for you.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var M = 256; // target map resolution
+
+var THREADS = {
+  birch:   {thread:"#1a1714", board:"#e9dcbf", dark:true,  name:"Birch"},
+  charcoal:{thread:"#f4efe4", board:"#2b2926", dark:false, name:"Charcoal"},
+  oak:     {thread:"#a3122a", board:"#d9bb8a", dark:true,  name:"Oak"},
+  walnut:  {thread:"#e0b04a", board:"#3a281c", dark:false, name:"Walnut"}
+};
+var threadPreset = "birch";
+
+var state = {
+  frame:"circle", target:"portrait",
+  nNails:200, targetCount:2000, rate:10,
+  manual:false, paused:false,
+  seq:[], current:0,
+  hover:-1, hook:-1
+};
+var nails = [], residual = null, thumbMap = null;
+var boardSize = 0, dpr = 1;
+var woodC = document.getElementById("wood"), threadC = document.getElementById("threads"), ovC = document.getElementById("overlay");
+var badge = document.getElementById("badge");
+var tip = document.getElementById("nailTip");
+var wctx, tctx, octx;
+
+/* seeded PRNG */
+function mulberry(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* ---------------- target maps ---------------- */
+function buildTarget(kind){
+  var map = new Float32Array(M*M);
+  var cx = M/2, cy = M/2;
+  for (var y = 0; y < M; y++){
+    for (var x = 0; x < M; x++){
+      var v = 0.94; // lightness
+      if (kind === "portrait"){
+        var fx = (x - cx)/(M*0.30), fy = (y - cy)/(M*0.36);
+        var fd = Math.sqrt(fx*fx + fy*fy);
+        if (fd < 1.05){ // face
+          v = 0.88 - 0.28*fd;
+          // hair cap + side falls
+          if (y < cy - M*0.10 && Math.abs(fx) < 1.05) v = 0.10;
+          if (fd > 0.78 && y < cy + M*0.28) v = Math.min(v, 0.14);
+          // eyes + brows
+          var e1 = Math.hypot((x - cx + M*0.16)/(M*0.075), (y - cy + M*0.02)/(M*0.03));
+          var e2 = Math.hypot((x - cx - M*0.16)/(M*0.075), (y - cy + M*0.02)/(M*0.03));
+          if (e1 < 1 || e2 < 1) v = 0.10;
+          var b1 = Math.hypot((x - cx + M*0.16)/(M*0.10), (y - cy + M*0.09)/(M*0.015));
+          var b2 = Math.hypot((x - cx - M*0.16)/(M*0.10), (y - cy + M*0.09)/(M*0.015));
+          if (b1 < 1 || b2 < 1) v = 0.22;
+          // nose
+          if (Math.abs(x - cx) < M*0.012 && y > cy - M*0.02 && y < cy + M*0.08) v = 0.45;
+          // lips
+          var lp = Math.hypot((x - cx)/(M*0.11), (y - cy - M*0.16)/(M*0.028));
+          if (lp < 1) v = 0.30;
+          // neck shadow
+          if (Math.abs(fx) < 0.28 && y > cy + M*0.34 && y < cy + M*0.46) v = 0.5;
+        }
+        // shoulders
+        if (y > cy + M*0.44){
+          var sh = 1 - Math.abs(x - cx)/(M*0.62);
+          if (sh > 0) v = Math.min(v, 0.9 - 0.5*sh);
+        }
+      } else if (kind === "orb"){
+        var dx = (x - cx)/(M*0.36), dy = (y - cy - M*0.04)/(M*0.36);
+        var od = Math.sqrt(dx*dx + dy*dy);
+        if (od < 1){
+          v = 0.92 - 0.75*od*od;
+          var sp = Math.hypot((x - cx + M*0.11)/(M*0.09), (y - cy - M*0.13)/(M*0.09));
+          if (sp < 1) v = Math.min(0.96, v + (1 - sp)*0.5);
+        }
+        var gy = (y - cy - M*0.34)/(M*0.07), gx = (x - cx)/(M*0.42);
+        var gd = gx*gx + gy*gy;
+        if (gd < 1) v = Math.min(v, 0.35 + 0.4*gd);
+      } else { // rings
+        var rr = Math.hypot((x - cx)/(M*0.5), (y - cy)/(M*0.5));
+        var band = Math.sin(rr * Math.PI * 7) > 0 ? 0.88 : 0.22;
+        v = band;
+        var diag = (x + y)/(2*M);
+        v *= 1 - diag*0.55;
+      }
+      map[y*M + x] = v;
+    }
+  }
+  return map;
+}
+
+function rebuildResidual(){
+  thumbMap = buildTarget(state.target);
+  var T = THREADS[threadPreset];
+  residual = new Float32Array(M*M);
+  for (var i = 0; i < M*M; i++){
+    var lum = thumbMap[i];
+    residual[i] = T.dark ? (1 - lum) : lum;
+  }
+  var tc = document.getElementById("thumb").getContext("2d");
+  var img = tc.createImageData(M, M);
+  for (var j = 0; j < M*M; j++){
+    var v = Math.round(thumbMap[j]*255);
+    img.data[j*4] = v; img.data[j*4+1] = v; img.data[j*4+2] = v; img.data[j*4+3] = 255;
+  }
+  tc.putImageData(img, 0, 0);
+}
+
+/* ---------------- frames / nails ---------------- */
+function buildNails(){
+  nails = [];
+  var n = state.nNails, i;
+  if (state.frame === "circle"){
+    for (i = 0; i < n; i++){
+      var a = i/n * Math.PI*2 - Math.PI/2;
+      nails.push({x:0.5 + Math.cos(a)*0.46, y:0.5 + Math.sin(a)*0.46, deg:(a*180/Math.PI + 450) % 360});
+    }
+  } else if (state.frame === "square"){
+    var per = 4, pts = [];
+    for (i = 0; i < n; i++){
+      var t = i/n * per, side = Math.floor(t), f = t - side, m = 0.04, len = 1 - m*2;
+      var px, py;
+      if (side === 0){ px = m + f*len; py = m; }
+      else if (side === 1){ px = 1 - m; py = m + f*len; }
+      else if (side === 2){ px = 1 - m - f*len; py = 1 - m; }
+      else { px = m; py = 1 - m - f*len; }
+      nails.push({x:px, y:py, deg:side*90});
+    }
+  } else { // heart, arc-length resampled
+    var raw = [], cl = [0], k;
+    for (k = 0; k <= 720; k++){
+      var tt = k/720 * Math.PI*2;
+      var hx = 16*Math.pow(Math.sin(tt), 3);
+      var hy = -(13*Math.cos(tt) - 5*Math.cos(2*tt) - 2*Math.cos(3*tt) - Math.cos(4*tt));
+      raw.push([hx/17, hy/17]);
+    }
+    for (k = 1; k < raw.length; k++)
+      cl.push(cl[k-1] + Math.hypot(raw[k][0]-raw[k-1][0], raw[k][1]-raw[k-1][1]));
+    var total = cl[cl.length-1];
+    for (i = 0; i < n; i++){
+      var want = i/n * total, seg = 1;
+      while (seg < cl.length && cl[seg] < want) seg++;
+      var f2 = (want - cl[seg-1]) / (cl[seg] - cl[seg-1] || 1);
+      var ix = raw[seg-1][0] + (raw[seg][0]-raw[seg-1][0])*f2;
+      var iy = raw[seg-1][1] + (raw[seg][1]-raw[seg-1][1])*f2;
+      nails.push({x:0.5 + ix*0.52, y:0.5 + iy*0.52, deg:0});
+    }
+  }
+}
+
+/* ---------------- painting ---------------- */
+function paintWood(){
+  var T = THREADS[threadPreset];
+  wctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  wctx.clearRect(0, 0, boardSize, boardSize);
+  wctx.fillStyle = T.board; wctx.fillRect(0, 0, boardSize, boardSize);
+  var rnd = mulberry(42);
+  var S = boardSize;
+  for (var i = 0; i < 160; i++){
+    var x = rnd()*S, y0 = -20;
+    wctx.strokeStyle = rnd() > 0.5 ? "rgba(0,0,0,.045)" : "rgba(255,255,255,.05)";
+    wctx.lineWidth = 0.6 + rnd()*1.4;
+    wctx.beginPath();
+    wctx.moveTo(x + (rnd()-0.5)*30, y0);
+    wctx.bezierCurveTo(x + (rnd()-0.5)*80, S*0.33, x + (rnd()-0.5)*80, S*0.66, x + (rnd()-0.5)*40, S+20);
+    wctx.stroke();
+  }
+  // two knots
+  [[0.32, 0.3],[0.68, 0.72]].forEach(function(p){
+    var kx = p[0]*S, ky = p[1]*S;
+    for (var r = 14; r > 2; r -= 3){
+      wctx.strokeStyle = "rgba(60,40,20,.14)";
+      wctx.lineWidth = 1.6;
+      wctx.beginPath(); wctx.ellipse(kx, ky, r*2.4, r, 0.3, 0, Math.PI*2); wctx.stroke();
+    }
+  });
+  // vignette
+  var vg = wctx.createRadialGradient(S/2, S/2, S*0.35, S/2, S/2, S*0.75);
+  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(30,20,10,.22)");
+  wctx.fillStyle = vg; wctx.fillRect(0, 0, S, S);
+  // diagonal sheen
+  var sh = wctx.createLinearGradient(0, 0, S, S);
+  sh.addColorStop(0, "rgba(255,255,255,.10)"); sh.addColorStop(0.45, "rgba(255,255,255,0)");
+  sh.addColorStop(1, "rgba(255,255,255,.05)");
+  wctx.fillStyle = sh; wctx.fillRect(0, 0, S, S);
+}
+
+function nailXY(n){
+  var pad = boardSize*0.03;
+  return [pad + n.x*(boardSize - pad*2), pad + n.y*(boardSize - pad*2)];
+}
+
+function drawNails(){
+  octx.clearRect(0, 0, boardSize, boardSize);
+  var S = boardSize;
+  for (var i = 0; i < nails.length; i++){
+    var p = nailXY(nails[i]);
+    // soft offset shadow
+    octx.fillStyle = "rgba(0,0,0,.35)";
+    octx.beginPath(); octx.arc(p[0]+1.6, p[1]+2.4, 2.6, 0, Math.PI*2); octx.fill();
+    // steel dome
+    var g = octx.createRadialGradient(p[0]-1, p[1]-1.4, 0.4, p[0], p[1], 3);
+    g.addColorStop(0, "#f4f4f2"); g.addColorStop(0.55, "#9aa0a6"); g.addColorStop(1, "#4a4f55");
+    octx.fillStyle = g;
+    octx.beginPath(); octx.arc(p[0], p[1], 2.8, 0, Math.PI*2); octx.fill();
+  }
+  // hover ring
+  if (state.hover >= 0){
+    var hp = nailXY(nails[state.hover]);
+    octx.strokeStyle = "rgba(255,255,255,.9)"; octx.lineWidth = 1.4;
+    octx.beginPath(); octx.arc(hp[0], hp[1], 6.5, 0, Math.PI*2); octx.stroke();
+  }
+  // selected brass ring + dashed preview
+  var sel = state.manual ? state.hook : (state.seq.length ? state.seq[state.seq.length-1] : -1);
+  if (sel >= 0){
+    var sp2 = nailXY(nails[sel]);
+    octx.strokeStyle = "#b98a3a"; octx.lineWidth = 1.8;
+    octx.beginPath(); octx.arc(sp2[0], sp2[1], 6.8, 0, Math.PI*2); octx.stroke();
+    if (state.manual && state.hover >= 0 && state.hover !== sel){
+      var hp2 = nailXY(nails[state.hover]);
+      octx.setLineDash([4, 4]); octx.strokeStyle = "rgba(226,184,98,.9)";
+      octx.beginPath(); octx.moveTo(sp2[0], sp2[1]); octx.lineTo(hp2[0], hp2[1]); octx.stroke();
+      octx.setLineDash([]);
+    }
+  }
+}
+
+function drawThreadLine(a, b){
+  var pa = nailXY(nails[a]), pb = nailXY(nails[b]);
+  var T = THREADS[threadPreset];
+  var shadow = T.dark ? "rgba(0,0,0,.28)" : "rgba(0,0,0,.4)";
+  var base = T.thread;
+  tctx.strokeStyle = shadow; tctx.lineWidth = 0.7;
+  tctx.beginPath(); tctx.moveTo(pa[0]+0.7, pa[1]+1.1); tctx.lineTo(pb[0]+0.7, pb[1]+1.1); tctx.stroke();
+  tctx.strokeStyle = base; tctx.globalAlpha = 0.32; tctx.lineWidth = 0.8;
+  tctx.beginPath(); tctx.moveTo(pa[0], pa[1]); tctx.lineTo(pb[0], pb[1]); tctx.stroke();
+  tctx.globalAlpha = 1;
+}
+
+function redrawAllThreads(){
+  tctx.clearRect(0, 0, boardSize, boardSize);
+  for (var i = 1; i < state.seq.length; i++) drawThreadLine(state.seq[i-1], state.seq[i]);
+}
+
+function updateCounters(){
+  var metres = 0, S = boardSize;
+  for (var i = 1; i < state.seq.length; i++){
+    var a = nailXY(nails[state.seq[i-1]]), b = nailXY(nails[state.seq[i]]);
+    metres += Math.hypot(a[0]-b[0], a[1]-b[1]);
+  }
+  metres = metres / S * 0.6;
+  document.getElementById("cThreads").textContent = Math.max(0, state.seq.length - 1);
+  document.getElementById("cNails").textContent = state.nNails;
+  document.getElementById("cMetres").textContent = metres.toFixed(1) + " m";
+}
+
+/* ---------------- weaver ---------------- */
+function sampleResidual(x0, y0, x1, y1, steps){
+  var sum = 0;
+  for (var i = 1; i < steps; i++){
+    var f = i/steps;
+    var x = x0 + (x1-x0)*f, y = y0 + (y1-y0)*f;
+    var mx = Math.min(M-1, Math.max(0, (x*0.94 + 0.03)*M | 0));
+    var my = Math.min(M-1, Math.max(0, (y*0.94 + 0.03)*M | 0));
+    sum += residual[my*M + mx];
+  }
+  return sum / (steps - 1);
+}
+function subtractResidual(a, b){
+  var pa = nailXY(nails[a]), pb = nailXY(nails[b]);
+  var steps = 60;
+  for (var i = 0; i <= steps; i++){
+    var f = i/steps;
+    var x = pa[0] + (pb[0]-pa[0])*f, y = pa[1] + (pb[1]-pa[1])*f;
+    var mx = Math.min(M-1, Math.max(0, (x*0.94 + 0.03)*M | 0));
+    var my = Math.min(M-1, Math.max(0, (y*0.94 + 0.03)*M | 0));
+    residual[my*M + mx] = Math.max(0, residual[my*M + mx] - 0.13);
+  }
+}
+function angularGap(a, b){
+  var pa = nailXY(nails[a]), pb = nailXY(nails[b]);
+  var v1 = [pa[0]-boardSize/2, pa[1]-boardSize/2], v2 = [pb[0]-boardSize/2, pb[1]-boardSize/2];
+  var ang = Math.abs(Math.atan2(v1[1], v1[0]) - Math.atan2(v2[1], v2[0]));
+  return Math.min(ang, Math.PI*2 - ang);
+}
+function weaveStep(){
+  var cur = state.seq[state.seq.length-1];
+  if (cur == null) cur = 0;
+  var minGap = 2 * Math.PI / nails.length * 8;
+  var best = -1, bestScore = 0.015;
+  for (var j = 0; j < nails.length; j++){
+    if (j === cur) continue;
+    if (nails.length > 30 && angularGap(cur, j) < minGap) continue;
+    var pa = nailXY(nails[cur]), pb = nailXY(nails[j]);
+    var s = sampleResidual(pa[0], pa[1], pb[0], pb[1], 48);
+    if (s > bestScore){ bestScore = s; best = j; }
+  }
+  if (best < 0) return false;
+  drawThreadLine(cur, best);
+  subtractResidual(cur, best);
+  state.seq.push(best);
+  return true;
+}
+var rafId = null;
+function loop(){
+  if (!state.manual && !state.paused && state.seq.length - 1 < state.targetCount){
+    var done = 0;
+    for (var i = 0; i < state.rate; i++){
+      if (!weaveStep()) break;
+      done++;
+    }
+    updateCounters();
+    badge.textContent = "weaving · " + (state.seq.length - 1) + " / " + state.targetCount;
+    if (done === 0){
+      badge.textContent = "settled · " + (state.seq.length - 1) + " threads";
+    }
+    rafId = requestAnimationFrame(loop);
+  } else {
+    rafId = null;
+    if (state.manual) badge.textContent = "manual mode · click nail to hook";
+    else if (state.paused) badge.textContent = "paused · " + (state.seq.length - 1) + " threads";
+  }
+}
+function ensureLoop(){ if (!rafId) rafId = requestAnimationFrame(loop); }
+
+function restart(){
+  state.seq = []; state.current = 0; state.hook = -1;
+  buildNails(); rebuildResidual();
+  paintWood();
+  tctx.clearRect(0, 0, boardSize, boardSize);
+  state.seq.push(0);
+  drawNails(); updateCounters();
+  badge.textContent = "weaving · 0 / " + state.targetCount;
+  ensureLoop();
+}
+
+/* ---------------- board sizing ---------------- */
+function resize(){
+  var rect = document.getElementById("board").getBoundingClientRect();
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  boardSize = rect.width;
+  [woodC, threadC, ovC].forEach(function(c){
+    c.width = boardSize * dpr; c.height = boardSize * dpr;
+  });
+  wctx = woodC.getContext("2d"); tctx = threadC.getContext("2d"); octx = ovC.getContext("2d");
+  paintWood(); redrawAllThreads(); drawNails();
+}
+
+/* ---------------- interaction ---------------- */
+ovC.addEventListener("pointermove", function(e){
+  var r = ovC.getBoundingClientRect();
+  var x = (e.clientX - r.left)/r.width * boardSize, y = (e.clientY - r.top)/r.height * boardSize;
+  var best = -1, bd = 14;
+  for (var i = 0; i < nails.length; i++){
+    var p = nailXY(nails[i]);
+    var d = Math.hypot(p[0]-x, p[1]-y);
+    if (d < bd){ bd = d; best = i; }
+  }
+  state.hover = best;
+  if (best >= 0){
+    tip.style.display = "block";
+    tip.textContent = "nail " + String(best).padStart(3, "0") + " · " + Math.round(nails[best].deg) + "°";
+    tip.style.left = e.clientX + "px"; tip.style.top = e.clientY + "px";
+  } else tip.style.display = "none";
+  drawNails();
+});
+ovC.addEventListener("pointerleave", function(){
+  state.hover = -1; tip.style.display = "none"; drawNails();
+});
+ovC.addEventListener("pointerdown", function(e){
+  if (state.hover < 0) return;
+  if (!state.manual){ state.manual = true; document.getElementById("btnManual").textContent = "Resume weaving"; }
+  if (state.hook < 0){
+    state.hook = state.hover;
+  } else if (state.hover !== state.hook){
+    drawThreadLine(state.hook, state.hover);
+    subtractResidual(state.hook, state.hover);
+    state.seq.push(state.hover);
+    state.hook = state.hover;
+    updateCounters();
+  }
+  drawNails();
+});
+document.addEventListener("keydown", function(e){
+  if (e.key === "Escape"){ state.hook = -1; drawNails(); }
+  if (e.code === "Space" && e.target.tagName !== "INPUT"){
+    e.preventDefault(); togglePause();
+  }
+});
+function togglePause(){
+  state.paused = !state.paused;
+  document.getElementById("btnPause").textContent = state.paused ? "Resume" : "Pause";
+  if (!state.paused) ensureLoop();
+}
+document.getElementById("btnManual").addEventListener("click", function(){
+  state.manual = !state.manual;
+  this.textContent = state.manual ? "Resume weaving" : "Manual mode";
+  if (!state.manual){ state.hook = -1; ensureLoop(); }
+  drawNails();
+});
+document.getElementById("btnPause").addEventListener("click", togglePause);
+document.getElementById("btnClear").addEventListener("click", function(){
+  state.seq = []; state.hook = -1;
+  tctx.clearRect(0, 0, boardSize, boardSize);
+  state.seq.push(0);
+  updateCounters();
+  badge.textContent = "cleared";
+  if (!state.manual && !state.paused) ensureLoop();
+});
+document.getElementById("btnPng").addEventListener("click", function(){
+  var out = document.createElement("canvas");
+  out.width = boardSize * dpr; out.height = boardSize * dpr;
+  var o = out.getContext("2d");
+  [woodC, threadC, ovC].forEach(function(c){ o.drawImage(c, 0, 0); });
+  var a = document.createElement("a");
+  a.download = "tension-string-art.png";
+  a.href = out.toDataURL("image/png");
+  a.click();
+});
+function bindSeg(ids, key, restartNeeded){
+  ids.forEach(function(id){
+    document.getElementById(id).addEventListener("click", function(){
+      ids.forEach(function(x){
+        document.getElementById(x).setAttribute("aria-pressed", String(x === id));
+      });
+      state[key] = id.replace(/^[tf]/, function(m2){ return ""; });
+      if (key === "target") state.target = id.slice(1);
+      if (key === "frame") state.frame = id.slice(1);
+      if (restartNeeded) restart();
+    });
+  });
+}
+bindSeg(["tPortrait","tOrb","tRings"], "target", true);
+bindSeg(["fCircle","fSquare","fHeart"], "frame", true);
+function bindPreset(id, key){
+  document.getElementById(id).addEventListener("click", function(){
+    ["sBirch","sCharcoal","sOak","sWalnut"].forEach(function(x){
+      document.getElementById(x).setAttribute("aria-pressed", String(x === id));
+    });
+    threadPreset = key; restart();
+  });
+}
+bindPreset("sBirch","birch"); bindPreset("sCharcoal","charcoal");
+bindPreset("sOak","oak"); bindPreset("sWalnut","walnut");
+document.getElementById("sNails").addEventListener("input", function(){
+  state.nNails = +this.value;
+  document.getElementById("oNails").textContent = this.value;
+  restart();
+});
+document.getElementById("sTarget").addEventListener("input", function(){
+  var old = state.targetCount;
+  state.targetCount = +this.value;
+  document.getElementById("oTarget").textContent = this.value;
+  if (state.seq.length - 1 > state.targetCount){ restart(); }
+  else { ensureLoop(); }
+});
+document.getElementById("sRate").addEventListener("input", function(){
+  state.rate = +this.value;
+  document.getElementById("oRate").textContent = this.value;
+});
+
+/* swatch discs */
+document.getElementById("swBirch").style.background = "linear-gradient(135deg,#1a1714 50%,#e9dcbf 50%)";
+document.getElementById("swCharcoal").style.background = "linear-gradient(135deg,#f4efe4 50%,#2b2926 50%)";
+document.getElementById("swOak").style.background = "linear-gradient(135deg,#a3122a 50%,#d9bb8a 50%)";
+document.getElementById("swWalnut").style.background = "linear-gradient(135deg,#e0b04a 50%,#3a281c 50%)";
+
+addEventListener("resize", function(){
+  resize();
+});
+
+resize();
+restart();
+})();
+</script>
+</body>
+</html>

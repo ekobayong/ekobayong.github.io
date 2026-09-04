@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dispersion — An Interactive Prism</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+  background:#04050a;
+  background-image:radial-gradient(90% 80% at 50% 45%,#0d1018 0%,#04050a 100%);
+  font-family:system-ui,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  color:#dfe4ee;
+}
+#stage{position:fixed;inset:0;display:block;touch-action:none}
+header{position:fixed;top:22px;left:26px;right:26px;pointer-events:none;z-index:4}
+.kicker{
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px;
+  letter-spacing:.32em;text-transform:uppercase;color:#8fd3ff;margin-bottom:10px;
+}
+h1{font-weight:300;font-size:clamp(18px,3.2vw,30px);line-height:1.2;color:#eef2f8}
+h1 b{font-weight:700}
+.panel{
+  position:fixed;z-index:5;
+  background:rgba(14,16,24,.72);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,255,255,.12);border-radius:12px;
+  box-shadow:0 10px 34px rgba(0,0,0,.5);
+  font-size:12.5px;line-height:1.5;
+}
+#explain{left:26px;bottom:26px;max-width:330px;padding:16px 18px}
+#explain h2{
+  font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:#8fd3ff;
+  margin-bottom:8px;font-weight:600;
+}
+#explain .law{font-family:ui-monospace,Menlo,Consolas,monospace;color:#aeb6c6;font-size:11.5px;margin-bottom:10px}
+#explain .stats{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:#e8edf5}
+#explain .stats div{display:flex;justify-content:space-between;gap:12px;padding:2px 0}
+#explain .stats span{color:#7d8598}
+#controls{right:26px;bottom:26px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:210px}
+#controls label{display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none}
+#controls input[type=checkbox]{
+  appearance:none;width:32px;height:18px;border-radius:999px;
+  background:#1c2030;border:1px solid rgba(255,255,255,.18);position:relative;cursor:pointer;
+}
+#controls input[type=checkbox]:checked{background:#0f4c5c}
+#controls input[type=checkbox]::after{
+  content:"";position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:50%;
+  background:#dfe4ee;transition:left .2s;
+}
+#controls input[type=checkbox]:checked::after{left:15px}
+.btn{
+  appearance:none;font:inherit;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:#dfe4ee;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);
+  border-radius:8px;padding:8px 12px;cursor:pointer;transition:background .2s;
+}
+.btn:hover{background:rgba(255,255,255,.12)}
+#readout{
+  position:fixed;z-index:6;pointer-events:none;opacity:0;transition:opacity .2s;
+  background:rgba(10,12,18,.9);border:1px solid rgba(143,211,255,.35);border-radius:8px;
+  padding:8px 11px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;
+  color:#dff3ff;white-space:pre;line-height:1.5;box-shadow:0 6px 20px rgba(0,0,0,.5);
+}
+summary{cursor:pointer;font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:#8fd3ff}
+@media (max-width:640px){
+  #explain{display:none}
+  #explainM{display:block !important;position:fixed;left:14px;right:14px;bottom:88px;z-index:5;
+    background:rgba(14,16,24,.78);backdrop-filter:blur(10px);
+    border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 14px;font-size:12px}
+  #controls{right:14px;bottom:14px}
+}
+#explainM{display:none}
+.hint{position:fixed;top:22px;right:26px;z-index:4;pointer-events:none;
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px;color:#5a6478;
+  letter-spacing:.14em;text-transform:uppercase}
+@media (max-width:640px){.hint{display:none}}
+@media (prefers-reduced-motion: reduce){
+  #readout{transition:none}
+}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<header>
+  <div class="kicker">Gallery of Optics · Exhibit 07</div>
+  <h1>Why the rainbow lives<br><b>inside glass</b></h1>
+</header>
+<div class="hint">Drag the lamp and the prism</div>
+
+<aside class="panel" id="explain">
+  <h2>On the law of refraction</h2>
+  <p class="law">n₁ sin θ₁ = n₂ sin θ₂<br>n(λ) ≈ 1.5046 + 0.0042 / λ²</p>
+  <p style="color:#aeb6c6;margin-bottom:10px">White light is a committee of wavelengths. Each pays a different toll at the glass door, so the beam fans into a spectrum — narrow like BK7 in reality, wide like theatre when the artistry is turned up.</p>
+  <div class="stats">
+    <div><span>n @ 400 nm</span><output id="n400">—</output></div>
+    <div><span>n @ 680 nm</span><output id="n680">—</output></div>
+    <div><span>angular spread</span><output id="spread">—</output></div>
+  </div>
+</aside>
+<details id="explainM">
+  <summary>Why the rainbow lives inside glass</summary>
+  <p style="color:#aeb6c6;margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:11px">n(λ) ≈ 1.5046 + 0.0042/λ². Each wavelength refracts at its own angle — drag the lamp and prism to fan the spectrum onto the screen.</p>
+</details>
+
+<div class="panel" id="controls">
+  <label><input type="checkbox" id="modeToggle"> <span>Artistic spread</span></label>
+  <label><input type="checkbox" id="secondPrism"> <span>Second prism (recombine)</span></label>
+  <button class="btn" id="resetBtn">Reset layout</button>
+</div>
+
+<div id="readout" role="status"></div>
+
+<script>
+(function(){
+"use strict";
+var canvas=document.getElementById("stage"),ctx=canvas.getContext("2d");
+var W=0,H=0,DPR=1,reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var WAVELEN=[400,680];
+
+function cauchy(nm,artistic){var um=nm/1000;var b=artistic?0.0042*11:0.0042;return 1.5046+b/(um*um);}
+
+var lamp={x:.18,y:.55,r:26};
+var prism={x:.5,y:.5,s:110,a:Math.PI/3};
+var prism2={x:.62,y:.5,s:90,a:Math.PI/3};
+var screen={x:.86};
+
+function defaultLayout(){lamp={x:.18,y:.55};prism={x:.5,y:.5,s:110};prism2={x:.62,y:.5};}
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=innerWidth;H=innerHeight;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  off=document.createElement("canvas");
+  off.width=W*DPR;off.height=H*DPR;
+  offctx=off.getContext("2d");
+  offctx.setTransform(DPR,0,0,DPR,0,0);
+}
+var off,offctx;
+
+/* wavelength to RGB (Bruton-style), gamma .8 */
+function wl2rgb(nm){
+  var r=0,g=0,b=0;
+  if(nm>=380&&nm<440){r=-(nm-440)/60;b=1;}
+  else if(nm<490){g=(nm-440)/50;b=1;}
+  else if(nm<510){g=1;b=-(nm-510)/20;}
+  else if(nm<580){r=(nm-510)/70;g=1;}
+  else if(nm<645){r=1;g=-(nm-645)/65;}
+  else if(nm<=780){r=1;}
+  var f=1;
+  if(nm<420)f=.3+.7*(nm-380)/40;
+  else if(nm>700)f=.3+.7*(780-nm)/80;
+  function gc(c){return Math.pow(Math.max(0,c)*f,.8);}
+  return [Math.round(gc(r)*255),Math.round(gc(g)*255),Math.round(gc(b)*255)];
+}
+var names=[[434,"Hγ · violet-blue"],[486,"Hβ · blue-cyan"],[589,"Na D · yellow"],[656,"Hα · red"]];
+
+/* ray tracing: a ray is a polyline of points; produced inside traceRay */
+function rayPath(lx,ly,nm,pr,artistic){
+  var dx=pr.x-lx,dy=pr.y-ly;var L=Math.hypot(dx,dy);dx/=L;dy/=L;
+  var n1=1.0,n2=cauchy(nm,artistic);
+  var pts=[[lx,ly]];
+  /* triangle vertices */
+  function verts(){
+    var s=pr.s,a=pr.a;
+    var p1=[pr.x-s/2,pr.y+s*0.577/2*0+0];
+    /* equilateral with side s, centroid at (x,y): apex angle a=60deg */
+    var h=s*0.577;
+    var v=[[pr.x-s/2,pr.y+h/2],[pr.x+s/2,pr.y+h/2],[pr.x,pr.y-h]];
+    return v;
+  }
+  var V=verts();
+  var pos=[lx,ly],dir=[dx,dy],medium=false;
+  for(var bounce=0;bounce<8;bounce++){
+    /* find intersection with next surface */
+    var hit=null,hitN=null;
+    for(var e=0;e<3;e++){
+      var A=V[e],B=V[(e+1)%3];
+      var ex=B[0]-A[0],ey=B[1]-A[1];
+      var den=dir[0]*ey-dir[1]*ex;
+      if(Math.abs(den)<1e-9)continue;
+      var t=((A[0]-pos[0])*ey-(A[1]-pos[1])*ex)/den;
+      var u=((A[0]-pos[0])*dir[1]-(A[1]-pos[1])*dir[0])/den;
+      if(t>1e-6&&u>=0&&u<=1){
+        if(!hit||t<hit.t){hit={t:t,x:A[0]+ex*u,y:A[1]+ey*u};hitN=[ey,-ex];}
+      }
+    }
+    if(!hit)break;
+    var nl=Math.hypot(hitN[0],hitN[1]);hitN[0]/=nl;hitN[1]/=nl;
+    /* orient normal against incoming dir */
+    if(dir[0]*hitN[0]+dir[1]*hitN[1]>0){hitN[0]=-hitN[0];hitN[1]=-hitN[1];}
+    var cosi=-(dir[0]*hitN[0]+dir[1]*hitN[1]);
+    var eta=medium?n2/n1:n1/n2;
+    var sin2t=eta*eta*(1-cosi*cosi);
+    var outDir;
+    if(sin2t>1){
+      /* total internal reflection */
+      outDir=[dir[0]+2*cosi*hitN[0],dir[1]+2*cosi*hitN[1]];
+      pts.push([hit.x,hit.y]);
+      pos=[hit.x,hit.y];dir=outDir;
+      continue;
+    }
+    var cost=Math.sqrt(1-sin2t);
+    outDir=[eta*dir[0]+(eta*cosi-cost)*hitN[0],eta*dir[1]+(eta*cosi-cost)*hitN[1]];
+    var ol=Math.hypot(outDir[0],outDir[1]);outDir[0]/=ol;outDir[1]/=ol;
+    pts.push([hit.x,hit.y]);
+    pos=[hit.x,hit.y];dir=outDir;medium=!medium;
+    if(!medium)break; /* exited */
+  }
+  if(!medium||pts.length<2){pts.push([pos[0]+dir[0]*3000,pos[1]+dir[1]*3000]);}
+  return pts;
+}
+
+function traceAll(artistic){
+  var rays=[];
+  var N=40;
+  var lx=lamp.x*W,ly=lamp.y*H;
+  for(var i=0;i<N;i++){
+    var nm=400+280*i/(N-1);
+    var pts=rayPath(lx,ly,nm,prism,artistic);
+    rays.push({nm:nm,pts:pts,col:wl2rgb(nm)});
+  }
+  return rays;
+}
+
+function exitAngleRange(rays){
+  var min=Infinity,max=-Infinity;
+  var px=W*screen.x;
+  rays.forEach(function(r){
+    var last=r.pts[r.pts.length-1];
+    if(last[0]<px-2)return;
+    var a=Math.atan2(last[1]-r.pts[r.pts.length-2][1],last[0]-r.pts[r.pts.length-2][0]);
+    if(a<min)min=a;if(a>max)max=a;
+  });
+  if(min===Infinity)return 0;
+  return (max-min)*180/Math.PI;
+}
+
+function drawPrism(c,p){
+  var h=p.s*0.577;
+  var V=[[p.x-p.s/2,p.y+h/2],[p.x+p.s/2,p.y+h/2],[p.x,p.y-h]];
+  /* caustic ribbons */
+  c.save();
+  c.beginPath();
+  c.moveTo(V[0][0],V[0][1]);c.lineTo(V[1][0],V[1][1]);c.lineTo(V[2][0],V[2][1]);c.closePath();
+  c.save();c.clip();
+  for(var r=0;r<3;r++){
+    var ph=reduce?r*2.1:perf*0.35*(r+1);
+    c.beginPath();
+    for(var t=0;t<=40;t++){
+      var u=t/40;
+      var yy=p.y-h/2+u*h*0.9-h*0.2;
+      var xx=p.x-p.s/4+u*p.s/2+Math.sin(u*6+r*2+ph)*p.s*0.12;
+      if(t===0)c.moveTo(xx,yy);else c.lineTo(xx,yy);
+    }
+    c.strokeStyle="rgba(170,215,255,0.08)";c.lineWidth=6;c.stroke();
+  }
+  c.restore();
+  var g=c.createLinearGradient(V[0][0],0,V[1][0],0);
+  g.addColorStop(0,"rgba(180,220,255,.16)");
+  g.addColorStop(1,"rgba(200,230,255,.14)");
+  c.fillStyle=g;
+  c.fill();
+  /* edges */
+  c.strokeStyle="rgba(160,205,255,.8)";
+  c.lineWidth=1.5;
+  c.shadowColor="rgba(110,180,255,.9)";
+  c.shadowBlur=14;
+  c.stroke();
+  c.shadowBlur=0;
+  /* vertex flares */
+  V.forEach(function(v){
+    var fg=c.createRadialGradient(v[0],v[1],0,v[0],v[1],14);
+    fg.addColorStop(0,"rgba(200,230,255,.7)");fg.addColorStop(1,"rgba(200,230,255,0)");
+    c.fillStyle=fg;c.beginPath();c.arc(v[0],v[1],14,0,6.2832);c.fill();
+  });
+  c.restore();
+}
+
+function drawScreen(c){
+  var x=W*screen.x,top=H*0.18,bot=H*0.86;
+  c.strokeStyle="rgba(180,200,230,.4)";c.lineWidth=1;
+  c.beginPath();c.moveTo(x,top);c.lineTo(x,bot);c.stroke();
+  for(var t=0;t<=20;t++){
+    var y=top+(bot-top)*t/20;
+    c.beginPath();c.moveTo(x,y);c.lineTo(x+((t%5===0)?9:5),y);c.stroke();
+  }
+  c.fillStyle="rgba(150,170,200,.75)";
+  c.font="600 10px ui-monospace,Menlo,Consolas,monospace";
+  c.save();c.translate(x+24,(top+bot)/2);c.rotate(-Math.PI/2);
+  c.textAlign="center";c.fillText("P R O J E C T I O N   S C R E E N",0,0);
+  c.restore();
+}
+
+var perf=0;
+function draw(now){
+  perf=now/1000;
+  var artistic=document.getElementById("modeToggle").checked;
+  var c=offctx;
+  c.clearRect(0,0,W,H);
+  /* stage background */
+  var bg=c.createRadialGradient(W*0.5,H*0.45,0,W*0.5,H*0.45,Math.max(W,H)*0.7);
+  bg.addColorStop(0,"rgba(13,16,24,.0)");bg.addColorStop(1,"rgba(13,16,24,1)");
+  c.fillStyle=bg;c.fillRect(0,0,W,H);
+  drawScreen(c);
+
+  var rays=traceAll(artistic);
+  /* blobs on screen */
+  var px=W*screen.x,top=H*0.18,bot=H*0.86;
+  rays.forEach(function(r){
+    var lastp=r.pts[r.pts.length-1];
+    if(lastp[0]<px-2)return;
+    var slope=(lastp[1]-r.pts[r.pts.length-2][1])/(lastp[0]-r.pts[r.pts.length-2][0]+1e-6);
+    var y=lastp[1]+slope*(px-lastp[0]);
+    if(y<top||y>bot)return;
+    var g=c.createLinearGradient(0,y-30,0,y+30);
+    var a="rgba("+r.col[0]+","+r.col[1]+","+r.col[2]+",";
+    g.addColorStop(0,a+"0)");
+    g.addColorStop(.5,a+"0.55)");
+    g.addColorStop(1,a+"0)");
+    c.save();c.globalCompositeOperation="lighter";
+    c.fillStyle=g;c.fillRect(px-40,y-30,40,60);
+    c.restore();
+  });
+  /* rays */
+  c.save();
+  c.globalCompositeOperation="lighter";
+  rays.forEach(function(r){
+    var a="rgba("+r.col[0]+","+r.col[1]+","+r.col[2]+",";
+    /* faint fresnel reflections: at each interior vertex, draw short reflected stub */
+    c.strokeStyle=a+"0.34)";
+    c.lineWidth=1.4;
+    c.beginPath();
+    c.moveTo(r.pts[0][0],r.pts[0][1]);
+    for(var i=1;i<r.pts.length;i++)c.lineTo(r.pts[i][0],r.pts[i][1]);
+    c.stroke();
+    if(r.pts.length>2){
+      var mid=r.pts[r.pts.length-2];
+      var prev=r.pts[r.pts.length-3];
+      var di=[mid[0]-prev[0],mid[1]-prev[1]];
+      var dl=Math.hypot(di[0],di[1]);di[0]/=dl;di[1]/=dl;
+      c.strokeStyle=a+"0.10)";
+      c.beginPath();c.moveTo(mid[0],mid[1]);
+      c.lineTo(mid[0]-di[0]*60+(di[1])*30*-1*(di[0]>0?1:-1)*0+30*(di[1]),mid[1]-di[1]*60-di[0]*30);
+      c.stroke();
+    }
+  });
+  c.restore();
+
+  /* lamp */
+  var lx=lamp.x*W,ly=lamp.y*H;
+  var lg=c.createRadialGradient(lx,ly,0,lx,ly,80);
+  lg.addColorStop(0,"rgba(255,255,255,.95)");
+  lg.addColorStop(.15,"rgba(255,250,230,.5)");
+  lg.addColorStop(1,"rgba(255,250,230,0)");
+  c.fillStyle=lg;c.beginPath();c.arc(lx,ly,80,0,6.2832);c.fill();
+  c.strokeStyle="rgba(220,225,240,.5)";c.setLineDash([4,5]);c.lineWidth=1.2;
+  c.beginPath();c.arc(lx,ly,26,0,6.2832);c.stroke();c.setLineDash([]);
+  c.fillStyle="rgba(180,190,210,.8)";
+  c.font="600 9px ui-monospace,Menlo,Consolas,monospace";c.textAlign="center";
+  c.fillText("L A M P",lx,ly+44);
+
+  /* prism(s) */
+  drawPrism(c,prism);
+  if(document.getElementById("secondPrism").checked){
+    var p2={x:prism2.x*W,y:prism2.y*H,s:prism.s*0.8,a:prism.a};
+    c.save();c.translate(p2.x,p2.y);c.rotate(Math.PI);c.translate(-p2.x,-p2.y);
+    drawPrism(c,p2);
+    c.restore();
+  }
+
+  /* composite + reflection */
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  ctx.drawImage(off,0,0,W,H);
+  /* floor reflection */
+  var floor=H*0.84;
+  ctx.save();
+  ctx.globalAlpha=0.28;
+  ctx.translate(0,floor*2);
+  ctx.scale(1,-1);
+  ctx.filter="blur(2px)";
+  ctx.drawImage(off,0,0,W,H);
+  ctx.restore();
+  var fg=ctx.createLinearGradient(0,floor,0,H);
+  fg.addColorStop(0,"rgba(4,5,10,0.15)");
+  fg.addColorStop(1,"rgba(4,5,10,0.95)");
+  ctx.fillStyle=fg;
+  ctx.fillRect(0,floor,W,H-floor);
+  ctx.strokeStyle="rgba(255,255,255,.07)";
+  ctx.beginPath();ctx.moveTo(0,floor);ctx.lineTo(W,floor);ctx.stroke();
+  ctx.restore();
+}
+
+/* stats */
+function updateStats(){
+  document.getElementById("n400").textContent=cauchy(400,modeToggle.checked).toFixed(4);
+  document.getElementById("n680").textContent=cauchy(680,modeToggle.checked).toFixed(4);
+}
+
+/* hover on screen */
+var readout=document.getElementById("readout");
+var hoverNm=null;
+canvas.addEventListener("pointermove",function(e){
+  var px=W*screen.x;
+  if(Math.abs(e.clientX-px)<70){
+    var rays=traceAll(modeToggle.checked);
+    var best=null,bd=28;
+    rays.forEach(function(r){
+      var lastp=r.pts[r.pts.length-1];
+      if(lastp[0]<px-2)return;
+      var slope=(lastp[1]-r.pts[r.pts.length-2][1])/(lastp[0]-r.pts[r.pts.length-2][0]+1e-6);
+      var y=lastp[1]+slope*(px-lastp[0]);
+      var d=Math.abs(y-e.clientY);
+      if(d<bd){bd=d;best=r;}
+    });
+    if(best){
+      hoverNm=best.nm;
+      var line="λ = "+best.nm.toFixed(0)+" nm";
+      for(var i=0;i<names.length;i++){
+        if(Math.abs(best.nm-names[i][0])<26)line+="\n~ "+names[i][1];
+      }
+      readout.textContent=line;
+      readout.style.color="rgb("+best.col[0]+","+best.col[1]+","+best.col[2]+")";
+      readout.style.opacity="1";
+      readout.style.left=(px-200)+"px";
+      readout.style.top=(e.clientY+14)+"px";
+      return;
+    }
+  }
+  readout.style.opacity="0";hoverNm=null;
+});
+canvas.addEventListener("pointerleave",function(){readout.style.opacity="0";});
+
+/* dragging */
+var drag=null,pointer={x:0,y:0,vx:0,vy:0};
+canvas.addEventListener("pointerdown",function(e){
+  canvas.setPointerCapture(e.pointerId);
+  var lx=lamp.x*W,ly=lamp.y*H;
+  var pxc=prism.x*W,pyc=prism.y*H;
+  if(Math.hypot(e.clientX-lx,e.clientY-ly)<70)drag={o:lamp};
+  else if(Math.hypot(e.clientX-pxc,e.clientY-pyc)<prism.s)drag={o:prism};
+  else if(secondPrism.checked&&Math.hypot(e.clientX-prism2.x*W,e.clientY-prism2.y*H)<prism.s*0.8)drag={o:prism2};
+  if(drag){drag.ox=drag.o.x*W-e.clientX;drag.oy=drag.o.y*H-e.clientY;}
+  pointer.x=e.clientX;pointer.y=e.clientY;
+});
+canvas.addEventListener("pointermove",function(e){
+  if(!drag)return;
+  drag.o.x=Math.max(.03,Math.min(.95,(e.clientX+drag.ox)/W));
+  drag.o.y=Math.max(.06,Math.min(.9,(e.clientY+drag.oy)/H));
+  if(!reduce)requestRender();
+  pointer.x=e.clientX;pointer.y=e.clientY;
+});
+canvas.addEventListener("pointerup",function(){drag=null;});
+var modeToggle=document.getElementById("modeToggle");
+var secondPrism=document.getElementById("secondPrism");
+modeToggle.addEventListener("change",function(){updateStats();if(!reduce)requestRender();else draw(perf*1000);});
+secondPrism.addEventListener("change",function(){if(!reduce)requestRender();else draw(perf*1000);});
+document.getElementById("resetBtn").addEventListener("click",function(){
+  defaultLayout();
+  if(!reduce)requestRender();else draw(perf*1000);
+});
+
+/* render loop: static when reduced-motion */
+var rafId=null;
+function requestRender(){if(!rafId&&!reduce)rafId=requestAnimationFrame(loop);}
+function loop(now){
+  rafId=null;
+  draw(now);
+  if(!reduce)requestAnimationFrame(loop);
+}
+var lastTime=0;
+function raf2(){rafId=null;}
+requestRender();
+updateStats();
+resize();
+window.addEventListener("resize",function(){resize();if(reduce)draw(perf*1000);});
+/* kick off one static draw in case reduced motion */
+draw(performance.now());
+})();
+</script>
+</body>
+</html>
