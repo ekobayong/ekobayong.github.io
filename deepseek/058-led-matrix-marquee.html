@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DOTMATRIX-7 // Marquee controller</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:repeating-linear-gradient(0deg,transparent 0 4px,rgba(255,255,255,.015) 4px 5px),#0c0d0f;
+  background-image:radial-gradient(80% 40% at 50% 0%,rgba(255,170,60,.07),transparent 70%),repeating-linear-gradient(0deg,transparent 0 4px,rgba(255,255,255,.015) 4px 5px),#0c0d0f;
+  min-height:100vh;color:#c9ced4;font-family:'Courier New','Courier',ui-monospace,monospace;text-transform:uppercase;
+  padding:26px 18px 60px;letter-spacing:.06em;
+}
+.wrap{max-width:1180px;margin:0 auto}
+header{display:flex;align-items:center;gap:14px;padding:0 6px 16px}
+.linkled{width:10px;height:10px;border-radius:50%;background:#39ff5a;box-shadow:0 0 10px #39ff5a;animation:ledb 1.6s steps(2) infinite}
+@keyframes ledb{50%{opacity:.3}}
+header h1{font-size:19px;letter-spacing:.16em;font-weight:400;color:#c9ced4}
+header h1 b{color:#c9ced4;font-weight:400}
+header span{color:#ffb000;font-size:10px;letter-spacing:.18em}
+/* bezel */
+.bezel{
+  background:repeating-linear-gradient(90deg,#3a3e44 0 4px,#2f3338 4px 8px,#34383e 8px 12px,#2b2f34 12px 16px);
+  position:relative;border-radius:10px;padding:26px 30px 22px;
+  box-shadow:inset 0 2px 1px rgba(255,255,255,.22),inset 0 -6px 12px rgba(0,0,0,.6),0 30px 60px rgba(0,0,0,.6);
+}
+.bezel::before{content:"";position:absolute;inset:0;border-radius:10px;
+  background:linear-gradient(180deg,rgba(255,255,255,.1),transparent 8%),linear-gradient(0deg,rgba(255,255,255,.05),transparent 12%)}
+.screw{position:absolute;width:22px;height:22px;border-radius:50%;
+  background:radial-gradient(circle at 35% 28%,#cdd2da,#5a5f66 55%,#33373c);
+  box-shadow:inset 0 1px 2px rgba(255,255,255,.5),0 2px 5px rgba(0,0,0,.5)}
+.screw::before{content:"";position:absolute;left:3px;right:3px;top:10px;height:2px;background:#22262b;transform:rotate(var(--sr,0deg))}
+.screw.tl{top:9px;left:9px;--sr:24deg}.screw.tr{top:9px;right:9px;--sr:-18deg}
+.screw.bl{bottom:9px;left:9px;--sr:63deg}.screw.br{bottom:9px;right:9px;--sr:7deg}
+/* glass + display */
+.glass{background:#0a0c10;border-radius:6px;padding:18px 12px 14px;position:relative;overflow:hidden;
+  box-shadow:inset 0 8px 26px rgba(0,0,0,.9),inset 0 -1px 0 rgba(255,255,255,.08)}
+.glass::before{content:"";position:absolute;left:-30%;top:-40%;width:70%;height:40%;transform:rotate(20deg);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.05),transparent)}
+canvas#matrix{width:100%;display:block;image-rendering:pixelated}
+.glabel{display:flex;justify-content:space-between;font-size:8.5px;letter-spacing:.24em;color:#6f777f;padding:8px 6px 0}
+/* controls */
+.ctrls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:18px}
+.cgroup{background:#171a1e;border:1px solid #2c3238;border-radius:8px;padding:16px 18px}
+.cgroup .lbl{font-size:9px;letter-spacing:.24em;color:#6f777f;margin-bottom:12px;display:flex;justify-content:space-between}
+.cgroup .lbl b{color:#c9ced4;font-weight:400}
+input[type="text"]{
+  width:100%;background:#0d0f12;border:1px solid #2c3238;color:#c9ced4;font-family:inherit;font-size:13px;
+  padding:11px 12px;letter-spacing:.08em;outline:none;text-transform:uppercase;
+}
+input[type="text"]:focus{border-color:#ffb000}
+.modeseg{display:flex;background:#0d0f12;border:1px solid #2c3238;border-radius:6px;overflow:hidden}
+.modeseg button{flex:1;background:none;border:none;color:#6f777f;font-family:inherit;font-size:10px;letter-spacing:.14em;
+  padding:11px 8px;cursor:pointer;position:relative;text-transform:uppercase}
+.modeseg button.on{color:#c9ced4}
+.modeseg button.on::after{content:"";position:absolute;left:20%;right:20%;bottom:0;height:2px;background:#ffb000}
+.swatches{display:flex;gap:10px}
+.swatch{width:34px;height:34px;border-radius:50%;cursor:pointer;border:none;position:relative;
+  background:radial-gradient(circle at 35% 30%,var(--c2),var(--c) 55%,#000)}
+.swatch::after{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 -3px 6px rgba(0,0,0,.5)}
+.swatch.on{box-shadow:0 0 0 2.5px #0c0d0f,0 0 0 4px var(--c)}
+.sliderrow label{display:flex;justify-content:space-between;font-size:9px;letter-spacing:.2em;color:#6f777f;margin-bottom:8px}
+.sliderrow label b{color:#ffb000;font-weight:400}
+.slider{width:100%;appearance:none;-webkit-appearance:none;height:8px;border-radius:3px;background:#0d0f12;
+  outline:none;border:1px solid #2c3238}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:22px;border-radius:4px;background:linear-gradient(180deg,#3a3e44,#2b2f34);
+  border:1px solid #565c64;box-shadow:0 2px 6px rgba(0,0,0,.6)}
+.slider::-moz-range-thumb{width:18px;height:22px;border-radius:4px;background:#2b2f34;border:1px solid #565c64}
+.pixread{font-size:11px;letter-spacing:.12em;color:#ffb000;line-height:1.8}
+/* display B */
+.bezel.b{margin-top:26px;padding:18px 24px 14px}
+.bezel.b canvas{max-width:520px;margin:0 auto;display:block}
+.liveclock{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);font-size:9px;letter-spacing:.22em;color:#6f777f}
+.footer{margin-top:30px;display:flex;justify-content:space-between;font-size:9px;letter-spacing:.22em;color:#6f777f;flex-wrap:wrap;gap:8px}
+@media(prefers-reduced-motion:reduce){.linkled{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="linkled"></span>
+    <h1>DOTMATRIX-7 // <b>Marquee controller</b></h1>
+    <span style="margin-left:auto">SER. Nº 207A-MK3</span>
+  </header>
+
+  <div class="bezel">
+    <span class="screw tl"></span><span class="screw tr"></span><span class="screw bl"></span><span class="screw br"></span>
+    <div class="glass">
+      <canvas id="matrix"></canvas>
+      <div class="glabel"><span>Display A · matrix</span><span>"0" 60 col</span></div>
+    </div>
+  </div>
+
+  <div class="ctrls">
+    <div class="cgroup">
+      <div class="lbl">Message <b id="chCount">0 CH</b></div>
+      <input type="text" id="message" value="HELLO OPERATOR" maxlength="120" spellcheck="false">
+    </div>
+    <div class="cgroup">
+      <div class="lbl">Mode</div>
+      <div class="modeseg" id="modes">
+        <button class="on" data-m="scroll">Scroll</button>
+        <button data-m="static">Static</button>
+        <button data-m="bounce">Bounce</button>
+      </div>
+    </div>
+    <div class="cgroup">
+      <div class="lbl">Colour</div>
+      <div class="swatches" id="swatches">
+        <button class="swatch on" data-c="#ffb000" data-c2="#ffe0a0" style="--c:#ffb000;--c2:#ffe0a0" aria-label="amber"></button>
+        <button class="swatch" data-c="#ff2a1a" data-c2="#ff9a8a" style="--c:#ff2a1a;--c2:#ff9a8a" aria-label="red"></button>
+        <button class="swatch" data-c="#39ff5a" data-c2="#aaffc0" style="--c:#39ff5a;--c2:#aaffc0" aria-label="green"></button>
+        <button class="swatch" data-c="#29e6ff" data-c2="#a8f2ff" style="--c:#29e6ff;--c2:#a8f2ff" aria-label="cyan"></button>
+        <button class="swatch" data-c="#f4f4ff" data-c2="#ffffff" style="--c:#f4f4ff;--c2:#ffffff" aria-label="white"></button>
+      </div>
+    </div>
+    <div class="cgroup">
+      <div class="sliderrow"><label>Speed <b id="speedVal">40 c/s</b></label>
+        <input type="range" class="slider" id="speed" min="5" max="120" value="40"></div>
+      <div class="sliderrow" style="margin-top:12px"><label>Pixel size <b id="pxVal">12 px</b></label>
+        <input type="range" class="slider" id="pxsize" min="7" max="26" value="12"></div>
+    </div>
+    <div class="cgroup">
+      <div class="lbl">PIXELS</div>
+      <div class="pixread">LIT <b id="pxLit">0</b> · TOTAL <b id="pxTotal">0</b><br>GRID <b id="pxGrid">60×11</b></div>
+    </div>
+  </div>
+
+  <div class="bezel b">
+    <span class="screw tl"></span><span class="screw tr"></span><span class="screw bl"></span><span class="screw br"></span>
+    <div class="glass" style="display:flex;justify-content:center">
+      <canvas id="clockCv" style="width:auto;max-width:100%"></canvas>
+    </div>
+    <div class="glabel"><span>Display B · local time</span><span>HH:MM:SS</span></div>
+  </div>
+  <div class="footer">
+    <span>DOTMATRIX-7 // MARQUEE CONTROLLER</span>
+    <span>58-7K-ORDER-B02 · MADE FOR INDUSTRIAL NOSTALGIA</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // 5x7 font
+  var FONT={
+    A:['01110','10001','10001','11111','10001','10001','10001'],
+    B:['11110','10001','10001','11110','10001','10001','11110'],
+    C:['01111','10000','10000','10000','10000','10000','01111'],
+    D:['11110','10001','10001','10001','10001','10001','11110'],
+    E:['11111','10000','10000','11110','10000','10000','11111'],
+    F:['11111','10000','10000','11110','10000','10000','10000'],
+    G:['01111','10000','10000','10111','10001','10001','01111'],
+    H:['10001','10001','10001','11111','10001','10001','10001'],
+    I:['11111','00100','00100','00100','00100','00100','11111'],
+    J:['00111','00010','00010','00010','00010','10010','01100'],
+    K:['10001','10010','10100','11000','10100','10010','10001'],
+    L:['10000','10000','10000','10000','10000','10000','11111'],
+    M:['10001','11011','10101','10101','10001','10001','10001'],
+    N:['10001','11001','10101','10011','10001','10001','10001'],
+    O:['01110','10001','10001','10001','10001','10001','01110'],
+    P:['11110','10001','10001','11110','10000','10000','10000'],
+    Q:['01110','10001','10001','10001','10101','10010','01101'],
+    R:['11110','10001','10001','11110','10100','10010','10001'],
+    S:['01111','10000','10000','01110','00001','00001','11110'],
+    T:['11111','00100','00100','00100','00100','00100','00100'],
+    U:['10001','10001','10001','10001','10001','10001','01110'],
+    V:['10001','10001','10001','10001','10001','01010','00100'],
+    W:['10001','10001','10001','10101','10101','11011','10001'],
+    X:['10001','10001','01010','00100','01010','10001','10001'],
+    Y:['10001','10001','01010','00100','00100','00100','00100'],
+    Z:['11111','00001','00010','00100','01000','10000','11111'],
+    '0':['01110','10001','10011','10101','11001','10001','01110'],
+    '1':['00100','01100','00100','00100','00100','00100','01110'],
+    '2':['01110','10001','00001','00010','00100','01000','11111'],
+    '3':['11110','00001','00001','01110','00001','00001','11110'],
+    '4':['00010','00110','01010','10010','11111','00010','00010'],
+    '5':['11111','10000','11110','00001','00001','10001','01110'],
+    '6':['01110','10000','10000','11110','10001','10001','01110'],
+    '7':['11111','00001','00010','00100','01000','01000','01000'],
+    '8':['01110','10001','10001','01110','10001','10001','01110'],
+    '9':['01110','10001','10001','01111','00001','00001','01110'],
+    ' ':['00000','00000','00000','00000','00000','00000','00000'],
+    '.':['00000','00000','00000','00000','00000','00100','00100'],
+    ',':['00000','00000','00000','00000','00100','00100','01000'],
+    '!':['00100','00100','00100','00100','00100','00000','00100'],
+    '?':['01110','10001','00001','00110','00100','00000','00100'],
+    "'":['00100','00100','01000','00000','00000','00000','00000'],
+    '"':['01010','01010','00000','00000','00000','00000','00000'],
+    '-':['00000','00000','00000','01110','00000','00000','00000'],
+    '_':['00000','00000','00000','00000','00000','00000','11111'],
+    ':':['00000','00100','00100','00000','00100','00100','00000'],
+    ';':['00000','00100','00100','00000','00100','00100','01000'],
+    '/':['00001','00010','00010','00100','00100','01000','01000'],
+    '&':['01100','10010','10010','01100','10101','10010','01101'],
+    '+':['00000','00100','00100','11111','00100','00100','00000'],
+    '=':['00000','00000','11111','00000','11111','00000','00000'],
+    '(':['00110','01000','01000','01000','01000','01000','00110'],
+    ')':['01100','00010','00010','00010','00010','00010','01100'],
+    '#':['01010','01010','11111','01010','11111','01010','01010'],
+    '$':['00100','01110','10101','01110','10101','10101','01110'],
+    '%':['11001','11010','00010','00100','01000','01011','10011'],
+    '@':['01110','10001','10111','10101','10111','10000','01110'],
+    '*':['00000','01010','00100','11111','00100','01010','00000'],
+    '<':['00010','00100','01000','10000','01000','00100','00010'],
+    '>':['01000','00100','00010','00001','00010','00100','01000'],
+    '\u2665':['01010','10101','10001','10001','01010','00100','00000']
+  };
+  function raster(msg){
+    var cols=[];
+    var up=msg.toUpperCase();
+    for(var i=0;i<up.length;i++){
+      var glyph=FONT[up[i]]||null;
+      if(!glyph){
+        // hollow box
+        glyph=['01110','10001','10001','10001','10001','10001','01110'];
+      }
+      for(var c=0;c<5;c++){
+        var col=0;
+        for(var r=0;r<7;r++){
+          if(glyph[r]&&glyph[r][c]==="1")col|=1<<r;
+        }
+        cols.push(col);
+      }
+      cols.push(0); // blank column
+    }
+    return cols;
+  }
+  // display state
+  var mode="scroll",msg="HELLO OPERATOR",color="#ffb000";
+  var ROWS=11;
+  var cv=document.getElementById("matrix"),ctx=cv.getContext("2d");
+  var cvc=document.getElementById("clockCv"),cctx=cvc.getContext("2d");
+  var px2=12,speed=40;
+  var offset=0;
+  function resizeCv(){
+    var dpr=Math.min(2,devicePixelRatio||1);
+    var w=cv.parentElement.clientWidth;
+    var cols=Math.max(8,Math.floor((w-24)/px2));
+    cvs.cols=cols;
+    cv.width=cols*px2*dpr;cv.height=ROWS*px2*dpr;
+    cvs.dpr=dpr;
+  }
+  var cvs={dpr:1,cols:40};
+  function drawMatrix(){
+    var dpr=cvs.dpr,cols=cvs.cols;
+    var W=cols*px2,H=ROWS*px2;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,W,H);
+    // background grid dots
+    ctx.fillStyle="rgba(23,26,30,1)";
+    for(var y=0;y<ROWS;y++)for(var x=0;x<cols;x++){
+      ctx.fillStyle="#171a1e";
+      ctx.beginPath();ctx.arc(x*px2+px2/2,y*px2+px2/2,px2*0.34,0,7);ctx.fill();
+    }
+    // raster
+    var grid=raster(msg);
+    var step=Math.ceil(speed/6);
+    if(mode==="scroll"){
+      offset+=step*(RM?0.33:1);
+      if(offset>= (grid.length+cols+8))offset=0;
+      drawRaster(grid,offset-cols-8);
+    }else if(mode==="static"){
+      drawRasterStatic(grid);
+    }else{
+      // bounce
+      var total=grid.length+8;
+      var span=Math.max(total,cols);
+      var pos=Math.abs(Math.sin(offset/span*Math.PI))* (Math.max(cols,total)-cols);
+      if(Math.sin(offset/span*Math.PI*2)>0)offset++ ;else{}
+      offset+=step*(RM?0.33:1);
+      var p2=Math.abs(((offset/Math.max(total-2,1))%(1))) ;
+      var seat= (total>cols)?Math.abs(Math.sin((offset/ (Math.max(total-cols,1)) )*Math.PI))* (total-cols):0;
+      drawRaster(grid,-seat+ (cols-Math.min(cols,total))/2);
+    }
+    // lit count
+    var lit=0;
+    for(var i=0;i<grid.length;i++){var v=grid[i];while(v){lit+=v&1;v>>=1}}
+    // recompute: count lit drawn = grid bits
+    document.getElementById("pxLit").textContent=countLit(grid);
+    document.getElementById("pxTotal").textContent=cols*ROWS;
+    document.getElementById("pxGrid").textContent=cols+"×"+ROWS;
+    document.getElementById("chCount").textContent=msg.length+" CH";
+  }
+  function countLit(grid){
+    var n=0;
+    for(var i=0;i<grid.length;i++){var v=grid[i];while(v){n+=v&1;v>>=1}}
+    return n;
+  }
+  function drawRaster(grid,off){
+    var cols=cvs.cols;
+    for(var i=0;i<grid.length;i++){
+      var colX=i+off;
+      if(colX<-1||colX>cols)continue;
+      var v=grid[i];
+      for(var r=0;r<7;r++){
+        if((v>>r)&1){
+          drawLED(colX,r);
+        }
+      }
+    }
+  }
+  function drawRasterStatic(grid){
+    var cols=cvs.cols,total=grid.length;
+    if(total<=cols){
+      var start=Math.floor((cols-total)/2);
+      drawRaster(grid,start);
+    }else{
+      // show middle
+      var start=Math.floor((total-cols)/2);
+      var sub=grid.slice(start,start+cols);
+      drawRaster(sub,0);
+    }
+  }
+  function drawLED(cx,r){
+    var pad=2;
+    var x=cx*px2+pad/2,y=r*px2+pad/2;
+    var size=px2-pad;
+    // halo
+    ctx.fillStyle=color;
+    ctx.globalAlpha=0.16;
+    ctx.beginPath();ctx.arc(x+size/2,y+size/2,size*0.55,0,7);ctx.fill();
+    // core
+    ctx.globalAlpha=1;
+    ctx.fillStyle=color;
+    ctx.beginPath();ctx.arc(x+size/2,y+size/2,size*0.36,0,7);ctx.fill();
+    // specular
+    ctx.fillStyle="rgba(255,255,255,.85)";
+    ctx.beginPath();ctx.arc(x+size*0.34,y+size*0.32,Math.max(1,size*0.08),0,7);ctx.fill();
+  }
+  // clock display B
+  function drawClock(){
+    var dpr=Math.min(2,devicePixelRatio||1);
+    var size=px2*0.8;
+    var msg2=nowStr();
+    // measure: 6 glyphs*6 cols + 2 colons (blink) 
+    var grid=[];
+    for(var i=0;i<6;i++){
+      var g=FONT[msg2[i]]||FONT["0"];
+      for(var c=0;c<5;c++){
+        var col=0;
+        for(var r=0;r<7;r++)if(g[r][c]==="1")col|=1<<r;
+        grid.push(col);
+      }
+      grid.push(0);
+    }
+    var cols2=grid.length;
+    var W=cols2*size+40,H=11*size+20;
+    cvc.width=W*dpr;cvc.height=H*dpr;
+    cctx.setTransform(dpr,0,0,dpr,0,0);
+    cctx.clearRect(0,0,W,H);
+    var off=20;
+    for(var ci=0;ci<grid.length;ci++){
+      var blink=ci===6||ci===13;
+      if(blink&&Math.floor(Date.now()/500)%2===1&&!RM)continue;
+      var v=grid[ci];
+      for(var r=0;r<7;r++){
+        if((v>>r)&1){
+          pix(cctx,off+ci*size,r*size,size);
+        }
+      }
+    }
+    // unlit dots
+    cctx.fillStyle="rgba(23,26,30,.6)";
+    for(var y=0;y<11;y++)for(var x=0;x<cols2;x++){
+      cctx.globalAlpha=0.9;
+      cctx.fillStyle="#101318";
+      cctx.beginPath();cctx.arc(off+x*size+size/2,y*size+size/2,size*0.3,0,7);cctx.fill();
+    }
+    cctx.globalAlpha=1;
+  }
+  function pix(c,x,y,size){
+    var pad=Math.max(1,size*0.14);
+    c.fillStyle=color;
+    c.globalAlpha=0.14;
+    c.beginPath();c.arc(x+size/2,y+size/2,size*0.5,0,7);c.fill();
+    c.globalAlpha=1;
+    c.beginPath();c.arc(x+size/2,y+size/2,size*0.33,0,7);c.fill();
+    c.fillStyle="rgba(255,255,255,.8)";
+    c.beginPath();c.arc(x+size*0.3,y+size*0.3,Math.max(1,size*0.06),0,7);c.fill();
+  }
+  function nowStr(){
+    var d=new Date();
+    return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0");
+  }
+  // controls
+  document.getElementById("message").addEventListener("input",function(){
+    msg=this.value.toUpperCase().slice(0,120);
+  });
+  document.querySelectorAll("#modes button").forEach(function(b){
+    b.addEventListener("click",function(){
+      document.querySelectorAll("#modes button").forEach(function(x){x.classList.remove("on")});
+      b.classList.add("on");
+      mode=b.dataset.m;
+      offset=0;
+    });
+  });
+  document.querySelectorAll(".swatch").forEach(function(b){
+    b.addEventListener("click",function(){
+      document.querySelectorAll(".swatch").forEach(function(x){x.classList.remove("on")});
+      b.classList.add("on");
+      color=b.dataset.c;
+    });
+  });
+  document.getElementById("speed").addEventListener("input",function(){
+    speed=+this.value;
+    document.getElementById("speedVal").textContent=speed+" c/s";
+  });
+  document.getElementById("pxsize").addEventListener("input",function(){
+    px2=+this.value;
+    document.getElementById("pxVal").textContent=px2+" px";
+    resizeCv();
+  });
+  function loop(){
+    drawMatrix();
+    drawClock();
+    requestAnimationFrame(loop);
+  }
+  resizeCv();
+  loop();
+})();
+</script>
+</body>
+</html>

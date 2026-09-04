@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breathe — A Living Gradient</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --base:#1a1030;--c1:#ff6b57;--c2:#7b4dff;--c3:#14b8a6;--c4:#f5b942;
+  --pname:"Dawn";
+}
+html,body{height:100%;overflow:hidden}
+body{background:var(--base);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#f4f2ff;transition:background 2.2s ease}
+.mesh{position:fixed;inset:-20%;overflow:hidden;filter:blur(clamp(50px,7vw,120px)) saturate(1.15);z-index:0}
+.blob{position:absolute;border-radius:50%;mix-blend-mode:screen;will-change:transform}
+.grain{position:fixed;inset:0;z-index:2;pointer-events:none;opacity:.22;mix-blend-mode:overlay}
+.vig{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(120% 100% at 50% 50%,transparent 55%,rgba(0,0,0,.42))}
+/* typography */
+.monohead{position:fixed;top:30px;left:34px;z-index:5;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:rgba(244,242,255,.6);line-height:2}
+.monohead b{color:#fff}
+.monohead .pal{color:var(--c1);transition:color 2.2s}
+/* word */
+.wordwrap{position:absolute;inset:0;display:grid;place-items:center;z-index:3}
+.word{
+  font-family:'Iowan Old Style',Palatino,Georgia,serif;font-weight:300;font-style:italic;
+  font-size:clamp(3.4rem,15vw,15rem);letter-spacing:-.02em;color:#f6f2ff;
+  text-shadow:0 0 60px rgba(255,255,255,.4);text-align:center;
+}
+.word .layer{position:absolute;inset:0;display:grid;place-items:center;grid-row:1;grid-column:1;white-space:nowrap}
+.word .out{opacity:0}
+.word .in{opacity:0}
+.caption{position:fixed;bottom:108px;left:50%;transform:translateX(-50%);z-index:4;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;letter-spacing:.3em;text-transform:uppercase;color:rgba(244,242,255,.55);text-align:center;transition:opacity 1.6s;max-width:90vw}
+/* footer */
+.footer{position:fixed;bottom:26px;left:0;right:0;z-index:6;display:flex;justify-content:center;gap:18px;align-items:center;flex-wrap:wrap;padding:0 20px}
+.seg{display:flex;border-radius:999px;border:1px solid rgba(255,255,255,.16);overflow:hidden;background:rgba(255,255,255,.05);backdrop-filter:blur(12px)}
+.seg button{border:none;background:none;color:rgba(244,242,255,.65);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.12em;padding:10px 18px;cursor:pointer;transition:background .3s,color .3s}
+.seg button:hover{background:rgba(255,255,255,.1)}
+.seg button.on{background:rgba(255,255,255,.18);color:#fff}
+.dot{width:14px;height:14px;border-radius:50%;display:inline-block;vertical-align:-2px;margin-right:8px;transition:transform .4s cubic-bezier(.34,1.56,.64,1)}
+.seg button:hover .dot{transform:scale(1.35) rotate(15deg)}
+.pause{width:52px;height:52px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.05);color:#fff;cursor:pointer;display:grid;place-items:center;transition:transform .4s cubic-bezier(.34,1.56,.64,1),background .3s}
+.pause:hover{transform:scale(1.12);background:rgba(255,255,255,.12)}
+.hint{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);z-index:5;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;letter-spacing:.22em;color:rgba(244,242,255,.4);white-space:nowrap}
+@media(max-width:640px){
+  .monohead{top:18px;left:20px;font-size:9.5px}
+  .hint{display:none}
+  .seg button{padding:9px 12px;font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){
+  .grain{opacity:.15}
+}
+</style>
+</head>
+<body>
+<div class="mesh" id="mesh"></div>
+<div class="vig"></div>
+<canvas class="grain" id="grain"></canvas>
+
+<header class="monohead">
+  BREATHE · A LIVING GRADIENT <span style="opacity:.4">NO. 009</span><br>
+  palette — <span class="pal" id="palName">DAWN</span>
+</header>
+
+<div class="wordwrap" id="wordwrap">
+  <div class="word" id="word"></div>
+</div>
+<p class="caption" id="caption"></p>
+<div class="hint">space · pause&nbsp;&nbsp;&nbsp;1 2 3 · palette</div>
+
+<footer class="footer">
+  <div class="seg" id="palSeg" role="group" aria-label="Palette">
+    <button data-p="Dawn" class="on"><span class="dot" style="background:conic-gradient(#ff6b57,#7b4dff,#14b8a6,#f5b942,#ff6b57)"></span>Dawn</button>
+    <button data-p="Reef"><span class="dot" style="background:conic-gradient(#00c2c7,#2748ff,#5be7a9,#ff7ab6,#00c2c7)"></span>Reef</button>
+    <button data-p="Ember"><span class="dot" style="background:conic-gradient(#ff4d2e,#9c1a5b,#ff9f1c,#ffd166,#ff4d2e)"></span>Ember</button>
+  </div>
+  <button class="pause" id="pauseBtn" aria-label="Pause" aria-pressed="false">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21" id="icPlay"/><rect x="5" y="3" width="5" height="18" rx="1" id="icPause" style="display:none"/><rect x="14" y="3" width="5" height="18" rx="1" id="icPause2" style="display:none"/></svg>
+  </button>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var palettes={
+    Dawn:{base:"#1a1030",c1:"#ff6b57",c2:"#7b4dff",c3:"#14b8a6",c4:"#f5b942"},
+    Reef:{base:"#03131f",c1:"#00c2c7",c2:"#2748ff",c3:"#5be7a9",c4:"#ff7ab6"},
+    Ember:{base:"#1c0a0a",c1:"#ff4d2e",c2:"#9c1a5b",c3:"#ff9f1c",c4:"#ffd166"}
+  };
+  var words=[
+    {w:"breathe",c:"in through the nose, four counts"},
+    {w:"drift",c:"let the thought pass like weather"},
+    {w:"soften",c:"unclench the jaw, drop the shoulders"},
+    {w:"become",c:"you are the room you are sitting in"},
+    {w:"linger",c:"stay with the last warm feeling"},
+    {w:"unfold",c:"release the day's folded edges"},
+    {w:"return",c:"come back to the sound of yourself"}
+  ];
+  var root=document.documentElement,mesh=document.getElementById("mesh");
+  var blobs=[],paused=false,wordIdx=0,wordTimer=0;
+
+  function buildMesh(){
+    mesh.innerHTML="";
+    blobs=[];
+    for(var i=0;i<5;i++){
+      var b=document.createElement("div");
+      b.className="blob";
+      var d=48+Math.random()*22;
+      b.style.width=b.style.height=(d+"vmax");
+      b.style.left=(Math.random()*120-10)+"%";
+      b.style.top=(Math.random()*120-10)+"%";
+      b.style.background="radial-gradient(circle at 35% 35%,var(--c"+(i%4+1)+"),transparent 68%)";
+      mesh.appendChild(b);
+      blobs.push({el:b,
+        px:parseFloat(b.style.left),py:parseFloat(b.style.top),
+        tx:46+Math.random()*18,ty:46+Math.random()*18,
+        ox:Math.random()*28-14,oy:Math.random()*28-14,
+        xp:(i*0.8),yp:(i*1.3),ph:(Math.random()*6),rot:Math.random()*360,
+        sx:0.88+Math.random()*0.2,sy:0.88+Math.random()*0.2,sp:0.5+Math.random()*0.5,sw:8+Math.random()*6});
+    }
+  }
+  buildMesh();
+  function easeSine(x){return Math.sign(Math.sin(x))*Math.pow(Math.abs(Math.sin(x)),0.8)}
+  function tick(t){
+    var tt=t/1000;
+    for(var i=0;i<blobs.length;i++){
+      var b=blobs[i];
+      var ix=easeSine(tt/(23+b.ox)+b.ph)*b.tx+b.ox;
+      var iy=easeSine(tt/(31+b.oy)+b.yp)*b.ty+b.oy;
+      var sc=1+Math.sin(tt/(b.sw)+b.sp)*((8+Math.abs(b.ph)*6)/100);
+      b.el.style.transform="translate("+ix+"vw,"+iy+"vh) rotate("+(tt*b.rot/60+(b.ox*4))+"deg) scale("+sc+")";
+    }
+    grainDraw();
+    if(!paused)requestAnimationFrame(tick);
+  }
+  // grain
+  var grain=document.getElementById("grain"),gc=grain.getContext("2d");
+  var frames=[];
+  function buildGrain(){
+    var dpr=Math.min(1.5,window.devicePixelRatio||1);
+    var w=Math.min(320,window.innerWidth/3),h=Math.min(320,window.innerHeight/3);
+    grain.width=w*dpr;grain.height=h*dpr;
+    gc.setTransform(dpr,0,0,dpr,0,0);
+    gc.globalAlpha=1;
+    frames=[];
+    for(var f=0;f<4;f++){
+      var img=gc.createImageData(w,h);
+      for(var i=0;i<img.data.length;i+=4){
+        var v=110+Math.random()*90;
+        img.data[i]=v;img.data[i+1]=v;img.data[i+2]=v;img.data[i+3]=255;
+      }
+      frames.push(img);
+    }
+    gc.clearRect(0,0,w,h);
+    grain.style.width=w+"px";grain.style.height=h+"px";
+    grain.style.backgroundSize=w+"px "+h+"px";
+    if(RM){gc.putImageData(frames[0],0,0)}
+  }
+  var gf=0;
+  function grainDraw(){
+    if(RM)return;
+    gc.globalAlpha=1;
+    gc.putImageData(frames[(gf++)%4],0,0);
+  }
+  var resTimer=null;
+  window.addEventListener("resize",function(){clearTimeout(resTimer);resTimer=setTimeout(buildGrain,250)});
+  buildGrain();
+  if(!RM)tick(performance.now());else tick(performance.now());
+
+  // word cycling
+  var wordEl=document.getElementById("word");
+  var capEl=document.getElementById("caption");
+  function makeLayer(txt,cls){
+    var d=document.createElement("div");
+    d.className="layer "+cls;d.textContent=txt;
+    return d;
+  }
+  function swapWord(n){
+    var item=words[n%words.length];
+    var layers=wordEl.children;
+    if(layers.length){
+      var out=layers[0];
+      out.style.transition="opacity 1.6s ease-out,transform 1.6s ease-out,filter 1.6s ease-out";
+      out.style.opacity=0;out.style.transform="translateY(-12px) scale(1.015)";out.style.filter="blur(10px)";
+      setTimeout(function(){out.remove()},1800);
+    }
+    if(layers.length>1){layers[1].remove()}
+    var inc=makeLayer(item.w,"in");
+    inc.style.transition="opacity 1.6s ease-out,transform 1.6s ease-out,filter 1.6s ease-out";
+    inc.style.opacity=0;inc.style.transform="translateY(12px) scale(.985)";inc.style.filter="blur(8px)";
+    wordEl.appendChild(inc);
+    requestAnimationFrame(function(){requestAnimationFrame(function(){
+      inc.style.opacity=1;inc.style.transform="none";inc.style.filter="blur(0)";
+    })});
+    capEl.style.opacity=0;
+    setTimeout(function(){capEl.textContent=item.c;capEl.style.opacity=1},1200);
+  }
+  swapWord(0);
+  function cycle(){
+    if(paused)return;
+    wordIdx++;
+    swapWord(wordIdx);
+    setTimeout(cycle,RM?9000:5200);
+  }
+  setTimeout(cycle,RM?9000:5200);
+  wordwrap.addEventListener("click",function(){if(!paused){wordIdx++;swapWord(wordIdx)}});
+
+  // palettes
+  var seg=document.getElementById("palSeg");
+  function setPal(name,cb){
+    var p=palettes[name];
+    root.style.setProperty("--base",p.base);
+    root.style.setProperty("--c1",p.c1);root.style.setProperty("--c2",p.c2);
+    root.style.setProperty("--c3",p.c3);root.style.setProperty("--c4",p.c4);
+    document.getElementById("palName").textContent=name;
+    seg.querySelectorAll("button").forEach(function(b){b.classList.toggle("on",b.dataset.p===name)});
+  }
+  seg.querySelectorAll("button").forEach(function(b){
+    b.addEventListener("click",function(){setPal(b.dataset.p)});
+  });
+  // pause
+  var pauseBtn=document.getElementById("pauseBtn");
+  pauseBtn.addEventListener("click",function(){
+    paused=!paused;
+    pauseBtn.setAttribute("aria-pressed",paused?"true":"false");
+    document.getElementById("icPlay").style.display=paused?"none":"block";
+    document.getElementById("icPause").style.display=paused?"block":"none";
+    document.getElementById("icPause2").style.display=paused?"block":"none";
+    if(!paused)requestAnimationFrame(tick);
+  });
+  window.addEventListener("keydown",function(e){
+    if(e.code==="Space"){e.preventDefault();pauseBtn.click()}
+    if(e.key==="1")setPal("Dawn");
+    if(e.key==="2")setPal("Reef");
+    if(e.key==="3")setPal("Ember");
+  });
+})();
+</script>
+</body>
+</html>

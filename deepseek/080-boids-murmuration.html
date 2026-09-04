@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Murmuration — Starlings at Dusk</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--night:0;--amber:#d9a466}
+html,body{height:100%;overflow:hidden}
+body{
+  background:
+    linear-gradient(180deg,#2a2f4a,#5a4a6e 34%,#b26a5a 62%,#e3a06a 80%,#f0c48c);
+  background-attachment:fixed;
+  color:#f2eadf;font-family:Georgia,'Iowan Old Style',Palatino,serif;cursor:none;
+}
+@media(pointer:coarse){body{cursor:auto}}
+/* night layer */
+.night{position:fixed;inset:0;opacity:var(--night);pointer-events:none;z-index:1;transition:opacity 1s;
+  background:linear-gradient(180deg,#05060c,#0b0f1e 40%,#1a1c33 75%,#2b2540)}
+.night .stars2{position:absolute;inset:0;opacity:.5;
+  background-image:radial-gradient(1.5px 1.5px at 14% 20%,#fff,transparent 60%),
+  radial-gradient(1px 1px at 30% 12%,#fff,transparent 60%),
+  radial-gradient(2px 2px at 48% 28%,#fff,transparent 60%),
+  radial-gradient(1px 1px at 63% 15%,#fff,transparent 60%),
+  radial-gradient(1px 1px at 80% 24%,#fff,transparent 60%),
+  radial-gradient(1.5px 1.5px at 90% 10%,#fff,transparent 60%)}
+.night .hglow{position:absolute;left:0;right:0;bottom:0;height:34vh;
+  background:radial-gradient(70% 100% at 50% 100%,rgba(160,120,220,.22),transparent 70%)}
+canvas#flock{position:fixed;inset:0;z-index:3;display:block}
+/* landscape */
+svg#land{position:fixed;left:0;right:0;bottom:0;width:100%;z-index:2;pointer-events:none}
+/* hawk cursor */
+.hawk{position:fixed;z-index:6;width:30px;height:30px;pointer-events:none;transform:translate(-50%,-50%);
+  transition:transform .2s ease}
+.hawk svg{width:30px;height:30px;display:block;filter:drop-shadow(0 0 6px rgba(10,10,16,.7))}
+/* title */
+.titlebox{position:fixed;top:26px;left:28px;z-index:7;pointer-events:none}
+.titlebox h1{font-size:clamp(30px,4.6vw,54px);font-weight:400;letter-spacing:.02em}
+.titlebox h1 em{font-style:italic;color:var(--amber)}
+.titlebox p{font-style:italic;color:rgba(242,234,223,.75);font-size:14.5px;margin-top:6px}
+/* panel */
+.panelbox{position:fixed;top:24px;right:26px;z-index:8;width:230px;background:rgba(13,15,20,.55);
+  backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px;pointer-events:auto}
+.panelbox .pfps{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.24em;color:rgba(242,234,223,.5);text-transform:uppercase;margin-bottom:12px;display:flex;justify-content:space-between}
+.panelbox .pfps b{color:#fff;font-weight:400}
+.prow{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-style:italic;color:rgba(242,234,223,.8);margin-bottom:8px}
+.prow b{font-family:ui-monospace,monospace;font-style:normal;color:var(--amber);font-weight:400;font-variant-numeric:tabular-nums}
+.prow input{appearance:none;-webkit-appearance:none;width:120px;height:2px;background:rgba(255,255,255,.2);border-radius:1px;outline:none}
+.prow input::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--amber);cursor:pointer;box-shadow:0 0 8px rgba(217,164,102,.8)}
+.pbtns{display:flex;gap:6px;margin-top:12px}
+.pbtn{border:1px solid rgba(255,255,255,.25);background:none;color:rgba(242,234,223,.85);font-family:ui-monospace,monospace;
+  font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;padding:8px 10px;border-radius:7px;cursor:pointer;flex:1;transition:all .25s}
+.pbtn:hover{border-color:var(--amber);color:#fff}
+.pbtn[aria-pressed="true"]{background:rgba(217,164,102,.2);border-color:var(--amber)}
+.hidep{position:fixed;top:24px;right:26px;z-index:9;border:1px solid rgba(255,255,255,.2);background:rgba(13,15,20,.5);
+  color:rgba(242,234,223,.85);font-family:ui-monospace,monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  padding:10px 14px;border-radius:99px;cursor:pointer;display:none}
+.foot{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:7;font-family:ui-monospace,monospace;
+  font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:rgba(242,234,223,.55);pointer-events:none;white-space:nowrap}
+@media(max-width:640px){
+  .panelbox{width:190px;padding:12px}
+  .panelbox .prow input{width:84px}
+  .titlebox{top:16px;left:16px}
+  .titlebox p{display:none}
+}
+@media(prefers-reduced-motion:reduce){.hawk{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="flock"></canvas>
+<div class="night"><div class="stars2"></div><div class="hglow"></div></div>
+<svg id="land" viewBox="0 0 1600 340" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+  <defs>
+    <linearGradient id="hillG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2333"/><stop offset="1" stop-color="#1a1520"/></linearGradient>
+    <linearGradient id="treeG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1620"/><stop offset="1" stop-color="#0a0a10"/></linearGradient>
+  </defs>
+  <path d="M0 200 Q 250 150 520 195 T 1100 190 T 1600 185 L1600 340 L0 340 Z" fill="url(#hillG)"/>
+  <path d="M0 250 L120 205 L200 250 L320 208 L430 256 L590 218 L700 258 L830 230 L940 262 L1100 225 L1250 260 L1380 238 L1600 262 L1600 340 L0 340 Z" fill="url(#treeG)"/>
+  <g stroke="#151018" stroke-width="5">
+    <line x1="260" y1="300" x2="260" y2="232"/><line x1="244" y1="246" x2="276" y2="240"/><line x1="248" y1="260" x2="274" y2="256"/>
+    <line x1="760" y1="310" x2="760" y2="248"/><line x1="744" y1="260" x2="776" y2="254"/><line x1="748" y1="274" x2="774" y2="270"/>
+    <line x1="1230" y1="296" x2="1230" y2="230"/><line x1="1214" y1="244" x2="1246" y2="238"/><line x1="1218" y1="258" x2="1244" y2="254"/>
+  </g>
+  <path d="M248 234 Q 500 240 1240 230" stroke="#151018" stroke-width="2" fill="none"/>
+  <ellipse cx="90" cy="310" rx="7" ry="5" fill="#0c0a12"/>
+  <ellipse cx="150" cy="300" rx="6" ry="4.5" fill="#0c0a12"/>
+  <ellipse cx="1400" cy="300" rx="7" ry="5" fill="#0c0a12"/>
+</svg>
+<div class="hawk" id="hawk">
+  <svg viewBox="0 0 30 30"><path d="M15 2 L27 24 L15 18 L3 24 Z" fill="#0c0a12"/><circle cx="15" cy="8" r="2.4" fill="#2a2430"/></svg>
+</div>
+
+<div class="titlebox">
+  <h1>Murmuration<em>.</em></h1>
+  <p>Twenty thousand birds, one unspoken sentence, revised every second.</p>
+</div>
+
+<div class="panelbox" id="panel">
+  <div class="pfps"><span>Flock</span><b id="pFps">60 fps</b></div>
+  <div class="prow"><span>Birds</span><b id="pBirds">3000</b></div>
+  <div class="prow"><span>Cohesion</span><b id="pCoh">1.0</b><input type="range" id="rCoh" min="0" max="3" step="0.1" value="1"></div>
+  <div class="prow"><span>Alignment</span><b id="pAli">1.0</b><input type="range" id="rAli" min="0" max="3" step="0.1" value="1"></div>
+  <div class="prow"><span>Separation</span><b id="pSep">1.2</b><input type="range" id="rSep" min="0" max="3" step="0.1" value="1.2"></div>
+  <div class="prow"><span>Speed</span><b id="pSpd">4</b><input type="range" id="rSpd" min="1" max="7" step="0.2" value="4"></div>
+  <div class="prow"><span>Perception</span><b id="pPer">42</b><input type="range" id="rPer" min="10" max="80" step="2" value="42"></div>
+  <div class="prow"><span>Dusk → night</span><b id="pNight">0</b><input type="range" id="rNight" min="0" max="100" value="0"></div>
+  <div class="pbtns">
+    <button class="pbtn" id="pauseB" aria-pressed="false">Pause</button>
+    <button class="pbtn" id="stepB">Step</button>
+    <button class="pbtn" id="scatterB">Scatter</button>
+  </div>
+</div>
+<button class="hidep" id="hideP">Hide panel</button>
+<div class="foot">click to scatter · space pause · s scatter</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cv=document.getElementById("flock"),ctx=cv.getContext("2d");
+  var W=0,H=0,DPR=1;
+  var N=3000,maxN=12000;
+  var px2=new Float32Array(maxN*2),pv=new Float32Array(maxN*2),phead=new Float32Array(maxN);
+  var night=0,paused=false;
+  var params={coh:1,ali:1,sep:1.2,spd:4,per:42};
+  var mouse={x:-9999,y:-9999};
+  // spatial hash
+  var cell=0,head=null,nxt=null,hcount=0;
+  function resize(){
+    DPR=Math.min(2,devicePixelRatio||1);
+    W=innerWidth;H=innerHeight;
+    cv.width=W*DPR;cv.height=H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    initHawk();
+  }
+  function newBird(i){
+    px2[i*2]=Math.random()*W;
+    px2[i*2+1]=Math.random()*H*0.7;
+    var a=Math.random()*Math.PI*2;
+    var sp=(0.5+Math.random()*0.5)*params.spd*40;
+    pv[i*2]=Math.cos(a)*sp;pv[i*2+1]=Math.sin(a)*sp;
+  }
+  function initFlock(){
+    for(var i=0;i<N;i++)newBird(i);
+    head=new Int32Array(N);nxt=new Int32Array(N);
+  }
+  function rebuildHash(){
+    cell=params.per+8;
+    hcount=0;
+    for(var i=0;i<N;i++)head[i]=-1;
+    nxt.set(new Int32Array(N));
+    var cols=Math.ceil(W/cell)+1;
+    for(var i2=0;i2<N;i2++){
+      var cx=Math.floor(px2[i2*2]/cell);
+      var cy=Math.floor(px2[i2*2+1]/cell);
+      var key=cy*cols+cx;
+      // we need per-cell lists; use head array sized cols*rows — allocate
+    }
+  }
+  // simpler: use a Map-like Int32 with grid arrays sized on demand
+  var gridSize=0;
+  function rebuildHash2(){
+    cell=params.per+8;
+    var cols=Math.ceil(W/cell)+2,rows=Math.ceil(H/cell)+2;
+    var gs=cols*rows;
+    if(head.length!==gs||true){
+      head=new Int32Array(gs);nxt=new Int32Array(N);
+      head.fill(-1);nxt.fill(-1);
+      cols_=cols;
+    }
+    for(var i=0;i<N;i++)nxt[i]=-1;
+    for(var i2=0;i2<N;i2++){
+      var cx=Math.floor(px2[i2*2]/cell)+1;
+      var cy=Math.floor(px2[i2*2+1]/cell)+1;
+      var key=cy*cols+cx;
+      nxt[i2]=head[key];
+      head[key]=i2;
+    }
+  }
+  var cols_=0;
+  function step(dt){
+    if(!paused){
+      rebuildHash2();
+      var w=W,h=H;
+      for(var i=0;i<N;i++){
+        var x=px2[i*2],y=px2[i*2+1];
+        var vx=pv[i*2],vy=pv[i*2+1];
+        var cx=Math.floor(x/cell)+1,cy=Math.floor(y/cell)+1;
+        var sx=0,sy=0,ax=0,ay=0,cx2=0,cy2=0,count=0;
+        for(var dy=-1;dy<=1;dy++)for(var dx=-1;dx<=1;dx++){
+          var key=(cy+dy)*cols_+(cx+dx);
+          if(key<0||key>=head.length)continue;
+          var j=head[key];
+          var trials=0;
+          while(j!==-1&&j!==i&&trials<24){
+            trials++;
+            var ox=px2[j*2]-x,oy=px2[j*2+1]-y;
+            var d2=ox*ox+oy*oy;
+            if(d2<params.per*params.per&&d2>0.001){
+              var d=Math.sqrt(d2);
+              // separation (inverse square within 45%)
+              if(d<params.per*0.45){
+                sx-=ox/d2*params.sep*30;
+                sy-=oy/d2*params.sep*30;
+              }
+              ax+=pv[j*2]/d*0.3;ay+=pv[j*2+1]/d*0.3;
+              cx2+=ox*0.001;cy2+=oy*0.001;
+              count++;
+            }
+            j=nxt[j];
+          }
+        }
+        // attractor (Lissajous)
+        var t=performance.now()/1000;
+        var axx=w*0.5+Math.sin(t*0.11+Math.sin(t*0.03)*2)*w*0.24;
+        var ayy=h*0.32+Math.cos(t*0.09)*h*0.18;
+        if(count>0){
+          ax2=ax/count*params.ali*18;
+          ay2=ay/count*params.ali*18;
+          cx2/=count;cy2/=count;
+          cx2=cx2*params.coh*14;cy2=cy2*params.coh*14;
+        }else{ax2=0;ay2=0;cx2=0;cy2=0}
+        // attractor pull
+        var adx=axx-x,ady=ayy-y;
+        var ad=Math.sqrt(adx*adx+ady*ady)||1;
+        var pull=Math.min(1,ad/500)*0.5;
+        // edge + treeline repulsion
+        var ex=0,ey=0;
+        if(y>h*0.7)ey-= (y-h*0.7)*0.03;
+        if(x<40)ex+=40;if(x>w-40)ex-=40;
+        if(y<40)ey+=40;
+        // mouse hawk fear
+        var mdx=x-mouse.x,mdy=y-mouse.y;
+        var md=Math.sqrt(mdx*mdx+mdy*mdy)||1;
+        var mf=0;
+        if(md<160)mf=(1-md/160)*260;
+        vx+=sx+ax2+cx2+adx/ad*pull*30+ ex+(mdx/md)*mf;
+        vy+=sy+ay2+cy2+ady/ad*pull*30+ ey+(mdy/md)*mf;
+        // clamp speed
+        var spd=Math.hypot(vx,vy)||1;
+        var maxS=params.spd*52,minS=params.spd*52*0.45;
+        if(spd>maxS){vx=vx/spd*maxS;vy=vy/spd*maxS}
+        else if(spd<minS&&spd>0){vx=vx/spd*minS;vy=vy/spd*minS}
+        pv[i*2]=vx;pv[i*2+1]=vy;
+        px2[i*2]+=vx*dt;
+        px2[i*2+1]+=vy*dt;
+        phead[i]=Math.atan2(vy,vx);
+      }
+    }
+  }
+  var ax2=0,ay2=0;
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // bucket birds by density into 4 batch paths
+    // per-bird density check via count neighbours (reuse head)
+    var paths=[[],[],[],[]];
+    for(var i=0;i<N;i++){
+      var x=px2[i*2],y=px2[i*2+1];
+      var a=phead[i];
+      var size=Math.max(3.2,5.2-Math.min(5,N/3000));
+      // density bucket
+      var nx=Math.cos(a)*size*0.8,ny=Math.sin(a)*size*0.8;
+      var tx=-ny*size*0.4,ty=nx*size*0.4;
+      var b=0.35+ (y>H*0.68?0.3:0);
+      var idx=Math.min(3,Math.floor((Math.sin(i*7.3)+1)*2));
+      paths[idx].push([
+        (x+nx).toFixed(1)+","+(y+ny).toFixed(1),
+        (x-nx+tx).toFixed(1)+","+(y-ny+ty).toFixed(1),
+        (x-nx-tx).toFixed(1)+","+(y-ny-ty).toFixed(1)
+      ].join(" "));
+    }
+    var shades=["rgba(30,26,38,0.42)","rgba(24,21,30,0.62)","rgba(16,14,22,0.8)","rgba(6,5,10,0.96)"];
+    paths.forEach(function(pts,b){
+      if(!pts.length)return;
+      ctx.fillStyle=shades[b];
+      ctx.beginPath();
+      pts.forEach(function(p){
+        var c=p.split(" ");
+        ctx.moveTo(+c[0].split(",")[0],+c[0].split(",")[1]);
+        ctx.lineTo(+c[1].split(",")[0],+c[1].split(",")[1]);
+        ctx.lineTo(+c[2].split(",")[0],+c[2].split(",")[1]);
+        ctx.closePath();
+      });
+      ctx.fill();
+    });
+    // fps
+    fpsCount++;
+  }
+  var fpsCount=0,fpsT=0,lastT=performance.now();
+  // controls
+  function bind(name,el,out){
+    document.getElementById(el).addEventListener("input",function(){
+      var v=+this.value;
+      params[name]=v;
+      document.getElementById(out).textContent= round1(v);
+    });
+    document.getElementById(out).textContent=round1(params[name]);
+  }
+  function round1(v){return Math.round(v*10)/10}
+  bind("coh","rCoh","pCoh");bind("ali","rAli","pAli");bind("sep","rSep","pSep");
+  bind("spd","rSpd","pSpd");bind("per","rPer","pPer");
+  document.getElementById("rNight").addEventListener("input",function(){
+    night=this.value/100;
+    document.getElementById("pNight").textContent=this.value;
+    document.documentElement.style.setProperty("--night",night);
+  });
+  var pauseB=document.getElementById("pauseB");
+  function togglePause(){
+    paused=!paused;
+    pauseB.setAttribute("aria-pressed",paused?"true":"false");
+    pauseB.textContent=paused?"Resume":"Pause";
+  }
+  pauseB.addEventListener("click",togglePause);
+  document.getElementById("stepB").addEventListener("click",function(){if(paused)step(0.016)});
+  document.getElementById("scatterB").addEventListener("click",function(){scatterAt(W/2,H/2)});
+  cv.addEventListener("pointerdown",function(e){
+    var r=cv.getBoundingClientRect();
+    scatterAt(e.clientX-r.left,e.clientY-r.top);
+  });
+  function scatterAt(x,y){
+    for(var i=0;i<N;i++){
+      var dx=px2[i*2]-x,dy=px2[i*2+1]-y;
+      var d=Math.hypot(dx,dy);
+      if(d<220){
+        var a=Math.atan2(dy,dx)+(Math.random()-0.5)*1.6;
+        var sp=(120+Math.random()*140);
+        pv[i*2]=Math.cos(a)*sp;pv[i*2+1]=Math.sin(a)*sp;
+      }
+    }
+  }
+  // hawk
+  var hawk=document.getElementById("hawk");
+  function initHawk(){
+    cv.addEventListener("pointermove",function(e){
+      var r=cv.getBoundingClientRect();
+      mouse.x=e.clientX-r.left;mouse.y=e.clientY-r.top;
+      hawk.style.left=(e.clientX)+"px";hawk.style.top=(e.clientY)+"px";
+    });
+  }
+  // pause btn hover states
+  window.addEventListener("keydown",function(e){
+    if(e.code==="Space"){e.preventDefault();togglePause()}
+    if(e.key==="s"||e.key==="S")scatterAt(mouse.x,mouse.y);
+  });
+  var panel=document.getElementById("panel"),hideP=document.getElementById("hideP");
+  var hidden=false;
+  hideP.addEventListener("click",function(){
+    hidden=!hidden;
+    panel.style.display=hidden?"none":"";
+    hideP.style.display=hidden?"block":"none";
+  });
+  function showPanelBtn(){if(hidden&&!panelVisible){}}
+  // manually show hide button when idle
+  setInterval(function(){
+    if(!hidden&&!panel.matches(":hover")){}
+    hideP.style.display=hidden?"block":"none";
+  },500);
+  var birdsEl=document.getElementById("pBirds");
+  var birdInput=null;
+  // birds count slider (500-12000) — compact: +/- buttons absent; use hidden range
+  var bRow=document.createElement("div");bRow.className="prow";
+  bRow.innerHTML="<span>Birds</span><input type='range' id='rBirds' min='500' max='12000' step='100' value='3000'>";
+  document.getElementById("panel").insertBefore(bRow,document.querySelector("#panel .prow"));
+  document.getElementById("rBirds").addEventListener("input",function(){
+    var nOld=N;
+    N=Math.min(maxN,+this.value);
+    birdsEl.textContent=N;
+    if(N>nOld){for(var i=nOld;i<N;i++)newBird(i)}
+  });
+  // main loop
+  function loop(now){
+    var dt=Math.min(0.05,(now-lastT)/1000);lastT=now;
+    step(dt*(RM?0.5:1));
+    draw();
+    fpsT+=dt;fpsCount=0;
+    if(fpsT>0.5){
+      document.getElementById("pFps").textContent=Math.round(1/dt&&1/(dt||0.016))+" fps";
+      fpsT=0;
+    }
+    requestAnimationFrame(loop);
+  }
+  resize();
+  initFlock();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

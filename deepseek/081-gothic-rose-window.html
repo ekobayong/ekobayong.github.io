@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rosace du Nord — Gothic Rose Window</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:radial-gradient(70% 60% at 50% 42%,rgba(120,90,60,.18),transparent 70%),#0b0908;
+  color:#e8ddc8;min-height:100vh;overflow:hidden;
+  font-family:Georgia,'Iowan Old Style',Palatino,serif;
+}
+header{position:fixed;top:22px;left:0;right:0;text-align:center;z-index:10;pointer-events:none}
+header h1{font-size:clamp(24px,3vw,40px);letter-spacing:.22em;text-transform:uppercase;font-weight:400}
+header p{font-style:italic;color:#a5937a;font-size:13.5px;margin-top:6px}
+.wheel{position:fixed;inset:0;display:grid;place-items:center;z-index:2;pointer-events:none}
+.wheel svg{width:min(88vh,92vw);height:auto}
+.panel6{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:11;display:flex;align-items:center;gap:12px;
+  pointer-events:auto;background:rgba(20,14,10,.6);backdrop-filter:blur(10px);border:1px solid rgba(232,221,200,.25);
+  border-radius:99px;padding:9px 16px}
+.panel6 .seas{display:flex;gap:6px}
+.panel6 button{border:1px solid rgba(232,221,200,.3);background:none;color:#e8ddc8;font-family:inherit;font-style:italic;
+  font-size:13px;padding:7px 15px;border-radius:99px;cursor:pointer;transition:all .3s}
+.panel6 button:hover{border-color:#d7b36a}
+.panel6 button.on{background:rgba(215,179,106,.18);border-color:#d7b36a;color:#ffe9b8}
+.caption{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:11;text-align:center;
+  font-style:italic;color:#a5937a;font-size:13.5px;max-width:80vw;pointer-events:none;min-height:20px;transition:opacity .3s}
+canvas#motes{position:fixed;inset:0;z-index:3;pointer-events:none}
+.tooltip{position:fixed;z-index:30;background:#f4e8c8;color:#2a2018;font-family:ui-monospace,monospace;font-size:10.5px;
+  padding:7px 11px;border-radius:6px;pointer-events:none;opacity:0;transition:opacity .2s;box-shadow:0 10px 24px rgba(0,0,0,.5);max-width:220px}
+.tooltip::before{content:"";position:absolute;top:-5px;left:14px;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:6px solid #f4e8c8}
+@media(max-width:640px){header p{display:none}}
+@media(prefers-reduced-motion:reduce){.panel6 button{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Rosace du Nord</h1>
+  <p>a gothic rose window · twelve spokes · the sun walks behind it</p>
+</header>
+
+<div class="wheel" id="wheel"></div>
+<canvas id="motes"></canvas>
+<div class="caption" id="caption"></div>
+<div class="tooltip" id="tooltip"></div>
+<div class="panel6">
+  <div class="seas" id="seasons">
+    <button class="on" data-s="winter">Winter</button>
+    <button data-s="summer">Summer</button>
+    <button data-s="evening">Evening</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var SVGNS="http://www.w3.org/2000/svg";
+  var wheel=document.getElementById("wheel");
+  var svg=document.createElementNS(SVGNS,"svg");
+  svg.setAttribute("viewBox","0 0 800 820");
+  var season="winter";
+  var sunPos={x:400,y:560}; // arc start position userSpace
+  var SI={winter:{light:"#dfe9ff",s1:"#ffffff",s2:"#c9d8ff",mote:"rgba(223,233,255",caption:"pale winter light, high and cool"},
+    summer:{light:"#ffe9b8",s1:"#fff6dc",s2:"#ffd47a",mote:"rgba(255,233,184",caption:"warm gold pours in from the south"},
+    evening:{light:"#ffb56b",s1:"#ffd9a6",s2:"#ff8a3c",mote:"rgba(255,181,107",caption:"the evening packs its colour away slowly"}};
+  // ---------- build window ----------
+  function build(){
+    svg.innerHTML="";
+    var defs='<defs>'+
+      '<pattern id="ashlar" width="56" height="28" patternUnits="userSpaceOnUse">'+
+      '<rect width="56" height="28" fill="#2e2824"/>'+
+      '<rect x="0" y="0" width="28" height="14" stroke="#1a1512" stroke-width="1.5" fill="none"/>'+
+      '<rect x="28" y="14" width="28" height="14" stroke="#1a1512" stroke-width="1.5" fill="none"/>'+
+      '<line x1="0" y1="14.75" x2="56" y2="14.75" stroke="#463c35" stroke-width=".7"/></pattern>'+
+      '<filter id="wobble"><feTurbulence type="fractalNoise" baseFrequency="0.055" numOctaves="3" result="n"/>'+
+      '<feDisplacementMap in="SourceGraphic" in2="n" scale="5"/></filter>'+
+      '<filter id="mottle"><feTurbulence type="fractalNoise" baseFrequency="0.07" numOctaves="2" result="n"/>'+
+      '<feColorMatrix in="n" type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .5 0"/></filter>'+
+      '<radialGradient id="sunG" cx="'+sunPos.x+'" cy="'+sunPos.y+'" r="420" gradientUnits="userSpaceOnUse">'+
+      '<stop offset="0" stop-color="'+SI[season].s1+'"/><stop offset=".55" stop-color="'+SI[season].s2+'"/><stop offset="1" stop-color="transparent"/></radialGradient>'+
+      '</defs>';
+    svg.innerHTML=defs;
+    // stone surround
+    var stone=document.createElementNS(SVGNS,"rect");
+    stone.setAttribute("x","160");stone.setAttribute("y","80");stone.setAttribute("width","480");stone.setAttribute("height","640");
+    stone.setAttribute("rx","30");
+    stone.setAttribute("fill","url(#ashlar)");
+    svg.appendChild(stone);
+    // spokes symbol
+    var sym=document.createElementNS(SVGNS,"symbol");
+    sym.id="spoke";sym.setAttribute("viewBox","-300 -300 600 600");
+    sym.innerHTML='<path d="M0 0 L0 -262 L18 -262 L28 -8 L10 4 Z" fill="#4a4038" stroke="#181310" stroke-width="2"/>'+
+      '<line x1="0" y1="0" x2="0" y2="-262" stroke="#7a6c60" stroke-width="1.6" transform="translate(-9,0)"/>';
+    svg.appendChild(sym);
+    // glass groups
+    var glass=document.createElementNS(SVGNS,"g");
+    glass.setAttribute("filter","url(#wobble)");
+    glass.setAttribute("id","glassG");
+    // 24 border panes gold/sapphire alternating
+    for(var i=0;i<24;i++){
+      var a=i*15;
+      var col=i%2===0?"#fff2b0":"#6f95ff";
+      var pane=document.createElementNS(SVGNS,"path");
+      pane.setAttribute("d",arcPath(252+26,252+42,a,15));
+      pane.setAttribute("fill",jewel(col));
+      pane.setAttribute("class","pane");
+      pane.dataset.subj=(i%2===0?"Gold border panel":"Sapphire border panel");
+      pane.dataset.story=(i%2===0?"the outer ring catches the sun first; pure gold, reserved for the frame.":"sapphire rings the rose like cold water — the old glassmakers' blue that outlasts everything.");
+      glass.appendChild(pane);
+    }
+    // 12 tall lancets
+    for(var i2=0;i2<12;i2++){
+      var a2=i2*30+15;
+      var subjects=["St. Denis preaching","The Annunciation","St. Stephen's stones","The Visitation","St. Lawrence's gridiron","The Nativity","St. Catherine's wheel","The Presentation","St. Michael weighing souls","The Flight into Egypt","St. John on Patmos","The Raising of Lazarus"];
+      var panes=[
+        {d:lancetPath(a2,142,240),col:"ruby",bar:"#3a0810",icon:"M0 30 q40 -50 80 0"},
+        {d:lancetPath(a2,142,240),col:"sapphire",bar:"#0a1656",icon:"M20 50 h40 v-16"}
+      ];
+      var paneL=document.createElementNS(SVGNS,"path");
+      paneL.setAttribute("d",lancetPath(a2,142,240));
+      paneL.setAttribute("fill",jewel(glassCol(i2,"lancet")));
+      paneL.setAttribute("class","pane");
+      paneL.dataset.subj=subjects[i2];
+      paneL.dataset.story="one of the Gospel windows, told the way the old glaziers told it: colour first, argument later.";
+      glass.appendChild(paneL);
+      // gothic arch line
+      var arch=document.createElementNS(SVGNS,"path");
+      arch.setAttribute("d",lancetPath(a2,142,240));
+      arch.setAttribute("fill","none");arch.setAttribute("stroke","rgba(20,10,6,.55)");arch.setAttribute("stroke-width","3");
+      glass.appendChild(arch);
+    }
+    // 12 short lancets (labours)
+    for(var i3=0;i3<12;i3++){
+      var a3=i3*30+30;
+      var paneS=document.createElementNS(SVGNS,"path");
+      paneS.setAttribute("d",lancetPath(a3,142,180));
+      paneS.setAttribute("fill",jewel(glassCol(i3,"month")));
+      paneS.setAttribute("class","pane");
+      paneS.dataset.subj="Labour of the months · "+["January","February","March","April","May","June","July","August","September","October","November","December"][i3];
+      paneS.dataset.story="four weeks of one honest task each — the year, in twelve small rooms.";
+      glass.appendChild(paneS);
+    }
+    // central rosette: 6 petals + mystic rose
+    var rose=document.createElementNS(SVGNS,"g");
+    rose.setAttribute("class","pane");
+    rose.dataset.subj="The Mystic Rose";
+    rose.dataset.story="the six days of creation, gathered around the seventh that has no number — the seventh is this circle.";
+    for(var p=0;p<6;p++){
+      var petal=document.createElementNS(SVGNS,"ellipse");
+      petal.setAttribute("cx",400+Math.cos(p*Math.PI/3)*78);
+      petal.setAttribute("cy",410+Math.sin(p*Math.PI/3)*78);
+      petal.setAttribute("rx",62);petal.setAttribute("ry",34);
+      petal.setAttribute("transform","rotate("+(p*60+20)+" "+(400+Math.cos(p*Math.PI/3)*78)+" "+(410+Math.sin(p*Math.PI/3)*78)+")");
+      petal.setAttribute("fill",jewel(["#63e39a","#6f95ff","#ffd27a","#d59bff","#63e39a","#ff5d70"][p]));
+      rose.appendChild(petal);
+    }
+    var core=document.createElementNS(SVGNS,"circle");
+    core.setAttribute("cx","400");core.setAttribute("cy","410");core.setAttribute("r","52");
+    core.setAttribute("fill",jewel("#fff2b0"));
+    rose.appendChild(core);
+    glass.appendChild(rose);
+    // mottle overlay
+    var mott=document.createElementNS(SVGNS,"rect");
+    mott.setAttribute("x","160");mott.setAttribute("y","80");mott.setAttribute("width","480");mott.setAttribute("height","640");
+    mott.setAttribute("filter","url(#mottle)");
+    mott.setAttribute("style","mix-blend-mode:overlay");
+    glass.appendChild(mott);
+    svg.appendChild(glass);
+    // mullions (stone rings & spokes on top)
+    var stoneG=document.createElementNS(SVGNS,"g");
+    [60,136,234,272].forEach(function(r2){
+      var c=document.createElementNS(SVGNS,"circle");
+      c.setAttribute("cx","400");c.setAttribute("cy","405");c.setAttribute("r",r2);
+      c.setAttribute("fill","none");
+      c.setAttribute("stroke","#4a4038");c.setAttribute("stroke-width","7");
+      stoneG.appendChild(c);
+      var c2=document.createElementNS(SVGNS,"circle");
+      c2.setAttribute("cx","400");c2.setAttribute("cy","405");c2.setAttribute("r",r2);
+      c2.setAttribute("fill","none");
+      c2.setAttribute("stroke","#181310");c2.setAttribute("stroke-width","9");
+      stoneG.appendChild(c2);
+      var c3=document.createElementNS(SVGNS,"circle");
+      c3.setAttribute("cx","400");c3.setAttribute("cy","405");c3.setAttribute("r",r2);
+      c3.setAttribute("fill","none");
+      c3.setAttribute("stroke","#7a6c60");c3.setAttribute("stroke-width","1.6");
+      c3.setAttribute("transform","translate(1.5,-1.5)");
+      stoneG.appendChild(c3);
+    });
+    for(var s=0;s<12;s++){
+      var u=document.createElementNS(SVGNS,"use");
+      u.setAttribute("href","#spoke");
+      u.setAttribute("transform","rotate("+(s*30)+" 400 405)");
+      stoneG.appendChild(u);
+      var u2=document.createElementNS(SVGNS,"use");
+      u2.setAttribute("href","#spoke");
+      u2.setAttribute("transform","rotate("+(s*30+15)+" 400 405)");
+      u2.setAttribute("opacity",".55");
+      stoneG.appendChild(u2);
+    }
+    svg.appendChild(stoneG);
+    // sun disc (screen blend, clipped to window) + floor pool
+    var sunClip=document.createElementNS(SVGNS,"clipPath");
+    sunClip.id="winclip";
+    var winPath=document.createElementNS(SVGNS,"path");
+    winPath.setAttribute("d","M160 405 a240 240 0 0 1 480 0 a50 50 0 0 1 -50 50 h-380 a50 50 0 0 1 -50 -50 Z");
+    sunClip.appendChild(winPath);
+    svg.appendChild(sunClip);
+    var sun=document.createElementNS(SVGNS,"circle");
+    sun.setAttribute("id","sunDisc");
+    sun.setAttribute("cx","400");sun.setAttribute("cy","405");sun.setAttribute("r","400");
+    sun.setAttribute("fill","url(#sunG)");
+    sun.setAttribute("style","mix-blend-mode:screen;clip-path:url(#winclip)");
+    svg.appendChild(sun);
+    // tint rect
+    var tint=document.createElementNS(SVGNS,"rect");
+    tint.setAttribute("id","tintR");
+    tint.setAttribute("x","160");tint.setAttribute("y","80");tint.setAttribute("width","480");tint.setAttribute("height","640");
+    tint.setAttribute("fill",SI[season].light);tint.setAttribute("opacity",".12");
+    tint.setAttribute("style","mix-blend-mode:multiply;clip-path:url(#winclip)");
+    svg.appendChild(tint);
+    wheel.appendChild(svg);
+    // floor pool
+    var poolG=document.createElementNS(SVGNS,"g");
+    poolG.setAttribute("id","pool");
+    poolG.style.mixBlendMode="screen";
+    var pool=document.createElementNS(SVGNS,"use");
+    pool.setAttribute("href","#glassG");
+    poolG.appendChild(pool);
+    var floorDefs=document.createElementNS(SVGNS,"defs");
+    var flt=document.createElementNS(SVGNS,"filter");
+    flt.id="poolblur";
+    flt.innerHTML='<feGaussianBlur stdDeviation="9"/>';
+    floorDefs.appendChild(flt);
+    svg.appendChild(floorDefs);
+    poolG.setAttribute("filter","url(#poolblur)");
+    poolG.setAttribute("transform","translate(0,640) rotate(0) scale(1,1) skewX(-28) scale(1,0.34)");
+    poolG.setAttribute("opacity",".55");
+    svg.appendChild(poolG);
+    // interactivity
+    svg.querySelectorAll(".pane").forEach(function(p){
+      p.style.cursor="pointer";
+      p.addEventListener("pointerenter",function(e){
+        p.style.filter="brightness(1.35) saturate(1.25) drop-shadow(0 0 12px rgba(255,240,190,.6))";
+        var tt=document.getElementById("tooltip");
+        tt.style.opacity=1;
+        tt.style.left=(e.clientX+14)+"px";
+        tt.style.top=(e.clientY+14)+"px";
+        tt.innerHTML="<b>"+p.dataset.subj+"</b><br>"+p.dataset.story;
+        document.getElementById("caption").textContent=p.dataset.subj+" — "+p.dataset.story;
+      });
+      p.addEventListener("pointermove",function(e){
+        var tt=document.getElementById("tooltip");
+        tt.style.left=(e.clientX+14)+"px";tt.style.top=(e.clientY+14)+"px";
+      });
+      p.addEventListener("pointerleave",function(){
+        p.style.filter="";
+        document.getElementById("tooltip").style.opacity=0;
+      });
+      p.addEventListener("focus",function(){p.style.filter="brightness(1.35) saturate(1.25)"});
+      p.addEventListener("blur",function(){p.style.filter=""});
+      p.setAttribute("tabindex","0");
+    });
+    updateSun(0);
+  }
+  function arcPath(r1,r2,a,span){
+    var a0=a*Math.PI/180,a1=(a+span)*Math.PI/180;
+    var x1=400+r1*Math.cos(a0),y1=405+r1*Math.sin(a0);
+    var x2=400+r1*Math.cos(a1),y2=405+r1*Math.sin(a1);
+    var x3=400+r2*Math.cos(a1),y3=405+r2*Math.sin(a1);
+    var x4=400+r2*Math.cos(a0),y4=405+r2*Math.sin(a0);
+    return "M"+x1+" "+y1+" A"+r1+" "+r1+" 0 0 1 "+x2+" "+y2+" L"+x3+" "+y3+" A"+r2+" "+r2+" 0 0 0 "+x4+" "+y4+" Z";
+  }
+  function lancetPath(angle,r1,r2){
+    var a=angle*Math.PI/180;
+    var cos=Math.cos(a),sin=Math.sin(a);
+    // base at window center 400,405 (the rose); lancets radiate out
+    var x1=400+Math.cos(a-Math.PI/2)*r1,y1=405+Math.sin(a-Math.PI/2)*r1;
+    var x2=400+Math.cos(a-Math.PI/2)*r2,y2=405+Math.sin(a-Math.PI/2)*r2;
+    // pointed gothic arch at outer end
+    var midx=400+Math.cos(a-Math.PI/2)*r2;
+    var midy=405+Math.sin(a-Math.PI/2)*r2;
+    var perpX=Math.cos(a),perpY=Math.sin(a);
+    var width=r2*0.28;
+    var p1=midx+perpX*width, q1=midy+perpY*width;
+    var p2=midx-perpX*width,q2=midy-perpY*width;
+    var tipx=midx+perpX*width*1.9,tipy=midy+perpY*width*1.9;
+    var bx1=400+Math.cos(a-Math.PI/2)*r1+perpX*width,by1=405+Math.sin(a-Math.PI/2)*r1+perpY*width;
+    var bx2=400+Math.cos(a-Math.PI/2)*r1-perpX*width,by2=405+Math.sin(a-Math.PI/2)*r1-perpY*width;
+    return "M"+bx1+" "+by1+" L"+p1+" "+q1+" Q"+(midx+perpX*width*0.55)+" "+(midy+perpY*width*1.6)+" "+tipx+" "+tipy+" Q"+(midx-perpX*width*0.55)+" "+(midy+perpY*width*1.6)+" "+p2+" "+q2+" L"+bx2+" "+by2+" Z";
+  }
+  function glassCol(i,kind){
+    var cols=["#ff5d70","#6f95ff","#63e39a","#ffd27a","#d59bff","#fff2b0"];
+    return cols[i%cols.length];
+  }
+  function jewel(base){
+    return "url(#jg)";
+  }
+  // ---------- sun arc ----------
+  var sunT=0;
+  function updateSun(t2){
+    // arc 90s: angle 0..PI across lower part
+    var a=Math.PI*(1-(t2%1));
+    var r=300;
+    var cx=400+r*Math.cos(a),cy=560-r*Math.sin(a)*0.7;
+    var sunG=svg.querySelector("#sunG");
+    if(sunG){
+      sunG.setAttributeNS(null,"cx",cx);
+      sunG.setAttributeNS(null,"cy",cy);
+    }
+    var pool=svg.querySelector("#pool");
+    if(pool){
+      var skew=Math.max(10,Math.min(50,-28+Math.sin(a)*16));
+      pool.setAttribute("transform","translate("+((cx-400)*0.5)+",620) skewX("+(skew)+") scale(1,0.34)");
+    }
+    var motes=mv2;
+    document.documentElement.style.setProperty("--sunx",cx);
+    document.documentElement.style.setProperty("--suny",cy);
+  }
+  var mv2={};
+  // motes canvas
+  var mcv=document.getElementById("motes"),mctx=mcv.getContext("2d");
+  var motes=[],MW=0,MH=0,DPR2=1;
+  function resizeM(){
+    DPR2=Math.min(2,devicePixelRatio||1);
+    MW=innerWidth;MH=innerHeight;
+    mcv.width=MW*DPR2;mcv.height=MH*DPR2;
+    mctx.setTransform(DPR2,0,0,DPR2,0,0);
+    var n=100+Math.floor(Math.random()*60);
+    motes=[];
+    for(var i=0;i<n;i++){
+      motes.push({x:Math.random()*MW,y:Math.random()*MH,r:0.5+Math.random()*1.6,
+        sp:8+Math.random()*22,ph:Math.random()*6,sway:Math.random()*0.6});
+    }
+  }
+  window.addEventListener("resize",resizeM);
+  function drawMotes(dt){
+    mctx.clearRect(0,0,MW,MH);
+    var c=SI[season].mote;
+    var sunX=parseFloat(document.documentElement.style.getPropertyValue("--sunx"));
+    var sunY=parseFloat(document.documentElement.style.getPropertyValue("--suny"));
+    for(var i=0;i<motes.length;i++){
+      var m=motes[i];
+      m.y+=m.sp*dt;m.x+=Math.sin(m.ph*2+m.y*0.002)*0.2;
+      if(m.y>MH){m.y=-4;m.x=Math.random()*MW}
+      // brightness in beam cone
+      var dx=m.x-MW/2,dy=m.y-MH*0.4;
+      var beam=-m.y;
+      var inBeam=m.x>MW*0.3&&m.x<MW*0.7&&m.y<MH*0.75&&dy>sunY-MH*0.55;
+      var a=(inBeam?0.5:0.12)*(0.5+0.5*Math.sin(m.ph+performance.now()/900));
+      mctx.fillStyle=c.replace(")",","+a+")").replace("rgba(","rgba(");
+      var colNum=c.match(/[\d.]+/g);
+      mctx.fillStyle="rgba("+colNum[0]+","+colNum[1]+","+colNum[2]+","+a+")";
+      mctx.beginPath();mctx.arc(m.x,m.y,m.r,0,7);mctx.fill();
+    }
+  }
+  // seasons
+  document.querySelectorAll("#seasons button").forEach(function(b){
+    b.addEventListener("click",function(){
+      document.querySelectorAll("#seasons button").forEach(function(x){x.classList.remove("on")});
+      b.classList.add("on");
+      season=b.dataset.s;
+      var si=SI[season];
+      var sunG=svg.querySelector("#sunG");
+      sunG.innerHTML='<stop offset="0" stop-color="'+si.s1+'"/><stop offset=".55" stop-color="'+si.s2+'"/><stop offset="1" stop-color="transparent"/>';
+      var tint=svg.querySelector("#tintR");
+      tint.setAttribute("fill",si.light);
+      document.getElementById("caption").textContent=si.caption;
+    });
+  });
+  // main
+  var last=performance.now();
+  function loop(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    sunT+=dt*(RM?0:1/90);
+    updateSun(sunT);
+    drawMotes(dt);
+    requestAnimationFrame(loop);
+  }
+  build();
+  resizeM();
+  document.getElementById("caption").textContent=SI.winter.caption;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

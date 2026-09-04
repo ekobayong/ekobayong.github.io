@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Descent — Surface to the Challenger Deep</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --sea-top:#7fe0ef;--sea-bot:#1f8fb8;
+  --rays:1;--depth:0;
+}
+html,body{height:100%}
+body{
+  background:linear-gradient(180deg,var(--sea-top),var(--sea-bot));
+  color:#eaf6ff;overflow-x:hidden;
+  font-family:'Iowan Old Style',Palatino,Georgia,serif;
+}
+/* fixed world */
+.world{position:fixed;inset:0;z-index:0}
+.sea{position:absolute;inset:0;background:linear-gradient(180deg,var(--sea-top),var(--sea-bot));transition:background .3s linear}
+.surface{position:absolute;top:-30px;left:-5%;right:-5%;height:160px;background:linear-gradient(180deg,rgba(220,250,255,.55),transparent);filter:blur(14px);animation:surf 9s ease-in-out infinite alternate}
+@keyframes surf{from{transform:translateY(0) skewX(2deg)}to{transform:translateY(34px) skewX(-3deg)}}
+.rays{position:absolute;inset:0;opacity:var(--rays);transition:opacity 1s;overflow:hidden}
+.ray{position:absolute;top:-30%;width:120px;height:140%;background:linear-gradient(180deg,rgba(255,255,255,.14),transparent);transform:skewX(-8deg);filter:blur(6px);animation:sway 14s ease-in-out infinite alternate;mix-blend-mode:soft-light}
+.ray.r1{left:20%;animation-delay:-3s}.ray.r2{left:44%;width:80px;animation-delay:-8s}.ray.r3{left:64%;animation-delay:-1s}.ray.r4{left:82%;width:60px;animation-delay:-11s}
+@keyframes sway{from{transform:skewX(-8deg) translateX(-12px)}to{transform:skewX(-6deg) translateX(16px)}}
+.caustic{position:absolute;left:0;right:0;top:30%;height:50%;background:radial-gradient(40% 30% at 20% 40%,rgba(190,240,255,.12),transparent 60%),radial-gradient(35% 25% at 60% 55%,rgba(190,240,255,.1),transparent 60%),radial-gradient(30% 22% at 85% 35%,rgba(190,240,255,.09),transparent 60%);opacity:var(--rays);transition:opacity 1s;animation:cast 13s ease-in-out infinite alternate;filter:blur(2px)}
+@keyframes cast{from{transform:translateX(0) scale(1)}to{transform:translateX(-40px) scale(1.06)}}
+/* fauna */
+.fauna{position:absolute;inset:0;opacity:.9}
+.mote{position:fixed;inset:0;z-index:1;pointer-events:none}
+/* HUD */
+.hud{position:fixed;inset:0;pointer-events:none;z-index:20}
+.depthmeter{position:fixed;left:26px;top:50%;transform:translateY(-50%);z-index:20;height:60vh;width:22px;display:flex;flex-direction:column;justify-content:space-between}
+.depthmeter i{position:absolute;left:0;width:22px;height:1px;background:rgba(234,246,255,.3)}
+.depthmeter i.lab::after{content:attr(data-m);position:absolute;left:26px;top:-6px;font-family:ui-monospace,'Courier New',monospace;font-size:8.5px;letter-spacing:.14em;color:rgba(234,246,255,.55);white-space:nowrap}
+.marker{position:absolute;left:0;top:calc(var(--depth)*100%);width:22px;height:22px;border-radius:50%;
+  background:#9be7ff;box-shadow:0 0 14px rgba(155,231,255,.95),0 0 40px rgba(155,231,255,.4);transition:top .2s linear}
+.readout{position:fixed;top:28px;right:32px;z-index:20;text-align:right;font-family:ui-monospace,'Courier New',monospace}
+.readout .d{font-size:clamp(38px,6vw,72px);color:#fff;font-variant-numeric:tabular-nums;text-shadow:0 4px 30px rgba(0,20,60,.5)}
+.readout .d small{font-size:.42em;color:rgba(234,246,255,.65)}
+.readout .m{font-size:11.5px;line-height:1.7;color:rgba(234,246,255,.72);letter-spacing:.06em;font-variant-numeric:tabular-nums;display:flex;justify-content:flex-end;gap:8px}
+.readout .m span{display:inline-block;min-width:118px;text-align:left}
+.zonelabel{position:fixed;top:14vh;left:0;right:0;text-align:center;z-index:19;opacity:0;transition:opacity .8s}
+.zonelabel.show{opacity:1}
+.zonelabel .z{font-size:clamp(26px,4.6vw,52px);font-family:Georgia,'Iowan Old Style',serif;font-weight:400;text-shadow:0 3px 26px rgba(0,10,40,.6)}
+.zonelabel .zs{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.42em;text-transform:uppercase;color:rgba(234,246,255,.7);margin-top:6px}
+.hint{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:20;text-align:center;color:rgba(234,246,255,.75);font-size:11px;letter-spacing:.3em;text-transform:uppercase;transition:opacity 1.2s}
+.hint .fall{display:block;width:1px;height:34px;background:rgba(155,231,255,.8);margin:10px auto 0;overflow:hidden}
+.hint .fall::after{content:"";display:block;width:100%;height:100%;background:#9be7ff;animation:fall 2.2s ease-in infinite}
+@keyframes fall{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+/* captions */
+.captions{position:relative;z-index:10;margin:0 auto;padding:150vh 0 20vh;max-width:760px}
+.cap{
+  background:rgba(2,10,24,.38);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:34px 38px;margin-bottom:70vh;
+  opacity:0;transform:translateY(40px);transition:opacity .9s ease,transform .9s ease;
+}
+.cap.in{opacity:1;transform:none}
+.cap .tag{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.4em;text-transform:uppercase;color:#9be7ff;margin-bottom:12px}
+.cap h3{font-size:clamp(26px,3.6vw,40px);font-weight:400;margin-bottom:16px}
+.cap p{font-size:16px;line-height:1.75;color:rgba(234,246,255,.88);margin-bottom:14px}
+.facts{display:flex;gap:26px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:11px;color:rgba(234,246,255,.6);border-top:1px solid rgba(255,255,255,.12);padding-top:14px}
+.final{background:transparent;border:none;text-align:center;margin-bottom:0}
+.final h3{font-style:italic;font-size:clamp(24px,3.4vw,38px);color:rgba(234,246,255,.95)}
+@media(max-width:640px){
+  .depthmeter i.lab::after{display:none}
+  .readout .m span{min-width:90px}
+  .depthmeter{left:12px}
+}
+@media(prefers-reduced-motion:reduce){
+  .surface,.ray,.caustic{animation:none}
+  .hint .fall::after{animation:none}
+  .cap{transition:none}
+}
+</style>
+</head>
+<body>
+<div class="world">
+  <div class="sea" id="sea"></div>
+  <div class="surface"></div>
+  <div class="rays" id="rays">
+    <div class="ray r1"></div><div class="ray r2"></div><div class="ray r3"></div><div class="ray r4"></div>
+    <div class="caustic"></div>
+  </div>
+  <div class="fauna" id="fauna"></div>
+</div>
+<canvas class="mote" id="mote"></canvas>
+
+<div class="zonelabel" id="zoneLabel"><div class="z" id="zoneName">Epipelagic</div><div class="zs" id="zoneSub">The sunlit zone</div></div>
+
+<div class="hud">
+  <div class="depthmeter" id="depthmeter">
+    <i class="lab" data-m="0 m" style="top:0%"></i>
+    <i class="lab" data-m="200 m" style="top:14%"></i>
+    <i class="lab" data-m="1 000 m" style="top:34%"></i>
+    <i class="lab" data-m="4 000 m" style="top:48%"></i>
+    <i class="lab" data-m="6 000 m" style="top:60%"></i>
+    <i class="lab" data-m="10 935 m" style="top:100%"></i>
+    <div class="marker" id="marker"></div>
+  </div>
+  <div class="readout">
+    <div class="d"><span id="depthNum">0</span><small> m</small></div>
+    <div class="m">
+      <span>PRESSURE <b style="color:#fff" id="press">1.0 atm</b></span>
+      <span>TEMP <b style="color:#fff" id="temp">24.0 °C</b></span>
+      <span>LIGHT <b style="color:#fff" id="light">100%</b></span>
+    </div>
+  </div>
+</div>
+<div class="hint" id="hint">Scroll to descend<span class="fall"></span></div>
+
+<div class="captions" id="caps">
+  <section class="cap" data-zone="Epipelagic" data-m="25" data-m2="0">
+    <div class="tag">Zone 01 · 0–200 m</div>
+    <h3>Epipelagic — the sunlit zone</h3>
+    <p>Down here light still rules. Photons reach perhaps two hundred metres, and almost everything
+      that lives in the ocean lives on their charity: phytoplankton turn sun into sugar, krill eat
+      the sugar, and the whole blue pantry of the pelagic zone is stocked from a single skylight.</p>
+    <p>The surface is not a boundary you can see from below. It is a ceiling of liquid glass,
+      shimmering with pressure, through which the entire sky — and occasionally a whale — slides.</p>
+    <div class="facts"><span>Light: 100%</span><span>Temp: 24→18 °C</span><span>Pressure: 1–20 atm</span></div>
+  </section>
+  <section class="cap" data-zone="Mesopelagic" data-m="400" data-m2="200">
+    <div class="tag">Zone 02 · 200–1 000 m</div>
+    <h3>Mesopelagic — the twilight zone</h3>
+    <p>Blue still arrives here, but it arrives tired. By five hundred metres a human eye would see
+      only a dim, directionless dusk. The animals that live in this zone have answered the shortage
+      of light with a surplus of invention: lanterns under their chins, lures on their foreheads,
+      organs that switch on and off like rooms in a hotel.</p>
+    <p>Every night the largest migration on Earth passes through this water — billions of lanternfish
+      rising to feed under the cover of darkness, then sinking back before the sun can find them.</p>
+    <div class="facts"><span>Light: ~1%</span><span>Temp: 18→4 °C</span><span>Pressure: 20–100 atm</span></div>
+  </section>
+  <section class="cap" data-zone="Bathypelagic" data-m="1500" data-m2="1000">
+    <div class="tag">Zone 03 · 1 000–4 000 m</div>
+    <h3>Bathypelagic — the midnight zone</h3>
+    <p>No sunlight has ever reached this floor. The only light is manufactured, and the only food is
+      the slow snowfall of marine detritus — the remains of the sunlit world, falling past like a
+      blizzard of ash. A sperm whale descending to hunt may pass a hundred metres of absolute night
+      for every living thing it sees.</p>
+    <p>Pressure here would crush a submarine like a fist around a paper cup. The animals that call
+      this dark home don't fight it; they simply don't have any air to compress.</p>
+    <div class="facts"><span>Light: none</span><span>Temp: 4→2.5 °C</span><span>Pressure: 100–400 atm</span></div>
+  </section>
+  <section class="cap" data-zone="Abyssopelagic" data-m="6500" data-m2="4000">
+    <div class="tag">Zone 04 · 4 000–6 000 m</div>
+    <h3>Abyssopelagic — the abyssal zone</h3>
+    <p>The abyss is the largest habitat on the planet and the least visited. Its floor is a softly
+      rolling plain of sediment, interrupted by hydrothermal vents that cook the water to over 300 °C
+      and feed, entirely without sunlight, gardens of tube worms and blind white crabs.</p>
+    <p>The Atolla jellyfish flashes crimson here as a burglar alarm — a cry for help aimed at any
+      predator large enough to eat whatever is attacking it. Even in the dark, evolution has
+      invented the distress call.</p>
+    <div class="facts"><span>Light: none</span><span>Temp: 2→1.6 °C</span><span>Pressure: 400–600 atm</span></div>
+  </section>
+  <section class="cap" data-zone="Hadalpelagic" data-m="10000" data-m2="6000">
+    <div class="tag">Zone 05 · 6 000–10 935 m</div>
+    <h3>Hadalpelagic — the trenches</h3>
+    <p>Named for Hades, because it seemed reasonable. The trenches are the deepest cuts in the
+      planet's crust: the Mariana Trench alone could swallow Everest with more than two kilometres
+      to spare. Life persists even here — pale snailfish the length of a hand, cruising the pressure
+      of a thousand atmospheres as if it were weather.</p>
+    <p>A descent into the hadal zone is a descent into the oldest, quietest room on Earth — one that
+      has never once seen the sun.</p>
+    <div class="facts"><span>Light: none</span><span>Temp: ~1.1 °C</span><span>Pressure: 600–1 100 atm</span></div>
+  </section>
+  <section class="cap final" data-zone="Challenger Deep" data-m="10935" data-m2="10935">
+    <h3>"It is cold, and it is dark, and it is quiet, and it is alive."</h3>
+  </section>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var sea=document.getElementById("sea");
+  var zoneLabel=document.getElementById("zoneLabel");
+  var zones=[
+    {name:"Epipelagic",sub:"The sunlit zone",m:0},
+    {name:"Mesopelagic",sub:"The twilight zone",m:1000},
+    {name:"Bathypelagic",sub:"The midnight zone",m:4000},
+    {name:"Abyssopelagic",sub:"No sunlight reaches here",m:6000},
+    {name:"Hadalpelagic",sub:"The trenches",m:10935}
+  ];
+  var depth=0,targetDepth=0;
+  var colors=[[0x7fe0ef,0x1f8fb8],[0x1a7fb0,0x0d3f78],[0x0b2a5e,0x061234],[0x050a1e,0x02040e],[0x02030a,0x000104],[0x000000,0x000000]];
+  var caps=Array.prototype.slice.call(document.querySelectorAll(".cap"));
+  // fauna SVG silhouettes as inline elements
+  var fauna=document.getElementById("fauna");
+  var sprites={
+    sardine:'<g><ellipse cx="0" cy="0" rx="16" ry="5" fill="rgba(190,230,240,.85)"/><polygon points="14,0 22,-6 22,6" fill="rgba(190,230,240,.85)"/></g>',
+    turtle:'<g><ellipse cx="0" cy="0" rx="15" ry="10" fill="rgba(150,210,190,.9)"/><ellipse cx="-8" cy="0" rx="8" ry="6" fill="rgba(120,190,170,.9)"/><path d="M15 0 L22 -6 M15 2 L20 7 M15 -2 L22 -2" stroke="rgba(120,190,170,.9)" stroke-width="3" fill="none"/></g>',
+    manta:'<g><path d="M0 0 Q20 -14 40 0 Q20 8 0 0 Z" fill="rgba(160,220,235,.8)"/><path d="M0 0 Q-20 -14 -40 0 Q-20 8 0 0 Z" fill="rgba(160,220,235,.8)"/><path d="M0 0 L6 3 M0 0 L-6 3" stroke="rgba(90,150,170,.9)" stroke-width="2"/></g>',
+    jelly:'<g><path d="M0 0 Q12 -14 22 0 Q28 8 26 22 Q12 14 2 22 Q-2 8 0 0 Z" fill="rgba(200,240,255,.7)"/><path d="M8 18 Q8 30 4 40 M14 18 Q14 30 18 40 M22 18 Q22 28 20 38" stroke="rgba(200,240,255,.65)" stroke-width="1.6" fill="none"/><circle cx="16" cy="8" r="3" fill="#6ff" opacity=".9"><animate attributeName="opacity" values=".4;1;.4" dur="1.5s" repeatCount="indefinite"/></circle></g>',
+    lantern:'<g><path d="M0 0 Q10 -18 18 -8 Q8 6 0 0 Z" fill="rgba(250,255,235,.85)"/><circle cx="13" cy="-4" r="5" fill="#ffe9a8"><animate attributeName="opacity" values=".3;1;.3" dur="2s" repeatCount="indefinite"/></circle></g>',
+    whale:'<g><ellipse cx="0" cy="0" rx="150" ry="34" fill="rgba(210,225,240,.82)"/><ellipse cx="-120" cy="-6" rx="28" ry="22" fill="rgba(210,225,240,.82)"/><path d="M150 0 L190 -14 L190 14 Z" fill="rgba(210,225,240,.82)"/><circle cx="-128" cy="-10" r="3.4" fill="#24303f"/><g><path d="M-30 -24 Q0 -34 30 -24" stroke="rgba(180,200,220,.7)" stroke-width="3" fill="none"><animate attributeName="d" values="M-30 -24 Q0 -34 30 -24;M-30 -20 Q0 -16 30 -20;M-30 -24 Q0 -34 30 -24" dur="6s" repeatCount="indefinite"/></path></g></g>',
+    angler:'<g><ellipse cx="0" cy="0" rx="26" ry="17" fill="rgba(40,48,60,.95)"/><path d="M-26 0 L-40 -8 Q-50 -16 -58 -12" stroke="rgba(60,70,85,.95)" stroke-width="2.4" fill="none"/><circle cx="-58" cy="-12" r="5" fill="#7fffd4"><animate attributeName="opacity" values=".2;1;.2" dur="1.6s" repeatCount="indefinite"/></circle><path d="M28 0 L60 4 L30 8" stroke="rgba(40,48,60,.95)" stroke-width="2" fill="none"/><circle cx="6" cy="-6" r="3" fill="#eaffea" opacity=".8"/></g>',
+    atolla:'<g><ellipse cx="0" cy="0" rx="18" ry="18" fill="rgba(255,120,140,.75)"/><path d="M14 12 Q26 14 34 8 M-14 12 Q-26 14 -34 8 M0 26 Q2 40 -4 50 M0 26 Q-2 40 4 50 M14 -12 Q26 -14 34 -8" stroke="rgba(255,120,140,.7)" stroke-width="2" fill="none"/></g>',
+    snailfish:'<g><ellipse cx="0" cy="0" rx="16" ry="6" fill="rgba(240,235,225,.85)"/><path d="M16 0 L24 -2 L20 3 Z" fill="rgba(240,235,225,.85)"/><circle cx="-10" cy="-2" r="1.6" fill="#555"/></g>'
+  };
+  var faunaDefs=[
+    {s:"sardine",y:0.18,scale:26,x:0.7,sp:0.65,depth:60},
+    {s:"turtle",y:0.28,scale:44,x:0.2,sp:0.4,depth:120},
+    {s:"manta",y:0.36,scale:56,x:0.82,sp:0.3,depth:250},
+    {s:"jelly",y:0.5,scale:34,x:0.35,sp:0.5,depth:800},
+    {s:"lantern",y:0.55,scale:20,x:0.75,sp:0.7,depth:900},
+    {s:"whale",y:0.62,scale:170,x:0.12,sp:0.16,depth:1800},
+    {s:"angler",y:0.72,scale:30,x:0.7,sp:0.5,depth:2600},
+    {s:"atolla",y:0.82,scale:36,x:0.3,sp:0.35,depth:5200},
+    {s:"snailfish",y:0.9,scale:28,x:0.6,sp:0.3,depth:9000}
+  ];
+  var anchors=[];
+  faunaDefs.forEach(function(fd){
+    var g=document.createElementNS("http://www.w3.org/2000/svg","svg");
+    g.setAttribute("viewBox","-220 -60 440 120");
+    g.innerHTML=sprites[fd.s];
+    g.style.cssText="position:absolute;width:"+fd.scale+"px;left:"+(fd.x*100)+"%;top:"+(fd.y*100)+"%;transition:transform .3s linear;overflow:visible";
+    fauna.appendChild(g);
+    anchors.push({el:g,fd:fd});
+  });
+  // motes canvas
+  var mv=document.getElementById("mote"),mctx=mv.getContext("2d");
+  var motes=[],MW=0,MH=0,DPR=1;
+  function motesResize(){
+    DPR=Math.min(2,devicePixelRatio||1);
+    MW=innerWidth;MH=innerHeight;
+    mv.width=MW*DPR;mv.height=MH*DPR;
+    mctx.setTransform(DPR,0,0,DPR,0,0);
+    var n=Math.round(MW*MH/26000);
+    motes=[];
+    for(var i=0;i<n;i++){
+      motes.push({x:Math.random()*MW,y:Math.random()*MH,r:0.8+Math.random()*2,ph:Math.random()*6,
+        sp:8+Math.random()*18,vx:(Math.random()-0.5)*6,
+        hue:Math.random()<0.8?175+Math.random()*30:320+Math.random()*20});
+    }
+  }
+  window.addEventListener("resize",motesResize);motesResize();
+  function drawMotes(dt){
+    mctx.clearRect(0,0,MW,MH);
+    mctx.globalCompositeOperation="lighter";
+    var d=depth;
+    var a=Math.max(0,Math.min(1,(d-700)/800));
+    for(var i=0;i<motes.length;i++){
+      var m2=motes[i];
+      m2.y-=m2.sp*dt;m2.x+=m2.vx*dt+Math.sin((m2.ph*3)+d/100)*0.3;
+      if(m2.y<-5){m2.y=MH+5;m2.x=Math.random()*MW}
+      var tw=0.5+0.5*Math.sin((performance.now()/1000)*1.5+m2.ph);
+      var al=a*tw*(m2.r>1.8?0.55:0.3);
+      mctx.fillStyle="hsla("+m2.hue+",80%,"+(m2.r>1.8?70:60)+"%,"+al+")";
+      mctx.beginPath();mctx.arc(m2.x,m2.y,m2.r,0,7);mctx.fill();
+      if(m2.r>1.8){
+        var g=mctx.createRadialGradient(m2.x,m2.y,0,m2.x,m2.y,m2.r*6);
+        g.addColorStop(0,"hsla("+m2.hue+",80%,75%,"+(al*0.35)+")");g.addColorStop(1,"hsla("+m2.hue+",80%,75%,0)");
+        mctx.fillStyle=g;mctx.beginPath();mctx.arc(m2.x,m2.y,m2.r*6,0,7);mctx.fill();
+      }
+    }
+  }
+  // scroll engine
+  var lastScroll=0,last=performance.now();
+  function computeDepth(){
+    var vh=innerHeight,c=window.innerHeight/2;
+    total();
+    var el=document.elementFromPoint(innerWidth/2,vh*0.5)||document.body;
+    var cur=currentSection();
+    return cur?cur.dataset.m:0;
+  }
+  function currentSection(){
+    var vh=innerHeight;
+    var best=caps[0],bestD=1e9;
+    caps.forEach(function(c){
+      var r=c.getBoundingClientRect();
+      var d=Math.abs(r.top+r.height/2-vh/2);
+      if(d<bestD){bestD=d;best=c}
+    });
+    return best;
+  }
+  function total(){
+    var h=document.documentElement.scrollHeight;
+  }
+  function frame(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    var sec=currentSection();
+    var m1=parseFloat(sec.dataset.m),m0=parseFloat(sec.dataset.m2);
+    var r=sec.getBoundingClientRect();
+    var vh=innerHeight;
+    var prog=(vh*0.5-r.top)/r.height;
+    prog=Math.max(0,Math.min(1,prog));
+    // smoothstep
+    prog=prog*prog*(3-2*prog);
+    var td=m0+(m1-m0)*prog;
+    if(RM)depth=td;else depth+=(td-depth)*0.12;
+    depth=Math.max(0,Math.min(10935,depth));
+    // colours
+    var stops=[[0,[0x7fe0ef,0x1f8fb8]],[200,[0x1a7fb0,0x0d3f78]],[1000,[0x0b2a5e,0x061234]],[4000,[0x050a1e,0x02040e]],[6000,[0x02030a,0x000104]],[10935,[0,0]]];
+    var topC=stops[0][1][0],botC=stops[0][1][1];
+    for(var i=0;i<stops.length-1;i++){
+      if(depth>=stops[i][0]&&depth<=stops[i+1][0]){
+        var t=(depth-stops[i][0])/(stops[i+1][0]-stops[i][0]);
+        topC=lerpColor(stops[i][1][0],stops[i+1][1][0],t);
+        botC=lerpColor(stops[i][1][1],stops[i+1][1][1],t);
+      }
+    }
+    sea.style.background="linear-gradient(180deg,"+topC+","+botC+")";
+    // rays fade past ~220m
+    document.getElementById("rays").style.setProperty("--rays",depth>450?0:1);
+    // hud
+    var pct=depth/10935;
+    document.getElementById("depthNum").textContent=Math.round(depth).toLocaleString();
+    document.getElementById("marker").style.setProperty("--depth",pct);
+    document.getElementById("press").textContent=(1+depth/10).toFixed(1)+" atm";
+    document.getElementById("temp").textContent=tempAt(depth).toFixed(1)+" °C";
+    document.getElementById("light").textContent=Math.round(100*Math.exp(-depth/32))+"%";
+    // zone label
+    var zn="";
+    for(var z=zones.length-1;z>=0;z--){
+      if(depth>=zones[z].m){zn=zones[z];break}
+    }
+    if(zn){
+      document.getElementById("zoneName").textContent=zn.name;
+      document.getElementById("zoneSub").textContent=zn.sub;
+    }
+    // fauna parallax + fading
+    anchors.forEach(function(a){
+      var y=a.fd.y*MH;
+      var v=a.fd.y*MH+a.fd.sp*depth*0.35;
+      var vy=Math.max(20,Math.min(MH-20,v));
+      a.el.style.top=(vy/MH*100)+"%";
+      var inView=depth>a.fd.depth*0.5&&depth<a.fd.depth*2.4;
+      var al=inView?0.9:0;
+      a.el.style.opacity=al;
+    });
+    // caption reveals handled by IO
+    drawMotes(dt);
+    requestAnimationFrame(frame);
+  }
+  function lerpColor(a,b,t){t=Math.max(0,Math.min(1,t));
+    var ar=(a>>16)&255,ag=(a>>8)&255,ab=a&255;
+    var br=(b>>16)&255,bg=(b>>8)&255,bb=b&255;
+    return "rgb("+Math.round(ar+(br-ar)*t)+","+Math.round(ag+(bg-ag)*t)+","+Math.round(ab+(bb-ab)*t)+")";
+  }
+  function tempAt(d){
+    var stops2=[[0,24],[200,12],[1000,4],[4000,2],[6000,1.6],[10935,1.1]];
+    for(var i=0;i<stops2.length-1;i++){
+      if(d>=stops2[i][0]&&d<=stops2[i+1][0]){
+        var t=(d-stops2[i][0])/(stops2[i+1][0]-stops2[i][0]);
+        return stops2[i][1]+(stops2[i+1][1]-stops2[i][1])*t;
+      }
+    }
+    return 1.1;
+  }
+  var hint=document.getElementById("hint");
+  window.addEventListener("scroll",function(){
+    if(!hint.hidden&&window.scrollY>20){hint.style.opacity=0;hint.hidden=true}
+  },{passive:true});
+  // caption IO
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(en){
+      if(en.isIntersecting){en.target.classList.add("in");io.unobserve(en.target)}
+    });
+  },{threshold:.25});
+  caps.forEach(function(c){io.observe(c)});
+  if(RM)caps.forEach(function(c){c.classList.add("in")});
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sumi — Ink Drops in Water</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--inkc:#1f2a6b}
+html,body{height:100%;overflow:hidden}
+body{background:#e7edf0;font-family:'Iowan Old Style',Palatino,Georgia,serif;cursor:crosshair}
+canvas#bg{position:fixed;inset:0;display:block}
+canvas#ink{position:fixed;inset:0;display:block;mix-blend-mode:multiply;touch-action:none}
+/* title */
+.title{position:fixed;top:26px;left:30px;z-index:10;display:flex;align-items:flex-start;gap:16px;pointer-events:none}
+.title h1{font-size:clamp(22px,2.6vw,34px);font-weight:400;letter-spacing:.06em;color:#24303a}
+.title .sub{font-family:ui-sans-serif,system-ui,sans-serif;font-size:9.5px;letter-spacing:.3em;text-transform:uppercase;color:rgba(36,48,58,.55);margin-top:4px}
+.vrule{width:1px;height:74px;background:linear-gradient(180deg,#24303a,transparent);position:relative;margin-top:6px}
+.vrule::after{content:"";position:absolute;top:0;left:-2.5px;width:6px;height:6px;border-radius:50%;background:var(--inkc)}
+.vertcaption{position:fixed;top:120px;left:38px;z-index:10;writing-mode:vertical-rl;font-size:11px;
+  letter-spacing:.4em;color:rgba(36,48,58,.45);pointer-events:none}
+/* hint & counter */
+.hint{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);z-index:10;font-style:italic;
+  font-size:16px;color:rgba(36,48,58,.6);animation:breathe 3.6s ease-in-out infinite;pointer-events:none;transition:opacity 1.2s}
+@keyframes breathe{0%,100%{opacity:.4}50%{opacity:.95}}
+.counter{position:fixed;bottom:24px;right:26px;z-index:10;font-family:ui-monospace,monospace;font-size:11px;
+  color:rgba(36,48,58,.5);pointer-events:none;font-variant-numeric:tabular-nums}
+/* toolbar */
+.toolbar{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:12;display:flex;align-items:center;gap:12px;
+  background:rgba(255,255,255,.75);backdrop-filter:blur(10px);border-radius:99px;padding:10px 18px;
+  box-shadow:0 12px 34px rgba(30,40,60,.18)}
+.sw5{width:26px;height:26px;border-radius:50%;cursor:pointer;border:1px solid rgba(30,40,60,.2);position:relative;transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sw5:hover{transform:scale(1.18)}
+.sw5.on{box-shadow:0 0 0 2px #fff,0 0 0 3.5px #24303a;transform:scale(1.12)}
+.segwater{display:flex;border:1px solid rgba(30,40,60,.3);border-radius:99px;overflow:hidden}
+.segwater button{border:none;background:none;color:#24303a;font-family:ui-sans-serif,system-ui;font-size:10.5px;
+  letter-spacing:.16em;text-transform:uppercase;padding:8px 14px;cursor:pointer}
+.segwater button.on{background:#24303a;color:#f6f2e8}
+.drainbtn{border:1px solid rgba(30,40,60,.35);background:none;color:#24303a;font-family:ui-sans-serif,system-ui;
+  font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;padding:8px 16px;border-radius:99px;cursor:pointer;transition:all .3s}
+.drainbtn:hover{background:rgba(30,40,60,.08)}
+.drainbtn.draining{animation:throb 1s ease-in-out infinite;border-color:#24303a}
+@keyframes throb{0%,100%{opacity:1}50%{opacity:.5}}
+@media(max-width:640px){.vertcaption{display:none}.hint{bottom:90px}.toolbar{left:10px;right:10px;transform:none;justify-content:center;flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){.hint{animation:none}}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<canvas id="ink"></canvas>
+
+<div class="title">
+  <div>
+    <h1>Sumi</h1>
+    <div class="sub">ink drops in water</div>
+  </div>
+  <div class="vrule"></div>
+</div>
+<div class="vertcaption">墨 · still water · slow breath</div>
+
+<div class="hint" id="hint">touch the water</div>
+<div class="counter">drops · <b id="dropCount">0</b></div>
+
+<div class="toolbar">
+  <button class="sw5 on" data-ink="#1f2a6b" style="background:#1f2a6b" title="Indigo (1)"></button>
+  <button class="sw5" data-ink="#c8402a" style="background:#c8402a" title="Vermilion (2)"></button>
+  <button class="sw5" data-ink="#6b4a2b" style="background:#6b4a2b" title="Sepia (3)"></button>
+  <button class="sw5" data-ink="#14141a" style="background:#14141a" title="Black (4)"></button>
+  <button class="sw5" data-ink="#157a7a" style="background:#157a7a" title="Teal (5)"></button>
+  <div class="segwater" id="bgSeg">
+    <button class="on" data-m="water">Water</button>
+    <button data-m="paper">Paper</button>
+  </div>
+  <button class="drainbtn" id="drainBtn">Drain</button>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var bgCv=document.getElementById("bg"),bctx=bgCv.getContext("2d");
+  var inkCv=document.getElementById("ink"),ictx=inkCv.getContext("2d");
+  var W=0,H=0,DPR=1;
+  var medium="water";
+  var particles=[],drops=0,draining=0;
+  var ink="#1f2a6b";
+  // sprites cache
+  var sprites={};
+  function spriteFor(col,paper){
+    var key=col+(paper?"p":"w");
+    if(sprites[key])return sprites[key];
+    var s=document.createElement("canvas");s.width=s.height=64;
+    var c=s.getContext("2d");
+    var g=c.createRadialGradient(32,32,0,32,32,32);
+    var r=parseInt(col.slice(1,3),16),gr=parseInt(col.slice(3,5),16),b=parseInt(col.slice(5,7),16);
+    if(paper){
+      g.addColorStop(0,"rgba("+r+","+gr+","+b+",.35)");
+      g.addColorStop(0.6,"rgba("+r+","+gr+","+b+",.18)");
+      g.addColorStop(1,"rgba("+r+","+gr+","+b+",0)");
+    }else{
+      g.addColorStop(0,"rgba("+r+","+gr+","+b+",.5)");
+      g.addColorStop(0.55,"rgba("+r+","+gr+","+b+",.22)");
+      g.addColorStop(1,"rgba("+r+","+gr+","+b+",0)");
+    }
+    c.fillStyle=g;c.fillRect(0,0,64,64);
+    sprites[key]=s;
+    return s;
+  }
+  // curl noise
+  var perm=new Uint8Array(512);
+  (function(){var p=[151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180];for(var i=0;i<512;i++)perm[i]=p[i&255]})();
+  function fade(t){return t*t*(3-2*t)}
+  function grad(h,x,y){return((h&1)?x:-x)+((h&2)?y:-y)}
+  function noise2(x,y){
+    var X=Math.floor(x),Y=Math.floor(y);
+    x-=X;y-=Y;
+    var u=fade(x),v=fade(y);
+    var A=perm[X&255],B=perm[(X+1)&255];
+    var aa=perm[(A+Y)&255],ab=perm[(A+Y+1)&255];
+    var ba=perm[(B+Y)&255],bb=perm[(B+Y+1)&255];
+    var x0=grad(aa,x,y)*(1-u)+grad(ba,x-1,y)*u;
+    var x1=grad(ab,x,y-1)*(1-u)+grad(bb,x-1,y-1)*u;
+    return x0*(1-v)+x1*v;
+  }
+  function curlAt(x,y,t){
+    var e=0.45;
+    var f=0.005,g2=0.0016;
+    var n1=noise2(x*f+g2*100,y*f+g2*100);
+    var n2=noise2(x*f+37.3,y*f+t*0.05);
+    var n3=noise2(x*f+91.7,y*f+t*0.08);
+    return{vx:n1*42+n3*18,vy:n2*42+n3*14};
+  }
+  function resize(){
+    DPR=Math.min(2,devicePixelRatio||1);
+    W=innerWidth;H=innerHeight;
+    bgCv.width=W*DPR;bgCv.height=H*DPR;
+    inkCv.width=W*DPR;inkCv.height=H*DPR;
+    bctx.setTransform(DPR,0,0,DPR,0,0);
+    ictx.setTransform(DPR,0,0,DPR,0,0);
+    paintBg();
+  }
+  window.addEventListener("resize",function(){resize()});
+  function paintBg(){
+    if(medium==="water"){
+      var g=bctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.75);
+      g.addColorStop(0,"#f1f5f6");g.addColorStop(.6,"#e3eaee");g.addColorStop(1,"#cfd9df");
+      bctx.fillStyle=g;bctx.fillRect(0,0,W,H);
+      // caustic rings
+      bctx.strokeStyle="rgba(255,255,255,.06)";
+      for(var i=0;i<40;i++){
+        var x=Math.random()*W,y=Math.random()*H,r=20+Math.random()*90;
+        bctx.beginPath();bctx.ellipse(x,y,r,r*0.4,Math.random()*Math.PI,0,7);bctx.stroke();
+      }
+    }else{
+      bctx.fillStyle="#f3ead8";
+      bctx.fillRect(0,0,W,H);
+      // fibres
+      for(var j=0;j<3000;j++){
+        var x2=Math.random()*W,y2=Math.random()*H;
+        var a=Math.random()*Math.PI,l=(Math.random()<0.4?2+Math.random()*14:9+Math.random()*40);
+        bctx.strokeStyle=Math.random()<0.55?"rgba(120,95,60,.12)":"rgba(255,255,255,.35)";
+        bctx.lineWidth=0.6+Math.random();
+        bctx.beginPath();bctx.moveTo(x2,y2);bctx.lineTo(x2+Math.cos(a)*l,y2+Math.sin(a)*l);bctx.stroke();
+      }
+      // mottling
+      for(var m=0;m<60;m++){
+        var mx=Math.random()*W,my=Math.random()*H,mr=40+Math.random()*160;
+        var g2=bctx.createRadialGradient(mx,my,0,mx,my,mr);
+        g2.addColorStop(0,Math.random()<0.5?"rgba(150,120,80,.06)":"rgba(255,250,235,.2)");
+        g2.addColorStop(1,"rgba(0,0,0,0)");
+        bctx.fillStyle=g2;bctx.fillRect(mx-mr,my-mr,mr*2,mr*2);
+      }
+    }
+  }
+  function dropAt(x,y){
+    var n=380+Math.floor(Math.random()*240);
+    n=Math.round(n*(W*H)/1300000);
+    var paper=medium==="paper";
+    var sp=paper?14+Math.random()*26:30+Math.random()*90;
+    for(var i=0;i<n;i++){
+      var a=Math.random()*Math.PI*2;
+      var d=Math.random()*24;
+      particles.push({x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,
+        vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,
+        life:0,max:4+Math.random()*6,
+        size:3+Math.random()*9,
+        ink:ink,paper:paper});
+    }
+    // initial blot stamp
+    var s=spriteFor(ink,paper);
+    for(var st2=0;st2<6;st2++){
+      ictx.globalAlpha=paper?0.045:0.07;
+      ictx.drawImage(s,x-16+Math.random()*16,y-16+Math.random()*16,24,24);
+    }
+    ictx.globalAlpha=1;
+    drops++;
+    document.getElementById("dropCount").textContent=drops;
+    var h=document.getElementById("hint");
+    if(h)h.style.opacity=0;
+  }
+  function step(dt){
+    var rotation=(medium==="water"&&!RM)?0.0002:0;
+    // self-swirl water
+    if(medium==="water"&&!RM&&particles.length){
+      var tmp=document.createElement("canvas");
+      tmp.width=inkCv.width;tmp.height=inkCv.height;
+      var tc=tmp.getContext("2d");
+      tc.clearRect(0,0,tmp.width,tmp.height);
+      tc.save();
+      tc.translate(tmp.width/2,tmp.height/2);
+      tc.rotate(rotation);
+      tc.scale(1.0004,1.0004);
+      tc.translate(-tmp.width/2+ (Math.random()-0.5), -tmp.height/2+(Math.random()-0.5));
+      tc.drawImage(inkCv,0,0);
+      tc.restore();
+      ictx.clearRect(0,0,inkCv.width,inkCv.height);
+      ictx.drawImage(tmp,0,0);
+    }
+    var cx=W/2,cy=H/2;
+    var paper=medium==="paper";
+    for(var i=particles.length-1;i>=0;i--){
+      var p=particles[i];
+      var c=curlAt(p.x,p.y,performance.now()/1000);
+      // fine + coarse
+      var fx=noise2(p.x*0.023,p.y*0.023+Math.sin(i)*9)*0.5;
+      // simpler combined curl already includes both scales
+      p.vx+=c.vx*dt*2.2+ (p.x-cx)*dt*0.02;
+      p.vy+=c.vy*dt*2.2+ (p.y-cy)*dt*0.02;
+      // global rotation of water
+      var rx=p.x-cx,ry=p.y-cy;
+      p.vx+=-ry*dt*0.004; p.vy+=rx*dt*0.004;
+      var drag=paper?0.90:0.965;
+      p.vx*=Math.pow(drag,dt*60);p.vy*=Math.pow(drag,dt*60);
+      p.x+=p.vx*dt;p.y+=p.vy*dt;
+      p.life+=dt;
+      if(p.life>p.max||p.x<-30||p.x>W+30||p.y<-30||p.y>H+30){
+        // respawn gently near origin? remove (they fade)
+        particles.splice(i,1);
+      }
+    }
+  }
+  function render(){
+    var paper=medium==="paper";
+    for(var i=0;i<particles.length;i++){
+      var p=particles[i];
+      var alpha=Math.max(0,1-p.life/p.max);
+      var a=paper?0.045:0.07;
+      var size=p.size*(1+ p.life/p.max*0.8);
+      ictx.globalAlpha=a*alpha;
+      var s=spriteFor(p.ink,paper);
+      ictx.drawImage(s,p.x-size/2,p.y-size/2,size,size);
+    }
+    ictx.globalAlpha=1;
+  }
+  // drain
+  function drain(){
+    if(draining)return;
+    draining=1;
+    var b=document.getElementById("drainBtn");
+    b.classList.add("draining");
+    var t0=performance.now();
+    (function fadeOut(now){
+      var t=(now-t0)/7000;
+      ictx.globalCompositeOperation="destination-out";
+      ictx.fillStyle="rgba(0,0,0,"+(0.018)+")";
+      ictx.fillRect(0,0,inkCv.width,inkCv.height);
+      ictx.globalCompositeOperation="source-over";
+      if(t<1){
+        requestAnimationFrame(fadeOut);
+      }else{
+        ictx.clearRect(0,0,inkCv.width,inkCv.height);
+        particles=[];
+        draining=0;
+        b.classList.remove("draining");
+      }
+    })(t0);
+  }
+  // pointer
+  var dragging=false,lastDrop=0;
+  inkCv.addEventListener("pointerdown",function(e){
+    var r=inkCv.getBoundingClientRect();
+    var x=e.clientX-r.left,y=e.clientY-r.top;
+    dropAt(x,y);
+    dragging=true;
+    document.getElementById("hint").style.opacity=0;
+  });
+  inkCv.addEventListener("pointermove",function(e){
+    if(!dragging)return;
+    var r=inkCv.getBoundingClientRect();
+    var x=e.clientX-r.left,y=e.clientY-r.top;
+    var now=performance.now();
+    if(now-lastDrop>220){
+      lastDrop=now;
+      dropAt(x,y);
+    }
+  });
+  window.addEventListener("pointerup",function(){dragging=false});
+  // controls
+  document.querySelectorAll(".sw5").forEach(function(b){
+    b.addEventListener("click",function(){
+      document.querySelectorAll(".sw5").forEach(function(x){x.classList.remove("on")});
+      b.classList.add("on");
+      ink=b.dataset.ink;
+      document.documentElement.style.setProperty("--inkc",ink);
+      document.querySelector(".vrule::after"); // nop
+      var vr=document.querySelector(".vrule");
+      if(vr)vr.style.background="linear-gradient(180deg,"+ink+",transparent)";
+    });
+  });
+  document.querySelectorAll("#bgSeg button").forEach(function(b){
+    b.addEventListener("click",function(){
+      document.querySelectorAll("#bgSeg button").forEach(function(x){x.classList.remove("on")});
+      b.classList.add("on");
+      medium=b.dataset.m;
+      paintBg();
+    });
+  });
+  document.getElementById("drainBtn").addEventListener("click",drain);
+  window.addEventListener("keydown",function(e){
+    var k=e.key;
+    if(k==="1")document.querySelectorAll(".sw5")[0].click();
+    if(k==="2")document.querySelectorAll(".sw5")[1].click();
+    if(k==="3")document.querySelectorAll(".sw5")[2].click();
+    if(k==="4")document.querySelectorAll(".sw5")[3].click();
+    if(k==="5")document.querySelectorAll(".sw5")[4].click();
+    if(k==="d"||k==="D")drain();
+    if(k==="p"||k==="P")document.querySelectorAll("#bgSeg button")[(medium==="water")?1:0].click();
+  });
+  var last=performance.now();
+  function loop(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    step(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+  resize();
+  // seed a first drop center
+  dropAt(W/2,H/2);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

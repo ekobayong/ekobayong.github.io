@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vellmar Metro — Live Network Map</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#f5f2ea;--panel:#ebe7dc;--ink:#1b1e24;--dim:#5a5f6b;--rule:#d5d0c4;--river:#cfe3ec;
+  --disc:#fff;--orbit:#1b1e24;
+}
+body.dark{
+  --bg:#0f1318;--panel:#151a21;--ink:#e9ecf1;--dim:#9aa3b2;--rule:#252c36;--river:#17232e;--disc:#0f1318;--orbit:#e9ecf1;
+}
+body{background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,'Helvetica Neue',Helvetica,Arial,sans-serif;
+  transition:background .5s,color .5s;min-height:100vh}
+.wrap{max-width:1360px;margin:0 auto;padding:24px 20px 50px}
+header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.headbox h1{font-family:inherit;font-weight:700;font-size:24px;letter-spacing:.01em}
+.headbox h1 b{color:#d9363e}
+.headbox p{font-size:11px;color:var(--dim);letter-spacing:.1em;margin-top:3px}
+.toolrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.mono2{font-family:ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.clock{font-family:ui-monospace,monospace;font-size:14px;color:var(--ink);padding:8px 14px;border:1px solid var(--rule);border-radius:8px}
+.nightbtn{border:1px solid var(--rule);background:none;color:var(--ink);font-family:inherit;font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;padding:9px 16px;border-radius:99px;cursor:pointer;transition:all .3s}
+.nightbtn:hover{border-color:var(--ink)}
+/* legend */
+.lines{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.lchip{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--dim);padding:5px 11px;border-radius:99px;cursor:pointer;
+  border:1px solid transparent;transition:all .3s}
+.lchip i{width:12px;height:3px;border-radius:2px}
+.lchip:hover{background:rgba(0,0,0,.05)}
+body.dark .lchip:hover{background:rgba(255,255,255,.06)}
+/* layout */
+.main{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start}
+@media(max-width:860px){.main{grid-template-columns:1fr}}
+.mapwrap{background:var(--panel);border:1px solid var(--rule);border-radius:14px;padding:14px;transition:background .5s,border-color .5s}
+svg#map{width:100%;height:auto;display:block}
+/* aside */
+.aside{display:flex;flex-direction:column;gap:14px}
+.acard{background:var(--panel);border:1px solid var(--rule);border-radius:14px;padding:16px;transition:background .5s,border-color .5s}
+.acard h3{font-size:9.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--dim);margin-bottom:12px;font-weight:500}
+.acard h3 b{color:var(--ink)}
+.arr{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--rule);font-size:13px}
+.arr:last-child{border:none}
+.arr .pip{width:9px;height:9px;border-radius:50%;flex:none}
+.arr .dest{flex:1;color:var(--ink)}
+.arr .dest small{display:block;color:var(--dim);font-size:10.5px}
+.arr .eta{font-family:ui-monospace,monospace;font-size:13px;font-variant-numeric:tabular-nums;color:var(--dim)}
+.arr .eta.due{color:#1e9e5a;font-weight:700}
+.arr.delay .eta{color:#f0a020}
+.statusrow{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--rule);font-size:12.5px}
+.statusrow:last-child{border:none}
+.statusrow .badge{font-size:9px;letter-spacing:.1em;padding:4px 10px;border-radius:99px;font-weight:600;color:#fff}
+.badge.ok{background:#1e9e5a}.badge.delay{background:#f0a020;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.none{color:var(--dim);font-size:12.5px;padding:6px 0;text-align:center}
+.mapcap{font-size:10px;color:var(--dim);letter-spacing:.08em;margin-top:8px;text-align:center;text-transform:uppercase}
+@media(prefers-reduced-motion:reduce){.badge.delay{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="headbox">
+      <h1>Vellmar <b>Metro</b> · Live</h1>
+      <p>Network diagram · 2026 · trains move, delays are real (the interval, at least)</p>
+    </div>
+    <div class="toolrow">
+      <span class="clock" id="clock">--:--</span>
+      <button class="nightbtn" id="nightBtn">Night mode</button>
+    </div>
+  </header>
+
+  <div class="lines" id="legend"></div>
+
+  <div class="main">
+    <div class="mapwrap">
+      <svg id="map" viewBox="0 0 1000 740"></svg>
+      <p class="mapcap">Vellmar Metro · Network Diagram · 2026</p>
+    </div>
+    <div class="aside">
+      <div class="acard"><h3>Next arrivals · <b id="stName">—</b></h3><div id="arrivals"></div></div>
+      <div class="acard"><h3>Service status</h3><div id="statusList"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // lines data: [id,color,name]
+  var LINES=[
+    ["CR","#d9363e","Crimson"],["CB","#1f6fd6","Cobalt"],["EM","#1e9e5a","Emerald"],
+    ["AM","#f0a020","Amber"],["VI","#7b4fbf","Violet"],["SL","#3a8c96","Slate"]
+  ];
+  var ST={
+    "Central Vellmar":[560,330],"Kingsrow":[560,220],"Aurora Park":[450,220],"Lantern Court":[330,220],
+    "Riverside":[220,330],"Botanic Gardens":[440,470],"Foundry Square":[600,470],"Priory Gate":[740,400],
+    "Saltmarsh":[820,300],"Old Docks":[700,190]
+  };
+  // lines as polyline points (horizontal/vertical/45deg)
+  var PATHS={
+    CR:[[330,220],[450,220],[560,220],[660,320],[760,420],[860,420]],
+    CB:[[220,330],[330,220],[450,220]],
+    EM:[[440,470],[560,470],[660,420],[160,520]],
+    AM:[[560,220],[660,320],[660,420],[740,400],[760,420]],
+    VI:[[860,420],[820,300],[820,300]],
+    SL:[[700,190],[760,190],[640,340]]
+  };
+  var LINE_STOP={};
+  // build stop list per line: nearest point on path
+  function lineStops(lid){
+    var pts=PATHS[lid];
+    var list=[];
+    Object.keys(ST).forEach(function(name){
+      var p=ST[name];
+      // distance to polyline
+      var best=1e9;
+      for(var i=0;i<pts.length-1;i++){
+        var d=segDist(p,pts[i],pts[i+1]);
+        if(d<best)best=d;
+      }
+      if(best<60)list.push({name:name,d:best});
+    });
+    list.sort(function(a,b){return a.d-b.d});
+    return list.map(function(s){return s.name});
+  }
+  LINES.forEach(function(l){
+    LINE_STOP[l[0]]=lineStops(l[0]);
+  });
+  var stationList=Object.keys(ST);
+  // build SVG
+  var SVGNS="http://www.w3.org/2000/svg";
+  var svg=document.getElementById("map");
+  var linePaths={},stationEls={},trainEls=[];
+  function el(n,a){var e=document.createElementNS(SVGNS,n);for(var k in a)e.setAttribute(k,a[k]);return e}
+  function buildMap(){
+    svg.innerHTML="";
+    // defs
+    var defs=el("defs",{});
+    LINES.forEach(function(l){var lg=el("linearGradient",{id:"lg"+l[0]});lg.innerHTML='';svg.appendChild(lg)});
+    // grid
+    var grid=el("rect",{x:0,y:0,width:1000,height:740,fill:"none",stroke:"rgba(0,0,0,0)"});
+    var g2=el("g",{opacity:.4});
+    for(var x=0;x<=1000;x+=100){g2.appendChild(el("line",{x1:x,y1:0,x2:x,y2:740,stroke:"rgba(0,0,0,.05)"}))}
+    for(var y=0;y<=740;y+=100){g2.appendChild(el("line",{x1:0,y1:y,x2:1000,y2:y,stroke:"rgba(0,0,0,.05)"}))}
+    svg.appendChild(g2);
+    // river
+    var river=el("path",{d:"M0 520 Q 300 480 520 560 T 1000 560 L1000 740 L0 740 Z",fill:"var(--river)"});
+    svg.appendChild(river);
+    // hit paths + visible paths
+    LINES.forEach(function(l){
+      var pts=PATHS[l[0]];
+      var d="M"+pts.map(function(p){return p[0]+" "+p[1]}).join(" L");
+      var hit=el("path",{d:d,fill:"none",stroke:"transparent",strokeWidth:26,"stroke-linecap":"round","stroke-linejoin":"round",
+        "data-l":l[0],"class":"hit"});
+      hit.style.cursor="pointer";
+      var vis=el("path",{d:d,fill:"none",stroke:l[1],strokeWidth:9,"stroke-linecap":"round","stroke-linejoin":"round",
+        "data-l":l[0],"class":"linep"});
+      var vis2=el("path",{d:d,fill:"none",stroke:"#fff",strokeWidth:2.2,"stroke-linecap":"round","stroke-linejoin":"round",opacity:.5,"class":"linec"});
+      svg.appendChild(hit);svg.appendChild(vis2);svg.appendChild(vis);
+      linePaths[l[0]]=vis;
+    });
+    // interchanges + stops
+    var inter="Central Vellmar Kingsrow Aurora Park Lantern Court Riverside Botanic Gardens Foundry Square Priory Gate Saltmarsh Old Docks".split(" ");
+    stationList.forEach(function(name){
+      var p=ST[name];
+      var isInter=inter.indexOf(name)>=0;
+      if(isInter){
+        var c=el("circle",{cx:p[0],cy:p[1],r:9,fill:"var(--disc)",stroke:"var(--orbit)",strokeWidth:2.5});
+        c.dataset.st=name;
+        svg.appendChild(c);
+      }else{
+        // tick
+      }
+      var lbl=el("text",{x:p[0],y:p[1]-14,"text-anchor":"middle","font-size":11.5,fill:"var(--ink)",
+        "font-weight":500,"paint-order":"stroke","data-st":name});
+      lbl.style.stroke="var(--bg)";lbl.style.strokeWidth="4px";
+      lbl.textContent=name;
+      lbl.setAttribute("class","stlabel");
+      svg.appendChild(lbl);
+      stationEls[name]={p:p,isInter:isInter,label:lbl};
+    });
+    // termini circle ticks: skip for brevity
+  }
+  function segDist(p,a,b){
+    var dx=b[0]-a[0],dy=b[1]-a[1];
+    var l2=dx*dx+dy*dy;
+    if(!l2)return Math.hypot(p[0]-a[0],p[1]-a[1]);
+    var t=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/l2;
+    t=Math.max(0,Math.min(1,t));
+    return Math.hypot(p[0]-(a[0]+t*dx),p[1]-(a[1]+t*dy));
+  }
+  // trains
+  var trains=[];
+  function initTrains(){
+    trains=[];
+    LINES.forEach(function(l){
+      var total=4;
+      for(var i=0;i<total;i++){
+        var dir=i<2?-1:1;
+        trains.push({line:l[0],pos:Math.random(),dir:dir,state:"moving",dwell:0,totalLen:pathLen(l[0])});
+      }
+    });
+  }
+  var pathTotal={};
+  function pathLen(lid){
+    var el2=linePaths[lid];
+    if(el2&&el2.getTotalLength)return el2.getTotalLength();
+    var pts=PATHS[lid],sum2=0;
+    for(var i=0;i<pts.length-1;i++)sum2+=Math.hypot(pts[i+1][0]-pts[i][0],pts[i+1][1]-pts[i][1]);
+    return sum2;
+  }
+  LINES.forEach(function(l){pathTotal[l[0]]=pathLen(l[0])});
+  function trainPos(t,dt){
+    var L=pathTotal[t.line];
+    var el2=linePaths[t.line];
+    t.pos+=dt*62/L*t.dir*(t.state==="moving"?(delayed.has(t.line)?0.45:1):0);
+    if(t.pos>1){t.pos=1;t.state="dwell";t.dwell=0}
+    if(t.pos<0){t.pos=0;t.state="dwell";t.dwell=0}
+    if(t.state==="dwell"){
+      t.dwell+=dt;
+      var maxDwell=(t.pos<=0.001||t.pos>=0.999)?3.2:1.6;
+      if(delayed.has(t.line))maxDwell*=2;
+      if(t.dwell>maxDwell){t.state="moving";t.dir*=-1;t.pos+=t.dir*0.0008}
+    }
+    // station snapping
+    var len=el2.getTotalLength?el2.getTotalLength():pathTotal[t.line];
+    var dist=t.pos*len;
+    var stops=LINE_STOP[t.line];
+    for(var i=0;i<stops.length;i++){
+      var p=ST[stops[i]];
+      var posAlong=nearestAlong(el2,p);
+      if(Math.abs(dist-posAlong)<8&&t.state==="moving"){
+        // snap & dwell briefly
+        t.pos=posAlong/len;
+      }
+    }
+    return{t:t,x:0,y:0};
+  }
+  function nearestAlong(el2,p){
+    // walk path
+    if(!el2.getPointAtLength)return 0;
+    var len=el2.getTotalLength();
+    var best=0,bd=1e9;
+    for(var d=0;d<=len;d+=2){
+      var pt=el2.getPointAtLength(d);
+      var dd2=Math.hypot(pt.x-p[0],pt.y-p[1]);
+      if(dd2<bd){bd=dd2;best=d}
+    }
+    return best;
+  }
+  var delayed=new Set();
+  var selected=null;
+  function drawTrains(dt){
+    trainEls.forEach(function(t){t.remove()});
+    trainEls=[];
+    trains.forEach(function(tr){
+      var info=trainPos(tr,dt);
+      var el2=linePaths[tr.line];
+      if(!el2||!el2.getPointAtLength)return;
+      var len=el2.getTotalLength();
+      var pt=el2.getPointAtLength(tr.pos*len);
+      var g=el("g",{"class":"train"});
+      var halo=el("circle",{cx:pt.x,cy:pt.y,r:7,fill:lineCol(tr.line),opacity:.25});
+      var body=el("circle",{cx:pt.x,cy:pt.y,r:4.5,fill:"#fff",stroke:lineCol(tr.line),strokeWidth:2.6});
+      g.appendChild(halo);g.appendChild(body);
+      svg.appendChild(g);
+      trainEls.push(g);
+    });
+  }
+  function lineCol(id){var l=LINES.find(function(x){return x[0]===id});return l?l[1]:"#000"}
+  // highlight
+  var hoverLine=null;
+  function setHover(l){
+    hoverLine=l;
+    document.querySelectorAll(".linep,.linec").forEach(function(p){
+      var on=l===null||p.dataset.l===l;
+      p.style.opacity=on?1:0.13;
+    });
+    // trains
+    trainEls.forEach(function(){});
+  }
+  // arrivals
+  function etaFor(st,line){
+    // find train on line ahead of station
+    var len=pathTotal[line];
+    var el2=linePaths[line];
+    var posAlong=nearestAlong(el2,ST[st]);
+    var list=[];
+    trains.forEach(function(t){
+      if(t.line!==line)return;
+      var distAlong=t.pos*len;
+      var d=posAlong-distAlong;
+      if(t.dir<0)d=distAlong-posAlong;
+      if(d>0){
+        var eta=d/62;
+        if(delayed.has(line))eta/=.45;
+        list.push({eta:eta,dest:terminusFor(line,t.dir>0),t:t});
+      }
+    });
+    list.sort(function(a,b){return a.eta-b.eta});
+    return list.slice(0,3);
+  }
+  function terminusFor(line,pos){
+    var pts=PATHS[line];
+    return pos?pts[pts.length-1]:pts[0];
+  }
+  var arrivalsEl=document.getElementById("arrivals");
+  var statusEl=document.getElementById("statusList");
+  function renderArrivals(){
+    if(!selected){
+      arrivalsEl.innerHTML='<div class="none">Select a station on the map</div>';
+      return;
+    }
+    var rows=[];
+    stationEls[selected].label.setAttribute("font-weight","700");
+    // find lines at this station
+    var linesHere=[];
+    LINES.forEach(function(l){
+      if(LINE_STOP[l[0]].indexOf(selected)>=0)linesHere.push(l[0]);
+    });
+    linesHere.forEach(function(l){
+      var taps=etaFor(selected,l);
+      taps.forEach(function(a){
+        var dest=Array.isArray(a.dest)?a.dest[0]+", "+a.dest[1]:a.dest;
+        var p=PATHS[l];
+        var end= a.t.dir>0?p[p.length-1]:p[0];
+        rows.push({line:l,dir:a.t.dir,et:Math.round(a.eta),dest:end,term:a.t.pos>0.999||a.t.pos<0.001});
+      });
+    });
+    rows.sort(function(a,b){return a.et-b.et});
+    arrivalsEl.innerHTML="";
+    if(!rows.length){arrivalsEl.innerHTML='<div class="none">No trains approaching</div>';return}
+    rows.slice(0,6).forEach(function(r){
+      var d=document.createElement("div");
+      d.className="arr"+(delayed.has(r.line)?" delay":"");
+      var etaTxt=r.et<=0?"Due":r.et<60?r.et+" s":Math.floor(r.et/60)+":"+String(r.et%60).padStart(2,"0");
+      d.innerHTML='<span class="pip" style="background:'+lineCol(r.line)+'"></span>'+
+        '<span class="dest">towards <b>'+r.dest+'</b>'+(r.term?'<small>Terminates here</small>':"")+'</span>'+
+        '<span class="eta'+(r.et<=3?" due":"")+'">'+etaTxt+'</span>';
+      arrivalsEl.appendChild(d);
+    });
+  }
+  function renderStatus(){
+    statusEl.innerHTML="";
+    LINES.forEach(function(l){
+      var d=document.createElement("div");
+      d.className="statusrow";
+      d.innerHTML='<span style="display:flex;align-items:center;gap:8px"><i style="width:12px;height:3px;border-radius:2px;background:'+l[1]+';display:inline-block"></i>'+l[2]+'</span>'+
+        (delayed.has(l[0])?'<span class="badge delay">Minor delays</span>':'<span class="badge ok">Good service</span>');
+      statusEl.appendChild(d);
+    });
+  }
+  // interactions
+  buildMap();
+  LINES.forEach(function(l){initTrains()});
+  // hmm initTrains done for each; make once
+  trains=[];
+  initTrains();
+  // legend
+  var legend=document.getElementById("legend");
+  LINES.forEach(function(l){
+    var c=document.createElement("div");
+    c.className="lchip";
+    c.innerHTML='<i style="background:'+l[1]+'"></i>'+l[2];
+    c.addEventListener("mouseenter",function(){
+      document.querySelectorAll(".linep").forEach(function(p){
+        p.style.opacity=p.dataset.l===l[0]?1:0.13;
+      });
+      document.querySelectorAll(".linec").forEach(function(p){
+        p.style.opacity=p.dataset.l===l[0]?1:0.13;
+      });
+    });
+    c.addEventListener("mouseleave",function(){
+      document.querySelectorAll(".linep,.linec").forEach(function(p){p.style.opacity=1});
+    });
+    legend.appendChild(c);
+  });
+  // status card also highlights
+  // map click
+  svg.addEventListener("click",function(e){
+    var t=e.target;
+    if(t.dataset.st){
+      selectStation(t.dataset.st);
+    }else if(t.classList&&t.classList.contains("stlabel")){
+      selectStation(t.dataset.st);
+    }
+  });
+  function selectStation(name){
+    if(selected){
+      var oldLbl=stationEls[selected].label;
+      oldLbl.setAttribute("font-weight","500");
+    }
+    selected=name;
+    document.getElementById("stName").textContent=name;
+    stationEls[name].label.setAttribute("font-weight","700");
+    renderArrivals();
+  }
+  // periodic delay flips
+  setInterval(function(){
+    if(Math.random()<0.5){
+      var lines=LINES.map(function(l){return l[0]});
+      var pick=lines[Math.floor(Math.random()*lines.length)];
+      if(delayed.has(pick)){delayed.delete(pick)}
+      else{delayed.add(pick)}
+      renderStatus();
+      // slow trains handled via delayed lookup
+    }
+  },RM?45000:26000);
+  // clock + loop
+  var last=performance.now();
+  function loop(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    drawTrains(dt*(RM?0.4:1));
+    // update dates
+    var d=new Date();
+    document.getElementById("clock").textContent=d.toTimeString().slice(0,5);
+    if(selected&&Math.floor(now/250)!==Math.floor((now-250)/250)){renderArrivals()}
+    renderArrivals();
+    requestAnimationFrame(loop);
+  }
+  // night
+  document.getElementById("nightBtn").addEventListener("click",function(){
+    var dark=!document.body.classList.toggle("dark");
+    var col=dark?"#0f1318":"#f5f2ea";
+    document.documentElement.style.setProperty("--bg",col);
+    this.textContent=dark?"Day mode":"Night mode";
+    if(matchMedia("(prefers-color-scheme: dark)").matches&&!dark)document.body.classList.remove("dark");
+  });
+  if(matchMedia("(prefers-color-scheme: dark)").matches){
+    document.body.classList.add("dark");
+    document.getElementById("nightBtn").textContent="Day mode";
+  }
+  renderStatus();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

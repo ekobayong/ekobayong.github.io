@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KESTREL//OS v9.4.1 Nightjar</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#05060a;--mag:#ff2bd6;--cyn:#00f0ff;--amb:#ffb830;--mint:#5cff8a;
+  --dim:#6b7390;--txt:#d8e6ff;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono","Courier New",monospace;
+}
+html,body{height:100%}
+body{
+  background:radial-gradient(120% 90% at 50% 0%,#10142a 0%,var(--bg) 55%);
+  color:var(--txt);font-family:var(--mono);font-size:14px;overflow:hidden;
+}
+/* ---------- CRT overlays ---------- */
+.crt{position:fixed;inset:0;pointer-events:none;z-index:60}
+.crt .scan{position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.28) 2px 3px);mix-blend-mode:multiply}
+.crt .sweep{position:absolute;left:0;right:0;height:140px;background:linear-gradient(0deg,transparent,rgba(0,240,255,.05) 50%,transparent);animation:sweep 7s linear infinite}
+@keyframes sweep{0%{top:-20%}100%{top:120%}}
+.crt .flick{position:absolute;inset:0;background:#fff;opacity:0;animation:flicker .12s steps(2) infinite}
+@keyframes flicker{0%{opacity:.02}50%{opacity:0}100%{opacity:.025}}
+.crt .vig{position:absolute;inset:0;background:radial-gradient(120% 100% at 50% 45%,transparent 55%,rgba(0,0,0,.55))}
+.gridfloor{position:fixed;left:-20vw;right:-20vw;bottom:-24vh;height:70vh;z-index:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent 0 46px,rgba(0,240,255,.14) 47px 48px);
+  transform:perspective(600px) rotateX(62deg);transform-origin:50% 0;
+  -webkit-mask-image:linear-gradient(0deg,#000 30%,transparent 85%);
+  mask-image:linear-gradient(0deg,#000 30%,transparent 85%);
+  animation:gridmove 1.6s linear infinite;
+}
+@keyframes gridmove{to{background-position-y:48px}}
+/* ---------- Layout ---------- */
+.shell{position:relative;z-index:10;height:100vh;display:grid;grid-template-rows:auto 1fr;max-width:1500px;margin:0 auto;padding:14px}
+@media(max-width:860px){body{overflow:auto}.shell{height:auto}.gridfloor{display:none}}
+/* ---------- Header ---------- */
+.top{position:relative;padding:14px 22px;margin-bottom:12px;
+  background:rgba(10,12,22,.82);border:1px solid rgba(0,240,255,.28);box-shadow:0 0 24px rgba(0,240,255,.14);
+  clip-path:polygon(0 0,calc(100% - 26px) 0,100% 26px,100% 100%,0 100%);
+  display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;
+}
+.top h1{font-size:22px;letter-spacing:.18em;font-weight:800;color:var(--cyn);text-shadow:0 0 12px rgba(0,240,255,.7)}
+.top h1 i{font-style:normal;color:var(--mag);text-shadow:0 0 12px rgba(255,43,214,.8)}
+.status{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--dim)}
+.led{width:9px;height:9px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint);animation:ledblink 1.2s steps(2) infinite}
+@keyframes ledblink{50%{opacity:.25}}
+.clock{color:var(--cyn)}
+.top.glitch{animation:glitch .42s steps(2) 1}
+@keyframes glitch{
+  0%{transform:translate(0)}
+  20%{transform:translate(-3px,1px) skewX(-2deg)}
+  40%{transform:translate(3px,-1px)}
+  60%{transform:translate(-2px,0) skewX(1deg)}
+  80%{transform:translate(2px,1px)}
+  100%{transform:translate(0)}
+}
+.top.glitch h1{text-shadow:-3px 0 var(--mag),3px 0 var(--cyn),0 0 12px rgba(0,240,255,.7)}
+/* ---------- Main ---------- */
+.main{display:grid;grid-template-columns:1fr 320px;gap:14px;min-height:0}
+@media(max-width:860px){.main{grid-template-columns:1fr}.side{margin-top:12px}}
+.panel{position:relative;background:rgba(10,12,22,.82);border:1px solid rgba(0,240,255,.25);box-shadow:0 0 18px rgba(0,240,255,.1);padding:14px}
+.panel::before{content:attr(data-label);position:absolute;top:-9px;left:30px;background:var(--bg);color:var(--mag);font-size:11px;text-transform:uppercase;letter-spacing:.2em;padding:0 10px}
+.panel .br{position:absolute;width:10px;height:10px;border:1px solid var(--cyn)}
+.panel .br.tl{top:-1px;left:-1px;border-right:none;border-bottom:none}
+.panel .br.tr{top:-1px;right:-1px;border-left:none;border-bottom:none}
+.panel .br.bl{bottom:-1px;left:-1px;border-right:none;border-top:none}
+.panel .br.brc{bottom:-1px;right:-1px;border-left:none;border-top:none}
+/* console */
+.console{display:flex;flex-direction:column}
+.log{flex:1;overflow-y:auto;min-height:0;padding:6px 4px;scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
+@media(max-width:860px){.console{min-height:60vh}}
+.line{white-space:pre-wrap;word-break:break-word;margin:0;line-height:1.55}
+.line .ts{color:var(--dim)}
+.line .ok{color:var(--mint)}
+.line .warn{color:var(--amb)}
+.line .err{color:#ff4d5e}
+.line .mag{color:var(--mag)}
+.line .cyn{color:var(--cyn)}
+.caret{display:inline-block;width:9px;height:15px;background:var(--cyn);vertical-align:-2px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+.bar{height:16px;margin:4px 0 8px;background:rgba(0,240,255,.08);border:1px solid rgba(0,240,255,.3);position:relative;overflow:hidden}
+.bar i{position:absolute;inset:0;background:linear-gradient(90deg,var(--cyn),var(--mag));transform-origin:left;width:0;box-shadow:0 0 10px rgba(255,43,214,.5)}
+.bar span{position:absolute;right:6px;top:-2px;font-size:11px;color:var(--txt)}
+.prompt{display:flex;align-items:center;gap:6px;border-top:1px solid rgba(0,240,255,.2);padding-top:8px;margin-top:6px}
+.prompt .ps{color:var(--mag);text-shadow:0 0 8px rgba(255,43,214,.7);white-space:nowrap}
+.prompt input{flex:1;background:none;border:none;outline:none;color:var(--txt);font-family:var(--mono);font-size:14px}
+.prompt input::selection{background:var(--mag);color:#000}
+/* ---------- Sidebar ---------- */
+.side{display:flex;flex-direction:column;gap:14px;overflow-y:auto;min-height:0}
+.side h3{font-size:11px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase;margin-bottom:8px}
+#coreCanvas{width:100%;height:180px;display:block;background:rgba(0,0,0,.4)}
+@media(min-width:1800px){#coreCanvas{height:240px}}
+.gauge{margin-bottom:10px}
+.gauge .gl{display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px}
+.gauge .gl b{color:var(--cyn);font-weight:600}
+.gauge .bar{height:8px;margin:0}
+.gauge .bar i{background:var(--mag);width:0}
+.hexdump{font-size:11.5px;line-height:1.5;white-space:pre;overflow:hidden;-webkit-mask-image:linear-gradient(#000 80%,transparent);mask-image:linear-gradient(#000 80%,transparent)}
+.hexdump .hi{color:var(--cyn);text-shadow:0 0 6px rgba(0,240,255,.8)}
+/* ---------- Responsive ---------- */
+@media(max-width:480px){
+  .top{flex-direction:column;align-items:flex-start}
+  .top h1{font-size:17px}
+}
+@media(prefers-reduced-motion:reduce){
+  .crt .sweep,.gridfloor{animation:none}
+  .crt .flick,.led,.caret{animation:none}
+  .top.glitch{animation:none}
+}
+</style>
+</head>
+<body>
+<div class="crt" aria-hidden="true">
+  <div class="scan"></div><div class="sweep"></div><div class="flick"></div><div class="vig"></div>
+</div>
+<div class="gridfloor" aria-hidden="true"></div>
+
+<div class="shell">
+  <header class="top" id="top">
+    <h1>KESTREL<i>//</i>OS <span style="font-weight:400;color:var(--dim)">v9.4.1 Nightjar</span></h1>
+    <div class="status">
+      <span class="led"></span>
+      <span>NODE 0x1F7A · OPS-2</span>
+      <span class="clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="panel console" data-label="console">
+      <span class="br tl"></span><span class="br tr"></span><span class="br bl"></span><span class="br brc"></span>
+      <div class="log" id="log"></div>
+      <div class="prompt">
+        <span class="ps">operator@kestrel:~$</span>
+        <input id="cmd" type="text" autocomplete="off" spellcheck="false" aria-label="Command">
+      </div>
+    </section>
+
+    <aside class="side">
+      <section class="panel" data-label="telemetry">
+        <span class="br tl"></span><span class="br tr"></span><span class="br bl"></span><span class="br brc"></span>
+        <h3>Core assembly</h3>
+        <canvas id="coreCanvas"></canvas>
+        <div class="gauge"><div class="gl"><span>Core temp</span><b id="ctemp">46.2°C</b></div><div class="bar"><i id="ctbar"></i></div></div>
+        <div class="gauge"><div class="gl"><span>Flux</span><b id="flux">0.83</b></div><div class="bar"><i id="fxbar"></i></div></div>
+        <h3 style="margin-top:6px">Memory · 0x7f3a</h3>
+        <div class="hexdump" id="hexdump"></div>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var log=document.getElementById("log");
+  var input=document.getElementById("cmd");
+  var busy=false,history=[],hIdx=-1;
+  var typedSpeed=RM?0:14;
+
+  function line(cls,html){var d=document.createElement("div");d.className="line "+cls;d.innerHTML=html;return d}
+  function ts(){var d=new Date();return "["+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0")+"] "}
+  function print(html,cls){log.appendChild(line(cls||"",ts().replace(/^/,"<span class='ts'>")+"</span>"+html));scroll()}
+  function raw(html,cls){var d=document.createElement("div");d.className="line "+(cls||"");d.innerHTML=html;log.appendChild(d);scroll()}
+  function scroll(){log.scrollTop=log.scrollHeight}
+
+  function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+
+  // ---- typing ----
+  function typeText(str,el,done){
+    var i=0;
+    (function tick(){
+      if(RM||i>=str.length){el.textContent=str;if(done)done();return}
+      el.textContent+=str[i];
+      var d=typedSpeed+Math.random()*22;
+      if(str[i]===" ")d+=20;
+      if(str[i]===",")d+=140;
+      if(str[i]==="."||str[i]===":")d+=380;
+      if(Math.random()<.035)d+=260;
+      if(Math.random()<.1)d+=18;
+      i++;setTimeout(tick,d);
+    })();
+  }
+  function typeLine(str,cls,after){
+    var d=document.createElement("div");d.className="line "+cls;
+    d.innerHTML=ts();
+    log.appendChild(d);scroll();
+    var body=document.createElement("span");
+    d.appendChild(body);
+    var caret=document.createElement("span");caret.className="caret";
+    d.appendChild(caret);
+    var alive=true;
+    typeText(str,body,function(){if(alive)caret.remove();if(after)after()});
+    return function(){alive=false;caret.remove();body.textContent=str}
+  }
+
+  // ---- boot ----
+  async function boot(){
+    print("<span class='cyn'>▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄</span>");
+    print("<span class='cyn'>███ ▄▄▄▄▄▄▄▄▄▄▄▄ ███  <b style='color:#fff'>KESTREL</b></span>");
+    print("<span class='cyn'>███ ██▄▄██ █▄▄█████▄▄  <span class='mag'>//OS</span> b9.4.1</span>");
+    print("<span class='cyn'>███ ███████ ████████▄▄  NIGHTJAR BUILD</span>");
+    print("<span class='cyn'>▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀</span>");
+    var checks=[
+      "Initializing memory lattice ............... ",
+      "Calibrating photonic buses ................ ",
+      "Waking neural accelerator ................. "
+    ];
+    for(var i=0;i<checks.length;i++){
+      await typeLine(checks[i],"",null);
+      await sleep(120);
+      var tag=(i===1?"<span class='warn'>[WARN]</span>":"<span class='ok'>[ OK ]</span>");
+      raw(tag);
+      await sleep(60);
+    }
+    await typeLine("Hydrating memory lattice ",null,null);
+    await sleep(60);
+    raw('<div class="bar"><i id="b1"></i><span>0%</span></div>');
+    await sleep(80);
+    raw("Hydration complete <span class='ok'>[ OK ]</span>");
+    await sleep(120);
+    await typeLine("Loading operator profile ",null,null);
+    await sleep(60);
+    raw('<div class="bar"><i id="b2"></i><span>0%</span></div>');
+    await sleep(80);
+    raw("Profile: operator / clearance 3 <span class='ok'>[ OK ]</span>");
+    await sleep(200);
+    print("");
+    print("<span class='mint'>Welcome to KESTREL//OS v9.4.1. Type <span class='cyn'>help</span> to begin.</span>");
+    enable(true);
+  }
+  function animateBar(id,el,to,label){
+    var cur=0;
+    (function step(){
+      cur=Math.min(to,cur+2+Math.random()*6);
+      el.style.width=cur+"%";
+      el.nextElementSibling.textContent=Math.round(cur)+"%"+label;
+      if(cur<to)setTimeout(step,16);
+    })();
+  }
+  var b1Stored=null,b2Stored=null;
+  function hydBars(){
+    var b1=b1Stored||(b1Stored=document.getElementById("b1"));
+    var b2=b2Stored||(b2Stored=document.getElementById("b2"));
+    if(b1)animateBar(0,b1,100,"");
+    if(b2)setTimeout(function(){if(b2)animateBar(0,b2,100,"")},40);
+  }
+
+  // ---- commands ----
+  var cmds={
+    help:function(){
+      raw("AVAILABLE COMMANDS<br><span style='color:var(--dim)'>  help       show this table</span><br>  status     subsystem report<br>  scan       detect nearby signals<br>  about      about this file<br>  clear      wipe the log</span>");
+    },
+    status:function(){
+      raw("<span style='color:var(--dim)'>SUBSYSTEM            STATE</span><br>"+
+          "  memory lattice   <span class='ok'>[ OK ]</span><br>"+
+          "  neural core      <span class='ok'>[ OK ]</span><br>"+
+          "  photon array     <span class='warn'>[WARN] · dimming</span><br>"+
+          "  uplink          <span class='ok'>[ OK ]</span><br>"+
+          "  operator mesh    <span class='ok'>[ OK ]</span>");
+    },
+    scan:function(){
+      raw('<div class="bar"><i style="width:100%;transition:none"></i><span>scanning…</span></div>');
+      setTimeout(function(){
+        raw("SIGNAL 01 · <span class='mag'>0x8F3A</span> · ghost carrier · -82 dBm · <span class='mint'>CLEAR</span><br>"+
+            "SIGNAL 02 · <span class='mag'>0x1CD7</span> · unmapped relay · -61 dBm · <span class='warn'>ENCRYPTED</span><br>"+
+            "SIGNAL 03 · <span class='mag'>0x4BE2</span> · emergency band · -97 dBm · <span class='mint'>CLEAR</span><br>"+
+            "<span style='color:var(--dim)'>summary: 3 contacts · 1 anomalous · recommend re-scan at dawn</span>");
+        setTimeout(function(){glitchTop()},300);
+      },900);
+    },
+    about:function(){
+      raw("This terminal is a single self-contained offline HTML file.<br>"+
+          "  · no network calls, fonts, images or libraries<br>"+
+          "  · all systems simulated in your browser<br>"+
+          "  · KESTREL//OS is a fictional operating system<br>"+
+          "  · the wireframe icosahedron is projected live");
+    },
+    clear:function(){log.innerHTML=""}
+  };
+
+  function runCmd(rawStr){
+    var parts=rawStr.trim().split(/\s+/);
+    var c=parts[0]||"";
+    print("<span class='mag'>❯</span> "+rawStr);
+    if(!c)return;
+    if(cmds[c]){cmds[c]()}
+    else{
+      raw("<span class='err'>command not found: "+c+" — type <span class='cyn'>help</span></span>");
+    }
+  }
+
+  // header glitch
+  var topEl=document.getElementById("top");
+  function glitchTop(){
+    if(RM)return;
+    topEl.classList.add("glitch");
+    setTimeout(function(){topEl.classList.remove("glitch")},460);
+  }
+  setInterval(function(){
+    if(document.hidden||busy)return;
+    if(Math.random()<(1/(2.5+Math.random()*6))){glitchTop()}
+  },2500);
+  setTimeout(function(){if(!RM)glitchTop()},9000);
+
+  // clock
+  var clockEl=document.getElementById("clock");
+  setInterval(function(){
+    var d=new Date();
+    clockEl.textContent=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0");
+  },1000);
+
+  // sidebar
+  var cv=document.getElementById("coreCanvas"),cx=cv.getContext("2d");
+  function resizeCv(){
+    var dpr=Math.min(3,window.devicePixelRatio||1);
+    var w=cv.clientWidth,h=cv.clientHeight;
+    cv.width=w*dpr;cv.height=h*dpr;cx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  resizeCv();window.addEventListener("resize",resizeCv);
+  var ang=0;
+  function ico(){
+    var w=cv.clientWidth,h=cv.clientHeight;cx.clearRect(0,0,w,h);
+    var cx0=w/2,cy0=h/2,R=Math.min(w,h)*0.36;
+    var verts=[];
+    var t=1.618;
+    var phi=(1+Math.sqrt(5))/2;
+    var pts=[
+      [-1,phi,0],[1,phi,0],[-1,-phi,0],[1,-phi,0],
+      [0,-1,phi],[0,1,phi],[0,-1,-phi],[0,1,-phi],
+      [phi,0,-1],[phi,0,1],[-phi,0,-1],[-phi,0,1]
+    ];
+    var faces=[
+      [0,1,4],[0,4,10],[0,10,9],[0,9,1],[1,9,5],[1,5,3],[3,5,7],[3,7,2],[2,7,6],[2,6,11],[11,6,8],[11,8,10],[10,8,9],[9,8,5],[5,8,7],[7,8,6],[6,8,2]
+    ];
+    function project(p){
+      var ax=p[0],ay=p[1]*Math.cos(ang)-p[2]*Math.sin(ang),az=p[1]*Math.sin(ang)+p[2]*Math.cos(ang);
+      var ey=az*Math.cos(ang*0.6)-ax*Math.sin(ang*0.6);
+      var ex=ax*Math.cos(ang*0.6)+az*Math.sin(ang*0.6);
+      var s=R/2.2;
+      var px=cx0+ex*s,py=cy0+ey*s;
+      var depth=(az+2.4)/4.8;
+      return {x:px,y:py,d:depth};
+    }
+    // outer ring
+    cx.strokeStyle="rgba(255,43,214,.7)";cx.lineWidth=1.2;
+    cx.beginPath();cx.arc(cx0,cy0,R*1.02,0,Math.PI*2);cx.stroke();
+    cx.setLineDash([6,8]);cx.strokeStyle="rgba(0,240,255,.6)";
+    cx.beginPath();cx.arc(cx0,cy0,R*1.07,ang*0.7,ang*0.7+Math.PI*2.2);cx.stroke();cx.setLineDash([]);
+    faces.forEach(function(f){
+      var a=project(pts[f[0]]),b=project(pts[f[1]]),c=project(pts[f[2]]);
+      var d=(a.d+b.d+c.d)/3;
+      var al=0.18+d*0.72;
+      cx.strokeStyle="rgba(0,240,255,"+al.toFixed(2)+")";
+      cx.lineWidth=0.6+d*1.4;
+      if(d>0.7)cx.shadowColor="rgba(0,240,255,.8)";else cx.shadowColor="transparent";
+      cx.shadowBlur=d>0.7?8:0;
+      cx.beginPath();cx.moveTo(a.x,a.y);cx.lineTo(b.x,b.y);cx.lineTo(c.x,c.y);cx.closePath();cx.stroke();
+      cx.shadowBlur=0;
+    });
+    pts.forEach(function(p){
+      var q=project(p);
+      cx.fillStyle="rgba(255,43,214,"+(0.4+q.d*0.6)+")";
+      cx.beginPath();cx.arc(q.x,q.y,q.d*2,0,Math.PI*2);cx.fill();
+    });
+    cx.fillStyle="rgba(0,240,255,.8)";
+    cx.font="10px monospace";
+    cx.fillText("∠ "+(ang*57.3%360).toFixed(1)+"°",6,h-8);
+  }
+  (function icoLoop(){ang+=0.008;ico();requestAnimationFrame(icoLoop)})();
+
+  // gauges
+  function gauges(){
+    var t=42+Math.random()*14+(Math.random()<.04?12:0);
+    document.getElementById("ctemp").textContent=t.toFixed(1)+"°C";
+    document.getElementById("ctbar").style.width=((t-35)/40*100)+"%";
+    var f=0.5+Math.random()*0.6;
+    document.getElementById("flux").textContent=f.toFixed(2);
+    document.getElementById("fxbar").style.width=(f*100)+"%";
+  }
+  gauges();setInterval(gauges,RM?4000:1400);
+
+  // hex dump
+  var hex=document.getElementById("hexdump"),dumpRows=[];
+  function newRow(){
+    var addr=Math.floor(Math.random()*0xffff).toString(16).padStart(4,"0");
+    var bytes=[],ascii=[];
+    for(var i=0;i<8;i++){
+      var b=Math.floor(Math.random()*256);
+      var hi=Math.random()<0.12;
+      bytes.push(hi?"<span class='hi'>"+b.toString(16).padStart(2,"0")+"</span>":b.toString(16).padStart(2,"0"));
+      ascii.push(b>31&&b<127?String.fromCharCode(b):"·");
+    }
+    return "0x"+addr+"  "+bytes.join(" ")+"  |"+ascii.join("")+"|";
+  }
+  function updateHex(){
+    var add=Math.ceil(dumpRows.length/14);
+    for(var i=0;i<add;i++)dumpRows.push(newRow());
+    while(dumpRows.length>14)dumpRows.shift();
+    hex.innerHTML=dumpRows.join("\n");
+  }
+  updateHex();setInterval(updateHex,RM?1500:220);
+
+  // input
+  function enable(on){
+    input.disabled=!on;
+    if(on){input.focus()}
+  }
+  function submit(){
+    if(busy)return;
+    var v=input.value;
+    history.unshift(v);hIdx=-1;
+    input.value="";
+    runCmd(v);
+  }
+  input.addEventListener("keydown",function(e){
+    if(e.key==="Enter"){submit()}
+    else if(e.key==="ArrowUp"){e.preventDefault();if(history.length){hIdx=Math.min(history.length-1,hIdx+1);input.value=history[hIdx]||""}}
+    else if(e.key==="ArrowDown"){e.preventDefault();if(hIdx>=0){hIdx--;input.value=hIdx>=0?history[hIdx]:""}}
+  });
+  document.querySelector(".console").addEventListener("click",function(){if(!input.disabled)input.focus()});
+  input.addEventListener("blur",function(){if(!RM)setTimeout(function(){input.focus()},0)});
+
+  // monitor hydration bars
+  var obs=new MutationObserver(function(){hydBars()});
+  obs.observe(log,{childList:true});
+
+  boot();
+})();
+</script>
+</body>
+</html>

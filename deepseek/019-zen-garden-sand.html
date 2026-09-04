@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Karesansui — A Garden of Raked Sand</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--tines:3}
+html,body{height:100%;overflow:hidden}
+body{
+  background:#dccbab;font-family:'Iowan Old Style',Palatino,Georgia,ui-serif;color:rgba(43,36,28,.75);
+  cursor:none;
+}
+canvas#garden{position:fixed;inset:0;display:block;cursor:none;touch-action:none}
+.vignette{position:fixed;inset:0;pointer-events:none;z-index:4;box-shadow:inset 0 0 120px rgba(40,30,15,.45)}
+/* custom cursor */
+svg#cursor{position:fixed;left:0;top:0;z-index:50;pointer-events:none;width:44px;height:44px;transform:translate(-50%,-50%)}
+svg#cursor .ring{fill:none;stroke:rgba(43,36,28,.45);stroke-width:1.4}
+svg#cursor .tine{stroke:rgba(43,36,28,.55);stroke-width:1.2}
+svg#cursor.dragging .ring{stroke:#b3402a!important}
+/* chrome */
+.ui{position:fixed;z-index:10;pointer-events:none}
+.heading{top:34px;left:40px}
+.heading h1{font-size:clamp(22px,2.6vw,34px);font-weight:400;letter-spacing:.08em;margin-bottom:6px}
+.heading p{font-style:italic;font-size:14px;color:rgba(43,36,28,.55)}
+.vert{top:50%;right:26px;transform:translateY(-50%);writing-mode:vertical-rl;font-size:11px;letter-spacing:.42em;color:rgba(43,36,28,.55)}
+.vert .rule{display:inline-block;width:1px;height:70px;background:linear-gradient(180deg,rgba(43,36,28,.5),transparent);margin-bottom:14px;margin-right:8px}
+.seal{position:fixed;right:28px;bottom:110px;z-index:10;width:44px;height:44px;background:#b3402a;color:#f6ead6;
+  display:grid;place-items:center;font-size:20px;transform:rotate(-3deg);box-shadow:0 6px 16px rgba(60,30,10,.3);pointer-events:none}
+.toolbar{
+  position:fixed;bottom:26px;left:26px;z-index:10;display:flex;gap:14px;align-items:center;pointer-events:auto;
+  background:rgba(240,230,208,.55);backdrop-filter:blur(8px);border:1px solid rgba(43,36,28,.2);
+  border-radius:99px;padding:9px 12px;
+}
+.pillgroup{display:flex;gap:4px}
+.pill{
+  display:flex;align-items:flex-end;justify-content:center;gap:3px;width:40px;height:26px;
+  border:1px solid rgba(43,36,28,.45);background:none;border-radius:99px;cursor:pointer;padding:5px 0;
+}
+.pill i{width:2px;height:14px;background:rgba(43,36,28,.7);border-radius:2px}
+.pill.on{background:rgba(43,36,28,.9)}
+.pill.on i{background:#e9dcc3}
+.pill.fill{
+  position:relative;overflow:hidden;width:auto;padding:0 20px;font-family:inherit;font-style:italic;font-size:14px;color:rgba(43,36,28,.85);
+}
+.pill.fill::before{content:"";position:absolute;inset:0;background:rgba(43,36,28,.9);transform:scaleY(0);transform-origin:bottom;transition:transform .35s cubic-bezier(.22,1,.36,1)}
+.pill.fill:hover{color:#e9dcc3}
+.pill.fill:hover::before{transform:scaleY(1)}
+.pill.fill span{position:relative;z-index:1}
+.hint{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:10;font-style:italic;font-size:15px;
+  color:rgba(43,36,28,.6);transition:opacity 1.5s;pointer-events:none;text-align:center}
+.chrome-in{animation:rise 1s cubic-bezier(.22,1,.36,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@media(max-width:640px){
+  .heading p,.vert{display:none}
+  .toolbar{left:10px;right:10px;justify-content:space-between}
+  svg#cursor{display:none}
+  body{cursor:default}
+  canvas#garden{cursor:crosshair}
+}
+@media(prefers-reduced-motion:reduce){.chrome-in{animation:none}}
+</style>
+</head>
+<body>
+<canvas id="garden"></canvas>
+<div class="vignette"></div>
+
+<div class="ui heading chrome-in">
+  <h1>Karesansui</h1>
+  <p>a garden of raked sand, three stones, one afternoon</p>
+</div>
+<div class="vert chrome-in"><span class="rule"></span>枯山水 raked sand · three stones · one afternoon</div>
+<div class="seal chrome-in">静</div>
+
+<svg id="cursor" width="44" height="44" viewBox="0 0 44 44" aria-hidden="true">
+  <circle class="ring" cx="22" cy="22" r="17"/>
+  <g class="tines" id="cursorTines"></g>
+</svg>
+
+<div class="toolbar chrome-in">
+  <div class="pillgroup" id="tinesGroup" role="group" aria-label="Rake tines">
+    <button class="pill" data-t="1" title="1 tine"><i></i></button>
+    <button class="pill on" data-t="3" title="3 tines"><i></i><i></i><i></i></button>
+    <button class="pill" data-t="5" title="5 tines"><i></i><i></i><i></i><i></i><i></i></button>
+  </div>
+  <button class="pill fill" id="smoothBtn"><span>Smooth sand</span></button>
+</div>
+<div class="hint" id="hint">drag to rake · move the stones · let it be</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cv=document.getElementById("garden"),ctx=cv.getContext("2d");
+  var W=0,H=0,DPR=1;
+  var sand=document.createElement("canvas"),sc=sand.getContext("2d");
+  var groove=document.createElement("canvas"),gc=groove.getContext("2d");
+  var stones=[],tines=3,grabbing=-1,rngSeed=20240601;
+  var branchShadow={t:Math.random()*7};
+
+  function seeded(){
+    rngSeed=(rngSeed*1664525+1013904223)>>>0;
+    return rngSeed/4294967296;
+  }
+  function resize(){
+    DPR=Math.min(2,window.devicePixelRatio||1);
+    W=window.innerWidth;H=window.innerHeight;
+    cv.width=W*DPR;cv.height=H*DPR;
+    sand.width=W*DPR;sand.height=H*DPR;
+    groove.width=W*DPR;groove.height=H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    sc.setTransform(DPR,0,0,DPR,0,0);
+    gc.setTransform(DPR,0,0,DPR,0,0);
+    paintSand();
+    if(!stones.length)initStones();
+    preRake();
+  }
+  function paintSand(){
+    sc.clearRect(0,0,W,H);
+    // bed gradient
+    var g=sc.createLinearGradient(0,0,W,H);
+    g.addColorStop(0,"#e9dcc3");g.addColorStop(.5,"#e4d4b8");g.addColorStop(1,"#dccbab");
+    sc.fillStyle=g;sc.fillRect(0,0,W,H);
+    // grain tile
+    var tile=document.createElement("canvas");tile.width=tile.height=256;
+    var tc=tile.getContext("2d");
+    var img=tc.createImageData(256,256);
+    for(var i=0;i<img.data.length;i+=4){
+      var v=(Math.random()-0.5)*2;
+      var a=Math.pow(Math.abs(v),2.4)*255;
+      if(v>0){img.data[i]=36;img.data[i+1]=30;img.data[i+2]=22}else{img.data[i]=255;img.data[i+1]=252;img.data[i+2]=242}
+      img.data[i+3]=a*0.55;
+    }
+    tc.putImageData(img,0,0);
+    var pat=sc.createPattern(tile,"repeat");
+    sc.fillStyle=pat;sc.fillRect(0,0,W,H);
+    // undulation washes
+    var washes=6;
+    for(var w2=0;w2<washes;w2++){
+      var x=Math.random()*W,y=Math.random()*H,r2=Math.min(W,H)*(0.3+Math.random()*0.4);
+      var warm=Math.random()<0.5;
+      var g2=sc.createRadialGradient(x,y,0,x,y,r2);
+      if(warm){g2.addColorStop(0,"rgba(255,248,225,.35)");g2.addColorStop(1,"rgba(255,248,225,0)")}
+      else{g2.addColorStop(0,"rgba(150,130,95,.28)");g2.addColorStop(1,"rgba(150,130,95,0)")}
+      sc.fillStyle=g2;sc.fillRect(0,0,W,H);
+    }
+  }
+  function initStones(){
+    var m=Math.min(W,H);
+    stones=[
+      {x:W*0.3,y:H*0.55,rx:m*0.075,ry:m*0.055,rot:-0.35,c1:"#5b544b",c2:"#2e2a26"},
+      {x:W*0.62,y:H*0.42,rx:m*0.055,ry:m*0.04,rot:0.6,c1:"#4e463d",c2:"#262220"},
+      {x:W*0.55,y:H*0.7,rx:m*0.065,ry:m*0.048,rot:0.1,c1:"#655c52",c2:"#332f2a"}
+    ];
+  }
+  function preRake(){
+    stones.forEach(function(s){
+      for(var ring=0;ring<3;ring++){
+        var radius=s.rx*(1.8+ring*1.15);
+        for(var a=0;a<Math.PI*2;a+=0.02){
+          var x=s.x+Math.cos(a)*radius*(1+Math.sin(a*4)*0.02);
+          var y=s.y+Math.sin(a)*radius;
+          if(Math.random()<0.5)rakeStroke(x,y,x+Math.cos(a)*6,y+Math.sin(a)*6,3,0.35);
+        }
+      }
+    });
+    // slow sine wave across upper fifth
+    for(var x=0;x<W;x+=4){
+      var y=H*0.12+Math.sin(x/H*Math.PI*6)*18+Math.sin(x/H*Math.PI*2.3)*14;
+      rakeStroke(x,y,x+4,y+Math.sin((x+4)/H*Math.PI*6)*18+Math.sin((x+4)/H*Math.PI*2.3)*14,3,0.5);
+    }
+  }
+  function pointInStone(x,y,pad){
+    for(var i=0;i<stones.length;i++){
+      var s=stones[i];
+      var dx=x-s.x,dy=y-s.y;
+      var cos=Math.cos(-s.rot),sin=Math.sin(-s.rot);
+      var lx=dx*cos-dy*sin,ly=dx*sin+dy*cos;
+      var rx=s.rx+pad,ry=s.ry+pad;
+      if((lx*lx)/(rx*rx)+(ly*ly)/(ry*ry)<=1)return i;
+    }
+    return -1;
+  }
+  function rakeStroke(x1,y1,x2,y2,tinesN,alpha){
+    var dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy)||1;
+    var nx=-dy/len,ny=dx/len;
+    gc.lineCap="round";
+    for(var t=0;t<tinesN;t++){
+      var off=(t-(tinesN-1)/2)*9;
+      var px1=x1+nx*off,py1=y1+ny*off;
+      var px2=x2+nx*off,py2=y2+ny*off;
+      if(pointInStone(px1,py1,6)>=0||pointInStone(px2,py2,6)>=0)continue;
+      // embossed: shadow, highlight, floor
+      gc.strokeStyle="rgba(96,74,46,0.30)";
+      gc.lineWidth=3.2;
+      gc.beginPath();gc.moveTo(px1+1.1,py1+1.1);gc.lineTo(px2+1.1,py2+1.1);gc.stroke();
+      gc.strokeStyle="rgba(255,250,236,0.55)";
+      gc.lineWidth=2.2;
+      gc.beginPath();gc.moveTo(px1-1.3,py1-1.3);gc.lineTo(px2-1.3,py2-1.3);gc.stroke();
+      gc.strokeStyle="rgba(120,96,62,0.28)";
+      gc.lineWidth=1.6;
+      gc.beginPath();gc.moveTo(px1,py1);gc.lineTo(px2,py2);gc.stroke();
+    }
+  }
+  // pointer
+  var px2=-1,py2=-1,lastRake=0;
+  cv.addEventListener("pointerdown",function(e){
+    var r=cv.getBoundingClientRect();
+    var x=e.clientX-r.left,y=e.clientY-r.top;
+    var si=pointInStone(x,y,0);
+    if(si>=0){
+      grabbing=si;
+      stones[si].offx=x-stones[si].x;stones[si].offy=y-stones[si].y;
+      cursorEl.classList.add("dragging");
+    }else{
+      px2=x;py2=y;
+    }
+    cv.setPointerCapture(e.pointerId);
+    document.getElementById("hint").style.opacity=0;
+  });
+  cv.addEventListener("pointermove",function(e){
+    var r=cv.getBoundingClientRect();
+    var x=e.clientX-r.left,y=e.clientY-r.top;
+    // move custom cursor
+    cursorEl.style.left=x+"px";cursorEl.style.top=y+"px";
+    if(grabbing>=0){
+      var s=stones[grabbing];
+      s.x=x-s.offx;s.y=y-s.offy;
+    }else if(px2>=0){
+      var dx=x-px2,dy=y-py2;
+      var len=Math.sqrt(dx*dx+dy*dy);
+      if(len>4||e.buttons){
+        var steps=Math.max(1,Math.ceil(len/4));
+        for(var i=1;i<=steps;i++){
+          rakeStroke(px2+dx*(i-1)/steps,py2+dy*(i-1)/steps,px2+dx*i/steps,py2+dy*i/steps,tines,0.8);
+        }
+        px2=x;py2=y;
+      }
+    }
+    renderStones();
+  });
+  window.addEventListener("pointerup",function(){
+    grabbing=-1;px2=-1;py2=-1;
+    cursorEl.classList.remove("dragging");
+  });
+  // branch shadow ambient
+  function drawBranch(t){
+    var g=ctx;
+    g.save();
+    g.globalAlpha=0.16;
+    g.filter=RM?"none":"blur(9px)";
+    g.strokeStyle="#3a2c1a";
+    g.fillStyle="#3a2c1a";
+    g.lineCap="round";
+    var sway1=Math.sin(t*0.02)*26,sway2=Math.sin(t*0.013+2)*40,sway3=Math.sin(t*0.035)*10;
+    // main limb from upper right
+    var x0=W*0.82,y0=-H*0.05;
+    g.beginPath();
+    g.moveTo(x0,y0);
+    g.bezierCurveTo(x0-90+sway2,y0+H*0.12,x0-160+sway1,y0+H*0.2,x0-240+sway2,y0+H*0.3);
+    g.lineWidth=26;g.stroke();
+    // secondary limbs
+    g.beginPath();
+    g.moveTo(x0-140+sway1,y0+H*0.18);
+    g.bezierCurveTo(x0-220+sway3,y0+H*0.16,x0-280+sway3,y0+H*0.16,x0-330+sway3,y0+H*0.2);
+    g.lineWidth=12;g.stroke();
+    g.beginPath();
+    g.moveTo(x0-210+sway2,y0+H*0.26);
+    g.bezierCurveTo(x0-260+sway2,y0+H*0.32,x0-280+sway2,y0+H*0.4,x0-290+sway2,y0+H*0.47);
+    g.lineWidth=12;g.stroke();
+    // leaf clusters
+    [[-250+sway2,H*0.16,30],[-330+sway3,H*0.2,26],[-260+sway1,H*0.3,34],[-290+sway2,H*0.47,24],[-180+sway1,H*0.24,30]].forEach(function(l){
+      g.beginPath();
+      g.ellipse(l[0],l[1],l[2],l[2]*0.6,0.5,0,Math.PI*2);
+      g.fill();
+    });
+    g.restore();
+  }
+  function renderStones(){
+    // stones on top of grooves
+    stones.forEach(function(s){
+      // contact shadow
+      var g=ctx.createRadialGradient(s.x,s.y+s.ry*0.7,s.ry*0.2,s.x,s.y+s.ry*0.7,s.rx*1.5);
+      g.addColorStop(0,"rgba(40,30,15,.4)");g.addColorStop(1,"rgba(40,30,15,0)");
+      ctx.fillStyle=g;
+      ctx.beginPath();ctx.ellipse(s.x,s.y+s.ry*0.7,s.rx*1.4,s.ry*0.9,s.rot,0,Math.PI*2);ctx.fill();
+      // stone body
+      var g2=ctx.createRadialGradient(s.x-s.rx*0.3,s.y-s.ry*0.4,s.ry*0.1,s.x,s.y,s.rx*1.4);
+      g2.addColorStop(0,s.c1);g2.addColorStop(1,s.c2);
+      ctx.fillStyle=g2;
+      ctx.beginPath();ctx.ellipse(s.x,s.y,s.rx,s.ry,s.rot,0,Math.PI*2);ctx.fill();
+      // specular
+      ctx.fillStyle="rgba(255,255,255,.18)";
+      ctx.beginPath();ctx.ellipse(s.x-s.rx*0.25,s.y-s.ry*0.3,s.rx*0.3,s.ry*0.2,s.rot,0,Math.PI*2);ctx.fill();
+      // sand ring
+      ctx.strokeStyle="rgba(220,195,150,.6)";
+      ctx.lineWidth=2;
+      ctx.beginPath();ctx.ellipse(s.x,s.y,s.rx*1.12,s.ry*1.14,s.rot,0,Math.PI*2);ctx.stroke();
+    });
+  }
+  // main loop
+  var cursorEl=document.getElementById("cursor");
+  function buildCursor(){
+    var g=document.getElementById("cursorTines");
+    g.innerHTML="";
+    for(var t=0;t<tines;t++){
+      var off=(t-(tines-1)/2)*7;
+      var l=document.createElementNS("http://www.w3.org/2000/svg","line");
+      l.setAttribute("x1",22+off);l.setAttribute("y1",12);l.setAttribute("x2",22+off);l.setAttribute("y2",32);
+      g.appendChild(l);
+    }
+    cursorEl.style.left=(W/2)+"px";cursorEl.style.top=(H/2)+"px";
+  }
+  function loop(now){
+    var t=now/1000;
+    ctx.clearRect(0,0,W,H);
+    ctx.drawImage(sand,0,0,W,H);
+    ctx.drawImage(groove,0,0,W,H);
+    if(!RM)drawBranch(t+branchShadow.t);
+    renderStones();
+    requestAnimationFrame(loop);
+  }
+  // tines
+  document.querySelectorAll("#tinesGroup .pill").forEach(function(p){
+    p.addEventListener("click",function(){
+      document.querySelectorAll("#tinesGroup .pill").forEach(function(x){x.classList.remove("on")});
+      p.classList.add("on");
+      tines=+p.dataset.t;
+      buildCursor();
+    });
+  });
+  document.getElementById("smoothBtn").addEventListener("click",function(){
+    gc.clearRect(0,0,W,H);
+    preRake();
+  });
+  // cursor follow on fine pointers only
+  window.addEventListener("pointermove",function(e){
+    if(e.target===cv)return;
+    if(matchMedia("(pointer:fine)").matches){
+      cursorEl.style.left=e.clientX+"px";cursorEl.style.top=e.clientY+"px";
+    }
+  });
+  resize();
+  buildCursor();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

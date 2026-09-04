@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Keeper's Light</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--int:0.55}
+html,body{height:100%;overflow:hidden}
+body{
+  background:linear-gradient(180deg,#050a14,#0b1a30 55%,#12314a);
+  color:#dfe8f2;font-family:'Iowan Old Style',Palatino,Georgia,serif;
+}
+#scene{position:fixed;inset:0}
+svg#world{position:absolute;inset:0;width:100%;height:100%}
+/* moon */
+.moon{position:absolute;right:9%;top:8%;width:clamp(70px,11vw,150px);aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle at 38% 34%,#e9f1f7,#8fa2b1 75%);
+  box-shadow:0 0 60px 16px rgba(233,241,247,.35);z-index:2;opacity:.85}
+.cloud{position:absolute;border-radius:50%;filter:blur(14px)}
+.cloud.c1{right:0;top:4%;width:46vw;height:18vh;background:#1a2c44;animation:cl1 60s ease-in-out infinite alternate}
+.cloud.c2{right:12%;top:14%;width:52vw;height:20vh;background:#0f1d30;animation:cl2 80s ease-in-out infinite alternate}
+@keyframes cl1{from{transform:translateX(0)}to{transform:translateX(-9vw)}}
+@keyframes cl2{from{transform:translateX(0)}to{transform:translateX(11vw)}}
+/* rotating beam */
+.beamwrap{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;z-index:8}
+.beam{position:absolute;top:-240vmax;left:-240vmax;width:480vmax;height:480vmax;
+  background:conic-gradient(from 0deg,rgba(255,217,138,0) 0deg,rgba(255,217,138,.42) 14deg,rgba(255,217,138,.14) 24deg,rgba(255,217,138,0) 40deg,transparent 100%);
+  filter:blur(14px);mix-blend-mode:screen;transform:rotate(var(--beamrot,0deg));
+  animation:beamspin 9.47s linear infinite;opacity:.85}
+.beam2{position:absolute;top:-240vmax;left:-240vmax;width:480vmax;height:480vmax;
+  background:conic-gradient(from 0deg,rgba(255,200,110,0) 0deg,rgba(255,200,110,.4) 10deg,rgba(255,200,110,0) 34deg,transparent 100%);
+  filter:blur(30px);mix-blend-mode:screen;animation:beamspin 9.47s linear infinite 4.7s;opacity:.6}
+@keyframes beamspin{to{transform:rotate(360deg)}}
+.lampglow{position:absolute;width:140px;height:140px;border-radius:50%;transform:translate(-50%,-50%);
+  background:radial-gradient(closest-side,rgba(255,214,140,.95),transparent 70%);
+  filter:blur(6px);animation:lpulse 2s ease-in-out infinite alternate}
+@keyframes lpulse{from{opacity:.7}to{opacity:1}}
+/* rain + spray canvas */
+canvas#fx{position:fixed;inset:0;z-index:6;pointer-events:none}
+.flash{position:fixed;inset:0;background:#cfe4ff;opacity:0;pointer-events:none;z-index:9}
+.flash.go{animation:flashy .5s steps(2) both}
+@keyframes flashy{0%{opacity:.9}100%{opacity:0}}
+.shake{animation:shak .4s linear}
+@keyframes shak{0%,100%{transform:translate(0)}25%{transform:translate(-6px,3px)}50%{transform:translate(5px,-3px)}75%{transform:translate(-3px,-2px)}}
+/* UI */
+.ui{position:fixed;inset:0;pointer-events:none;z-index:10}
+.titlecard{position:absolute;top:26px;left:28px}
+.titlecard .mono{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:rgba(223,232,242,.5)}
+.titlecard h1{font-size:clamp(24px,3vw,38px);font-weight:400;margin-top:6px}
+.titlecard h1 em{font-style:italic;color:#ffd98a}
+.titlecard p{font-style:italic;color:rgba(223,232,242,.55);font-size:13px;margin-top:6px;max-width:36ch;line-height:1.5}
+.logline{position:absolute;left:28px;bottom:110px;font-style:italic;color:rgba(223,232,242,.6);font-size:13.5px;max-width:40ch}
+.panel{position:absolute;right:26px;bottom:26px;pointer-events:auto;background:rgba(5,12,24,.55);
+  backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 22px;width:min(300px,90vw);
+  box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.panel .lab{font-family:ui-monospace,monospace;font-size:8.5px;letter-spacing:.3em;text-transform:uppercase;color:rgba(223,232,242,.55);margin-bottom:10px;display:flex;justify-content:space-between}
+.panel .lab b{color:#ffd98a;font-weight:400}
+.panel input[type=range]{width:100%;appearance:none;-webkit-appearance:none;height:5px;border-radius:3px;
+  background:linear-gradient(90deg,#2a5a6e,#dff0f5);outline:none}
+.panel input::-webkit-slider-thumb{-webkit-appearance:none;width:17px;height:17px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#ffe6b8,#d9a050);border:1px solid rgba(255,255,255,.3);cursor:pointer;
+  box-shadow:0 0 14px rgba(255,217,138,.8)}
+.scale{display:flex;justify-content:space-between;font-family:ui-monospace,monospace;font-size:8px;letter-spacing:.2em;
+  text-transform:uppercase;color:rgba(223,232,242,.4);margin-top:5px}
+.readouts{display:flex;justify-content:space-between;margin-top:12px;font-family:ui-monospace,monospace;font-size:11px;
+  color:rgba(223,232,242,.8);font-variant-numeric:tabular-nums}
+.readouts b{color:#ffd98a;font-weight:400}
+.tap{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);font-family:ui-monospace,monospace;font-size:9px;
+  letter-spacing:.26em;color:rgba(223,232,242,.5);text-transform:uppercase;z-index:12}
+@media(max-width:640px){.titlecard{left:18px;top:18px}.panel{left:14px;right:14px;bottom:14px;width:auto}.tap{display:none}}
+@media(prefers-reduced-motion:reduce){.cloud,.beam,.beam2,.lampglow{animation:none}}
+</style>
+</head>
+<body>
+<div class="moon"></div>
+<div class="cloud c1"></div><div class="cloud c2"></div>
+<canvas id="fx"></canvas>
+<div class="flash" id="flash"></div>
+
+<div class="ui">
+  <div class="titlecard">
+    <div class="mono">Keeper's log · night watch</div>
+    <h1>The Keeper's <em>Light</em></h1>
+    <p>The lamp turns; the sea rehearses; one window on the headland stays lit all night, on principle.</p>
+  </div>
+  <div class="logline" id="logline">— a moderate night. the lamp holds.</div>
+  <div class="panel">
+    <div class="lab"><span>Storm intensity</span><b id="intLbl">gale</b></div>
+    <input type="range" id="intR" min="0" max="100" value="55">
+    <div class="scale"><span>calm</span><span>fresh</span><span>strong</span><span>gale</span></div>
+    <div class="readouts">
+      <span>WIND <b id="wWind">34 kn</b></span>
+      <span>SWELL <b id="wSwell">2.6 m</b></span>
+      <span>RAIN <b id="wRain">220</b></span>
+    </div>
+  </div>
+</div>
+<div class="tap">click anywhere to call lightning</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var scene=document.getElementById("scene");
+  // ---------- world svg ----------
+  var SVGNS="http://www.w3.org/2000/svg";
+  var svg=document.createElementNS(SVGNS,"svg");
+  svg.setAttribute("viewBox","0 0 1600 900");
+  svg.setAttribute("preserveAspectRatio","xMidYMax slice");
+  svg.id="world";
+  svg.innerHTML=
+    '<defs>'+
+    '<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050a14"/><stop offset=".7" stop-color="#12314a"/><stop offset="1" stop-color="#1b425e"/></linearGradient>'+
+    '<linearGradient id="rockg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d2632"/><stop offset="1" stop-color="#070b12"/></linearGradient>'+
+    '<linearGradient id="towg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6c7480"/><stop offset=".25" stop-color="#e8ebef"/><stop offset=".55" stop-color="#b3bac4"/><stop offset="1" stop-color="#4c535d"/></linearGradient>'+
+    '<linearGradient id="seaA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#10384a"/><stop offset="1" stop-color="#03111b"/></linearGradient>'+
+    '<linearGradient id="seaB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#163f52"/><stop offset="1" stop-color="#04131f"/></linearGradient>'+
+    '</defs>';
+  svg.innerHTML+='<rect width="1600" height="900" fill="url(#sky)"/>';
+  // rocks
+  svg.innerHTML+='<g>'
+    +'<path d="M0 640 L120 560 L200 600 L330 540 L420 590 L560 520 L640 590 L700 560 L820 640 L820 900 L0 900 Z" fill="url(#rockg)"/>'
+    +'<path d="M820 640 L940 570 L1040 620 L1180 555 L1280 610 L1400 550 L1600 620 L1600 900 L820 900 Z" fill="url(#rockg)"/>'
+    +'</g>';
+  // lighthouse tower
+  svg.innerHTML+='<g id="towerG">'
+    +'<path id="tower" d="M730 660 L870 660 L850 480 L750 480 Z" fill="url(#towg)"/>'
+    +'<clipPath id="towerClip"><path d="M730 660 L870 660 L850 480 L750 480 Z"/></clipPath>'
+    +'<g clip-path="url(#towerClip)">'
+    +'<rect x="725" y="500" width="150" height="34" fill="#5a1c1c"/>'
+    +'<rect x="728" y="548" width="144" height="30" fill="#c13a34"/>'
+    +'<rect x="731" y="594" width="138" height="26" fill="#9a2c28"/>'
+    +'</g>'
+    +'<rect x="742" y="452" width="116" height="16" rx="4" fill="#3f4852"/>'
+    +'<g id="lampRoom"><rect x="752" y="418" width="96" height="40" fill="#d9c9a0"/>'
+    +'<line x1="760" y1="420" x2="760" y2="456" stroke="#5a4a30" stroke-width="3"/>'
+    +'<line x1="780" y1="420" x2="780" y2="456" stroke="#5a4a30" stroke-width="3"/>'
+    +'<line x1="800" y1="420" x2="800" y2="456" stroke="#5a4a30" stroke-width="3"/>'
+    +'<line x1="820" y1="420" x2="820" y2="456" stroke="#5a4a30" stroke-width="3"/>'
+    +'<line x1="840" y1="420" x2="840" y2="456" stroke="#5a4a30" stroke-width="3"/>'
+    +'<rect x="752" y="412" width="96" height="8" fill="#202830"/></g>'
+    +'<path d="M742 414 L858 414 L848 392 L752 392 Z" fill="#2e3640"/>'
+    +'<rect x="790" y="600" width="22" height="60" rx="8" fill="#303840"/>'
+    +'</g>';
+  // cottage
+  svg.innerHTML+='<g>'
+    +'<rect x="940" y="600" width="150" height="70" fill="#131820"/>'
+    +'<path d="M920 600 L1015 555 L1110 600 Z" fill="#0e131c"/>'
+    +'<rect x="985" y="600" width="60" height="52" fill="#0c1018"/>'
+    +'<rect id="cWin" x="1002" y="620" width="26" height="22" fill="#ffe7a8">'
+    +'<animate attributeName="opacity" values="1;.35;1" dur="4s" repeatCount="indefinite"/></rect>'
+    +'<rect x="1002" y="620" width="26" height="22" fill="none" stroke="#131820" stroke-width="2"/>'
+    +'<line x1="1015" y1="620" x2="1015" y2="642" stroke="#131820" stroke-width="2"/>'
+    +'<line x1="1002" y1="631" x2="1028" y2="631" stroke="#131820" stroke-width="2"/>'
+    +'<rect x="1010" y="580" width="8" height="34" fill="#0c1018"/>'
+    +'<ellipse cx="1014" cy="578" rx="14" ry="6" fill="none" stroke="#0c1018" stroke-width="3"/>'
+    +'</g>';
+  // sea layers (ids for JS)
+  svg.innerHTML+='<path id="sea1" fill="url(#seaA)" opacity=".9"/>'
+    +'<path id="sea2" fill="url(#seaB)" opacity=".95"/>'
+    +'<path id="foam" fill="none" stroke="rgba(220,240,250,.5)" stroke-width="2"/>';
+  scene.appendChild(svg);
+  // beam anchor to lamp room
+  var beamWrap=document.createElement("div");
+  beamWrap.className="beamwrap";
+  beamWrap.innerHTML='<div class="beam"></div><div class="beam2"></div><div class="lampglow"></div>';
+  scene.appendChild(beamWrap);
+  function anchorBeam(){
+    var r=document.getElementById("lampRoom").getBoundingClientRect();
+    beamWrap.style.left=r.left+r.width/2+"px";
+    beamWrap.style.top=r.top+r.height/2+"px";
+    spotlight.style.left=r.left+r.width/2+"px";
+    spotlight.style.top=r.top+r.height/2+"px";
+  }
+  window.addEventListener("resize",function(){anchorBeam()});
+  // spotlight glow disc (static under beam)
+  var spotlight=document.createElement("div");
+  spotlight.style.cssText="position:absolute;width:260px;height:260px;border-radius:50%;pointer-events:none;z-index:7;"+
+    "background:radial-gradient(closest-side,rgba(255,224,150,.5),transparent 70%);filter:blur(18px);mix-blend-mode:screen";
+  scene.appendChild(spotlight);
+  // ---------- sea waves ----------
+  var sea1=document.getElementById("sea1"),sea2=document.getElementById("sea2"),foam=document.getElementById("foam");
+  var t=0;
+  function wavePath(base,amp1,amp2,amp3,sp1,sp2,ph){
+    var d="M0 900 ";
+    for(var x=0;x<=1600;x+=16){
+      var y=base
+        +Math.sin(x*0.004+ t*sp1+ph)*amp1
+        +Math.sin(x*0.009- t*sp2+ph)*amp2
+        +Math.sin(x*0.02+ t*1.3)*amp3;
+      d+=" L"+x+" "+y.toFixed(1);
+    }
+    return d+" L1600 900 L0 900 Z";
+  }
+  function updateSea(){
+    var s=0.55+parseFloat(document.documentElement.style.getPropertyValue("--int")||0.55)*1.1;
+    sea1.setAttribute("d",wavePath(560,10*s,6*s,4*s,0.5,0.8,0.4));
+    sea2.setAttribute("d",wavePath(610,14*s,8*s,5*s,0.4,0.7,2));
+    foam.setAttribute("d","M0 900 L0 "+(610+10*s)+" L1600 "+(580+12*s)+" L1600 900 Z");
+    // front crest foam line
+    var d2="M0 "+(610+10*s);
+    for(var x=0;x<=1600;x+=16){
+      var y=610+10*s+Math.sin(x*0.009- t*0.7+2)*7*s;
+      d2+=" L"+x+" "+y.toFixed(1);
+    }
+    foam.setAttribute("d",d2);
+  }
+  // ---------- fx canvas (rain + spray) ----------
+  var fcv=document.getElementById("fx"),fctx=fcv.getContext("2d");
+  var W=0,H=0,DPR=1,rain=[],spray=[];
+  var intensity=0.55;
+  function resizeFX(){
+    DPR=Math.min(2,devicePixelRatio||1);
+    W=innerWidth;H=innerHeight;
+    fcv.width=W*DPR;fcv.height=H*DPR;
+    fctx.setTransform(DPR,0,0,DPR,0,0);
+    buildRain();
+  }
+  window.addEventListener("resize",resizeFX);
+  function buildRain(){
+    rain=[];
+    var n=Math.round(60+(intensity*1400));
+    for(var i=0;i<n;i++){
+      rain.push({x:Math.random()*W,y:Math.random()*H*0.8,l:12+Math.random()*16,s:900+Math.random()*700,
+        wind:-320-intensity*320,a:0.08+Math.random()*0.14});
+    }
+  }
+  function stepFx(dt){
+    var beamAngle=(performance.now()/9470*360)%360;
+    var windAng=-24-intensity*22;
+    for(var i=0;i<rain.length;i++){
+      var r2=rain[i];
+      r2.y+=r2.s*dt*(0.4+intensity*0.8);
+      r2.x+=(r2.s*Math.tan(windAng*Math.PI/180))*dt;
+      if(r2.y>H){r2.y=-10;r2.x=Math.random()*W*1.2}
+      var len=r2.l*(0.4+intensity);
+      fctx.strokeStyle="rgba(190,210,235,"+r2.a+")";
+      fctx.lineWidth=1;
+      fctx.beginPath();
+      fctx.moveTo(r2.x,r2.y);
+      fctx.lineTo(r2.x+Math.tan(windAng*Math.PI/180)*len,r2.y+len);
+      fctx.stroke();
+      // warm in beam band
+      var lx=beamWrap.getBoundingClientRect().left;
+      if(beamAngle%360<40||beamAngle%360>320){
+        var dx=Math.abs(r2.x-lx);
+        if(dx<180&&r2.y<H*0.7){
+          fctx.strokeStyle="rgba(255,209,140,"+(r2.a*1.6)+")";
+          fctx.stroke();
+        }
+      }
+    }
+    // spray
+    var sRate=intensity*14;
+    if(Math.random()<sRate*dt*60*0.05){
+      var sr={x:W*(0.62+Math.random()*0.2),y:H*0.62,h:14+Math.random()*20,
+        vx:(Math.random()-0.5)*40-intensity*60,vy:-280-Math.random()*260*intensity,life:0,max:0.6+Math.random()*0.8};
+      spray.push(sr);
+    }
+    for(var j=spray.length-1;j>=0;j--){
+      var sp=spray[j];
+      sp.life+=dt;sp.vy+=900*dt;sp.x+=sp.vx*dt;sp.y+=sp.vy*dt;
+      var a=(1-sp.life/sp.max)*0.5;
+      fctx.fillStyle="rgba(210,230,245,"+a+")";
+      fctx.beginPath();fctx.arc(sp.x,sp.y,2.4,0,7);fctx.fill();
+      if(sp.life>sp.max)spray.splice(j,1);
+    }
+  }
+  // ---------- lightning ----------
+  var flash=document.getElementById("flash");
+  var nextStrike=1000;
+  var showel=document.getElementById("showel");
+  function tryStrike(){
+    if(intensity<0.15)return;
+    flash.classList.remove("go");
+    void flash.offsetWidth;
+    flash.classList.add("go");
+    if(!RM){
+      document.body.classList.add("shake");
+      setTimeout(function(){document.body.classList.remove("shake")},500);
+    }
+  }
+  setInterval(function(){
+    if(RM)return;
+    if(Math.random()<intensity*0.45)tryStrike();
+  },2600);
+  document.getElementById("scene").addEventListener("pointerdown",tryStrike);
+  // ---------- controls ----------
+  var intR=document.getElementById("intR");
+  function applyInt(v){
+    intensity=v/100;
+    document.documentElement.style.setProperty("--int",intensity);
+    var lbl=intensity<0.18?"calm":intensity<0.35?"fresh":intensity<0.6?"strong":"gale";
+    document.getElementById("intLbl").textContent=lbl;
+    document.getElementById("wWind").textContent=Math.round(6+intensity*52)+" kn";
+    document.getElementById("wSwell").textContent=(0.4+intensity*4.6).toFixed(1)+" m";
+    document.getElementById("wRain").textContent=Math.round(60+intensity*1400);
+    var log=document.getElementById("logline");
+    var lines=["— a calm night. the lamp turns for its own sake.","— a fresh breeze; the sea rehearses its arguments.","— strong winds; the lamp holds its yellow answer.","— a gale now. the keeper stays by the glass."];
+    log.textContent=lines[Math.round(intensity*3)];
+    // waves speed
+    t+=0;
+    buildRain();
+  }
+  intR.addEventListener("input",function(){applyInt(+this.value)});
+  applyInt(55);
+  // ---------- loop ----------
+  var last=performance.now();
+  function loop(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    t+=dt*(0.4+intensity*1.2);
+    updateSea();
+    fctx.clearRect(0,0,W,H);
+    stepFx(dt);
+    requestAnimationFrame(loop);
+  }
+  resizeFX();
+  anchorBeam();
+  updateSea();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

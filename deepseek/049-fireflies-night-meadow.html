@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Night Meadow — Fireflies</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{
+  background:linear-gradient(180deg,#05081a 0%,#0d1a3d 45%,#1a2f52 78%,#22344f 100%);
+  color:#e8e4d8;font-family:'Iowan Old Style',Palatino,Georgia,serif;
+  cursor:none;
+}
+@media(pointer:coarse),screen and (max-width:640px){body{cursor:auto}}
+/* stars */
+.stars{position:fixed;inset:0;pointer-events:none;z-index:1}
+.star{position:absolute;border-radius:50%;animation:tw 5s ease-in-out infinite alternate}
+@keyframes tw{from{opacity:.55}to{opacity:.95}}
+/* moon */
+.moon{position:fixed;top:9%;right:9%;width:clamp(64px,9vw,130px);aspect-ratio:1;border-radius:50%;z-index:2;
+  background:radial-gradient(circle at 38% 34%,#fffbf0,#d9cfb4 75%);
+  box-shadow:0 0 40px 8px rgba(255,250,230,.4),0 0 140px 50px rgba(252,244,214,.12);
+  transition:opacity 1.4s,filter 1.4s}
+.moon::before,.moon::after{content:"";position:absolute;border-radius:50%;background:rgba(160,150,120,.35)}
+.moon::before{width:16%;height:16%;left:38%;top:36%}
+.moon::after{width:11%;height:11%;left:60%;top:58%}
+.moonglow{position:fixed;top:0;right:0;width:60vw;height:60vh;z-index:1;pointer-events:none;
+  background:radial-gradient(closest-side at 70% 20%,rgba(255,248,220,.16),transparent 70%);transition:opacity 1.4s}
+/* hills */
+.hills{position:fixed;left:0;right:0;bottom:0;height:56%;z-index:2;pointer-events:none}
+.mist{position:absolute;left:0;right:0;height:12%;filter:blur(14px);background:rgba(190,205,225,.2);opacity:.5}
+.mist.m1{bottom:24%;animation:mistdrift 40s ease-in-out infinite alternate}
+.mist.m2{bottom:19%;animation:mistdrift 55s ease-in-out infinite alternate reverse;background:rgba(200,210,230,.16)}
+@keyframes mistdrift{from{transform:translateX(-3%)}to{transform:translateX(4%)}}
+/* fireflies canvas */
+canvas#ff{position:fixed;inset:0;z-index:3;display:block;pointer-events:none}
+/* caption */
+.caption{position:fixed;top:26px;left:50%;transform:translateX(-50%);z-index:5;text-align:center;pointer-events:none;
+  opacity:0;animation:capin 4s ease 1.2s forwards}
+@keyframes capin{to{opacity:1}}
+.caption p{font-style:italic;font-size:clamp(15px,2.2vw,20px);color:rgba(236,232,216,.85)}
+.caption span{display:block;font-family:system-ui,sans-serif;font-size:9px;letter-spacing:.4em;text-transform:uppercase;
+  color:rgba(236,232,216,.45);margin-top:8px}
+/* breeze disc */
+.breeze{position:fixed;z-index:4;width:120px;height:120px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(200,220,245,.12),transparent);border:1px solid rgba(200,220,245,.1);
+  left:-200px;top:-200px;transition:left .2s,top .2s}
+/* counter & button */
+.counter{position:fixed;bottom:18px;right:26px;z-index:6;font-family:ui-monospace,monospace;font-size:12px;color:rgba(226,232,220,.6);letter-spacing:.1em}
+.counter b{color:#d4ff6a;font-weight:400}
+.moonbtn{
+  position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:6;
+  display:flex;align-items:center;gap:10px;background:rgba(10,16,30,.5);backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.2);border-radius:99px;color:#e8e4d8;font-family:system-ui,sans-serif;
+  font-size:12px;letter-spacing:.1em;padding:11px 22px;cursor:pointer;transition:all .3s;
+}
+.moonbtn:hover{transform:translateY(-3px);border-color:rgba(212,255,106,.6)}
+.phase{margin-left:2px}
+.phase .dot{display:inline-block;width:22px;height:22px;border-radius:50%;vertical-align:middle;margin-left:8px;
+  background:radial-gradient(circle at 35% 35%,#fffdf2,#cfc6a8 70%);box-shadow:0 0 14px rgba(255,250,230,.8);
+  transition:all 1.4s}
+body.newmoon .phase .dot{background:radial-gradient(circle at 60% 50% 25%,#cfc6a8 0 3px,transparent 4px),radial-gradient(circle,#e8e4d8,#bdb49a 70%);box-shadow:0 0 8px rgba(255,250,230,.3)}
+body.newmoon .moon{opacity:.14;filter:saturate(.4) brightness(.6)}
+body.newmoon .moonglow{opacity:0}
+body.newmoon .mist{opacity:.25}
+body.newmoon .stars{filter:brightness(1.4)}
+body.newmoon{filter:brightness(.9) saturate(.82)}
+.hint{display:none}
+@media(max-width:640px){
+  .caption span{display:none}
+  .counter{right:12px}
+}
+@media(prefers-reduced-motion:reduce){.star,.mist{animation:none}}
+</style>
+</head>
+<body>
+<div class="stars" id="stars"></div>
+<div class="moonglow"></div>
+<div class="moon"></div>
+<div class="hills" id="hills"></div>
+<canvas id="ff"></canvas>
+<div class="caption"><p>The field remembers every small light.</p><span>a night meadow · late june</span></div>
+<div class="breeze" id="breeze"></div>
+<div class="counter">FIREFLIES <b id="flyCount">0</b></div>
+<button class="moonbtn" id="moonBtn" aria-pressed="false">MOON <span class="phase">FULL<span class="dot"></span></span></button>
+<div class="hint"></div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cv=document.getElementById("ff"),ctx=cv.getContext("2d");
+  var W=0,H=0,DPR=1;
+  var flies=[],swarms=[],newMoon=false;
+  var mouse={x:-9999,y:-9999};
+  // LCG for grass
+  var seedL=20240601;
+  function rnd(){seedL=(seedL*1103515245+12345)>>>0;return seedL/4294967296}
+  // grass svg
+  var hillsEl=document.getElementById("hills");
+  function buildHills(){
+    var ns="http://www.w3.org/2000/svg";
+    hillsEl.innerHTML="";
+    var svg=document.createElementNS(ns,"svg");
+    svg.setAttribute("viewBox","0 0 1000 600");
+    svg.setAttribute("preserveAspectRatio","xMidYMax slice");
+    svg.style.cssText="width:100%;height:100%";
+    // far hill
+    var fh=document.createElementNS(ns,"path");
+    fh.setAttribute("d","M0 420 Q 250 300 500 400 T 1000 380 L1000 600 L0 600 Z");
+    fh.setAttribute("fill","url(#fhg)");
+    var defs=document.createElementNS(ns,"defs");
+    var lg=document.createElementNS(ns,"linearGradient");lg.id="fhg";lg.setAttribute("x1","0");lg.setAttribute("y1","0");lg.setAttribute("x2","0");lg.setAttribute("y2","1");
+    lg.innerHTML='<stop offset="0" stop-color="#1b2c4d"/><stop offset="1" stop-color="#101c36"/>';
+    defs.appendChild(lg);
+    svg.appendChild(defs);
+    svg.appendChild(fh);
+    var nh=document.createElementNS(ns,"path");
+    nh.setAttribute("d","M0 480 Q 300 420 600 470 T 1000 450 L1000 600 L0 600 Z");
+    nh.setAttribute("fill","url(#nhg)");
+    var lg2=document.createElementNS(ns,"linearGradient");lg2.id="nhg";lg2.setAttribute("x1","0");lg2.setAttribute("y1","0");lg2.setAttribute("x2","0");lg2.setAttribute("y2","1");
+    lg2.innerHTML='<stop offset="0" stop-color="#0f1a31"/><stop offset="1" stop-color="#080f21"/>';
+    defs.appendChild(lg2);
+    svg.appendChild(nh);
+    // grass blades: far (140), mid (120), near (90)
+    svg.innerHTML="";
+    svg.appendChild(defs);
+    svg.appendChild(fh);
+    svg.appendChild(nh);
+    function blades(n,fill,op,baseY,hMul){
+      var g=document.createElementNS(ns,"g");
+      for(var i=0;i<n;i++){
+        var x=1000*rnd(),y=baseY+rnd()*80;
+        var h=(30+rnd()*70)*hMul;
+        var lean=(rnd()-0.5)*40;
+        var p=document.createElementNS(ns,"path");
+        p.setAttribute("d","M"+x+" "+y+" Q "+(x+lean*0.3)+" "+(y-h*0.6)+" "+(x+lean)+" "+(y-h));
+        p.setAttribute("fill","none");p.setAttribute("stroke",fill);p.setAttribute("stroke-width",2.4);
+        p.setAttribute("opacity",op);
+        p.setAttribute("transform-box","fill-box");
+        p.setAttribute("style","transform-origin:"+x+"px "+y+"px");
+        var dur=4+rnd()*4;
+        p.setAttribute("class","blade");
+        p.style.animation="sway "+dur+"s ease-in-out infinite alternate";
+        p.style.animationDelay=(-rnd()*dur)+"s";
+        g.appendChild(p);
+      }
+      return g;
+    }
+    svg.appendChild(blades(140,"#0b1530",0.55,480,1));
+    svg.appendChild(blades(120,"#070f24",0.7,520,1.2));
+    svg.appendChild(blades(90,"#03081a",0.9,560,1.35));
+    hillsEl.appendChild(svg);
+  }
+  var st=document.createElement("style");
+  st.textContent="@keyframes sway{from{transform:rotate(-3.5deg)}to{transform:rotate(3.5deg)}}";
+  document.head.appendChild(st);
+  // fireflies
+  function resize(){
+    DPR=Math.min(2,devicePixelRatio||1);
+    W=innerWidth;H=innerHeight;
+    cv.width=W*DPR;cv.height=H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    var n=Math.max(28,Math.min(90,Math.round(W*H/26000)));
+    flies=[];
+    for(var i=0;i<n;i++){
+      flies.push({x:Math.random()*W,y:H*(0.28+Math.random()*0.62),
+        heading:Math.random()*Math.PI*2,
+        ph:Math.random()*6,rate:1.5+Math.random()*3,
+        size:1.5+Math.random()*2.2,
+        hue:78+Math.random()*12});
+    }
+    document.getElementById("flyCount").textContent=flies.length;
+  }
+  window.addEventListener("resize",resize);
+  // breeze: hide native cursor on scene, show gentle disc
+  window.addEventListener("pointermove",function(e){
+    mouse.x=e.clientX;mouse.y=e.clientY;
+    document.getElementById("breeze").style.left=(e.clientX-60)+"px";
+    document.getElementById("breeze").style.top=(e.clientY-60)+"px";
+  },{passive:true});
+  cv.addEventListener("pointermove",function(e){
+    mouse.x=e.clientX;mouse.y=e.clientY;
+  });
+  // click swarm
+  cv.addEventListener("pointerdown",function(e){
+    var n=14+Math.floor(Math.random()*10);
+    for(var i=0;i<n;i++){
+      var a=Math.random()*Math.PI*2;
+      flies.push({x:e.clientX,y:e.clientY,
+        heading:Math.random()*Math.PI*2,
+        ph:Math.random()*6,rate:2+Math.random()*3,
+        size:1.4+Math.random()*2,
+        hue:78+Math.random()*12,
+        swarmed:true});
+    }
+    swarms.push({x:e.clientX,y:e.clientY,t:0,max:17});
+    document.getElementById("flyCount").textContent=flies.length;
+  });
+  function updateFlies(dt){
+    var t=performance.now()/1000;
+    for(var i=0;i<flies.length;i++){
+      var f=flies[i];
+      if(f.swarmed){
+        // fade out over ~17s then respawn normally
+        if(!f.swarmT)f.swarmT=0;
+        f.swarmT+=dt;
+        f.x+=(f.x-f.x)*0 +(Math.random()-0.5)*10;
+        f.y+=(Math.random()-0.5)*8;
+        f.ph+=dt*f.rate;
+        if(f.swarmT>17){f.swarmed=false;f.swarmT=0;f.x=Math.random()*W;f.y=H*(0.3+Math.random()*0.6)}
+        continue;
+      }
+      // wander steering
+      f.heading+=(Math.random()-0.5)*0.7;
+      // steer back to meadow band
+      if(f.y<H*0.28)f.heading+=0.02;
+      if(f.y>H*0.9)f.heading-=0.02;
+      if(f.x<10)f.heading=Math.random()*Math.PI-Math.PI/2;
+      if(f.x>W-10)f.heading=Math.random()*Math.PI+Math.PI/2;
+      var sp=(RM?2:10)*0.94*dt*60*0.008*(0.5+Math.random()*0.5);
+      f.x+=Math.cos(f.heading)*sp*4;
+      f.y+=Math.sin(f.heading)*sp*4;
+      // mouse breeze push
+      var dx=f.x-mouse.x,dy=f.y-mouse.y;
+      var d=Math.sqrt(dx*dx+dy*dy);
+      if(d<150&&d>0.01){
+        var f2=(1-d/150)*26;
+        f.x+=dx/d*f2*dt*2.2;
+        f.y+=dy/d*f2*dt*2.2;
+      }
+      f.ph+=dt*f.rate;
+    }
+  }
+  function drawFlies(){
+    ctx.clearRect(0,0,W,H);
+    var t=performance.now()/1000;
+    ctx.globalCompositeOperation="lighter";
+    for(var i=0;i<flies.length;i++){
+      var f=flies[i];
+      var b=Math.pow(Math.sin(f.ph),2);
+      var fade=1;
+      if(f.swarmed){
+        fade=Math.max(0,1-f.swarmT/17*2);
+      }
+      var a=b*fade;
+      // halo
+      var r=f.size*10;
+      var g=ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,r);
+      g.addColorStop(0,"hsla("+f.hue+",90%,55%,"+(a*0.35)+")");
+      g.addColorStop(1,"hsla("+f.hue+",90%,55%,0)");
+      ctx.fillStyle=g;
+      ctx.beginPath();ctx.arc(f.x,f.y,r,0,7);ctx.fill();
+      // core
+      ctx.fillStyle="hsla("+f.hue+",95%,75%,"+(a*0.95)+")";
+      ctx.beginPath();ctx.arc(f.x,f.y,f.size*(0.6+a*0.4),0,7);ctx.fill();
+    }
+    ctx.globalCompositeOperation="source-over";
+  }
+  // moon button
+  var moonBtn=document.getElementById("moonBtn");
+  moonBtn.addEventListener("click",function(){
+    newMoon=!newMoon;
+    document.body.classList.toggle("newmoon",newMoon);
+    this.setAttribute("aria-pressed",newMoon?"true":"false");
+    this.querySelector(".phase").firstChild.textContent=newMoon?"NEW":"FULL";
+  });
+  var last=performance.now();
+  function loop(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    var rate=RM?0.15:1;
+    updateFlies(dt*rate);
+    drawFlies();
+    // swarms decay
+    swarms=swarms.filter(function(s){s.t+=dt;return s.t<1.4});
+    requestAnimationFrame(loop);
+  }
+  buildHills();
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

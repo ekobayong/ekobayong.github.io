@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Garden Automaton — Plate XIV</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:radial-gradient(70% 60% at 50% 30%,#241911,transparent 70%),
+  radial-gradient(90% 80% at 50% 90%,#16100b 0%,#0c0805 80%);
+  min-height:100vh;overflow:hidden;color:#e8ddc4;
+  font-family:'Iowan Old Style',Palatino,Georgia,serif;
+}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:2;mix-blend-mode:overlay;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E")}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:3;
+  background:radial-gradient(120% 110% at 50% 45%,transparent 60%,rgba(0,0,0,.6))}
+canvas#life{position:fixed;inset:0;z-index:1;display:block;cursor:crosshair}
+/* UI */
+.ui{position:fixed;inset:0;pointer-events:none;z-index:5}
+.topleft{position:absolute;top:26px;left:30px}
+.topleft .plate{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.32em;text-transform:uppercase;color:rgba(232,221,196,.55);margin-bottom:8px}
+.topleft h1{font-size:clamp(26px,3.2vw,40px);font-weight:400;letter-spacing:.02em}
+.topleft h1 em{font-style:italic;color:var(--gold,#e7b95a)}
+.topleft .cap{font-style:italic;font-size:12.5px;color:rgba(232,221,196,.6);margin-top:6px;max-width:300px;line-height:1.5}
+.topright{position:absolute;top:26px;right:30px;text-align:right}
+.topright .gpl{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:rgba(232,221,196,.5)}
+.topright .nums{font-size:40px;font-variant-numeric:tabular-nums;line-height:1.1}
+.topright .nums small{font-size:13px;color:rgba(232,221,196,.55)}
+/* legend */
+.legend{position:absolute;left:30px;bottom:118px;font-style:italic;font-size:12px;color:rgba(232,221,196,.65);
+  display:flex;gap:16px;align-items:center}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:-1px;margin-right:6px}
+/* controls */
+.controls{position:absolute;right:26px;bottom:26px;display:flex;flex-direction:column;align-items:flex-end;gap:12px;pointer-events:auto}
+.ctrlrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.ltempo{font-style:italic;font-size:12.5px;color:rgba(232,221,196,.7)}
+.ltempo input{appearance:none;-webkit-appearance:none;width:120px;height:3px;border-radius:2px;
+  background:linear-gradient(90deg,rgba(231,185,90,.7),rgba(232,221,196,.15));outline:none;vertical-align:middle}
+.ltempo input::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#e7b95a;box-shadow:0 0 10px rgba(231,185,90,.9);cursor:pointer}
+.ltempo b{font-family:ui-monospace,monospace;font-weight:400;color:#e7b95a}
+.pill{
+  border:1px solid rgba(232,221,196,.4);background:rgba(20,14,8,.5);backdrop-filter:blur(8px);
+  color:#e8ddc4;font-family:inherit;font-style:italic;font-size:13.5px;padding:11px 22px;border-radius:99px;cursor:pointer;transition:all .3s;
+}
+.pill:hover{border-color:#e7b95a;transform:translateY(-2px)}
+.pill[aria-pressed="true"]{background:rgba(231,185,90,.18);border-color:#e7b95a}
+/* drawer */
+.drawer{
+  position:fixed;right:18px;bottom:18px;z-index:20;transform-origin:bottom right;transform:scale(0);
+  transition:transform .35s cubic-bezier(.34,1.56,.64,1);
+  background:rgba(24,16,9,.82);backdrop-filter:blur(16px);border:1px solid rgba(232,221,196,.25);
+  border-radius:18px;padding:22px;width:min(420px,90vw);pointer-events:auto;
+  box-shadow:0 30px 70px rgba(0,0,0,.6);
+}
+.drawer.open{transform:scale(1)}
+.drawer h3{font-style:italic;font-size:17px;color:#e7b95a;margin-bottom:14px}
+.seeds{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seedcard{border:1px solid rgba(232,221,196,.22);border-radius:12px;padding:13px 14px;cursor:pointer;background:rgba(255,255,255,.03);transition:all .25s}
+.seedcard:hover{border-color:#e7b95a;background:rgba(231,185,90,.08)}
+.seedcard .nm{font-size:15px;color:#e8ddc4}
+.seedcard .tg{font-style:italic;font-size:11.5px;color:rgba(232,221,196,.55);margin-top:3px}
+.hint{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);font-style:italic;font-size:12.5px;
+  color:rgba(232,221,196,.55);opacity:0;animation:hintin 1.2s ease 2.6s forwards;pointer-events:none}
+@keyframes hintin{to{opacity:1}}
+@media(max-width:640px){
+  .legend{display:none}
+  .controls{left:14px;right:14px;align-items:stretch}
+  .ctrlrow{justify-content:center}
+}
+@media(prefers-reduced-motion:reduce){.hint{animation:none}}
+</style>
+</head>
+<body>
+<canvas id="life"></canvas>
+<div class="ui">
+  <div class="topleft">
+    <div class="plate">Plate XIV · Cellular Horticulture</div>
+    <h1>The Garden <em>Automaton</em></h1>
+    <p class="cap">Three rules, tended at night: a seed with fewer than two neighbours withers;
+      a seed with two or three thrives; a seed with more than three is crowded out. Sow, and watch.</p>
+  </div>
+  <div class="topright">
+    <div class="gpl">Generation</div>
+    <div class="nums"><span id="genNum">0</span> <small style="display:block">·</small><span id="popNum">0</span> <small>blooms</small></div>
+  </div>
+  <div class="legend">
+    <span><i style="background:#7fb069"></i>seedling</span>
+    <span><i style="background:#f28e7b"></i>mature</span>
+    <span><i style="background:#a687d1"></i>elder</span>
+    <span><i style="background:#e7b95a"></i>golden</span>
+  </div>
+  <div class="controls">
+    <div class="ctrlrow">
+      <span class="ltempo">tempo <input type="range" id="tempo" min="1" max="30" value="12"><b>12</b>/s</span>
+      <button class="pill" id="pauseBtn" aria-pressed="false">Pause</button>
+      <button class="pill" id="stepBtn">Step</button>
+      <button class="pill" id="clearBtn">Clear bed</button>
+      <button class="pill" id="seedBtn">Seed drawer</button>
+    </div>
+  </div>
+  <div class="hint">click to sow · drag to paint · space to grow</div>
+</div>
+<div class="drawer" id="drawer">
+  <h3>The seed drawer</h3>
+  <div class="seeds" id="seeds"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cv=document.getElementById("life"),ctx=cv.getContext("2d");
+  var W=0,H=0,DPR=1;
+  var cell=14; // px per cell
+  var cols=0,rows=0;
+  var age=new Uint16Array(0),age2=new Uint16Array(0);
+  var alive=new Uint8Array(0);
+  var gen=0,pop=0,tempo=12,paused=RM;
+  var hover={x:-1,y:-1};
+  var sprites={};
+  function resize(){
+    DPR=Math.min(2,devicePixelRatio||1);
+    W=innerWidth;H=innerHeight;
+    cell=W<640?11:W>3000?18:14;
+    cols=Math.floor(W/cell)+2;rows=Math.floor(H/cell)+2;
+    var old=age.slice();
+    var oldC=Math.ceil(W/ (W/(cols*cell))*cols)||cols;
+    var newA=new Uint16Array(cols*rows);
+    for(var y=0;y<rows;y++)for(var x=0;x<cols;x++){
+      var ox=Math.floor(x/cols*Math.max(1,Math.sqrt(old.length/(cols*rows))))||x;
+      var oy=Math.floor(y/rows*Math.max(1,Math.sqrt(old.length/(cols*rows))))||y;
+      var ocols=Math.max(1,Math.round(Math.sqrt(old.length)));
+      if(oc*1)oc=oc;
+      try{
+        if(old.length){
+          var oc2=Math.max(1,Math.round(Math.sqrt(old.length)));
+          newA[y*cols+x]=old[(Math.min(oc2-1,oy))*oc2+Math.min(oc2-1,ox)];
+        }
+      }catch(e){}
+    }
+    age=newA;age2=new Uint16Array(cols*rows);
+    alive=new Uint8Array(cols*rows);
+    cv.width=W*DPR;cv.height=H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    seedGarden();
+  }
+  var oc=0;
+  function seedGarden(){
+    gen=0;
+    ctx.fillStyle="#160f0a";ctx.fillRect(0,0,W,H);
+    // seed r-pentomino-ish center + gliders
+    rpent(Math.floor(cols/2),Math.floor(rows/2));
+    glider(3,Math.floor(rows*0.3));
+    glider(cols-10,Math.floor(rows*0.7));
+    draw();
+  }
+  function rpent(cx,cy){
+    var pts=[[0,1],[1,0],[1,1],[1,2],[2,0]];
+    pts.forEach(function(p){if(cx+p[0]>=0&&cx+p[0]<cols&&cy+p[1]>=0&&cy+p[1]<rows)age[cy+p[1]*cols+cx+p[0]]=1});
+  }
+  function glider(cx,cy){
+    var pts=[[1,0],[2,1],[0,2],[1,2],[2,2]];
+    pts.forEach(function(p){if(cx+p[0]>=0&&cx+p[0]<cols&&cy+p[1]>=0&&cy+p[1]<rows)age[cy+p[1]*cols+cx+p[0]]=1});
+  }
+  function spriteFor(col,ages,hot){
+    var key=col+ages;
+    if(sprites[key])return sprites[key];
+    var s=document.createElement("canvas");
+    var size=cell*DPR;
+    s.width=size;s.height=size;
+    var c=s.getContext("2d");
+    var r=size*0.42;
+    var g=c.createRadialGradient(size*0.5,size*0.5,r*0.2,size*0.5,size*0.5,r*2);
+    g.addColorStop(0,"rgba(220,220,220,.05)");
+    g.addColorStop(1,"rgba(220,220,220,0)");
+    c.fillStyle=g;
+    c.fillRect(0,0,size,size);
+    c.fillStyle=col;
+    c.beginPath();c.arc(size*0.5,size*0.5,r,0,7);c.fill();
+    c.fillStyle="rgba(255,255,255,.5)";
+    c.beginPath();c.arc(size*0.42,size*0.38,r*0.22,0,7);c.fill();
+    if(ages>8){
+      c.fillStyle=col;c.globalAlpha=.25;
+      for(var i=0;i<5;i++){
+        var a=i/5*Math.PI*2;
+        c.beginPath();c.arc(size*0.5+Math.cos(a)*r*1.25,size*0.5+Math.sin(a)*r*1.25,size*0.14,0,7);c.fill();
+      }
+      c.globalAlpha=1;
+    }
+    sprites[key]=s;
+    return s;
+  }
+  function bloomColor(a){
+    a=Math.min(120,a);
+    if(a<2)return "#7fb069";
+    if(a<8)return blend("#7fb069","#f28e7b",(a-2)/6);
+    if(a<20)return blend("#f28e7b","#a687d1",(a-8)/12);
+    return blend("#a687d1","#e7b95a",Math.min(1,(a-20)/25));
+  }
+  function blend(h1,h2,t){
+    var a=parseInt(h1.slice(1),16),b=parseInt(h2.slice(1),16);
+    var r=Math.round(((a>>16)&255)+(((b>>16)&255)-((a>>16)&255))*t);
+    var g2=Math.round(((a>>8)&255)+(((b>>8)&255)-((a>>8)&255))*t);
+    var bl=Math.round((a&255)+((b&255)-(a&255))*t);
+    return "rgb("+r+","+g2+","+bl+")";
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle="#160f0a";ctx.fillRect(0,0,W,H);
+    ctx.globalCompositeOperation="lighter";
+    var img=ctx.getImageData(0,0,W,H);
+    var d32=new Uint32Array(img.data.buffer);
+    ctx.clearRect(0,0,W,H);
+    // draw sprites per cell
+    for(var y=0;y<rows;y++){
+      for(var x=0;x<cols;x++){
+        var a=age[y*cols+x];
+        if(a===0)continue;
+        var sp=spriteFor(bloomColor(a),a,false);
+        ctx.globalAlpha=(a<2?0.85:1);
+        ctx.drawImage(sp,x*cell,y*cell,cell,cell);
+      }
+    }
+    ctx.globalAlpha=1;
+    ctx.globalCompositeOperation="source-over";
+    // stains for dead cells (0 => brown)
+    // handled in step: keep separate? we approximate with age2 store
+    // (rationale: cheap) skip per-frame stains; drawn during step pass instead
+    // hover ring
+    if(hover.x>=0){
+      ctx.strokeStyle="rgba(232,221,196,.5)";ctx.lineWidth=1.2;
+      ctx.strokeRect(hover.x*cell+0.5,hover.y*cell+0.5,cell-1,cell-1);
+    }
+    var p=0;
+    for(var i2=0;i2<age.length;i2++)if(age[i2])p++;
+    pop=p;
+    document.getElementById("genNum").textContent=gen;
+    document.getElementById("popNum").textContent=p;
+  }
+  function step(){
+    if(paused&&!paused){}
+    // clear stain layer by advancing age2
+    age2.fill(0);
+    for(var y=0;y<rows;y++){
+      for(var x=0;x<cols;x++){
+        var n=0;
+        for(var dy=-1;dy<=1;dy++)for(var dx=-1;dx<=1;dx++){
+          if(dx===0&&dy===0)continue;
+          var nx2=(x+dx+cols)%cols,ny2=(y+dy+rows)%rows;
+          if(age[ny2*cols+nx2])n++;
+        }
+        var cur=age[y*cols+x];
+        var next=0;
+        if(cur&&(n===2||n===3))next=cur<255?cur+1:255; // mature
+        else if(!cur&&n===3)next=1; // newborn
+        if(next)age2[y*cols+x]=next;
+      }
+    }
+    var t=age;age=age2;age2=t;
+    gen++;
+    // stains: for cells that just died plot brown
+    ctx.fillStyle="rgba(120,80,60,.5)";
+    for(var y2=0;y2<rows;y2++){
+      for(var x2=0;x2<cols;x2++){
+        if(age[y2*cols+x2]===0){
+          // approx: draw faint stain with low probability to keep perf
+          if(Math.random()<0.02)ctx.fillRect(x2*cell,y2*cell,cell,cell);
+        }
+      }
+    }
+  }
+  // loop with accumulator
+  var accum=0,last=performance.now();
+  function loop(now){
+    var dt=Math.min(0.1,(now-last)/1000);last=now;
+    if(!paused){
+      accum+=dt;
+      var per=1/Math.max(1,tempo);
+      while(accum>=per){
+        step();
+        accum-=per;
+        if(gen>20000){step();break}
+      }
+    }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  // painting
+  var painting=false;
+  cv.addEventListener("pointerdown",function(e){
+    painting=true;
+    var c=getCell(e);
+    if(e.target.closest(".drawer"))return;
+    toggle(c.x,c.y);
+    cv.setPointerCapture(e.pointerId);
+    draw();
+  });
+  cv.addEventListener("pointermove",function(e){
+    var c=getCell(e);
+    hover=c;
+    if(painting){paintLive(c.x,c.y)}
+    draw();
+  });
+  window.addEventListener("pointerup",function(){painting=false});
+  function getCell(e){
+    var r=cv.getBoundingClientRect();
+    return{x:Math.floor((e.clientX-r.left)/r.width*cols),y:Math.floor((e.clientY-r.top)/r.height*rows)};
+  }
+  function toggle(x,y){
+    if(x<0||x>=cols||y<0||y>=rows)return;
+    age[y*cols+x]=age[y*cols+x]?0:1;
+  }
+  function paintLive(x,y){
+    if(x<0||x>=cols||y<0||y>=rows)return;
+    age[y*cols+x]=1;
+  }
+  // controls
+  document.getElementById("tempo").addEventListener("input",function(){
+    tempo=+this.value;
+    this.nextElementSibling.textContent=this.value;
+  });
+  var pauseBtn=document.getElementById("pauseBtn");
+  function togglePause(){
+    paused=!paused;
+    pauseBtn.setAttribute("aria-pressed",paused?"true":"false");
+    pauseBtn.textContent=paused?"Grow":"Pause";
+  }
+  pauseBtn.addEventListener("click",togglePause);
+  document.getElementById("stepBtn").addEventListener("click",function(){if(paused){step();draw()}});
+  document.getElementById("clearBtn").addEventListener("click",function(){
+    age.fill(0);age2.fill(0);gen=0;draw();
+  });
+  window.addEventListener("keydown",function(e){
+    if(e.code==="Space"){e.preventDefault();togglePause()}
+    if(e.key==="Escape")document.getElementById("drawer").classList.remove("open");
+  });
+  // seed drawer
+  var drawer=document.getElementById("drawer");
+  document.getElementById("seedBtn").addEventListener("click",function(){drawer.classList.toggle("open")});
+  var seedDefs={
+    "Gosper's glider gun":["a glider every 30 generations, forever","gun"],
+    "Pulsar":["period-3 flower of sixfold symmetry","pulsar"],
+    "R-pentomino":["the small seed that explodes","rpent"],
+    "Acorn":["six cells, a whole forest","acorn"],
+    "Wild garden":["thirty percent, sown at random","wild"],
+    "Diehard":["the pattern that dies, politely","diehard"]
+  };
+  function stampPattern(kind){
+    var cx=Math.floor(cols/2),cy=Math.floor(rows/2);
+    age.fill(0);
+    var pts=[];
+    if(kind==="rpent"){pts=[[0,1],[1,0],[1,1],[1,2],[2,0]]}
+    else if(kind==="acorn"){pts=[[0,0],[1,0],[3,1],[4,0],[5,0],[6,0],[3,2]]}
+    else if(kind==="diehard"){pts=[[0,1],[1,0],[5,0],[6,1],[6,2],[7,2],[1,2]]}
+    else if(kind==="pulsar"){for(var r=0;r<5;r++)for(var c2=0;c2<5;c2++){
+      if(r===0||r===4){if(c2>=2&&c2<=4){pts.push([c2,r]);pts.push([c2,4-r]);pts.push([4-c2,r+2+ (r===0?2:0)])}}
+      if(c2===2&&(r>=2&&r<=4)){pts.push([c2,r])}
+    }}
+    else if(kind==="gun"){
+      // simplified gun
+      pts=[[0,5],[0,6],[1,5],[1,6],[10,5],[10,6],[10,7],[11,4],[11,8],[12,3],[12,9],[13,3],[13,9],[14,6],[15,4],[15,8],[16,5],[16,6],[16,7],[17,6]] ;
+      cx=6;cy=Math.floor(rows*0.3);
+    }else if(kind==="wild"){
+      for(var i=0;i<cols*rows*0.3;i++){
+        var x=Math.floor(Math.random()*cols),y=Math.floor(Math.random()*rows);
+        age[y*cols+x]=1;
+      }
+      cx=0;cy=0;
+    }
+    var offx=cx-Math.floor(cols/2),offy=cy-Math.floor(rows/2);
+    if(kind==="gun"){offx=-6;offy=-10}
+    pts.forEach(function(p){
+      var x=p[0]-offx,y=p[1]-offy;
+      if(x>=0&&x<cols&&y>=0&&y<rows)age[y*cols+x]=1;
+    });
+    gen=0;
+    drawer.classList.remove("open");
+    draw();
+  }
+  var seedsEl=document.getElementById("seeds");
+  Object.keys(seedDefs).forEach(function(nm,i){
+    var d=document.createElement("div");
+    d.className="seedcard";
+    d.innerHTML="<div class='nm'>"+nm+"</div><div class='tg'>"+seedDefs[nm][0]+"</div>";
+    d.addEventListener("click",function(){stampPattern(seedDefs[nm][1])});
+    seedsEl.appendChild(d);
+  });
+  if(RM){tempo=4;document.getElementById("tempo").value=4;document.getElementById("tempo").nextElementSibling.textContent="4"}
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

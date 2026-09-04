@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sumi Field — Generative Ink Wash</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --ink:#16161a;--paper:#faf7f0;--seal:#b8321e;--grain:0;
+  --wash1:#16161a;--wash2:#4a4a52;
+}
+html,body{height:100%}
+body{
+  display:grid;grid-template-columns:300px 1fr;height:100vh;overflow:hidden;
+  font-family:ui-sans-serif,system-ui,'Helvetica Neue',sans-serif;color:var(--ink);
+}
+/* sidebar */
+.side{background:var(--paper);border-right:1px solid rgba(22,22,26,.12);padding:34px 26px;display:flex;flex-direction:column;gap:22px;overflow-y:auto;position:relative}
+.side::after{content:"";position:absolute;right:0;top:8%;bottom:8%;width:1px;background:linear-gradient(180deg,transparent,rgba(22,22,26,.12),transparent)}
+.side h1{font-family:Georgia,'Iowan Old Style',Palatino,ui-serif;font-size:34px;font-weight:400;letter-spacing:.01em}
+.side .lede{font-family:Georgia,'Iowan Old Style',Palatino,ui-serif;font-style:italic;font-size:14.5px;line-height:1.6;color:#55555c}
+.seedrow{display:flex;align-items:baseline;gap:10px}
+.seedrow label{font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:#55555c}
+.seedrow input{
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:15px;letter-spacing:.12em;border:none;background:none;
+  border-bottom:1px solid rgba(22,22,26,.25);outline:none;width:130px;color:var(--ink);
+  transition:border-color .3s,color .3s;
+}
+.seedrow input:focus{border-color:var(--seal);color:var(--seal)}
+fieldset{border:none;display:flex;gap:10px}
+legend{font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:#55555c;margin-bottom:10px;width:100%}
+.swatch{width:64px;height:52px;border-radius:8px;border:1px solid transparent;cursor:pointer;position:relative;transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.swatch:hover{transform:translateY(-2px)}
+.swatch input{position:absolute;opacity:0}
+.swatch:has(input:checked){box-shadow:0 0 0 2px var(--paper),0 0 0 4px var(--ink)}
+.sliderrow{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center}
+.sliderrow label{font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:#55555c}
+.sliderrow input{appearance:none;-webkit-appearance:none;height:16px;background:none;cursor:pointer;width:100%}
+.sliderrow input::-webkit-slider-runnable-track{height:1px;background:var(--ink)}
+.sliderrow input::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--paper);border:1.5px solid var(--ink);margin-top:-6.5px}
+.sliderrow .val{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;min-width:34px;text-align:right}
+.btns{display:flex;flex-direction:column;gap:10px}
+.outline{
+  position:relative;overflow:hidden;background:none;border:1px solid rgba(22,22,26,.5);font-family:inherit;
+  font-size:12px;letter-spacing:.16em;text-transform:uppercase;padding:12px 18px;cursor:pointer;color:var(--ink);
+  transition:color .3s;
+}
+.outline::before{content:"";position:absolute;inset:0;background:var(--ink);transform:scaleY(0);transform-origin:bottom;transition:transform .3s cubic-bezier(.22,1,.36,1);z-index:0}
+.outline:hover{color:var(--paper)}
+.outline:hover::before{transform:scaleY(1)}
+.outline span{position:relative;z-index:1}
+.outline.on{background:var(--ink);color:var(--paper)}
+.status{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#55555c;min-height:16px}
+.side .about{font-size:11px;line-height:1.6;color:#55555c;margin-top:auto;border-top:1px solid rgba(22,22,26,.1);padding-top:14px}
+/* stage */
+.stage{position:relative;overflow:hidden}
+#paper{position:absolute;inset:0;width:100%;height:100%;display:block}
+.progress{position:absolute;top:0;left:0;height:2px;background:var(--seal);width:0;z-index:5;transition:width .2s}
+.seal{
+  position:absolute;right:28px;bottom:28px;z-index:5;writing-mode:vertical-rl;
+  background:var(--seal);color:var(--paper);font-family:'Noto Serif SC',Georgia,serif;
+  font-size:15px;letter-spacing:.22em;padding:16px 9px;border:1.5px solid var(--paper);outline:1.5px solid var(--seal);outline-offset:-5px;
+  transform:rotate(-2deg);mix-blend-mode:multiply;opacity:.9;
+}
+.seal.pop{animation:stamp .6s cubic-bezier(.34,1.56,.64,1)}
+@keyframes stamp{0%{transform:rotate(-2deg) scale(2.6);opacity:0}60%{transform:rotate(-2deg) scale(.88)}100%{transform:rotate(-2deg) scale(1);opacity:.9}}
+@media(max-width:760px){
+  body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .side{padding:16px 18px;gap:14px;flex-direction:row;flex-wrap:wrap;align-items:center;overflow:visible;border-right:none;border-bottom:1px solid rgba(22,22,26,.12)}
+  .side .lede,.side .about,.side .status,.side #seedLabel{display:none}
+  .side h1{font-size:22px}
+}
+@media(prefers-reduced-motion:reduce){
+  .outline::before{transition:none}
+  .swatch{transition:none}
+}
+</style>
+</head>
+<body>
+<aside class="side">
+  <div>
+    <h1>Sumi Field</h1>
+    <p class="lede">A generative studio where ink obeys the field's whisper — drop a seed, watch the wash settle, then let the ink flow.</p>
+  </div>
+  <div class="seedrow">
+    <label for="seed">Seed</label>
+    <input id="seed" type="text" value="04219618" spellcheck="false">
+  </div>
+  <fieldset>
+    <legend>Palette</legend>
+    <label class="swatch" style="background:linear-gradient(135deg,#16161a,#4a4a52)" title="Ink">
+      <input type="radio" name="pal" value="ink" checked>
+    </label>
+    <label class="swatch" style="background:linear-gradient(135deg,#1b2a5e,#4a63b8)" title="Indigo">
+      <input type="radio" name="pal" value="indigo">
+    </label>
+    <label class="swatch" style="background:linear-gradient(135deg,#7a1e10,#d94a2a)" title="Vermilion">
+      <input type="radio" name="pal" value="vermilion">
+    </label>
+  </fieldset>
+  <div class="sliderrow">
+    <label for="turb">Turbulence</label>
+    <input id="turb" type="range" min="0.6" max="5" step="0.1" value="2.4">
+    <span class="val" id="turbVal">2.4</span>
+  </div>
+  <div class="btns">
+    <button class="outline" id="regenerate"><span>Regenerate</span></button>
+    <button class="outline" id="save"><span>Save PNG</span></button>
+    <button class="outline" id="flow" aria-pressed="false"><span>Flow · live particles</span></button>
+  </div>
+  <div class="status" id="status">painting 001800 strokes…</div>
+  <p class="about">Sumi Field · no. 013 — a seeded study of simplicial ink,
+    turbulence and slow water. Everything rendered in your browser;
+    nothing leaves this page.</p>
+</aside>
+
+<main class="stage">
+  <canvas id="paper"></canvas>
+  <div class="progress" id="progress"></div>
+  <div class="seal" id="seal">04219618</div>
+</main>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cv=document.getElementById("paper"),ctx=cv.getContext("2d");
+  var W=0,H=0,DPR=1,seed=4219618;
+  var palettes={
+    ink:{bg:"#f3eee3",tones:["#16161a","#2a2a30","#3d3d45"],wash:"rgba(20,20,24,"},
+    indigo:{bg:"#eef0ec",tones:["#1b2a5e","#2c3f7c","#40549a"],wash:"rgba(27,42,94,"},
+    vermilion:{bg:"#f7f1e6",tones:["#7a1e10","#96301c","#b34a2c"],wash:"rgba(122,30,16,"}
+  };
+  var pal="ink";
+  var flowOn=false,particles=[];
+
+  // mulberry32
+  function mulberry32(a){
+    return function(){
+      a|=0;a=a+0x6D2B79F5|0;
+      var t=Math.imul(a^a>>>15,1|a);
+      t=t+Math.imul(t^t>>>7,61|t)^t;
+      return((t^t>>>14)>>>0)/4294967296;
+    };
+  }
+  // simplex noise (classic 2D)
+  var grad3=[[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+  var F2=0.5*(Math.sqrt(3)-1),G2=(3-Math.sqrt(3))/6;
+  var perm=new Uint8Array(512);
+  (function(){var p=[151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180];
+  for(var i=0;i<512;i++)perm[i]=p[i&255]})();
+  function noise2(xin,yin){
+    var n0=0,n1=0,n2=0;
+    var s=(xin+yin)*F2,i=Math.floor(xin+s),j=Math.floor(yin+s);
+    var t=(i+j)*G2,x0=xin-(i-t),y0=yin-(j-t);
+    var i1,j1;
+    if(x0>y0){i1=1;j1=0}else{i1=0;j1=1}
+    var x1=x0-i1+G2,y1=y0-j1+G2,x2=x0-1+2*G2,y2=y0-1+2*G2;
+    var ii=i&255,jj=j&255;
+    var gi0=perm[ii+perm[jj]]%12,gi1=perm[ii+i1+perm[jj+j1]]%12,gi2=perm[ii+1+perm[jj+1]]%12;
+    var t0=0.5-x0*x0-y0*y0;
+    if(t0>=0){t0*=t0;n0=t0*t0*(grad3[gi0][0]*x0+grad3[gi0][1]*y0)}
+    var t1=0.5-x1*x1-y1*y1;
+    if(t1>=0){t1*=t1;n1=t1*t1*(grad3[gi1][0]*x1+grad3[gi1][1]*y1)}
+    var t2=0.5-x2*x2-y2*y2;
+    if(t2>=0){t2*=t2;n2=t2*t2*(grad3[gi2][0]*x2+grad3[gi2][1]*y2)}
+    return 70*(n0+n1+n2);
+  }
+  function fbm(x,y,f){
+    var a=0.7*noise2(x*f,y*f)+0.3*noise2(x*f*2.3,y*f*2.3);
+    return a*Math.PI*(f/1)*1.15;
+  }
+  function angleAt(x,y,turb){return fbm(x,y,turb)}
+  function resize(){
+    DPR=Math.min(2,window.devicePixelRatio||1);
+    W=cv.clientWidth;H=cv.clientHeight;
+    cv.width=W*DPR;cv.height=H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    paint();
+  }
+  window.addEventListener("resize",function(){resize()});
+
+  function paint(){
+    var rng=mulberry32(seed);
+    // paper base
+    ctx.fillStyle=palettes[pal].bg;
+    ctx.fillRect(0,0,W,H);
+    // per-pixel grain
+    var img=ctx.getImageData(0,0,Math.min(W,900),Math.min(H,600));
+    var buf=new Uint32Array(img.data.buffer);
+    for(var i=0;i<buf.length;i++){
+      var g=Math.floor((rng()-0.5)*2*9);
+      var v=img.data[i*4]+g;
+      img.data[i*4]=Math.max(0,Math.min(255,v));
+      img.data[i*4+1]=Math.max(0,Math.min(255,img.data[i*4+1]+g));
+      img.data[i*4+2]=Math.max(0,Math.min(255,img.data[i*4+2]+g));
+    }
+    // fibre lines
+    for(var f=0;f<360;f++){
+      var x=rng()*W,y=rng()*H;
+      var len=8+rng()*60,ang=rng()*Math.PI;
+      ctx.strokeStyle="rgba(22,22,26,"+(0.02+rng()*0.05)+")";
+      ctx.lineWidth=0.5+rng()*0.6;
+      ctx.beginPath();ctx.moveTo(x,y);
+      ctx.quadraticCurveTo(x+Math.cos(ang)*len*0.5+rng()*8,y+Math.sin(ang)*len*0.5+rng()*8,x+Math.cos(ang)*len,y+Math.sin(ang)*len);
+      ctx.stroke();
+    }
+    // vignette
+    var vg=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.3,W/2,H/2,Math.max(W,H)*0.75);
+    vg.addColorStop(0,"rgba(0,0,0,0)");vg.addColorStop(1,"rgba(40,30,20,.14)");
+    ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+    paintStrokes(rng);
+  }
+  function paintStrokes(rng){
+    var tones=palettes[pal].tones;
+    var area=W*H/1000000;
+    var washes=Math.round(260*area),mids=Math.round(1400*area),fines=Math.round(2600*area);
+    var total=washes+mids+fines,done=0;
+    var progress=document.getElementById("progress");
+    var status=document.getElementById("status");
+    function batch(){
+      var bn=1800;
+      var steps=0;
+      while(steps<bn&&done<total){
+        var kind=done<washes?0:done<washes+mids?1:2;
+        stroke(kind,rng);
+        done++;steps++;
+      }
+      progress.style.width=(done/total*100)+"%";
+      status.textContent="painting "+(String(done).padStart(6,"0"))+" strokes…";
+      if(done<total){requestAnimationFrame(batch)}
+      else{
+        progress.style.width="100%";
+        setTimeout(function(){progress.style.width="0";status.textContent="painting complete · seed "+seed;stampSeal()},300);
+        if(flowOn)startFlow();
+      }
+    }
+    batch();
+  }
+  var seq=0;
+  function stroke(kind,rng){
+    var tones=palettes[pal].tones;
+    var x=rng()*W,y=rng()*H;
+    var turb=+document.getElementById("turb").value;
+    var w,alpha,col;
+    if(kind===0){w=7+rng()*9;alpha=0.025+rng()*0.035;col=tones[0]}
+    else if(kind===1){w=1.4+rng()*2.6;alpha=0.12+rng()*0.18;col=tones[Math.floor(rng()*3)]}
+    else{w=0.35+rng()*0.75;alpha=0.3+rng()*0.4;col=tones[Math.floor(rng()*3)]}
+    var ang=angleAt(x/W,y/H,turb)+rng()*0.5;
+    if(kind===0)ang+=Math.PI/2;
+    var cosv=Math.cos(ang),sinv=Math.sin(ang);
+    var len=kind===0?30+rng()*90:14+rng()*70;
+    var steps=Math.max(6,Math.floor(len/4));
+    var w0=w,w1=w*0.15;
+    ctx.lineCap="round";
+    ctx.strokeStyle=col;
+    for(var i=0;i<steps;i++){
+      var t=i/steps;
+      var xx=x+cosv*len*t,yy=y+sinv*len*t;
+      var wob=Math.sin(t*9+seq)*0.8*(1-t);
+      var cw=w0+(w1-w0)*t;
+      // dry brush: skip with rising probability near tip
+      if(rng()<t*t*0.5)continue;
+      ctx.globalAlpha=alpha*(0.45+0.55*(1-t)*(1-t));
+      ctx.lineWidth=Math.max(0.2,cw*(1+rng()*0.35));
+      ctx.beginPath();
+      ctx.moveTo(xx,yy);
+      ctx.lineTo(xx+cosv*4+wob*0.4,yy+sinv*4+wob*0.4);
+      ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+    seq++;
+  }
+  function stampSeal(){
+    var s=document.getElementById("seal");
+    s.textContent=String(seed).padStart(8,"0");
+    s.style.background=pal==="vermilion"?"#16161a":"#b8321e";
+    s.classList.remove("pop");void s.offsetWidth;s.classList.add("pop");
+  }
+  // flow mode
+  function startFlow(){
+    var rng=mulberry32(seed*7+3);
+    particles=[];
+    var n=Math.round(480*(W*H)/1200000);
+    for(var i=0;i<n;i++){
+      particles.push({x:rng()*W,y:rng()*H,age:rng()*200});
+    }
+    flowTick();
+  }
+  function flowTick(){
+    if(!flowOn)return;
+    var turb=+document.getElementById("turb").value;
+    for(var i=0;i<particles.length;i++){
+      var p=particles[i];
+      var a=angleAt(p.x/W,p.y/H,turb);
+      p.x+=Math.cos(a)*3.2;p.y+=Math.sin(a)*3.2;
+      p.age++;
+      var tones=palettes[pal].tones;
+      ctx.globalAlpha=0.028;
+      ctx.fillStyle=tones[Math.floor(Math.random()*3)];
+      ctx.beginPath();ctx.arc(p.x,p.y,1.15,0,7);ctx.fill();
+      ctx.globalAlpha=1;
+      if(p.x<0||p.x>W||p.y<0||p.y>H||p.age>300){p.x=Math.random()*W;p.y=Math.random()*H;p.age=0}
+    }
+    if(flowOn)requestAnimationFrame(flowTick);
+  }
+  // controls
+  document.getElementById("turb").addEventListener("input",function(){
+    document.getElementById("turbVal").textContent=(+this.value).toFixed(1);
+  });
+  document.getElementById("regenerate").addEventListener("click",function(){
+    reseed();paint();
+  });
+  function reseed(){seed=(seed*1664525+1013904223)>>>0;document.getElementById("seed").value=String(seed).padStart(8,"0");document.getElementById("seal").textContent=String(seed).padStart(8,"0")}
+  document.getElementById("seed").addEventListener("keydown",function(e){
+    if(e.key==="Enter"){
+      var v=parseInt(this.value,10);
+      if(!isNaN(v)){seed=v>>>0;this.value=String(seed>>>0).padStart(8,"0");paint()}
+    }
+  });
+  document.querySelectorAll('input[name="pal"]').forEach(function(r){
+    r.addEventListener("change",function(){
+      pal=r.value;
+      document.documentElement.style.setProperty("--seal",pal==="vermilion"?"#16161a":"#b8321e");
+      paint();
+    });
+  });
+  document.getElementById("save").addEventListener("click",function(){
+    var a=document.createElement("a");
+    a.download="sumi-field-"+seed+".png";
+    a.href=cv.toDataURL("image/png");
+    a.click();
+  });
+  var flowBtn=document.getElementById("flow");
+  flowBtn.addEventListener("click",function(){
+    flowOn=!flowOn;
+    flowBtn.classList.toggle("on",flowOn);
+    flowBtn.setAttribute("aria-pressed",flowOn?"true":"false");
+    if(flowOn)startFlow();
+  });
+  var status=document.getElementById("status");
+  window.addEventListener("keydown",function(e){
+    if(e.key==="r"||e.key==="R"){reseed();paint()}
+    if(e.key==="f"||e.key==="F"){flowBtn.click()}
+  });
+  resize();
+})();
+</script>
+</body>
+</html>

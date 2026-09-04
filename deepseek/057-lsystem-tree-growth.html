@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arbor recursiva — Lindenmayer Herbarium</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:linear-gradient(180deg,#f1e7d3,#e4d6ba);min-height:100vh;color:#2b2318;
+  font-family:Georgia,'Iowan Old Style',Palatino,serif;overflow-x:hidden;
+}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;mix-blend-mode:multiply;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E")}
+.sheet{
+  position:relative;z-index:2;margin:26px auto;max-width:1280px;
+  border:1px solid rgba(43,35,24,.35);outline:1px solid rgba(43,35,24,.35);outline-offset:4px;
+  min-height:calc(100vh - 60px);display:flex;padding:30px 34px 20px;flex-direction:column;
+}
+.head{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;padding-bottom:14px;border-bottom:1px solid rgba(43,35,24,.25)}
+.head .plate{font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#6b5b45}
+.head h1{font-size:clamp(30px,4.4vw,52px);font-weight:400;font-style:italic;letter-spacing:.01em;margin-top:4px}
+.head .fam{font-style:italic;font-size:14px;color:#6b5b45;margin-top:4px}
+.head .rules{font-family:'Courier New',ui-monospace,monospace;font-size:11px;line-height:1.7;color:#6b5b45;text-align:right;border-left:1px solid rgba(43,35,24,.2);padding-left:14px}
+@media(max-width:640px){.head .rules{display:none}}
+/* plate area */
+.platewrap{position:relative;flex:1;min-height:56vh}
+canvas#tree{position:absolute;inset:0;width:100%;height:100%;display:block}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#2b2318;color:#f1e7d3;
+  font-family:Georgia,serif;font-style:italic;font-size:14px;padding:10px 22px;border-radius:99px;opacity:0;transition:opacity .6s;z-index:50;pointer-events:none}
+.toast.show{opacity:1}
+/* caption bar */
+.captionbar{display:flex;justify-content:space-between;align-items:center;gap:20px;border-top:1px solid rgba(43,35,24,.25);
+  padding-top:16px;margin-top:8px;flex-wrap:wrap}
+.seasongroup{display:flex;gap:8px}
+.season{display:flex;align-items:center;gap:7px;border:1px solid rgba(43,35,24,.4);background:none;color:#2b2318;
+  border-radius:6px;padding:9px 16px;cursor:pointer;font-family:Georgia,serif;font-size:13px;font-style:italic;transition:all .25s}
+.season i{width:12px;height:12px;border-radius:50%}
+.season:hover{background:rgba(43,35,24,.06)}
+.season.on{background:#2b2318;color:#f1e7d3}
+.windrow{display:flex;align-items:center;gap:10px;font-style:italic;font-size:13px;color:#6b5b45}
+.windrow input{appearance:none;-webkit-appearance:none;width:140px;height:1px;background:#2b2318;outline:none}
+.windrow input::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:#f1e7d3;border:1.5px solid #2b2318;cursor:pointer}
+.windrow .wlbl{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.1em;width:66px}
+.plantbtn{background:#2b2318;color:#f1e7d3;border:none;font-family:Georgia,serif;font-style:italic;font-size:14px;
+  padding:12px 26px;cursor:pointer;position:relative;overflow:hidden;transition:color .3s}
+.plantbtn::before{content:"";position:absolute;inset:0;background:#f1e7d3;transform:scaleY(0);transform-origin:bottom;transition:transform .35s cubic-bezier(.22,1,.36,1)}
+.plantbtn:hover{color:#2b2318}
+.plantbtn:hover::before{transform:scaleY(1)}
+.plantbtn span{position:relative;z-index:1}
+@media(max-width:640px){.captionbar{flex-direction:column;align-items:stretch}}
+@media(prefers-reduced-motion:reduce){.plantbtn::before{transition:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header class="head">
+    <div>
+      <div class="plate">Plate XVII · Lindenmayer Herbarium</div>
+      <h1>Arbor recursiva var. lindenmayeri</h1>
+      <div class="fam">Grammaticaceae — a stochastic bracketed L-system, five derivations</div>
+    </div>
+    <div class="rules">
+      axiom X<br>
+      X → F[+X]F[−X]+X<br>
+      X → F[−X]F[+X]−X<br>
+      X → F[+X][−X]FX<br>
+      F → FF<br>
+      angle 22–28° · jittered
+    </div>
+  </header>
+
+  <div class="platewrap"><canvas id="tree"></canvas></div>
+
+  <div class="captionbar">
+    <div class="seasongroup" id="seasonGroup">
+      <button class="season on" data-s="spring"><i style="background:#f4a9bc"></i>Spring</button>
+      <button class="season" data-s="summer"><i style="background:#5f8f45"></i>Summer</button>
+      <button class="season" data-s="autumn"><i style="background:#d98a2c"></i>Autumn</button>
+      <button class="season" data-s="winter"><i style="background:#e8ecf2"></i>Winter</button>
+    </div>
+    <div class="windrow">
+      <span>wind</span>
+      <input type="range" id="wind" min="0" max="100" value="0">
+      <span class="wlbl" id="windLbl">still</span>
+    </div>
+    <button class="plantbtn" id="plantBtn"><span>Plant new tree</span></button>
+  </div>
+</div>
+<div class="toast" id="toast">Sapling planted</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cv=document.getElementById("tree"),ctx=cv.getContext("2d");
+  var W=0,H=0,DPR=1;
+  var season="spring",wind=0;
+  var saplings=[],maxSaplings=8;
+  var seasons={spring:["#f4a9bc","#f9c9d5","#ea8ea6","#fff1f3"],
+    summer:["#5f8f45","#78a659","#3e6d33","#93bb6e"],
+    autumn:["#d98a2c","#c2561f","#e6b04b","#a63d1a"],
+    winter:null};
+  // L-system
+  function generate(len){
+    var rules=[
+      function(){return Math.random()<0.4?"F[+X]F[−X]+X":Math.random()<0.7?"F[−X]F[+X]−X":"F[+X][−X]FX"}
+    ];
+    var s="X";
+    for(var d=0;d<len;d++){
+      var out="";
+      for(var i=0;i<s.length;i++){
+        var c=s[i];
+        if(c==="X")out+=rules[0]();
+        else if(c==="F")out+="FF";
+        else out+=c;
+      }
+      s=out;
+      if(s.length>9000)break;
+    }
+    return s;
+  }
+  function xorshift(seed){
+    var x=seed||7;
+    return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return(x>>>0)/4294967296};
+  }
+  function interpret(str,rng,angle){
+    var nodes=[];
+    var stack=[];
+    var x=0,y=0,dir=-90;
+    var order=0;
+    for(var i=0;i<str.length;i++){
+      var c=str[i];
+      if(c==="F"){
+        nodes.push({x:x,y:y,len:1,order:order,depth:stack.length,ang:dir,leaf:false});
+        x+=Math.cos(dir*Math.PI/180);
+        y+=Math.sin(dir*Math.PI/180);
+      }else if(c==="+"){
+        dir+=angle*(0.85+rng()*0.3);
+      }else if(c==="−"){
+        dir-=angle*(0.85+rng()*0.3);
+      }else if(c==="["){
+        stack.push({x:x,y:y,dir:dir,order:order});
+        order++;
+      }else if(c==="]"){
+        var s=stack.pop();
+        x=s.x;y=s.y;dir=s.dir;order=s.order;
+        // tip blossom
+        nodes.push({x:x,y:y,len:0,order:order,depth:stack.length+1,ang:dir,leaf:true});
+      }
+    }
+    // max order
+    var maxO=0;
+    nodes.forEach(function(n){if(n.order>maxO)maxO=n.order});
+    return{nodes:nodes,maxO:maxO};
+  }
+  function resize(){
+    DPR=Math.min(2,devicePixelRatio||1);
+    var r=cv.parentElement.getBoundingClientRect();
+    W=r.width;H=r.height;
+    cv.width=W*DPR;cv.height=H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    redrawAll();
+  }
+  window.addEventListener("resize",resize);
+  function redrawAll(){
+    ctx.clearRect(0,0,W,H);
+    // ground
+    var g=ctx.createLinearGradient(0,H*0.9,0,H);
+    g.addColorStop(0,"rgba(120,95,55,.25)");g.addColorStop(1,"rgba(110,85,50,.4)");
+    ctx.fillStyle=g;ctx.fillRect(0,H*0.9,W,H*0.1);
+    ctx.strokeStyle="rgba(43,35,24,.35)";
+    ctx.beginPath();ctx.moveTo(0,H*0.9);ctx.lineTo(W,H*0.9);ctx.stroke();
+    // grass ticks lean with wind
+    ctx.strokeStyle="rgba(43,35,24,.4)";ctx.lineWidth=1;
+    for(var x=0;x<W;x+=14){
+      var h2=5+Math.sin(x*0.05)*3;
+      ctx.beginPath();ctx.moveTo(x,H*0.9);ctx.lineTo(x+wind*0.14,h2+ H*0.9-h2);ctx.stroke();
+    }
+    // mist ellipses
+    for(var m=0;m<3;m++){
+      var mx=W*(0.2+m*0.3),my=H*0.86,mw=W*0.28;
+      ctx.fillStyle="rgba(220,210,185,.5)";
+      ctx.beginPath();ctx.ellipse(mx,my,mw,14,0,0,7);ctx.fill();
+    }
+    // seasonal sky tint
+    var tints={spring:"rgba(244,169,188,.05)",summer:"rgba(95,143,69,.05)",autumn:"rgba(217,138,44,.07)",winter:"rgba(232,236,242,.12)"};
+    ctx.fillStyle=tints[season];
+    ctx.fillRect(0,0,W,H*0.9);
+    // saplings by depth: lower = larger
+    var ordered=saplings.slice().sort(function(a,b){return a.y-b.y});
+    ordered.forEach(function(s,idx){
+      var scale=0.5+idx*0.08;
+      if(s.plantedAt===undefined)s.plantedAt=0;
+      drawTree(s,scale);
+    });
+    // winter snow on tips
+    if(season==="winter"){
+      ordered.forEach(function(s,idx){
+        var scale=0.5+idx*0.08;
+        drawSnowHighlight(s,scale);
+      });
+    }
+  }
+  function growth(now){return Math.min(1,now/2500)}
+  function drawTree(s,scale){
+    var age=Math.min(1,(performance.now()-s.t0)/2500);
+    if(RM)age=1;
+    var growPx=Math.pow(smooth(age),1);
+    var maxO=s.maxO;
+    var baseX=s.x,baseY=s.y;
+    var windAmt=wind/100;
+    var nodeScale=Math.min(1.35,scale);
+    var t=performance.now()/1000;
+    ctx.lineCap="round";
+    for(var i=0;i<s.nodes.length;i++){
+      var n=s.nodes[i];
+      // order-based appearance timing
+      var app=(n.order/ s.maxO)*55/1000*5;
+      var appearAt=n.order*55;
+      var ageN=Math.max(0,Math.min(1,(performance.now()-s.t0-appearAt)/110));
+      if(ageN<=0&&!RM)continue;
+      var lenE=smooth(ageN);
+      if(n.leaf){
+        if(season==="winter")continue;
+        var lA=Math.max(0,Math.min(1,(performance.now()-s.t0-appearAt-80)/700));
+        if(lA<=0&&!RM)continue;
+        var cols=seasons[season];
+        var col=cols[Math.floor(Math.random()*cols.length)];
+        var r2=(2.4+Math.random()*2.6)*scale;
+        var wob=windAmt*0.004*Math.sin(t*1.6+n.order*0.35);
+        ctx.fillStyle=col;
+        ctx.globalAlpha=RM?1:smooth(lA);
+        ctx.beginPath();
+        ctx.ellipse((baseX+n.x*2*scale),(baseY+n.y*2.6*scale)+wob*r2,r2,r2*0.7,n.ang*Math.PI/180+ (Math.random()-0.5),0,7);
+        ctx.fill();
+        ctx.globalAlpha=1;
+        continue;
+      }
+      // wind sway
+      var sway=windAmt*(0.003+0.014*n.order/maxO)*Math.sin(t*1.6+n.order*0.35);
+      var sway2=windAmt*0.002*Math.sin(t*3.1+n.depth*0.7);
+      // heading inherited: approximate by angle + accumulated sway
+      var dx=Math.cos(n.ang*Math.PI/180)*2*scale;
+      var dy=Math.sin(n.ang*Math.PI/180)*2.6*scale;
+      var swx=sway*(2*scale)* Math.sign(dx||1);
+      var x1=baseX+n.x*2*scale+swx*n.order;
+      var y1=baseY+n.y*2.6*scale+sway2*n.depth;
+      var x2=baseX+(n.x+Math.cos(n.ang*Math.PI/180))*2*scale+swx*(n.order+1);
+      var y2=baseY+(n.y+Math.sin(n.ang*Math.PI/180))*2.6*scale+sway2*(n.depth+1);
+      var wdt=4.5*Math.pow(1-n.order/maxO,1.6)*scale;
+      if(season==="winter"){ctx.strokeStyle="#3b2a1c"}else{ctx.strokeStyle="#3b2a1c"}
+      ctx.globalAlpha=Math.max(0.25,ageN);
+      ctx.lineWidth=Math.max(0.3,wdt*lenE);
+      ctx.beginPath();
+      ctx.moveTo(x1,y1);
+      ctx.lineTo(x1+(x2-x1)*lenE,y1+(y2-y1)*lenE);
+      ctx.stroke();
+      ctx.globalAlpha=1;
+    }
+  }
+  function drawSnowHighlight(s,scale){
+    var t=performance.now()/1000;
+    // white highlight along thick branches (order < 3)
+    ctx.strokeStyle="rgba(255,255,255,.85)";
+    ctx.lineWidth=1.2;
+    for(var i=0;i<s.nodes.length;i++){
+      var n=s.nodes[i];
+      if(n.order>2)continue;
+      var x1=s.x+n.x*2*scale,y1=s.y+n.y*2.6*scale;
+      var x2=s.x+(n.x+Math.cos(n.ang*Math.PI/180))*2*scale;
+      var y2=s.y+(n.y+Math.sin(n.ang*Math.PI/180))*2.6*scale;
+      ctx.beginPath();ctx.moveTo(x1,y1-1);ctx.lineTo(x2,y2-1);ctx.stroke();
+    }
+  }
+  function smooth(x){return x*x*(3-2*x)}
+  function seedTree(x,y){
+    var rng=xorshift((Math.random()*1e9)|0);
+    var angle=22+rng()*6;
+    var str=generate(5);
+    var t=interpret(str,rng,angle);
+    return{...t,x:x,y:y,t0:performance.now()};
+  }
+  // controls
+  document.querySelectorAll(".season").forEach(function(b){
+    b.addEventListener("click",function(){
+      document.querySelectorAll(".season").forEach(function(x){x.classList.remove("on")});
+      b.classList.add("on");
+      season=b.dataset.s;
+      redrawAll();
+    });
+  });
+  var windLbls=["still","gentle","brisk","gale"];
+  document.getElementById("wind").addEventListener("input",function(){
+    wind=+this.value;
+    var lbl=wind<15?"still":wind<40?"gentle":wind<75?"brisk":"gale";
+    document.getElementById("windLbl").textContent=lbl;
+  });
+  document.getElementById("plantBtn").addEventListener("click",function(){
+    var x=W*0.5+(Math.random()-0.5)*W*0.7;
+    var y=H*0.82+Math.random()*H*0.06;
+    saplings.push(seedTree(x,y));
+    if(saplings.length>maxSaplings)saplings.shift();
+    toast("Sapling planted");
+    redrawAll();
+  });
+  var toastEl=document.getElementById("toast");
+  function toast(msg){
+    toastEl.textContent=msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastEl._tm);
+    toastEl._tm=setTimeout(function(){toastEl.classList.remove("show")},1600);
+  }
+  cv.addEventListener("pointerdown",function(e){
+    var r=cv.getBoundingClientRect();
+    saplings.push(seedTree(e.clientX-r.left,e.clientY-r.top));
+    if(saplings.length>maxSaplings)saplings.shift();
+    toast("Sapling planted");
+  });
+  window.addEventListener("keydown",function(e){
+    if(e.code==="Space"){e.preventDefault();document.getElementById("plantBtn").click()}
+  });
+  function loop(){
+    redrawAll();
+    requestAnimationFrame(loop);
+  }
+  // initial
+  saplings.push(seedTree(W*0.3||200,H*0.84||300));
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
