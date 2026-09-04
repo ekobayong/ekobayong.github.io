@@ -153,9 +153,6 @@ const html = `<!DOCTYPE html>
   .btn:hover { background:#f1efe9; border-color:#b7ad99; }
   .btn-open { background:#191524; border-color:#191524; color:#fff; }
   .btn-open:hover { background:#2b2140; border-color:#2b2140; color:#fff; }
-  .btn-newtab { padding:9px 11px; color:var(--muted); }
-  .btn-newtab svg { width:14px; height:14px; }
-  .btn-newtab:hover { color:var(--acc); background:#f1efe9; border-color:#b7ad99; }
   .btn-prompt[aria-expanded="true"] { background:#e9e0ff; border-color:var(--acc); color:var(--acc); }
   .prompt-panel { display:none; border-top:1px solid var(--line); padding:14px 16px 16px;
                   background:#f4f1ea; }
@@ -234,6 +231,8 @@ const html = `<!DOCTYPE html>
     var ob = document.createElement("a");
     ob.className = "open-btn";
     ob.href = it.file;
+    ob.target = "_blank";
+    ob.rel = "noopener";
     ob.innerHTML = "<span>Open demo ↗</span>";
     thumb.appendChild(frame); thumb.appendChild(ob);
 
@@ -244,9 +243,8 @@ const html = `<!DOCTYPE html>
 
     var actions = document.createElement("div");
     actions.className = "actions";
-    actions.innerHTML = '<a class="btn btn-open" href="' + it.file + '">Open demo</a>' +
-      '<button class="btn btn-prompt" type="button" aria-expanded="false" aria-controls="prompt-' + it.num + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Prompt</span></button>' +
-      '<a class="btn btn-newtab" href="' + it.file + '" target="_blank" rel="noopener" title="Buka di tab baru"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a>';
+    actions.innerHTML = '<a class="btn btn-open" href="' + it.file + '" target="_blank" rel="noopener">Open demo</a>' +
+      '<button class="btn btn-prompt" type="button" aria-expanded="false" aria-controls="prompt-' + it.num + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Prompt</span></button>';
 
     var panel = document.createElement("div");
     panel.className = "prompt-panel";
