@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KESTREL//OS v9.4.1 Nightjar — Boot Terminal</title>
+<style>
+  :root{
+    --bg:#05060a; --lift:#10142a; --mag:#ff2bd6; --cy:#00f0ff; --amb:#ffb830; --mint:#5cff8a;
+    --slate:#6b7390; --body:#d8e6ff; --panel:rgba(10,12,22,.82);
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{background:radial-gradient(120% 90% at 50% 0%,#10142a 0%,#05060a 60%); color:var(--body);
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono","Courier New",monospace;
+    overflow:hidden}
+  ::selection{background:var(--mag); color:#000}
+  /* CRT overlays */
+  .crt{position:fixed; inset:0; pointer-events:none; z-index:60}
+  .crt .scan{position:absolute; inset:0; mix-blend-mode:multiply; opacity:.55;
+    background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.35) 2px 3px)}
+  .crt .band{position:absolute; left:0; right:0; height:120px; mix-blend-mode:screen; opacity:.05;
+    background:linear-gradient(180deg,transparent,var(--cy),transparent); animation:sweep 7s linear infinite}
+  @keyframes sweep{0%{top:-15%}100%{top:115%}}
+  .crt .flick{position:absolute; inset:0; background:#fff; opacity:0; animation:flick .12s steps(1) infinite}
+  @keyframes flick{0%{opacity:.021}50%{opacity:0}100%{opacity:.016}}
+  .crt .vig{position:absolute; inset:0; background:radial-gradient(120% 100% at 50% 45%,transparent 55%,rgba(0,0,0,.6) 100%)}
+  .floor{position:fixed; left:-20%; right:-20%; bottom:-6vh; height:38vh; z-index:-1; perspective:600px; overflow:hidden}
+  .floor::before{content:""; position:absolute; left:0; right:0; top:-10%; bottom:0; transform:rotateX(62deg); transform-origin:top;
+    background:
+      repeating-linear-gradient(0deg,transparent 0 34px,rgba(0,240,255,.16) 34px 35px),
+      repeating-linear-gradient(90deg,transparent 0 60px,rgba(255,43,214,.10) 60px 61px),
+      linear-gradient(180deg,rgba(5,6,10,.6),rgba(5,6,10,.9));
+    animation:gridz 3s linear infinite}
+  @keyframes gridz{to{background-position:0 35px,0 0,0 0}}
+  body.ready{overflow:auto}
+
+  .shell{height:100vh; display:grid; grid-template-rows:auto 1fr; gap:14px; padding:14px clamp(10px,2vw,26px) 18px}
+  /* header */
+  header{position:relative; display:flex; justify-content:space-between; align-items:center; padding:16px 26px; gap:18px; flex-wrap:wrap;
+    background:var(--panel); border:1px solid rgba(0,240,255,.28); box-shadow:0 0 26px rgba(0,240,255,.12), inset 0 0 30px rgba(0,240,255,.05);
+    clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px)}
+  .title{font-weight:700; letter-spacing:.18em; font-size:clamp(1.05rem,2.6vw,1.5rem); color:var(--cy);
+    text-shadow:0 0 8px rgba(0,240,255,.9),0 0 24px rgba(0,240,255,.5)}
+  .title .sl{color:var(--mag); text-shadow:0 0 8px rgba(255,43,214,.9)}
+  .title.glitch{animation:glitch .42s steps(2) both}
+  @keyframes glitch{
+    0%,100%{transform:translate(0) skewX(0); filter:none}
+    20%{transform:translate(-2px,1px) skewX(-6deg); text-shadow:-3px 0 var(--mag),3px 0 var(--cy)}
+    45%{transform:translate(2px,-1px) skewX(4deg); text-shadow:3px 0 var(--mag),-3px 0 var(--cy)}
+    70%{transform:translate(0,1px); text-shadow:-2px 0 var(--cy),2px 0 var(--mag)}
+  }
+  .hstatus{display:flex; gap:18px; align-items:center; font-size:.78rem; color:var(--slate); flex-wrap:wrap}
+  .led{width:8px;height:8px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint); animation:blink 1.1s steps(1) infinite}
+  @keyframes blink{50%{opacity:.15}}
+  .clock{color:var(--body); font-variant-numeric:tabular-nums}
+
+  main{display:grid; grid-template-columns:1fr minmax(260px,320px); gap:14px; min-height:0}
+  .panel{position:relative; background:var(--panel); border:1px solid rgba(0,240,255,.25); box-shadow:0 0 20px rgba(0,240,255,.08)}
+  .panel::before{content:attr(data-label); position:absolute; top:-9px; left:18px; z-index:2; font-size:.68rem; letter-spacing:.2em;
+    color:var(--mag); background:#06080f; padding:0 8px; text-transform:uppercase}
+  .corners::after{content:""; position:absolute; inset:6px; pointer-events:none; border:1px solid transparent;
+    background:
+      linear-gradient(var(--cy),var(--cy)) top left/12px 12px no-repeat,
+      linear-gradient(var(--cy),var(--cy)) top right/12px 12px no-repeat,
+      linear-gradient(var(--cy),var(--cy)) bottom left/12px 12px no-repeat,
+      linear-gradient(var(--cy),var(--cy)) bottom right/12px 12px no-repeat;
+    filter:drop-shadow(0 0 4px rgba(0,240,255,.6)); opacity:.8}
+  .console{display:flex; flex-direction:column; min-height:0}
+  .log{flex:1; overflow-y:auto; padding:18px 18px 6px; font-size:.83rem; line-height:1.55; scrollbar-width:thin}
+  .log .ts{color:var(--slate)}
+  .log .ok{color:var(--mint)}
+  .log .warn{color:var(--amb)}
+  .log .err{color:#ff5d5d}
+  .log .mag{color:var(--mag)}
+  .log .cy{color:var(--cy)}
+  .banner{color:var(--cy); text-shadow:0 0 10px rgba(0,240,255,.55); white-space:pre; font-size:clamp(.5rem,1.1vw,.78rem); line-height:1.2}
+  .caret{display:inline-block; width:.55em; height:1em; background:var(--cy); vertical-align:-.15em; box-shadow:0 0 8px var(--cy); animation:blink .9s steps(1) infinite}
+  .typing .caret{animation:none}
+  .pbar{display:inline-block; width:180px; height:9px; border:1px solid rgba(0,240,255,.4); vertical-align:middle; margin-left:8px; overflow:hidden}
+  .pbar i{display:block; height:100%; width:0; background:linear-gradient(90deg,var(--cy),var(--mag)); box-shadow:0 0 8px rgba(0,240,255,.8)}
+  .promptrow{display:flex; align-items:center; gap:8px; padding:12px 18px; border-top:1px solid rgba(0,240,255,.15); font-size:.9rem}
+  .promptrow .ps{color:var(--mag); text-shadow:0 0 8px rgba(255,43,214,.6)}
+  .promptrow input{flex:1; background:none; border:0; outline:0; color:var(--body); font:inherit; caret-color:var(--cy)}
+  .promptrow input:disabled{color:var(--slate)}
+
+  /* sidebar */
+  .side{display:flex; flex-direction:column; gap:12px; min-height:0; overflow-y:auto}
+  .subpanel{position:relative; background:var(--panel); border:1px solid rgba(255,43,214,.22); padding:14px}
+  .subpanel::before{content:attr(data-label); position:absolute; top:-8px; left:12px; background:#06080f; padding:0 7px;
+    font-size:.6rem; letter-spacing:.16em; color:var(--mag); text-transform:uppercase}
+  .subpanel canvas{width:100%; height:auto; display:block; background:#05060a}
+  .gauge{display:flex; justify-content:space-between; align-items:center; font-size:.72rem; margin-top:10px}
+  .gauge .gv{color:var(--cy); font-variant-numeric:tabular-nums}
+  .gbar{height:5px; background:rgba(255,43,214,.15); margin-top:4px; overflow:hidden}
+  .gbar i{display:block; height:100%; width:30%; background:var(--mag); transition:width .6s; box-shadow:0 0 8px var(--mag)}
+  .hexdump{font-size:.62rem; line-height:1.45; color:var(--slate); overflow:hidden; position:relative}
+  .hexdump .row{white-space:pre}
+  .hexdump .ad{color:var(--mag)}
+  .hexdump .hb{color:var(--slate)}
+  .hexdump .hh{color:var(--cy); text-shadow:0 0 6px var(--cy)}
+  .hexdump .asc{color:#93a1c9}
+  .hexdump::after{content:""; position:absolute; left:0;right:0;bottom:0;height:26px; background:linear-gradient(transparent,var(--panel))}
+
+  @media (max-width:860px){
+    body{overflow:auto}
+    .shell{height:auto; min-height:100vh}
+    main{grid-template-columns:1fr}
+    .console{height:60vh}
+    .side{order:2}
+  }
+  @media (max-width:480px){
+    header{padding:14px 16px; clip-path:none}
+    .hstatus .hide480{display:none}
+    .pbar{width:120px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .band,.floor::before,.led,.crt .flick{animation:none!important}
+  }
+</style>
+</head>
+<body>
+  <div class="crt"><div class="scan"></div><div class="band"></div><div class="flick"></div><div class="vig"></div></div>
+  <div class="floor" aria-hidden="true"></div>
+
+  <div class="shell">
+    <header>
+      <div class="title" id="glitchEl">KESTREL<span class="sl">//</span>OS <span class="sl">v9.4.1</span> Nightjar</div>
+      <div class="hstatus">
+        <span style="display:inline-flex;align-items:center;gap:7px"><span class="led"></span>online</span>
+        <span>node <span class="cy" id="node">kst-7f3a</span></span>
+        <span class="clock" id="clock">00:00:00</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel console corners" data-label="// console">
+        <div class="log" id="log"></div>
+        <div class="promptrow">
+          <span class="ps">operator@kestrel:~$</span>
+          <input id="cmd" type="text" autocomplete="off" spellcheck="false" disabled placeholder="[ booting… ]">
+        </div>
+      </section>
+
+      <aside class="side">
+        <div class="subpanel" data-label="core assembly">
+          <canvas id="core" width="260" height="180"></canvas>
+          <div class="gauge"><span>Core temp</span><span class="gv" id="gtemp">41.2°C</span></div>
+          <div class="gbar"><i id="gbar1"></i></div>
+          <div class="gauge"><span>Flux</span><span class="gv" id="gflux">0.63</span></div>
+          <div class="gbar"><i id="gbar2"></i></div>
+        </div>
+        <div class="subpanel" data-label="memory · 0x7f3a">
+          <div class="hexdump" id="hexdump"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+<script>
+  const reduced=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  const $=s=>document.querySelector(s);
+  const log=$('#log'), input=$('#cmd');
+  const CH=reduced?0:14; // ms per char (instant if reduced)
+
+  function pad(n,l){return String(n).padStart(l,'0')}
+  function ts(){const d=new Date();return pad(d.getHours(),2)+':'+pad(d.getMinutes(),2)+':'+pad(d.getSeconds(),2)}
+  setInterval(()=>{$('#clock').textContent=ts()},1000);
+
+  function addLine(cls,html){const d=document.createElement('div');d.className=cls;d.innerHTML=html;log.appendChild(d);log.scrollTop=log.scrollHeight;return d}
+  function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+
+  // ---- header glitch ----
+  const gel=$('#glitchEl');
+  function glitch(){ if(reduced)return; gel.classList.add('glitch'); setTimeout(()=>gel.classList.remove('glitch'),420);
+    setTimeout(glitch,2500+Math.random()*6000); }
+  glitch();
+
+  // ---- typewriter ----
+  async function typeLine(text,cls){
+    const row=document.createElement('div'); row.className='typing'; log.appendChild(row);
+    const timeTag='<span class="ts">['+ts()+']</span> ';
+    row.innerHTML=timeTag;
+    const span=document.createElement('span'); row.appendChild(span);
+    const car=document.createElement('span'); car.className='caret'; row.appendChild(car);
+    for(let i=0;i<text.length;i++){
+      span.textContent+=text[i];
+      car.style.display='none'; // typed char + separate blinking? spec: caret at end while typing — emulate trailing block
+      if(!reduced){await sleep(CH+Math.random()*6+(Math.random()<.08?14:0));}
+      row.scrollTop=log.scrollTop=log.scrollHeight;
+    }
+    // allow occasional 2-char burst already handled
+    span.insertAdjacentHTML('afterend','<span></span>');
+    row.classList.remove('typing');
+    car.remove();
+    return row;
+  }
+  async function endLine(row,cls){ addLine('',row.className) }
+
+  function printLine(html,cls=''){ addLine(cls,html); }
+  async function printStatus(tag,text){
+    const row=await typeLine(text);
+    row.insertAdjacentHTML('beforeend',' <span class="'+(tag==='OK'?'ok':'warn')+'">[ '+tag+' ]</span>');
+    if(reduced) await sleep(0); else await sleep(140);
+    return row;
+  }
+  async function printBar(label){
+    if(reduced){ printLine(label+' <span class="ok">[ 100% ]</span>'); return; }
+    const row=document.createElement('div'); row.innerHTML='<span class="ts">['+ts()+']</span> '+label+'<span class="pbar"><i></i></span> <span class="pct">0%</span>';
+    log.appendChild(row);
+    const bar=row.querySelector('.pbar i'), pct=row.querySelector('.pct');
+    for(let p=0;p<=100;p+=2){ bar.style.width=p+'%'; pct.textContent=p+'%'; await sleep(22); log.scrollTop=log.scrollHeight; }
+    row.querySelector('.pct').outerHTML='<span class="ok">[ OK ]</span>';
+    row.classList.remove('typing');
+  }
+
+  const BANNER=[
+    " _  __  _____ ____ _____ _   _ _     ___   ___ ____  ",
+    "| |/ / | ____/ ___| ____| \\ | | |   / _ \\ / _ \\ ___) |",
+    "| ' /  |  _|| |   |  _| |  \\| | |  | | | | | | | |_| |",
+    "| . \\  | |__| |___| |___| |\\  | |__| |_| | |_| |__| |",
+    "|_|\\_\\ |_____\\____|_____|_| \\_|_____\\___/ \\___/|____/ "
+  ].join('\n');
+
+  const bootLines=[
+    ['Hydrating memory lattice',2],['Waking photonic cores …',1],['Mounting /opt/nexus read-only',1],
+    ['Loading operator profile',2],['Calibrating flux coils',1],['Contacting relay 0x2A1F',0]
+  ];
+  // which are OK / WARN
+  const warnIdx=new Set([1,5]);
+
+  let booted=false;
+  async function boot(){
+    // banner printed instantly with cyan glow
+    const b=document.createElement('div'); b.className='banner'; b.textContent=BANNER;
+    b.style.height='0'; b.style.opacity='0'; log.appendChild(b);
+    // animate reveal
+    b.style.height='auto'; b.style.opacity='1'; b.style.transition='height .6s,opacity .6s';
+    log.scrollTop=log.scrollHeight;
+    await sleep(reduced?0:400);
+
+    let i=0;
+    for(const [label,kind] of bootLines){
+      if(kind===2){ await printBar(label); }
+      else {
+        const row=await typeLine(label);
+        row.insertAdjacentHTML('beforeend',' <span class="'+(warnIdx.has(i)?'warn':'ok')+'">[ '+(warnIdx.has(i)?'WARN':'OK')+' ]</span>');
+      }
+      i++;
+    }
+    if(!reduced) await sleep(260);
+    printLine('','');
+    await typeLine('Welcome to KESTREL//OS v9.4.1 Nightjar. Neural link established, operator Nova-7.');
+    printLine('Type <span class="cy">help</span> for a list of commands.<br>','');
+    booted=true;
+    input.disabled=false;
+    input.placeholder='';
+    input.focus();
+  }
+
+  // ---- commands ----
+  const CMDS={
+    help(){
+      printLine('<span class="mag">help</span>     list commands');
+      printLine('<span class="mag">status</span>   subsystem report');
+      printLine('<span class="mag">scan</span>     sweep for nearby signals');
+      printLine('<span class="mag">about</span>    what this page is');
+      printLine('<span class="mag">clear</span>    wipe the console log');
+    },
+    about(){
+      printLine('KESTREL//OS — a single offline HTML file simulating a cyberpunk');
+      printLine('operating system. No network, no libraries, no external fonts.');
+      printLine('Everything you see is CSS, canvas and plain JavaScript.');
+    },
+    status(){
+      printLine('<span class="slate">subsystem            state</span>');
+      const rows=[['photonic core','OK'],['memory lattice','OK'],['flux coils','OK'],['uplink relay','WARN'],['neural link','OK'],['shield mesh','OK']];
+      rows.forEach(r=>printLine('<span style="color:#93a1c9">'+r[0].padEnd(21)+'</span><span class="'+(r[1]==='OK'?'ok':'warn')+'">[ '+r[1]+' ]</span>'));
+      printLine('2 of 17 subsystems degraded · advisory level 2','');
+    },
+    async scan(){
+      input.disabled=true;
+      await printBar('Sweeping 40 MHz – 40 GHz');
+      await sleep(reduced?0:300);
+      const sigs=[['0x9F21C4','Raven uplink',-41.2,'HOSTILE'],['0x3B08AA','Drowned relay',-67.8,'DORMANT'],['0xD4F7E0','Ghost beacon',-88.4,'UNKNOWN']];
+      sigs.forEach(s=>printLine('<span class="cy">'+s[0]+'</span>  <span class="mag">'+s[1]+'</span>  <span style="color:#93a1c9">'+s[2].toFixed(1)+' dBm</span>  <span class="warn">'+s[3]+'</span>'));
+      printLine('Summary: 3 signals · 1 hostile · trace concealed by orbital relay.','');
+      glitchNow();
+      input.disabled=false; input.focus();
+    },
+    clear(){ log.innerHTML=''; }
+  };
+
+  function glitchNow(){ if(reduced)return; gel.classList.add('glitch'); setTimeout(()=>gel.classList.remove('glitch'),420); }
+  function unknown(c){ printLine('<span class="err">error:</span> unknown command <span class="cy">'+c+'</span> — try <span class="mag">help</span>',''); }
+
+  const history=[]; let hi=0;
+  async function run(cmdLine){
+    const c=cmdLine.trim();
+    if(!c) return;
+    const fn=CMDS[c.toLowerCase()];
+    if(!fn){ unknown(c); return; }
+    const r=fn.constructor.name==='AsyncFunction'? await fn() : fn();
+    if(r&&r.then) await r;
+  }
+  input.addEventListener('keydown',async e=>{
+    if(e.key==='Enter'){
+      const v=input.value;
+      addLine('','<span class="ts">['+ts()+']</span> <span class="mag">operator@kestrel:~$</span> '+v);
+      history.push(v); hi=history.length;
+      input.value=''; input.disabled=true;
+      await run(v);
+      input.disabled=false; input.focus();
+    } else if(e.key==='ArrowUp'){ e.preventDefault(); if(hi>0){hi--; input.value=history[hi]||''; } }
+    else if(e.key==='ArrowDown'){ e.preventDefault(); if(hi<history.length){hi++; input.value=history[hi]||'';} }
+  });
+  log.addEventListener('click',()=>{ if(!input.disabled) input.focus(); });
+  document.addEventListener('keydown',e=>{ if(!input.disabled && document.activeElement!==input && e.key.length===1){ input.focus(); } });
+
+  // ---- icosahedron wireframe ----
+  const cv=$('#core'), ctx=cv.getContext('2d');
+  const F=(reduced?1:60)/2*Math.PI; // golden ratio
+  let verts=[[-1,F,0],[1,F,0],[-1,-F,0],[1,-F,0],[0,-1,F],[0,1,F],[0,-1,-F],[0,1,-F],[F,0,-1],[F,0,1],[-F,0,-1],[-F,0,1]];
+  const edges=[];
+  for(let i=0;i<12;i++)for(let j=i+1;j<12;j++){
+    const d=verts[i].map((v,k)=>(v-verts[j][k])).reduce((a,b)=>a+b*b,0);
+    if(Math.abs(d-4*(1+F*F))<1e-6||Math.abs(d-(2+2*F*F))<1e-6) edges.push([i,j]);
+  }
+  let ang=0;
+  function project(v){
+    // rotate Y then X
+    const cy=Math.cos(ang), sy=Math.sin(ang), cx=Math.cos(ang*.35), sx=Math.sin(ang*.35);
+    let x=v[0]*cy+v[2]*sy, z=-v[0]*sy+v[2]*cy, y=v[1];
+    let y2=y*cx-z*sx, z2=y*sx+z*cx;
+    const s=44/(z2+3.2);
+    return [x*s+cv.width/2, -y2*s+cv.height/2, z2];
+  }
+  function drawCore(){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.save(); ctx.translate(cv.width/2,cv.height/2); ctx.restore();
+    const pts=verts.map(project);
+    // outer ring
+    ctx.beginPath(); ctx.arc(cv.width/2,cv.height/2,62,0,7); ctx.strokeStyle='rgba(255,43,214,.5)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cv.width/2,cv.height/2,70,ang,ang+1.6); ctx.strokeStyle='rgba(255,43,214,.8)'; ctx.setLineDash([4,5]); ctx.stroke(); ctx.setLineDash([]);
+    edges.forEach(([a,b])=>{
+      const depth=(pts[a][2]+pts[b][2])/2;
+      const t=Math.max(0,Math.min(1,(depth+3.2)/6.4));
+      ctx.beginPath(); ctx.moveTo(pts[a][0],pts[a][1]); ctx.lineTo(pts[b][0],pts[b][1]);
+      ctx.strokeStyle='rgba('+Math.round(0+230*t)+','+Math.round(240*t)+','+Math.round(255*t)+','+(0.25+0.75*t)+')';
+      ctx.lineWidth=0.6+1.4*t; ctx.stroke();
+    });
+    verts.forEach((v,i)=>{ const p=pts[i]; ctx.fillStyle='rgba(255,43,214,.9)'; ctx.fillRect(p[0]-1.6,p[1]-1.6,3.2,3.2); });
+    ctx.fillStyle='rgba(107,115,144,.8)'; ctx.font='10px ui-monospace,monospace';
+    ctx.fillText((ang*180/Math.PI%360).toFixed(1)+'°',6,cv.height-6);
+    if(!reduced) ang+=0.011;
+  }
+  (function loopCore(){ drawCore(); if(!reduced) requestAnimationFrame(loopCore); })();
+  if(reduced) drawCore();
+
+  // ---- gauges ----
+  let gt=41.2,gf=.63;
+  setInterval(()=>{ gt=38+Math.random()*9; gf=0.4+Math.random()*0.7; $('#gtemp').textContent=gt.toFixed(1)+'°C'; $('#gflux').textContent=gf.toFixed(2);
+    $('#gbar1').style.width=(gt-35)/25*100+'%'; $('#gbar2').style.width=gf*100+'%'; },1400);
+
+  // ---- hex dump ----
+  const hex=$('#hexdump');
+  const ascii=' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~';
+  function hexRow(addr){
+    const bytes=[...Array(8)].map(()=>Math.floor(Math.random()*256));
+    const hx=bytes.map(b=>'<span class="'+(Math.random()<.12?'hh hb':'hb')+'">'+b.toString(16).padStart(2,'0')+'</span>').join(' ');
+    const asc=bytes.map(b=>ascii[(b-32)%95+32]).join('');
+    return '<span class="ad">'+addr.toString(16).padStart(4,'0')+'</span>  '+hx+'   <span class="asc">'+asc+'</span>';
+  }
+  let addrBase=0x7f3a;
+  function fillRows(){
+    hex.innerHTML='';
+    for(let r=0;r<14;r++){ const d=document.createElement('div'); d.className='row'; d.innerHTML=hexRow(addrBase+r); hex.appendChild(d); }
+  }
+  fillRows();
+  setInterval(()=>{
+    addrBase+=1;
+    const d=document.createElement('div'); d.className='row'; d.innerHTML=hexRow(addrBase+13);
+    d.style.opacity='0';
+    hex.appendChild(d);
+    // fade in top row
+    hex.firstChild.style.transition='opacity .2s'; hex.firstChild.style.opacity='1';
+    if(hex.children.length>15) hex.firstChild.remove();
+    // recycle: shift all rows up by removing bottom? simpler keep max rows and fade
+  }, reduced?1500:220);
+
+  boot();
+</script>
+</body>
+</html>

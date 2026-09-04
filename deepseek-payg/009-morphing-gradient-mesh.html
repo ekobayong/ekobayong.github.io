@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Breathe — A Living Gradient / No. 009</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:#1a1030;color:#f7f5ff;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    transition:background 2.2s ease}
+  :root{--mono:ui-monospace,Menlo,Consolas,monospace}
+
+  .mesh{position:fixed;inset:-10%;overflow:hidden;filter:blur(clamp(50px,7vw,120px)) saturate(1.15);pointer-events:none;z-index:0}
+  .blob{position:absolute;mix-blend-mode:screen;will-change:transform;width:56vmax;height:56vmax;transition:transform .2s linear}
+  #grain{position:fixed;top:0;left:0;opacity:.22;mix-blend-mode:overlay;pointer-events:none;z-index:3}
+  .vignette{position:fixed;inset:0;pointer-events:none;z-index:2;
+    background:radial-gradient(120% 100% at 50% 42%,transparent 62%,rgba(2,0,8,.6) 100%)}
+
+  .wordstage{position:fixed;inset:0;z-index:5;pointer-events:none}
+  .word{position:absolute;left:0;right:0;top:42%;text-align:center;opacity:0;filter:blur(10px);
+    font-family:'Iowan Old Style',Palatino,Georgia,serif;font-weight:300;
+    font-size:clamp(3.4rem,15vw,15rem);letter-spacing:-.02em;line-height:.95;white-space:nowrap;color:#fff;
+    text-shadow:0 0 60px rgba(255,255,255,.25),0 0 130px rgba(255,255,255,.10);
+    transform:translateY(8px);transition:opacity 1.6s ease-out,transform 1.6s ease-out,filter 1.6s ease-out}
+  .word.active{opacity:1;transform:translateY(0);filter:blur(0);z-index:2}
+  .caption{position:absolute;left:0;right:0;top:40%;margin:clamp(64px,9vh,110px) auto 0;text-align:center;
+    font-family:var(--mono);letter-spacing:.3em;text-transform:uppercase;font-size:.62rem;
+    color:rgba(255,255,255,.8);opacity:1;transition:opacity .35s;width:100%}
+
+  header{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;justify-content:space-between;align-items:center;gap:18px;
+    padding:22px clamp(18px,3vw,40px);font-family:var(--mono);font-size:.66rem;letter-spacing:.28em;text-transform:uppercase;
+    color:rgba(255,255,255,.78);flex-wrap:wrap}
+  .led{display:inline-block;width:7px;height:7px;border-radius:50%;background:#fff;vertical-align:middle;margin-right:10px;box-shadow:0 0 12px #fff}
+  footer{position:fixed;bottom:0;left:0;right:0;z-index:20;display:flex;justify-content:space-between;align-items:center;gap:18px;
+    padding:18px clamp(18px,3vw,40px);flex-wrap:wrap}
+  .hint{font-family:var(--mono);font-size:.6rem;letter-spacing:.14em;color:rgba(255,255,255,.55)}
+  .ctrl{display:flex;align-items:center;gap:12px}
+  .pills{display:flex;gap:9px}
+  .pill{display:flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.05);
+    color:rgba(255,255,255,.75);cursor:pointer;padding:9px 15px;border-radius:999px;font-family:var(--mono);
+    font-size:.6rem;letter-spacing:.13em;text-transform:uppercase;
+    transition:background .3s,color .3s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+  .pill:hover{background:rgba(255,255,255,.13);color:#fff;transform:translateY(-2px) scale(1.05)}
+  .pill.active{background:rgba(255,255,255,.2);color:#fff;border-color:rgba(255,255,255,.65)}
+  .swdot{width:15px;height:15px;border-radius:50%;flex:none;animation:spinD 9s linear infinite}
+  .playbtn{width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.04);
+    cursor:pointer;display:grid;place-items:center;color:#fff;transition:transform .25s cubic-bezier(.34,1.56,.64,1),background .3s}
+  .playbtn:hover{transform:scale(1.15);background:rgba(255,255,255,.14)}
+  .playbtn svg{width:15px;height:15px;fill:currentColor}
+  @keyframes spinD{to{transform:rotate(360deg)}}
+
+  @media (max-width:600px){
+    header .h600{display:none}
+    footer{justify-content:center}
+    .hint{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .word{transition:none}
+  }
+</style>
+</head>
+<body>
+  <div class="mesh" id="mesh">
+    <div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+    <div class="blob" id="b3"></div><div class="blob" id="b4"></div><div class="blob" id="b5"></div>
+  </div>
+  <canvas id="grain"></canvas>
+  <div class="vignette"></div>
+
+  <div class="wordstage" id="ws"></div>
+
+  <header>
+    <div><span class="led"></span>Breathe</div>
+    <span class="h600">A living gradient · no. 009</span>
+    <span id="pname"></span>
+  </header>
+  <footer>
+    <div class="hint">space · pause&nbsp;&nbsp;&nbsp;1 2 3 · palette</div>
+    <div class="ctrl">
+      <div class="pills" id="pills"></div>
+      <button class="playbtn" id="playbtn" aria-label="Pause"><svg id="picon" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
+    </div>
+  </footer>
+<script>
+  const reduced=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  const $=s=>document.querySelector(s);
+  const blobs=[$('#b1'),$('#b2'),$('#b3'),$('#b4'),$('#b5')];
+
+  const palettes={
+    dawn:{base:'#1a1030',c:['#ff6b57','#7b4dff','#14b8a6','#f5b942'],name:'Dawn'},
+    reef:{base:'#03131f',c:['#00c2c7','#2748ff','#5be7a9','#ff7ab6'],name:'Reef'},
+    ember:{base:'#1c0a0a',c:['#ff4d2e','#9c1a5b','#ff9f1c','#ffd166'],name:'Ember'}
+  };
+  const captions={breathe:'in through the nose, four counts',drift:'let the thought pass like weather',
+    soften:'unclench the jaw, drop the shoulders',become:'you are the room breathing',
+    linger:'stay one second longer',unfold:'open toward the light',return:'home again, unhurried'};
+  const wordList=Object.keys(captions);
+  let palette='dawn';
+
+  // blob geometry + palette via JS-stored JS size
+  const conf=blobs.map((el,i)=>({
+    el, cx:15+Math.random()*70, cy:12+Math.random()*76,
+    Ax:10+Math.random()*13, Tx:23+Math.random()*30, Ty:23+Math.random()*30,
+    Px:Math.random()*6.28, Py:Math.random()*6.28,
+    rotA:(Math.random()-0.5)*16, rotT:1.5+Math.random()*2, scale:0.92+Math.random()*0.2,
+    blur:66+Math.random()*40
+  }));
+
+  // breathing eased waveform sign(sin)·|sin|^0.8 (hesitation at extremes)
+  function breath(u){ const a=Math.sin(u); return a>=0?Math.pow(a,0.8):-Math.pow(-a,0.8); }
+
+  function assignBlobSizes(){
+    blobs.forEach((b,i)=>{
+      const v=44+Math.random()*24;
+      b.style.width=v+'vmax'; b.style.height=v+'vmax';
+    });
+  }
+  function colorize(){
+    const p=palettes[palette];
+    document.body.style.background=p.base;
+    blobs.forEach((b,i)=>{
+      const col=i<p.c.length?p.c[i]:p.c[i%p.c.length];
+      b.style.background='radial-gradient(circle,'+col+' 0%,transparent 68%)';
+    });
+    $('#pname').textContent=p.name;
+  }
+
+  function placeBlobs(t){
+    conf.forEach(c=>{
+      const el=c.el;
+      const wPx=el.offsetWidth, hPx=el.offsetHeight;
+      const sigh=document.documentElement.clientHeight, sigw=document.documentElement.clientWidth;
+      const sx=breath(t/c.Tx*6.283+c.Px)*c.Ax/100*sigw;
+      const sy=breath(t/c.Ty*6.283+c.Py)*c.Ax/100*sigh;
+      const x=c.cx/100*sigw + sx - wPx/2;
+      const y=c.cy/100*sigh + sy - hPx/2;
+      const rot=c.rotA*Math.sin(t/c.rotT+c.Px);
+      const sc=c.scale*(1+0.08*Math.sin(t/80+c.Py));
+      el.style.transform='translate('+x+'px,'+y+'px) rotate('+rot+'deg) scale('+sc+')';
+    });
+  }
+
+  // ---- grain ----
+  const gc=$('#grain'),gctx=gc.getContext('2d');
+  let gframes=[],gW=0,gH=0,gI=0;
+  function buildGrain(){
+    let dpr=Math.min(1.5,devicePixelRatio||1);
+    gW=Math.floor(innerWidth*dpr); gH=Math.floor(innerHeight*dpr);
+    gc.width=gW;gc.height=gH;gc.style.width=innerWidth+'px';gc.style.height=innerHeight+'px';
+    gframes=[];
+    for(let f=0;f<4;f++){
+      const img=gctx.createImageData(gW,gH),d=img.data;
+      for(let i=0;i<d.length;i+=4){const v=110+Math.random()*90;d[i]=d[i+1]=d[i+2]=v;d[i+3]=255;}
+      const c=document.createElement('canvas');c.width=gW;c.height=gH;
+      c.getContext('2d').putImageData(img,0,0); gframes.push(c);
+    }
+    gI=0;
+  }
+  // ---- words ----
+  const ws=$('#ws'), cap=document.createElement('div'); cap.className='caption'; cap.id='cap'; ws.appendChild(cap);
+  const wordEls=[];
+  wordList.forEach(w=>{const d=document.createElement('div');d.className='word';d.textContent=w;ws.appendChild(d);wordEls.push(d);});
+  ws.insertBefore(cap, ws.firstChild); // caption behind words visually irrelevant (both non-overlap due positions)
+
+  let widx=0;
+  function activate(i){
+    wordEls.forEach((e,j)=>e.classList.toggle('active',j===i));
+    cap.style.opacity=0;
+    setTimeout(()=>{cap.textContent=captions[wordList[i]];cap.style.transition='opacity .4s';cap.style.opacity=1;},350);
+  }
+  wordEls.forEach(w=>w.classList.remove('active'));
+  activate(0);
+
+  function cycle(){ widx=(widx+1)%wordList.length; activate(widx); }
+
+  // ---- main loops ----
+  let paused=false;
+  function anim(t){
+    if(!paused) placeBlobs((t/1000));
+    requestAnimationFrame(anim);
+  }
+  // word cycling timer (driver frozen while paused)
+  setInterval(()=>{ if(!paused) cycle(); }, reduced?9000:5200);
+
+  function togglePause(){
+    paused=!paused;
+    $('#picon').innerHTML=paused?'<path d="M8 5v14l11-7z"/>':'<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>';
+  }
+  $('#playbtn').addEventListener('click',togglePause);
+  document.addEventListener('keydown',e=>{
+    if(e.code==='Space'){e.preventDefault();togglePause();}
+    if(e.key==='1')setPalette('dawn');
+    if(e.key==='2')setPalette('reef');
+    if(e.key==='3')setPalette('ember');
+  });
+
+  // pill controls
+  const pills=$('#pills');
+  Object.keys(palettes).forEach(k=>{
+    const p=palettes[k];
+    const b=document.createElement('button'); b.className='pill'; b.dataset.k=k;
+    const dot=document.createElement('span'); dot.className='swdot';
+    dot.style.background='conic-gradient('+p.c[0]+' 0 25%,'+p.c[1]+' 0 50%,'+p.c[2]+' 0 75%,'+p.c[3]+' 0)';
+    b.appendChild(dot); b.appendChild(document.createTextNode(p.name));
+    b.addEventListener('click',()=>setPalette(k));
+    pills.appendChild(b);
+  });
+  function setPalette(k){ palette=k; colorize(); document.querySelectorAll('.pill').forEach(x=>x.classList.toggle('active',x.dataset.k===k)); }
+
+  // resize handling
+  let rt; addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{assignBlobSizes();buildGrain();},200);});
+
+  assignBlobSizes();
+  buildGrain();
+  colorize();
+  document.querySelectorAll('.pill').forEach(x=>x.classList.toggle('active',x.dataset.k==='dawn'));
+
+  if(reduced){ placeBlobs(8); assignBlobSizes(); buildGrain(); if(gframes[0])gctx.drawImage(gframes[0],0,0); }
+  else requestAnimationFrame(anim);
+  // grain interval (respect pausing + reduced)
+  setInterval(()=>{ if(paused===false&&!reduced&&gframes.length){gI++;gctx.drawImage(gframes[gI%gframes.length],0,0);} },50);
+</script>
+</body>
+</html>

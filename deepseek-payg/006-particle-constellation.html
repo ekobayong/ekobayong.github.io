@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Constellation — Field Study No. 006</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:#060b1f;color:#ecefff;overflow:hidden}
+  :root{
+    --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+    --serif:'Iowan Old Style',Palatino,Georgia,serif;
+    --mono:ui-monospace,Menlo,Consolas,monospace;
+    --peri:#a9b4ff; --panel:rgba(6,11,31,.55);
+  }
+  canvas#sky{position:fixed;inset:0;display:block;touch-action:none}
+  .bg{position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(120% 100% at 50% 8%,rgba(120,90,200,.10),transparent 60%),
+      radial-gradient(130% 90% at 50% 110%,rgba(66,79,160,.22),transparent 60%),
+      radial-gradient(160% 130% at 50% 50%,transparent 55%,rgba(3,6,26,.75) 100%)}
+  .ui{position:fixed;inset:0;z-index:2;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;
+    padding:26px clamp(18px,3.5vw,44px) 22px;font-family:var(--sans)}
+  header{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap}
+  .title h1{font-family:var(--serif);font-weight:300;font-size:clamp(2.6rem,8vw,7.5rem);letter-spacing:.18em;line-height:1;
+    text-shadow:0 0 34px rgba(169,180,255,.35)}
+  .title .sub{margin-top:16px;font-family:var(--mono);font-size:.68rem;letter-spacing:.42em;text-transform:uppercase;color:var(--peri)}
+  .stamp{font-family:var(--mono);font-size:.66rem;letter-spacing:.26em;text-transform:uppercase;color:var(--peri);line-height:2.2;
+    text-align:right;font-variant-numeric:tabular-nums}
+  .stamp b{font-weight:500;color:#fff}
+
+  .bottom{display:flex;justify-content:space-between;align-items:flex-end;gap:26px;flex-wrap:wrap}
+  .legend{font-family:var(--mono);font-size:.64rem;letter-spacing:.18em;color:#b5bfe8;line-height:2.1}
+  .legend .row{display:flex;align-items:center;gap:14px}
+  .lg{width:26px;height:14px;position:relative;flex:none}
+  .lg .dot{position:absolute;left:2px;top:50%;transform:translateY(-50%);width:7px;height:7px;border-radius:50%;background:#fff;box-shadow:0 0 8px var(--peri)}
+  .lg .ln{position:absolute;left:2px;right:2px;top:50%;height:1px;background:var(--peri)}
+  .lg .rn{position:absolute;left:1px;right:1px;top:50%;transform:translateY(-50%);aspect-ratio:1;border:1px solid var(--peri);border-radius:50%;opacity:.8}
+
+  .panel{pointer-events:auto;background:var(--panel);border:1px solid rgba(236,239,255,.18);border-radius:14px;
+    padding:18px 20px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);width:min(286px,100%)}
+  .panel .label{font-family:var(--mono);font-size:.6rem;letter-spacing:.24em;text-transform:uppercase;color:var(--peri);margin-bottom:16px}
+  .crow{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.66rem;color:#b5bfe8;letter-spacing:.06em;margin-bottom:2px}
+  input[type=range].cdist{-webkit-appearance:none;appearance:none;width:100%;height:20px;background:transparent;cursor:pointer}
+  input[type=range].cdist::-webkit-slider-runnable-track{height:1px;background:linear-gradient(90deg,var(--peri) var(--fill,46%),rgba(169,180,255,.25) var(--fill,46%))}
+  input[type=range].cdist::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;margin-top:-5.5px;background:#fff;
+    box-shadow:0 0 10px var(--peri),0 0 2px var(--peri);transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+  input[type=range].cdist:hover::-webkit-slider-thumb{transform:scale(1.35)}
+  input[type=range].cdist::-moz-range-track{height:1px;background:var(--peri)}
+  input[type=range].cdist::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#fff;border:0;box-shadow:0 0 10px var(--peri)}
+  .seg{display:grid;grid-template-columns:1fr 1fr;position:relative;margin-top:14px;border:1px solid rgba(236,239,255,.18);border-radius:999px;overflow:hidden}
+  .seg button{border:0;background:transparent;color:#b5bfe8;font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;
+    text-transform:uppercase;padding:10px 0;cursor:pointer;position:relative;z-index:1;transition:color .4s}
+  .seg .slide{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 7px);border-radius:999px;background:var(--peri);transition:transform .45s cubic-bezier(.22,1,.36,1)}
+  .seg.repel .slide{transform:translateX(calc(100% + 10px))}
+  .seg:not(.repel) .on-a,.seg.repel .on-r{color:#070b22}
+
+  .reveal{opacity:0;transform:translateY(14px);filter:blur(6px);transition:opacity .9s ease,transform .9s ease,filter .9s ease;will-change:transform}
+  .shown{opacity:1;transform:none;filter:none}
+  @media (max-width:640px){
+    .ui{padding:20px 16px}
+    header{flex-direction:column}
+    .stamp{text-align:left}
+    .legend{display:none}
+    .bottom{flex-direction:column;align-items:stretch}
+    .panel{width:100%}
+  }
+  @media (prefers-reduced-motion:reduce){ .reveal{opacity:1;transform:none;filter:none;transition:none} }
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+  <canvas id="sky"></canvas>
+  <div class="ui">
+    <header>
+      <div class="title reveal">
+        <h1>Constellation</h1>
+        <div class="sub">Field study no. 006 · a slow gravity</div>
+      </div>
+      <div class="stamp reveal" style="transition-delay:.12s">
+        <div><b id="np">0</b> particles</div>
+        <div><b id="nl">0</b> threads</div>
+        <div><b id="nfps">60</b> fps</div>
+      </div>
+    </header>
+    <div class="bottom">
+      <div class="legend reveal" style="transition-delay:.5s">
+        <div class="row"><span class="lg"><span class="dot"></span></span> particle</div>
+        <div class="row"><span class="lg"><span class="ln"></span></span> thread</div>
+        <div class="row"><span class="lg"><span class="rn"></span></span> ripple</div>
+      </div>
+      <div class="panel reveal" style="transition-delay:.32s">
+        <div class="label">Controls</div>
+        <div class="crow"><span>Connection distance</span><span id="cdv">120</span></div>
+        <input type="range" class="cdist" id="cdist" min="40" max="260" value="120">
+        <div class="seg" id="seg">
+          <div class="slide"></div>
+          <button class="on-a" id="battr" type="button">Attract</button>
+          <button class="on-r" id="brepel" type="button">Repel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+<script>
+  const reduced=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  const $=s=>document.querySelector(s);
+  const cv=$('#sky'),ctx=cv.getContext('2d');
+  let W=0,H=0,dpr=Math.min(2,devicePixelRatio||1);
+  let connDist=120,repel=false,threads=0;
+  let particles=[],ripples=[];
+
+  // reveals
+  document.querySelectorAll('.reveal').forEach(el=>{ if(reduced)el.classList.add('shown'); else setTimeout(()=>el.classList.add('shown'),60) });
+
+  // slider + seg
+  const slider=$('#cdist');
+  function updFill(){slider.style.setProperty('--fill',((slider.value-40)/220*100)+'%')}
+  slider.addEventListener('input',()=>{connDist=+slider.value;$('#cdv').textContent=slider.value;updFill();});
+  updFill();
+  const seg=$('#seg');
+  seg.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    repel = b.id==='brepel'; seg.classList.toggle('repel',repel);
+  }));
+
+  function mx(n,v){return Math.max(n,Math.min(v))}
+  function resize(){
+    W=innerWidth;H=innerHeight;dpr=Math.min(2,devicePixelRatio||1);
+    cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    if(particles.length===0)particles=Array.from({length:count()},()=>mkP());
+  }
+  function count(){return mx(90,Math.min(420,Math.round(W*H/5200)))}
+  function mkP(){return {x:Math.random()*W,y:Math.random()*H,tw:Math.random()*6.28,
+    r:0.7+Math.random()*1.3,tint:Math.random()<.55,vx:0,vy:0,ph1:Math.random()*6.28,ph2:Math.random()*6.28}}
+
+  // per-particle slow "curl"-like drift field via layered sines
+  function driftVel(p,t){
+    const t1=t/1200, t2=t/900;
+    const a=Math.sin(p.ph1+t1+p.y*0.003)*Math.cos(p.ph2+t1*0.7+p.x*0.003);
+    const b=Math.cos(p.ph1*1.3+t2+p.x*0.003)*Math.sin(p.ph2*0.9+t2*0.8+p.y*0.003);
+    // swirl-ish current
+    const ang=a*2.1;
+    return {dx:Math.cos(ang)*(b*0.22+0.06), dy:Math.sin(ang)*(a*0.22+0.06)};
+  }
+
+  const mouse={x:-1e4,y:-1e4}, halo={x:-1e4,y:-1e4};
+  let now=0;
+
+  function updateRipplesAndCursor(t){
+    // cursor gravity applied during integration
+    // ripple wavefront pushes & ring maths done in draw
+  }
+
+  function simulate(t){
+    for(const p of particles){
+      const v=driftVel(p,t);
+      p.vx+= (v.dx - p.vx)*0.02; p.vy+=(v.dy-p.vy)*0.02;
+      // cursor gravity/repel (quadratic falloff within 220)
+      const d=Math.hypot(mouse.x-p.x,mouse.y-p.y);
+      if(d<220&&d>0.5){
+        const f=(repel?-1:1)*Math.pow(1-d/220,2)*3.2;
+        p.vx+=(p.x-mouse.x)/d*f*0.006*(p.x-mouse.x)/d*0; // handled scalar below
+      }
+      p.x+=p.vx*0.4;p.y+=p.vy*0.4;
+      const m=20; if(p.x<-m)p.x=W+m;if(p.x>W+m)p.x=-m;if(p.y<-m)p.y=H+m;if(p.y>H+m)p.y=-m;
+    }
+    // apply ripples after
+    for(const rp of ripples){
+      const age=(t-rp.t0)/1000;
+      if(age>1.6)continue;
+      for(const p of particles){
+        const d=Math.hypot(p.x-rp.x,p.y-rp.y);
+        if(d<rp.wave&&d>0.5){ const dirx=(p.x-rp.x)/d,diry=(p.y-rp.y)/d;
+          p.vx+=dirx*1.9; p.vy+=diry*1.9;}
+      }
+    }
+  }
+
+  function draw(t){
+    ctx.clearRect(0,0,W,H);
+    // spatial hash buckets
+    const cell=connDist, cols=Math.max(1,Math.ceil(W/cell)), rows=Math.max(1,Math.ceil(H/cell));
+    const b=Array.from({length:cols*rows},()=>[]);
+    particles.forEach((p,i)=>b[(Math.floor(p.x/cell))+(Math.floor(p.y/cell))*cols].push(i));
+    threads=0;
+    ctx.lineWidth=.8;
+    for(const [bi,p] of particles.entries()){
+      const bx=Math.floor(p.x/cell),by=Math.floor(p.y/cell);
+      for(let yy=by-1;yy<=by+1;yy++)for(let xx=bx-1;xx<=bx+1;xx++){
+        if(xx<0||yy<0||xx>=cols||yy>=rows)continue;
+        for(const qi of b[yy*cols+xx]){ if(qi<=bi)continue;
+          const q=particles[qi]; const dx=q.x-p.x,dy=q.y-p.y;
+          const d2=dx*dx+dy*dy;
+          if(d2<connDist*connDist&&d2>.5){
+            const o=1-Math.sqrt(d2)/connDist; const a=o*o;
+            ctx.strokeStyle='rgba(169,180,255,'+a.toFixed(3)+')';
+            ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();threads++;
+          }
+        }
+      }
+    }
+    $('#nl').textContent=threads;
+
+    // ripples (ring)
+    for(let i=ripples.length-1;i>=0;i--){
+      const rp=ripples[i]; const age=(t-rp.t0)/1000;
+      if(age>1.6){ripples.splice(i,1);continue;}
+      const k=age/1.6, e=1-Math.pow(1-k,3), rad=rp.r+ (240-rp.r)*e;
+      ctx.beginPath();ctx.arc(rp.x,rp.y,rad,0,7);ctx.strokeStyle='rgba(169,180,255,'+((1-k)*.6).toFixed(3)+')';ctx.lineWidth=1;ctx.stroke();
+      ctx.beginPath();ctx.arc(rp.x,rp.y,rad*0.84,0,7);ctx.strokeStyle='rgba(255,255,255,'+((1-k)*.24).toFixed(3)+')';ctx.lineWidth=1.4;ctx.stroke();
+    }
+
+    // halo
+    if(mouse.x>-1e3){
+      const pm=0.5+0.5*Math.sin(t/260);
+      const gr=ctx.createRadialGradient(mouse.x,mouse.y,0,mouse.x,mouse.y,90);
+      gr.addColorStop(0,'rgba(169,180,255,'+(0.15+0.06*pm)+')');gr.addColorStop(1,'transparent');
+      ctx.fillStyle=gr;ctx.beginPath();ctx.arc(mouse.x,mouse.y,90,0,7);ctx.fill();
+    }
+
+    // particles
+    for(const p of particles){
+      const tw=0.6+0.4*Math.sin(p.tw+t/1050);
+      const col=p.tint?'255,255,255':'169,180,255';
+      const rad=p.r*(1+0.14*Math.sin(p.tw*2+t/800)), hr=rad*6;
+      const gr2=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,hr);
+      gr2.addColorStop(0,'rgba('+col+','+(0.72*tw).toFixed(3)+')');
+      gr2.addColorStop(0.25,'rgba('+col+','+(0.22*tw).toFixed(3)+')');
+      gr2.addColorStop(1,'rgba('+col+',0)');
+      ctx.fillStyle=gr2;ctx.beginPath();ctx.arc(p.x,p.y,hr,0,7);ctx.fill();
+      ctx.fillStyle='rgba('+col+','+tw.toFixed(3)+')';
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill();
+    }
+  }
+
+  cv.addEventListener('pointermove',e=>{ mouse.x=e.clientX;mouse.y=e.clientY;halo.x=e.clientX;halo.y=e.clientY;});
+  cv.addEventListener('pointerleave',()=>{mouse.x=-1e4;mouse.y=-1e4;halo.x=-1e4;halo.y=-1e4});
+  cv.addEventListener('pointerdown',e=>{
+    ripples.push({x:e.clientX,y:e.clientY,t0:performance.now(),r:28,wave:26});
+    for(let i=0;i<4;i++){const p=mkP(),an=Math.random()*6.28,sp=2.4+Math.random()*2;
+      p.x=e.clientX;p.y=e.clientY;p.vx=Math.cos(an)*sp;p.vy=Math.sin(an)*sp;particles.push(p);}
+    while(particles.length>430)particles.shift();
+  });
+  addEventListener('resize',resize);
+
+  const npEl=$('#np'),nfEl=$('#nfps');
+  let frames=0,film=0,last=performance.now();
+
+  function loop(t){
+    now=t;
+    simulate(t);
+    // also apply cursor scalar
+    for(const p of particles){
+      const d=Math.hypot(mouse.x-p.x,mouse.y-p.y);
+      if(d<220&&d>0.5){const f=(repel?-1:1)*Math.pow(1-d/220,2)*1.6;
+        p.vx+=(p.x-mouse.x)/d*f*0.12;p.vy+=(p.y-mouse.y)/d*f*0.12;}
+    }
+    draw(t);
+    frames++; film+= (t-last)/1000;last=t;
+    if(film>=.5){npEl.textContent=particles.length;nfEl.textContent=Math.round(frames/film);frames=0;film=0;}
+    requestAnimationFrame(loop);
+  }
+  resize();
+  if(!reduced)requestAnimationFrame(loop);
+  else { // static single render
+    particles.forEach(p=>{ for(let i=0;i<120;i++){const v=driftVel(p,i*16);p.x+=v.dx*0.4;p.y+=v.dy*0.4;} });
+    draw(0);
+  }
+</script>
+</body>
+</html>
