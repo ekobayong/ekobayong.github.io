@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sakura Drift</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --sky1:#cfe3f5;--sky2:#f3dfe8;--sky3:#fbeee6;
+  --sunx:12vw;--suny:14vh;
+}
+html,body{height:100%;overflow:hidden}
+body{
+  background:linear-gradient(180deg,var(--sky1),var(--sky2) 55%,var(--sky3));
+  color:#2f2b52;font-family:'Iowan Old Style',Palatino,Georgia,serif;cursor:none;
+  transition:background 2s ease;
+}
+@media(pointer:coarse){body{cursor:auto}}
+.sun{position:absolute;left:var(--sunx);top:var(--suny);width:70px;height:70px;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(255,246,220,.95),rgba(255,240,200,0));
+  transition:left 2s ease,top 2s ease,opacity 2s;pointer-events:none}
+.haze{position:absolute;left:0;right:0;bottom:17%;height:42px;background:rgba(255,255,255,.4);filter:blur(8px);pointer-events:none}
+svg#scene{position:absolute;inset:0;width:100%;height:100%}
+canvas#petals{position:fixed;inset:0;display:block;z-index:3;pointer-events:none}
+/* spine label */
+.title{position:fixed;left:22px;bottom:22px;z-index:6;pointer-events:none}
+.title h1{font-size:clamp(22px,3vw,34px);font-weight:400;letter-spacing:.04em}
+.title h1 em{font-style:italic;color:#e2698c}
+.title .sub{font-family:ui-sans-serif,system-ui;font-size:9px;letter-spacing:.34em;text-transform:uppercase;color:rgba(47,43,82,.55);margin-top:4px}
+.kanji{position:fixed;right:20px;bottom:10px;font-size:110px;color:rgba(47,43,82,.10);z-index:5;pointer-events:none;user-select:none}
+.hint{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:8;font-family:ui-sans-serif,system-ui;
+  font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:rgba(47,43,82,.5);opacity:0;transition:opacity 1.4s;pointer-events:none}
+/* haiku */
+.haiku{position:fixed;right:30px;top:26px;z-index:6;font-size:17px;line-height:1.7;letter-spacing:.18em;
+  color:#2f2b52;text-align:right;font-style:italic;pointer-events:none;opacity:0}
+.haiku span{opacity:0;display:inline-block;transition:opacity 1.2s ease,transform 1.2s ease}
+.haiku span.in{opacity:1}
+@media(max-width:640px){.haiku{right:16px;top:16px;font-size:14px}.kanji{display:none}.hint{display:none}}
+</style>
+</head>
+<body>
+<div class="sun"></div>
+<div class="haze"></div>
+<svg id="scene" viewBox="0 0 1000 600" preserveAspectRatio="xMinYMax slice"></svg>
+<canvas id="petals"></canvas>
+
+<div class="haiku" id="haiku"></div>
+<div class="title"><h1>Sakura <em>Drift</em></h1><div class="sub">a quiet japanese afternoon</div></div>
+<div class="kanji">桜</div>
+<div class="hint" id="hint">move to stir the breeze · click for a gust</div>
+
+<script>
+(function(){
+  "use strict";
+  var RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var SVGNS="http://www.w3.org/2000/svg";
+  var scene=document.getElementById("scene");
+  var petalsCv=document.getElementById("petals"),pctx=petalsCv.getContext("2d");
+  var W=0,H=0,DPR=1;
+  var phase=0,t=0;
+  var mouse={x:W/2,y:H/2,vx:0,vy:0,gx:0,gy:0};
+  // ---------- landscape ----------
+  function buildScene(){
+    var svg=scene;
+    svg.innerHTML="";
+    // hills misty
+    var h1=document.createElementNS(SVGNS,"path");
+    h1.setAttribute("d","M0 420 Q 250 320 520 400 T 1000 380 L1000 600 L0 600 Z");
+    h1.setAttribute("fill","#b9b3d1");h1.setAttribute("opacity",".8");
+    h1.setAttribute("filter","url(#blur)");
+    svg.appendChild(h1);
+    var defs=document.createElementNS(SVGNS,"defs");
+    defs.innerHTML='<filter id="blur"><feGaussianBlur stdDeviation="6"/></filter>';
+    svg.appendChild(defs);
+    // pagoda
+    var pag=document.createElementNS(SVGNS,"g");
+    pag.innerHTML='<rect x="690" y="330" width="70" height="14" fill="#8f88b3"/>'+
+      '<path d="M668 330 L725 330 L707 306 L695 306 Z" fill="#8f88b3"/>'+
+      '<rect x="686" y="344" width="58" height="12" fill="#8f88b3"/>'+
+      '<path d="M668 344 L725 344 L710 322 L700 322 Z" fill="#8f88b3"/>'+
+      '<rect x="700" y="356" width="30" height="160" fill="#8f88b3" opacity=".9"/>'+
+      '<rect x="702" y="376" width="8" height="12" fill="#b9b3d1"/>'+
+      '<circle cx="715" cy="300" r="7" fill="#8f88b3"/>';
+    pag.setAttribute("filter","url(#blur)");
+    pag.setAttribute("opacity",".9");
+    svg.appendChild(pag);
+    // trees
+    var trees=[{x:150,y:470},{x:520,y:460}];
+    trees.forEach(function(tr){
+      var g=document.createElementNS(SVGNS,"g");
+      var branches="";
+      // trunk
+      branches+='<path d="M'+tr.x+' '+tr.y+' C '+(tr.x-4)+' '+(tr.y-70)+' '+(tr.x+6)+' '+(tr.y-120)+' '+(tr.x-10)+' '+(tr.y-190)+'" stroke="#2f2b52" stroke-width="14" fill="none" stroke-linecap="round"/>';
+      branches+='<path d="M'+(tr.x-6)+' '+(tr.y-110)+' C '+(tr.x-60)+' '+(tr.y-130)+' '+(tr.x-80)+' '+(tr.y-160)+' '+(tr.x-96)+' '+(tr.y-190)+'" stroke="#2f2b52" stroke-width="10" fill="none" stroke-linecap="round"/>';
+      branches+='<path d="M'+(tr.x+4)+' '+(tr.y-140)+' C '+(tr.x+50)+' '+(tr.y-160)+' '+(tr.x+70)+' '+(tr.y-180)+' '+(tr.x+80)+' '+(tr.y-210)+'" stroke="#2f2b52" stroke-width="10" fill="none" stroke-linecap="round"/>';
+      branches+='<path d="M'+(tr.x)+' '+(tr.y-150)+' C '+(tr.x+20)+' '+(tr.y-210)+' '+(tr.x+10)+' '+(tr.y-240)+' '+(tr.x-6)+' '+(tr.y-260)+'" stroke="#2f2b52" stroke-width="8" fill="none" stroke-linecap="round"/>';
+      g.innerHTML=branches;
+      svg.appendChild(g);
+      // blossoms clusters (back + front)
+      var back=document.createElementNS(SVGNS,"g");
+      back.setAttribute("opacity",".75");
+      for(var c=0;c<140;c++){
+        var bx=tr.x-110+Math.random()*220,by=tr.y-280+Math.random()*140;
+        var r=2.6+Math.random()*3.6;
+        var circ=document.createElementNS(SVGNS,"circle");
+        circ.setAttribute("cx",bx);circ.setAttribute("cy",by);circ.setAttribute("r",r);
+        var grad=document.createElementNS(SVGNS,"radialGradient");
+        var id="p"+Math.floor(Math.random()*1e6);
+        grad.id=id;
+        var c1=Math.random()<0.5?"#fff3f6":"#fbe0e8";
+        var c2=Math.random()<0.5?"#f7c8d4":"#f1b3c4";
+        var c3=Math.random()<0.5?"#e2698c":"#c9527a";
+        grad.innerHTML='<stop offset="0" stop-color="'+c1+'"/><stop offset=".6" stop-color="'+c2+'"/><stop offset="1" stop-color="'+c3+'"/>';
+        svg.querySelector("defs").appendChild(grad);
+        circ.setAttribute("fill","url(#"+id+")");
+        back.appendChild(circ);
+      }
+      svg.appendChild(back);
+      // front crisp clusters
+      var front=document.createElementNS(SVGNS,"g");
+      for(var c2=0;c2<70;c2++){
+        var fx=tr.x-100+Math.random()*200, fy=tr.y-270+Math.random()*130;
+        var r2=2+Math.random()*3;
+        var el2=document.createElementNS(SVGNS,"circle");
+        el2.setAttribute("cx",fx);el2.setAttribute("cy",fy);el2.setAttribute("r",r2);
+        var grad2=document.createElementNS(SVGNS,"radialGradient");
+        var id2="f"+Math.floor(Math.random()*1e6);
+        grad2.id=id2;
+        grad2.innerHTML='<stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#fbd9e2"/><stop offset="1" stop-color="#e98aa6"/>';
+        svg.querySelector("defs").appendChild(grad2);
+        el2.setAttribute("fill","url(#"+id2+")");
+        // petal highlight
+        front.appendChild(el2);
+      }
+      svg.appendChild(front);
+    });
+    // river
+    var river=document.createElementNS(SVGNS,"rect");
+    river.setAttribute("x","0");river.setAttribute("y","500");river.setAttribute("width","1000");river.setAttribute("height","100");
+    river.setAttribute("fill","rgba(110,130,170,.5)");
+    svg.appendChild(river);
+  }
+  // ---------- petals ----------
+  var petals=[];
+  function resize(){
+    DPR=Math.min(2,devicePixelRatio||1);
+    W=innerWidth;H=innerHeight;
+    petalsCv.width=W*DPR;petalsCv.height=H*DPR;
+    pctx.setTransform(DPR,0,0,DPR,0,0);
+    var n=Math.round(120+ (W*H-360*640)/9000);
+    n=Math.max(120,Math.min(170,n));
+    petals=[];
+    for(var i=0;i<n;i++)petals.push(newPetal(true));
+  }
+  window.addEventListener("resize",function(){resize()});
+  function newPetal(any){
+    return{x:Math.random()*W,y:Math.random()*H,z:0.4+Math.random()*1.6,
+      sp:14+Math.random()*26,ph:Math.random()*6,rot:Math.random()*6,
+      flip:Math.random()*6+4,size:4+Math.random()*6,floating:false,phase2:Math.random()*6};
+  }
+  var surge=0;
+  function step(dt){
+    t+=dt;
+    phase=(phase+dt*0.005)%2;
+    // sun arc
+    var sunA=phase*Math.PI; // 0->π over 90s
+    document.documentElement.style.setProperty("--sunx",(12+sunA/Math.PI*30)+"vw");
+    document.documentElement.style.setProperty("--suny",(14+Math.sin(sunA)*10)+"vh");
+    var gold=0.5+0.5*Math.sin(phase*Math.PI*2);
+    // sky interpolate
+    var r1=207+(233-207)*gold,g1=227+(217-227)*gold,b1=245+(168-245)*gold;
+    var r2=243+(246-243)*gold,g2=223+(217-223)*gold,b2=232+(180-232)*gold;
+    var r3=251+(251-251)*gold,g3=238+(229-238)*gold,b3=230+(201-230)*gold;
+    document.documentElement.style.setProperty("--sky1","rgb("+Math.round(r1)+","+Math.round(g1)+","+Math.round(b1)+")");
+    document.documentElement.style.setProperty("--sky2","rgb("+Math.round(r2)+","+Math.round(g2)+","+Math.round(b2)+")");
+    document.documentElement.style.setProperty("--sky3","rgb("+Math.round(r3)+","+Math.round(g3)+","+Math.round(b3)+")");
+    // pointer velocity
+    var mvx=mouse.vx, mvy=mouse.vy;
+    // petals
+    var riverY=H*0.83;
+    for(var i=0;i<petals.length;i++){
+      var p=petals[i];
+      if(p.floating){
+        // bob on river
+        p.phase2+=dt*2;
+        p.x+=dt*18*Math.sqrt(p.z);
+        p.y+=Math.sin(p.phase2)*0.5;
+        p.rot+=dt*0.8;
+        if(p.x>W+20){p.x=-20;p.y=riverY+Math.random()*14}
+        continue;
+      }
+      p.ph+=dt*(2.2*Math.sqrt(p.z));
+      p.y+=p.sp*dt*p.z*(0.5+0.5*Math.sin(p.ph));
+      p.x+=Math.sin(p.ph*0.8+p.phase2)*14*dt*Math.sqrt(p.z);
+      // pointer push
+      var dx=p.x-mouse.x,dy=p.y-mouse.y;
+      var d=Math.hypot(dx,dy);
+      if(d<180&&d>0.01){
+        var f=(1-d/180)*(Math.sqrt(mvx*mvx+mvy*mvy)*0.6+surge*2);
+        p.x+=(dx/d)*f*dt*40*Math.sqrt(p.z);
+        p.y+=(dy/d)*f*dt*40*Math.sqrt(p.z)-8*dt*Math.sqrt(p.z);
+      }
+      if(p.y>riverY){
+        p.floating=true;
+        p.y=riverY+Math.random()*6;
+      }
+    }
+    surge*=Math.pow(0.001,dt);
+  }
+  function gust(x){
+    // blow away from clicked side
+    var dir=x<W/2?1:-1;
+    surge=4;
+    for(var i=0;i<36;i++){
+      petals.push({x:x+(Math.random()*40-20),y:H*0.2+Math.random()*H*0.5,z:0.6+Math.random()*1.4,
+        sp:30+Math.random()*30,ph:Math.random()*6,rot:Math.random()*6,flip:Math.random()*6+4,
+        size:4+Math.random()*6,floating:false,phase2:Math.random()*6,
+        gx:dir*(40+Math.random()*60),gy:-20-Math.random()*40});
+    }
+  }
+  function draw(){
+    pctx.clearRect(0,0,W,H);
+    // river
+    var ry=H*0.83;
+    var g=pctx.createLinearGradient(0,ry,0,H);
+    var gold=0.5+0.5*Math.sin(phase*Math.PI*2);
+    g.addColorStop(0,gold>0.6?"rgb(200,175,190)":"rgb(170,185,205)");
+    g.addColorStop(1,"#5e628c");
+    pctx.fillStyle=g;
+    pctx.fillRect(0,ry,W,H-ry);
+    // blossom reflection glow under large tree
+    var glow=pctx.createRadialGradient(W*0.15,ry+14,0,W*0.15,ry+14,90);
+    glow.addColorStop(0,"rgba(242,150,170,.25)");
+    glow.addColorStop(1,"rgba(242,150,170,0)");
+    pctx.fillStyle=glow;
+    pctx.fillRect(W*0.15-100,ry-10,200,60);
+    // ripple lines
+    pctx.strokeStyle="rgba(255,255,255,.25)";
+    for(var i=0;i<9;i++){
+      var y=ry+8+i*(H-ry)/9;
+      var wd=40+Math.sin(i*2+t*2)*20;
+      pctx.lineWidth=1;
+      pctx.beginPath();
+      pctx.moveTo((Math.sin(i*3+t)*20+W*0.1)%W,y);
+      pctx.lineTo(((Math.sin(i*3+t)*20+W*0.1)%W)+wd,y);
+      pctx.stroke();
+    }
+    // sun glints
+    var sunX=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sunx"));
+    pctx.fillStyle="rgba(255,250,220,.5)";
+    for(var s=0;s<8;s++){
+      pctx.fillRect((sunX/100*W+Math.sin(s*3)*70)%W, ry+8+Math.random()*(H-ry-16), 14+Math.random()*24, 1.2);
+    }
+    // petals
+    for(var i2=0;i2<petals.length;i2++){
+      var p=petals[i2];
+      var flipScale=(Math.cos(p.flip*t+p.ph)*0.5+0.5);
+      var alpha=0.55+0.45*p.z/1.6;
+      pctx.save();
+      pctx.translate(p.x,p.y);
+      pctx.rotate(p.rot+Math.sin(p.ph)*0.4);
+      pctx.scale(0.35+0.85*flipScale*0.5+0.5*p.z*0.5,1.1);
+      var grad=pctx.createLinearGradient(-p.size/2,0,p.size/2,0);
+      grad.addColorStop(0,"#fbe0e8");grad.addColorStop(1,"#f0a3b9");
+      pctx.fillStyle=grad;
+      pctx.globalAlpha=alpha*(0.35+0.65*p.z);
+      pctx.beginPath();
+      pctx.moveTo(0,-p.size*0.4);
+      pctx.bezierCurveTo(p.size*0.55,-p.size*0.3,p.size*0.55,p.size*0.3,0,p.size*0.55);
+      pctx.bezierCurveTo(-p.size*0.55,p.size*0.3,-p.size*0.55,-p.size*0.3,0,-p.size*0.4);
+      pctx.fill();
+      pctx.restore();
+      pctx.globalAlpha=1;
+    }
+  }
+  // interactions
+  var pvx=0,pvy=0,lastPX=0,lastPY=0;
+  petalsCv.addEventListener("pointermove",function(e){
+    var r=petalsCv.getBoundingClientRect();
+    mouse.vx=e.clientX-lastPX;mouse.vy=e.clientY-lastPY;
+    lastPX=e.clientX;lastPY=e.clientY;
+    mouse.x=e.clientX-r.left;mouse.y=e.clientY-r.top;
+    var h=document.getElementById("hint");
+    if(h.style.opacity!=="1"){h.style.opacity=1}
+  });
+  petalsCv.addEventListener("pointerdown",function(e){
+    var r=petalsCv.getBoundingClientRect();
+    var x=e.clientX-r.left;
+    gust(x);
+    document.getElementById("hint").style.opacity=0;
+  });
+  // haiku
+  var haikuText=["petals","let","go","first","/","the","branch","remembers","nothing","/","the","river","keeps","all"];
+  var haikuEl=document.getElementById("haiku");
+  setTimeout(function(){
+    haikuEl.style.opacity=1;
+    haikuText.forEach(function(ch,i){
+      var s=document.createElement("span");
+      s.textContent=ch+(ch==="/"?"<br>":" ");
+      s.style.transitionDelay=(i*0.35)+"s";
+      haikuEl.appendChild(s);
+      if(RM)s.classList.add("in");
+      else setTimeout(function(){s.classList.add("in")},300+i*320);
+    });
+  },RM?0:700);
+  // loop
+  var last=performance.now();
+  function loop(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    step(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  buildScene();
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
