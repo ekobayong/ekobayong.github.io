@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planetarium — A Chart of the Visible Heavens</title>
+<style>
+  :root{
+    --brass:#efd9a1; --brass-dim:#c9a25e; --umber:#2b1c06;
+    --parch:#f3e6c8; --midnight:#070b1c;
+    --serif:'Iowan Old Style', Palatino, 'Book Antiqua', Georgia, serif;
+    --mono:ui-monospace, 'Courier New', Courier, monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{min-height:100%;}
+  body{
+    font-family:var(--serif);
+    color:var(--parch);
+    background-color:var(--midnight);
+    background-image:
+      radial-gradient(700px 520px at 18% 12%, rgba(22,32,74,.55), rgba(22,32,74,0) 70%),
+      radial-gradient(820px 640px at 84% 78%, rgba(18,26,58,.6), rgba(18,26,58,0) 72%),
+      radial-gradient(520px 420px at 72% 6%, rgba(22,32,74,.35), rgba(22,32,74,0) 70%);
+    background-attachment:fixed;
+    padding:26px clamp(14px,3vw,40px) 60px;
+  }
+  header{ text-align:center; margin-bottom:22px; }
+  h1{
+    font-size:clamp(24px,4vw,40px);
+    font-weight:400;
+    letter-spacing:.34em;
+    text-transform:uppercase;
+    color:var(--brass);
+    text-shadow:0 0 18px rgba(239,217,161,.45), 0 0 44px rgba(239,217,161,.18);
+    line-height:1.25;
+  }
+  h1 .sub{
+    display:block;
+    font-size:clamp(11px,1.4vw,15px);
+    letter-spacing:.46em;
+    color:#cbb277;
+    margin-top:6px;
+    text-shadow:0 0 12px rgba(239,217,161,.25);
+  }
+  .rule{
+    display:flex; align-items:center; justify-content:center; gap:14px;
+    margin:14px auto 0; max-width:520px; color:var(--brass-dim);
+  }
+  .rule::before,.rule::after{
+    content:""; flex:1; height:1px;
+    background:linear-gradient(90deg, rgba(239,217,161,0), rgba(239,217,161,.7), rgba(239,217,161,0));
+  }
+  .rule .orn{ font-size:13px; letter-spacing:.4em; text-shadow:0 0 8px rgba(239,217,161,.6); }
+  .layout{
+    display:grid; grid-template-columns:minmax(0,1fr) 322px;
+    gap:26px; max-width:1380px; margin:0 auto; align-items:start;
+  }
+  @media (max-width:900px){ .layout{ grid-template-columns:1fr; } }
+  .chart-wrap{ position:relative; width:100%; max-width:860px; margin:0 auto; }
+  .chart-wrap::before{ content:""; display:block; padding-top:100%; }
+  canvas#chart{ position:absolute; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
+  #tooltip{
+    position:absolute; pointer-events:none; z-index:5;
+    background:linear-gradient(180deg,#f6ead0,#e8d5ac);
+    color:#3a2a10; border:1px solid #8a6a30; border-radius:6px;
+    box-shadow:0 6px 18px rgba(0,0,0,.55);
+    padding:8px 11px; font-size:12.5px; line-height:1.45;
+    transform:translate(-50%, calc(-100% - 14px));
+    white-space:nowrap; display:none;
+  }
+  #tooltip::after{
+    content:""; position:absolute; left:50%; bottom:-7px; margin-left:-7px;
+    border:7px solid transparent; border-bottom:0; border-top-color:#e2cda0;
+    filter:drop-shadow(0 1px 0 #8a6a30);
+  }
+  #tooltip .tname{ font-weight:700; font-size:14px; letter-spacing:.04em; }
+  #tooltip .tcon{ font-style:italic; color:#6a4e20; }
+  #tooltip .tnum{ font-family:var(--mono); font-size:11.5px; }
+  aside{
+    background:rgba(11,16,38,.66);
+    -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+    border:1px solid rgba(201,162,94,.5);
+    box-shadow:0 0 0 1px rgba(9,12,28,.8), 0 18px 44px rgba(0,0,0,.5), inset 0 0 60px rgba(22,32,74,.35);
+    border-radius:12px; padding:20px 20px 24px;
+  }
+  aside h2{
+    font-size:12px; font-weight:400; text-transform:uppercase; letter-spacing:.3em;
+    color:var(--brass); text-shadow:0 0 10px rgba(239,217,161,.3);
+    margin-bottom:16px; padding-bottom:8px;
+    border-bottom:1px solid rgba(201,162,94,.35);
+  }
+  .ctl{ margin-bottom:15px; }
+  .ctl .lab{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px; }
+  .ctl .lab span:first-child{ font-size:12.5px; letter-spacing:.12em; text-transform:uppercase; color:#cdb888; }
+  .ctl .val{ font-family:var(--mono); font-size:12px; color:var(--brass); }
+  input[type=range]{ width:100%; accent-color:#c9a25e; height:22px; cursor:pointer; }
+  input[type=date]{
+    width:100%; background:rgba(7,11,28,.8); color:var(--parch);
+    border:1px solid rgba(201,162,94,.55); border-radius:6px;
+    font-family:var(--mono); font-size:13px; padding:6px 8px;
+    color-scheme:dark;
+  }
+  .toggles{ display:grid; grid-template-columns:1fr 1fr; gap:9px 14px; margin:18px 0 16px;
+    padding:14px 0; border-top:1px solid rgba(201,162,94,.28); border-bottom:1px solid rgba(201,162,94,.28); }
+  .sw{ display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none; }
+  .sw input{ position:absolute; opacity:0; width:0; height:0; }
+  .sw .track{
+    width:34px; height:18px; flex:0 0 34px; border-radius:10px;
+    background:#1a2247; border:1px solid #6b4d22; position:relative; transition:background .18s;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.6);
+  }
+  .sw .track::after{
+    content:""; position:absolute; top:1px; left:1px; width:14px; height:14px; border-radius:50%;
+    background:linear-gradient(160deg,#e6cf96,#9a7436); box-shadow:0 1px 2px rgba(0,0,0,.6);
+    transition:transform .18s;
+  }
+  .sw input:checked + .track{ background:#4d3a14; }
+  .sw input:checked + .track::after{ transform:translateX(16px); }
+  .sw .cap{ font-size:12px; letter-spacing:.08em; color:#d8c493; }
+  .btns{ display:flex; gap:10px; }
+  button.brass{
+    flex:1; font-family:var(--serif); font-size:12.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:#241703; cursor:pointer; border:1px solid #5a3f1a; border-radius:7px; padding:9px 6px;
+    background:linear-gradient(180deg,#efd9a1,#c9a25e 55%,#a67c3a);
+    box-shadow:inset 0 1px 0 rgba(255,245,210,.7), inset 0 -2px 3px rgba(74,46,10,.45), 0 3px 8px rgba(0,0,0,.45);
+  }
+  button.brass:hover{ filter:brightness(1.07); }
+  button.brass:active{ transform:translateY(1px); }
+  button.brass.paused{ background:linear-gradient(180deg,#8b6c33,#6b4d22); color:#f0dfb0; }
+  .readout{ margin-top:18px; font-family:var(--mono); font-size:12px; line-height:1.9; color:#cbb888; }
+  .readout b{ color:var(--brass); font-weight:400; letter-spacing:.06em; }
+  .readout .k{ display:inline-block; width:88px; color:#8f7c4e; font-family:var(--serif);
+    font-size:11px; text-transform:uppercase; letter-spacing:.14em; }
+  #starcard{
+    margin-top:16px; border:1px solid rgba(201,162,94,.4); border-radius:9px; padding:12px 14px;
+    background:rgba(20,28,60,.45); min-height:118px;
+  }
+  #starcard .sc-name{ font-size:17px; color:var(--brass); letter-spacing:.06em; }
+  #starcard .sc-con{ font-style:italic; font-size:12.5px; color:#b09a68; margin-bottom:7px; }
+  #starcard .sc-row{ font-family:var(--mono); font-size:11.5px; color:#cfc0a0; line-height:1.75; }
+  #starcard .empty{ font-style:italic; color:#7d6c48; font-size:13px; }
+  footer{ text-align:center; margin-top:34px; font-size:11.5px; letter-spacing:.28em;
+    text-transform:uppercase; color:#6f5f3c; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Planetarium<span class="sub">A Chart of the Visible Heavens</span></h1>
+  <div class="rule"><span class="orn">✦</span></div>
+</header>
+
+<div class="layout">
+  <div class="chart-wrap" id="chartWrap">
+    <canvas id="chart"></canvas>
+    <div id="tooltip"></div>
+  </div>
+
+  <aside>
+    <h2>Instrument Panel</h2>
+
+    <div class="ctl">
+      <div class="lab"><span>Local Hour</span><span class="val" id="hourVal">22:00</span></div>
+      <input type="range" id="hour" min="0" max="1439" step="1" value="1320" aria-label="Local hour">
+    </div>
+
+    <div class="ctl">
+      <div class="lab"><span>Date</span></div>
+      <input type="date" id="date" aria-label="Date">
+    </div>
+
+    <div class="ctl">
+      <div class="lab"><span>Latitude</span><span class="val" id="latVal">+45.0°</span></div>
+      <input type="range" id="lat" min="-70" max="70" step="0.5" value="45" aria-label="Latitude">
+    </div>
+
+    <div class="ctl">
+      <div class="lab"><span>Sidereal Drift</span><span class="val" id="driftVal">120×</span></div>
+      <input type="range" id="drift" min="0" max="600" step="1" value="120" aria-label="Sidereal drift speed">
+    </div>
+
+    <div class="toggles">
+      <label class="sw"><input type="checkbox" id="tLines" checked><span class="track"></span><span class="cap">Lines</span></label>
+      <label class="sw"><input type="checkbox" id="tFigures" checked><span class="track"></span><span class="cap">Figures</span></label>
+      <label class="sw"><input type="checkbox" id="tLabels" checked><span class="track"></span><span class="cap">Labels</span></label>
+      <label class="sw"><input type="checkbox" id="tMW" checked><span class="track"></span><span class="cap">Milky Way</span></label>
+      <label class="sw"><input type="checkbox" id="tEcl" checked><span class="track"></span><span class="cap">Ecliptic</span></label>
+      <label class="sw"><input type="checkbox" id="tGrid"><span class="track"></span><span class="cap">Alt/Az grid</span></label>
+    </div>
+
+    <div class="btns">
+      <button class="brass" id="btnNow">Set to now</button>
+      <button class="brass" id="btnPause">Pause</button>
+    </div>
+
+    <div class="readout">
+      <div><span class="k">Sidereal</span><b id="lstVal">—</b></div>
+      <div><span class="k">Julian Day</span><b id="jdVal">—</b></div>
+      <div><span class="k">Date</span><b id="dateVal">—</b></div>
+    </div>
+
+    <div id="starcard"><div class="empty">Hover a charted star to raise its card.</div></div>
+  </aside>
+</div>
+
+<footer>Engraved after the antique atlases · Longitude 8.35° E · stereographic projection from the zenith</footer>
+
+<script>
+'use strict';
+/* ============================================================
+   PLANETARIUM — stereographic sky chart
+   Catalogue: name, RA (hours), Dec (degrees), magnitude,
+   distance (light-years), constellation, tint (optional).
+   ============================================================ */
+const DEG = Math.PI/180, RAD = 180/Math.PI, TAU = Math.PI*2;
+const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
+
+const TINTS = { orange:'#ff9d5c', red:'#ff7a52', amber:'#ffd28a', blue:'#bcd8ff' };
+
+const CAT = [
+/* — Orion — */
+["Betelgeuse",5.9195,7.4071,0.50,548,"Orion","orange"],
+["Rigel",5.2423,-8.2016,0.13,863,"Orion","blue"],
+["Bellatrix",5.4189,6.3497,1.64,252,"Orion","blue"],
+["Mintaka",5.5334,-0.2991,2.23,1200,"Orion"],
+["Alnilam",5.6036,-1.2019,1.69,2000,"Orion","blue"],
+["Alnitak",5.6794,-1.9426,1.77,1260,"Orion"],
+["Saiph",5.7959,-9.6697,2.09,650,"Orion"],
+["Meissa",5.2443,9.9342,3.39,1100,"Orion","blue"],
+/* — Canis Major / Minor — */
+["Sirius",6.7525,-16.7161,-1.46,8.6,"Canis Major"],
+["Mirzam",6.3783,-17.9556,1.98,499,"Canis Major","blue"],
+["Adhara",6.9771,-28.9720,1.50,430,"Canis Major","blue"],
+["Wezen",7.1399,-26.3932,1.84,1600,"Canis Major","amber"],
+["Aludra",7.4015,-29.3031,2.92,1100,"Canis Major","blue"],
+["Procyon",7.6550,5.2250,0.34,11.4,"Canis Minor"],
+/* — Taurus — */
+["Aldebaran",4.5987,16.5093,0.85,65,"Taurus","amber"],
+["Elnath",5.4382,28.6074,1.65,134,"Taurus","blue"],
+["Alcyone",3.7914,24.1052,2.87,440,"Taurus","blue"],
+["Atlas",3.8212,24.0547,3.63,420,"Taurus","amber"],
+["Hyadum I",4.3302,15.6285,3.65,153,"Taurus","amber"],
+["Hyadum II",4.3517,17.5424,3.77,153,"Taurus","amber"],
+["Ain",4.4771,19.1805,3.53,155,"Taurus","amber"],
+["Zeta Tauri",5.3955,21.1427,2.97,440,"Taurus","blue"],
+/* — Gemini — */
+["Pollux",7.7553,28.0262,1.14,34,"Gemini","amber"],
+["Castor",7.5776,31.8883,1.62,51,"Gemini"],
+["Alhena",6.6285,16.3993,1.93,109,"Gemini","blue"],
+["Tejat",6.3828,22.5137,2.87,250,"Gemini","red"],
+["Mebsuta",6.7324,25.1311,2.98,840,"Gemini","amber"],
+["Propus",6.2520,22.5067,3.31,390,"Gemini","red"],
+["Wasat",7.3353,21.9827,2.98,60,"Gemini"],
+/* — Ursa Major / Minor — */
+["Dubhe",11.0621,61.7510,1.79,123,"Ursa Major","amber"],
+["Merak",11.0307,56.3824,2.37,79,"Ursa Major"],
+["Phecda",11.8972,53.6948,2.44,83,"Ursa Major"],
+["Megrez",12.2571,57.0326,3.31,81,"Ursa Major"],
+["Alioth",12.9005,55.9598,1.77,81,"Ursa Major"],
+["Mizar",13.3988,54.9254,2.23,83,"Ursa Major"],
+["Alkaid",13.7923,49.3133,1.86,101,"Ursa Major","blue"],
+["Muscida",4.9500,33.1700,2.99,185,"Ursa Major","amber"],
+["Polaris",2.5303,89.2641,1.98,433,"Ursa Minor"],
+["Kochab",14.8458,74.1555,2.07,131,"Ursa Minor","amber"],
+["Pherkad",15.3453,71.8340,3.05,480,"Ursa Minor"],
+/* — Cassiopeia — */
+["Schedar",0.6750,56.5373,2.24,228,"Cassiopeia","amber"],
+["Caph",0.1530,59.1500,2.27,54,"Cassiopeia"],
+["Gamma Cas",0.9451,60.7167,2.47,550,"Cassiopeia","blue"],
+["Ruchbah",1.4300,60.2353,2.68,99,"Cassiopeia"],
+["Segin",1.9070,63.6700,3.38,410,"Cassiopeia","blue"],
+/* — Cygnus — */
+["Deneb",20.6905,45.2803,1.25,2615,"Cygnus"],
+["Sadr",20.3705,40.2567,2.23,1500,"Cygnus"],
+["Gienah Cygni",20.7700,33.9703,2.48,72,"Cygnus","amber"],
+["Fawaris",19.7495,45.1307,2.86,165,"Cygnus","blue"],
+["Albireo",19.5120,27.9594,3.05,430,"Cygnus","amber"],
+/* — Lyra — */
+["Vega",18.6156,38.7837,0.03,25,"Lyra","blue"],
+["Sheliak",18.8347,33.3627,3.52,960,"Lyra","blue"],
+["Sulafat",18.9824,32.6896,3.25,620,"Lyra","blue"],
+["Delta Lyrae",18.9070,36.8987,4.30,740,"Lyra"],
+["Zeta Lyrae",18.7470,37.6050,4.36,150,"Lyra"],
+/* — Scorpius — */
+["Antares",16.4901,-26.4320,1.09,550,"Scorpius","orange"],
+["Fang",16.0906,-19.8055,2.62,400,"Scorpius","blue"],
+["Dschubba",16.0056,-22.6217,2.29,490,"Scorpius","blue"],
+["Paikauhale",15.9812,-26.1141,2.92,590,"Scorpius","blue"],
+["Alniyat",16.3534,-25.5928,2.88,700,"Scorpius","red"],
+["Tau Sco",16.6070,-28.2161,2.82,470,"Scorpius","blue"],
+["Larawag",16.8361,-34.2930,2.31,65,"Scorpius","amber"],
+["Iota Sco",17.2610,-37.3050,2.99,1870,"Scorpius","blue"],
+["Girtab",17.7080,-39.0290,2.39,480,"Scorpius","blue"],
+["Shaula",17.5601,-37.1040,1.62,570,"Scorpius","blue"],
+["Lesath",17.6274,-37.4051,2.70,580,"Scorpius","blue"],
+["Sargas",17.6250,-42.9980,1.86,270,"Scorpius","amber"],
+/* — Leo — */
+["Regulus",10.1395,11.9672,1.35,79,"Leo","blue"],
+["Algieba",10.3329,19.8415,2.61,130,"Leo","amber"],
+["Zosma",11.2351,20.5237,2.56,58,"Leo"],
+["Denebola",11.8180,14.5724,2.14,36,"Leo"],
+["Chertan",11.2373,15.4297,3.32,165,"Leo"],
+["Adhafera",10.2770,23.4161,3.44,260,"Leo"],
+["Eta Leonis",10.1223,16.7631,3.51,1300,"Leo","blue"],
+["Rasalas",9.8801,26.0075,3.88,127,"Leo","amber"],
+["Ras Elased",9.7640,23.7746,2.98,250,"Leo","amber"],
+/* — further bright stars, no figures — */
+["Canopus",6.3948,-52.6957,-0.74,310,"Carina"],
+["Miaplacidus",9.2200,-69.7172,1.67,111,"Carina","blue"],
+["Avior",8.5523,-59.2367,1.86,630,"Carina","orange"],
+["Naos",8.0555,-40.0030,2.21,1080,"Puppis","blue"],
+["Arcturus",14.2610,19.1824,-0.05,36.7,"Boötes","amber"],
+["Izar",14.7498,27.0736,2.37,230,"Boötes","orange"],
+["Spica",13.4199,-11.1613,0.97,250,"Virgo","blue"],
+["Acrux",12.4433,-63.0990,0.76,320,"Crux","blue"],
+["Mimosa",12.7953,-59.6890,1.25,280,"Crux","blue"],
+["Gacrux",12.5194,-57.1130,1.64,88,"Crux","red"],
+["Hadar",14.0637,-60.3731,0.61,390,"Centaurus","blue"],
+["Rigil Kentaurus",14.6600,-60.8340,-0.27,4.4,"Centaurus","amber"],
+["Achernar",1.6286,-57.2367,0.46,144,"Eridanus","blue"],
+["Capella",5.2783,45.9980,0.08,42.9,"Auriga"],
+["Menkalinan",5.9923,44.9475,1.90,98,"Auriga"],
+["Hassaleh",4.9501,33.1661,2.69,490,"Auriga","amber"],
+["Altair",19.8464,8.8683,0.77,16.7,"Aquila","blue"],
+["Tarazed",19.7709,10.6133,2.72,462,"Aquila","orange"],
+["Fomalhaut",22.9608,-29.6222,1.16,25,"Piscis Austrinus","blue"],
+["Alphecca",15.5780,26.7147,2.22,75,"Corona Borealis","blue"],
+["Rasalhague",17.5822,12.5601,2.08,49,"Ophiuchus"],
+["Mirfak",3.4054,49.8612,1.80,510,"Perseus","amber"],
+["Algol",3.1361,40.9561,2.12,90,"Perseus"],
+["Alpheratz",0.1400,29.0910,2.06,97,"Andromeda"],
+["Mirach",1.1623,35.6206,2.05,200,"Andromeda","amber"],
+["Almach",2.0649,42.3303,2.26,350,"Andromeda","amber"],
+["Hamal",2.1195,23.4624,2.00,78,"Aries","amber"],
+["Markab",23.0794,15.2053,2.48,133,"Pegasus","blue"],
+["Scheat",23.0629,28.0828,2.42,196,"Pegasus","orange"],
+["Algenib",0.8060,15.1840,2.83,390,"Pegasus","blue"],
+["Enif",21.7364,9.8750,2.40,690,"Pegasus","amber"],
+["Kaus Australis",18.4029,-34.3846,1.85,143,"Sagittarius"],
+["Nunki",18.9211,-26.2967,2.05,228,"Sagittarius","blue"],
+["Deneb Algedi",20.7370,-16.1530,2.87,39,"Capricornus"],
+["Sadalsuud",21.7755,12.1733,2.91,640,"Aquarius"],
+["Deneb Kaitos",0.7265,-17.9866,2.04,96,"Cetus","amber"],
+["Eltanin",17.9431,51.4890,2.23,155,"Draco","amber"]
+];
+
+/* Stick figures: pairs of catalogue names (all names verified present). */
+const CONSTELLATIONS = {
+  "Orion":[["Betelgeuse","Meissa"],["Meissa","Bellatrix"],["Bellatrix","Mintaka"],
+    ["Mintaka","Alnilam"],["Alnilam","Alnitak"],["Alnitak","Betelgeuse"],
+    ["Alnitak","Saiph"],["Mintaka","Rigel"]],
+  "Canis Major":[["Sirius","Mirzam"],["Sirius","Wezen"],["Wezen","Adhara"],["Adhara","Aludra"]],
+  "Taurus":[["Aldebaran","Hyadum I"],["Hyadum I","Hyadum II"],["Hyadum II","Ain"],
+    ["Ain","Elnath"],["Aldebaran","Zeta Tauri"],["Alcyone","Atlas"]],
+  "Gemini":[["Castor","Pollux"],["Pollux","Wasat"],["Wasat","Alhena"],
+    ["Castor","Mebsuta"],["Mebsuta","Tejat"],["Tejat","Propus"]],
+  "Ursa Major":[["Dubhe","Merak"],["Merak","Phecda"],["Phecda","Megrez"],
+    ["Megrez","Dubhe"],["Megrez","Alioth"],["Alioth","Mizar"],["Mizar","Alkaid"]],
+  "Cassiopeia":[["Caph","Schedar"],["Schedar","Gamma Cas"],["Gamma Cas","Ruchbah"],
+    ["Ruchbah","Segin"]],
+  "Cygnus":[["Deneb","Sadr"],["Sadr","Albireo"],["Sadr","Gienah Cygni"],["Sadr","Fawaris"]],
+  "Lyra":[["Vega","Zeta Lyrae"],["Zeta Lyrae","Sheliak"],["Sheliak","Sulafat"],
+    ["Sulafat","Delta Lyrae"],["Delta Lyrae","Zeta Lyrae"]],
+  "Scorpius":[["Fang","Dschubba"],["Dschubba","Paikauhale"],["Paikauhale","Alniyat"],
+    ["Alniyat","Antares"],["Antares","Tau Sco"],["Tau Sco","Larawag"],["Larawag","Iota Sco"],
+    ["Iota Sco","Girtab"],["Girtab","Shaula"],["Shaula","Lesath"],["Lesath","Sargas"]],
+  "Leo":[["Regulus","Eta Leonis"],["Eta Leonis","Algieba"],["Algieba","Adhafera"],
+    ["Adhafera","Rasalas"],["Rasalas","Ras Elased"],["Algieba","Zosma"],["Zosma","Denebola"],
+    ["Denebola","Chertan"],["Chertan","Regulus"]]
+};
+
+const NAME = new Map();
+const STARS = CAT.map(r=>{
+  const s = { name:r[0], ra:r[1], dec:r[2], mag:r[3], ly:r[4], con:r[5],
+              tint:TINTS[r[6]]||null, tw:0, px:0, py:0 };
+  NAME.set(s.name, s); return s;
+});
+
+/* ============================================================
+   faint procedural field — seeded LCG, uniform sky density
+   ============================================================ */
+function makeLCG(seed){
+  let z = seed>>>0;
+  return ()=>{ z = (Math.imul(z,1664525)+1013904223)>>>0; return z/4294967296; };
+}
+const FAINT = (()=>{
+  const u = makeLCG(20260904), out = [];
+  for(let i=0;i<900;i++){
+    out.push({ ra:u()*24, dec:Math.asin(2*u()-1)*RAD, mag:4.4+u()*2.2,
+               tw:u()*TAU, px:0, py:0 });
+  }
+  return out;
+})();
+{ const u = makeLCG(777); for(const s of STARS) s.tw = u()*TAU; }
+
+/* ============================================================
+   sidereal time
+   ============================================================ */
+const LON = 8.35;                              // fixed longitude, degrees east
+function julianDay(date, minutes){             // calendar date + clock time, timezone-free
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())/86400000
+         + 2440587.5 + minutes/1440;
+}
+function gmstDeg(date, minutes){
+  const d = julianDay(date, minutes) - 2451545.0;
+  let g = 280.46061837 + 360.98564736629 * d;  // mean obliquity-era polynomial
+  return ((g % 360) + 360) % 360;
+}
+function lstDeg(date, minutes){
+  return ((gmstDeg(date, minutes) + LON) % 360 + 360) % 360;
+}
+
+/* ============================================================
+   coordinate maths
+   ============================================================ */
+/* alt/az for a star; returns screen-normalised offsets (north up, east left) */
+function horizon(raH, decDeg, lst, latDeg){
+  const H = (lst - raH*15)*DEG;
+  const d = decDeg*DEG, p = latDeg*DEG;
+  const sa = Math.sin(d)*Math.sin(p) + Math.cos(d)*Math.cos(p)*Math.cos(H);
+  const alt = Math.asin(clamp(sa,-1,1));
+  const xe = -Math.cos(d)*Math.sin(H);                     // east component
+  const yn = Math.sin(d)*Math.cos(p) - Math.cos(d)*Math.sin(p)*Math.cos(H); // north
+  const cs = Math.cos(alt) || 1e-9;
+  const az = ((Math.atan2(xe/cs, yn/cs)*RAD)%360+360)%360; // from N through E
+  const zd = Math.PI/2 - alt;
+  const r = Math.tan(zd/2);                                // stereographic
+  return { alt:alt*RAD, az, x:-r*xe/cs, y:-r*yn/cs };
+}
+/* galactic → equatorial (NGP RA 192.86°, Dec 27.13°; NCP l = 122.93°) */
+function galToEqu(lDeg, bDeg){
+  const aG = 192.8595*DEG, dG = 27.1284*DEG, lN = 122.9320*DEG;
+  const l = lDeg*DEG, b = bDeg*DEG;
+  const sd = Math.sin(dG)*Math.sin(b) + Math.cos(dG)*Math.cos(b)*Math.sin(lN-l);
+  const dec = Math.asin(clamp(sd,-1,1));
+  const yy = Math.cos(b)*Math.cos(lN-l);
+  const xx = Math.cos(dG)*Math.sin(b) - Math.sin(dG)*Math.cos(b)*Math.sin(lN-l);
+  const ra = aG + Math.atan2(yy,xx);
+  return { ra:(((ra*RAD)%360+360)%360)/15, dec:dec*RAD };
+}
+/* ecliptic longitude → equatorial, obliquity 23.44° */
+const OBL = 23.44*DEG;
+function eclToEqu(lambdaDeg){
+  const l = lambdaDeg*DEG;
+  const dec = Math.asin(Math.sin(OBL)*Math.sin(l));
+  let ra = Math.atan2(Math.cos(OBL)*Math.sin(l), Math.cos(l));
+  return { ra:((ra*RAD+360)%360)/15, dec:dec*RAD };
+}
+function convexHull(pts){
+  if(pts.length<3) return pts.slice();
+  const P = pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+  const lo=[]; for(const p of P){ while(lo.length>=2 && cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); }
+  const up=[]; for(let i=P.length-1;i>=0;i--){ const p=P[i]; while(up.length>=2 && cr(up[up.length-2],up[up.length-1],p)<=0) up.pop(); up.push(p); }
+  lo.pop(); up.pop(); return lo.concat(up);
+}
+
+/* ============================================================
+   state + canvas
+   ============================================================ */
+const state = {
+  minutes:1320,
+  date:(()=>{ const n=new Date(); return new Date(n.getFullYear(),n.getMonth(),n.getDate()); })(),
+  drift:120, paused:false, hover:null,
+  reduced:matchMedia('(prefers-reduced-motion: reduce)').matches
+};
+const canvas = document.getElementById('chart');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('chartWrap');
+const tooltip = document.getElementById('tooltip');
+let CX=0, CY=0, Rsky=0, Rring=0, ringW=0, DPR=1, perf=0;
+let pos = new Map();     // star -> {alt,az,x,y,vis}
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  const cssW = wrap.clientWidth;
+  canvas.width = Math.round(cssW*DPR); canvas.height = Math.round(cssW*DPR);
+  canvas.style.width = cssW+'px'; canvas.style.height = cssW+'px';
+  CX = cssW/2; CY = cssW/2;
+  Rring = cssW/2 - 5;
+  ringW = clamp(cssW*0.055, 24, 46);
+  Rsky = Rring - ringW;
+  draw();
+}
+window.addEventListener('resize', resize);
+
+const magR = m => clamp(3.6 - m*0.66, 0.55, 3.8);
+
+/* ============================================================
+   draw
+   ============================================================ */
+function draw(){
+  const W = canvas.width/DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,W,W);
+  const lat = +document.getElementById('lat').value;
+  const lst = lstDeg(state.date, state.minutes);
+  const K = Rsky / Math.tan(94*DEG/2);      // horizon (90°) sits just inside the ring
+  const ck = s => s.reduced?1:(s._tw||1);
+
+  /* project catalogue */
+  pos = new Map();
+  for (const s of STARS){
+    const p = horizon(s.ra, s.dec, lst, lat);
+    pos.set(s, { alt:p.alt, az:p.az, x:CX+p.x*K, y:CY+p.y*K, vis:p.alt>-2.5 });
+  }
+  for (const f of FAINT){
+    const p = horizon(f.ra, f.dec, lst, lat);
+    f.px = CX+p.x*K; f.py = CY+p.y*K; f.vis = p.alt>-2.5;
+  }
+
+  /* — sky disc — */
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX,CY,Rsky,0,TAU); ctx.clip();
+  const g = ctx.createRadialGradient(CX,CY,0,CX,CY,Rsky);
+  g.addColorStop(0,'#0b1230'); g.addColorStop(0.6,'#080d24');
+  g.addColorStop(0.86,'#0a102c'); g.addColorStop(1,'#101a3f');
+  ctx.fillStyle=g; ctx.fillRect(CX-Rsky-2,CY-Rsky-2,Rsky*2+4,Rsky*2+4);
+  const hz = ctx.createRadialGradient(CX,CY,Rsky*0.82,CX,CY,Rsky); // haze ring, outer 18%
+  hz.addColorStop(0,'rgba(64,88,164,0)'); hz.addColorStop(1,'rgba(64,88,164,0.17)');
+  ctx.fillStyle=hz; ctx.fillRect(CX-Rsky-2,CY-Rsky-2,Rsky*2+4,Rsky*2+4);
+  ctx.restore();
+
+  /* — layers — */
+  if (document.getElementById('tMW').checked)  drawMilkyWay(lst, lat, K);
+  if (document.getElementById('tGrid').checked) drawAltAz(lst, lat, K);
+
+  /* faint field */
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX,CY,Rsky,0,TAU); ctx.clip();
+  for (const f of FAINT){
+    if(!f.vis) continue;
+    const a = clamp((7.4-f.mag)/3.0, .1, .9);
+    ctx.fillStyle = `rgba(198,210,240,${a})`;
+    ctx.beginPath(); ctx.arc(f.px,f.py,clamp(3.0-f.mag*0.42,.3,1.15),0,TAU); ctx.fill();
+  }
+  ctx.restore();
+
+  /* twinkle factors */
+  if(!state.reduced)
+    for (const s of STARS) if (s.mag<2.2)
+      s._tw = 1 + 0.30*Math.sin(perf*1.9+s.tw*7)*(0.55+0.45*Math.sin(perf*3.3+s.tw*13));
+
+  /* catalogue stars: glow + core */
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX,CY,Rsky,0,TAU); ctx.clip();
+  for (const s of STARS){
+    const p = pos.get(s); if(!p.vis) continue;
+    const r = magR(s.mag)*ck(s);
+    const col = s.tint || '#f5f7ff';
+    const gr = r*4.6;
+    const gg = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,gr);
+    gg.addColorStop(0, col);
+    gg.addColorStop(0.3, hexA(col,.42));
+    gg.addColorStop(1, hexA(col,0));
+    ctx.fillStyle = gg;
+    ctx.beginPath(); ctx.arc(p.x,p.y,gr,0,TAU); ctx.fill();
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,TAU); ctx.fill();
+  }
+  ctx.restore();
+
+  if (document.getElementById('tFigures').checked) drawHulls();
+  if (document.getElementById('tLines').checked)   drawLines();
+  if (document.getElementById('tLabels').checked)  drawLabels();
+  if (document.getElementById('tEcl').checked)     drawEcliptic(lst, lat, K);
+
+  /* hover halo */
+  if (state.hover){
+    const p = pos.get(state.hover);
+    if (p && p.vis){
+      ctx.save();
+      ctx.strokeStyle='rgba(239,217,161,.95)'; ctx.lineWidth=1.6;
+      ctx.shadowColor='rgba(239,217,161,.85)'; ctx.shadowBlur=9;
+      ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(11,magR(state.hover.mag)*4.6),0,TAU); ctx.stroke();
+      ctx.restore();
+    }
+  }
+  drawRing();
+
+  /* readouts */
+  document.getElementById('lstVal').textContent = fmtHM(lst/15);
+  document.getElementById('jdVal').textContent = julianDay(state.date,state.minutes).toFixed(3);
+  document.getElementById('dateVal').textContent =
+    state.date.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})+' · '+fmtHM(state.minutes/60);
+}
+function hexA(hex,a){
+  const n = parseInt(hex.slice(1),16);
+  return `rgba(${n>>16&255},${(n>>8)&255},${n&255},${a})`;
+}
+function drawLines(){
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX,CY,Rsky,0,TAU); ctx.clip();
+  ctx.strokeStyle='rgba(201,162,94,0.5)'; ctx.lineWidth=1;
+  for (const edges of Object.values(CONSTELLATIONS)){
+    for (const [a,b] of edges){
+      const A=NAME.get(a), B=NAME.get(b); if(!A||!B) continue;
+      const pa=pos.get(A), pb=pos.get(B);
+      if(!pa.vis||!pb.vis) continue;
+      ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+function figPoints(edges){
+  const used = new Set();
+  for (const e of edges){ used.add(e[0]); used.add(e[1]); }
+  const pts = [];
+  for (const n of used){
+    const s = NAME.get(n); if(!s) continue;
+    const p = pos.get(s);
+    if (p.vis) pts.push([p.x,p.y]);
+  }
+  return { pts, n:used.size };
+}
+function drawHulls(){
+  for (const edges of Object.values(CONSTELLATIONS)){
+    const { pts, n } = figPoints(edges);
+    if (pts.length<3 || n<3) continue;
+    const hull = convexHull(pts);
+    const cx = hull.reduce((a,p)=>a+p[0],0)/hull.length;
+    const cy = hull.reduce((a,p)=>a+p[1],0)/hull.length;
+    const rad = Math.max(70, hull.reduce((a,p)=>Math.max(a,Math.hypot(p[0]-cx,p[1]-cy)),0)*1.3);
+    const gg = ctx.createRadialGradient(cx,cy,0,cx,cy,rad);
+    gg.addColorStop(0,'rgba(201,162,94,0.13)'); gg.addColorStop(1,'rgba(201,162,94,0)');
+    ctx.save();
+    ctx.beginPath(); ctx.arc(CX,CY,Rsky,0,TAU); ctx.clip();
+    ctx.fillStyle=gg;
+    ctx.beginPath(); ctx.moveTo(hull[0][0],hull[0][1]);
+    for(let i=1;i<hull.length;i++) ctx.lineTo(hull[i][0],hull[i][1]);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+}
+function drawLabels(){
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX,CY,Rsky,0,TAU); ctx.clip();
+  ctx.textAlign='center';
+  ctx.font='italic 15.5px "Iowan Old Style", Palatino, "Book Antiqua", Georgia, serif';
+  for (const [name, edges] of Object.entries(CONSTELLATIONS)){
+    const { pts, n } = figPoints(edges);
+    if (pts.length<2 || n<3) continue;
+    const cx = pts.reduce((a,p)=>a+p[0],0)/pts.length;
+    const cy = pts.reduce((a,p)=>a+p[1],0)/pts.length;
+    ctx.shadowColor='rgba(7,11,28,0.95)'; ctx.shadowBlur=5;
+    ctx.fillStyle='rgba(239,217,161,0.78)';
+    ctx.fillText(name.toUpperCase(), cx, cy);
+    ctx.shadowBlur=0;
+  }
+  ctx.font='italic 11.5px "Iowan Old Style", Palatino, Georgia, serif';
+  ctx.fillStyle='rgba(243,230,200,0.9)';
+  ctx.textAlign='left';
+  for (const s of STARS){
+    if (s.mag>=1.6) continue;
+    const p = pos.get(s); if(!p.vis) continue;
+    ctx.shadowColor='rgba(7,11,28,0.9)'; ctx.shadowBlur=4;
+    ctx.fillText(s.name, p.x+8, p.y-7);
+    ctx.shadowBlur=0;
+  }
+  ctx.restore();
+}
+function drawEcliptic(lst, lat, K){
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX,CY,Rsky,0,TAU); ctx.clip();
+  ctx.strokeStyle='rgba(233,175,70,0.85)'; ctx.lineWidth=1.4;
+  ctx.setLineDash([8,6]);
+  ctx.beginPath();
+  let pen=false;
+  for (let lam=0; lam<=360.5; lam+=2){
+    const e = eclToEqu(lam);
+    const p = horizon(e.ra, e.dec, lst, lat);
+    if (p.alt<0){ pen=false; continue; }
+    const x=CX+p.x*K, y=CY+p.y*K;
+    if(!pen){ ctx.moveTo(x,y); pen=true; } else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+function drawMilkyWay(lst, lat, K){
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX,CY,Rsky,0,TAU); ctx.clip();
+  ctx.globalCompositeOperation='lighter';
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  if ('filter' in ctx) ctx.filter = `blur(${Math.max(7,Rsky*0.022)}px)`;
+  const strokes=[
+    { b:0,  w:Rsky*0.105, a:0.075 }, { b:0,  w:Rsky*0.05,  a:0.055 },
+    { b:7,  w:Rsky*0.036, a:0.030 }, { b:-7, w:Rsky*0.036, a:0.030 },
+    { b:14, w:Rsky*0.03,  a:0.017 }, { b:-14,w:Rsky*0.03,  a:0.017 }
+  ];
+  const dens = l => {                      // brighter toward the galactic centre
+    const d = Math.min(l, 360-l);
+    return 0.55 + 0.45*Math.exp(-(d*d)/(2*62*62));
+  };
+  for (const s of strokes){
+    for (let seg=0; seg<6; seg++){
+      const l0 = seg*60;
+      ctx.lineWidth = s.w;
+      ctx.strokeStyle = `rgba(150,170,232,${s.a*dens(l0+30)})`;
+      ctx.beginPath();
+      let pen=false;
+      for (let l=l0-2; l<=l0+62; l+=4){
+        const e = galToEqu(((l%360)+360)%360, s.b + 2.2*Math.sin(l*DEG*2.6));
+        const p = horizon(e.ra, e.dec, lst, lat);
+        if (p.alt<-1){ pen=false; continue; }
+        const x=CX+p.x*K, y=CY+p.y*K;
+        if(!pen){ ctx.moveTo(x,y); pen=true; } else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+  }
+  if ('filter' in ctx) ctx.filter = 'none';
+  ctx.restore();
+}
+function drawAltAz(lst, lat, K){
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX,CY,Rsky,0,TAU); ctx.clip();
+  ctx.strokeStyle='rgba(201,162,94,0.16)'; ctx.lineWidth=1;
+  for (const alt of [30,60]){
+    const r = Math.tan((90-alt)/2*DEG)*K;
+    ctx.beginPath(); ctx.arc(CX,CY,r,0,TAU); ctx.stroke();
+  }
+  const rH = Math.tan(90*DEG/2)*K;         // horizon circle
+  ctx.beginPath(); ctx.arc(CX,CY,rH,0,TAU); ctx.stroke();
+  for (let a=0; a<360; a+=30){             // azimuth spokes
+    ctx.beginPath(); ctx.moveTo(CX,CY);
+    ctx.lineTo(CX - rH*Math.sin(a*DEG), CY - rH*Math.cos(a*DEG));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawRing(){
+  const rOut = Rring, rIn = Rsky;
+  const grad = ctx.createLinearGradient(CX-rOut,CY-rOut,CX+rOut,CY+rOut);
+  grad.addColorStop(0,'#6b4d22'); grad.addColorStop(0.28,'#efd9a1');
+  grad.addColorStop(0.5,'#a67c3a'); grad.addColorStop(0.72,'#e0c17c'); grad.addColorStop(1,'#5a3f1a');
+  ctx.beginPath(); ctx.arc(CX,CY,rOut,0,TAU); ctx.arc(CX,CY,rIn,0,TAU,true);
+  ctx.fillStyle=grad; ctx.fill();
+  ctx.strokeStyle='#2b1c06'; ctx.lineWidth=1.4;
+  ctx.beginPath(); ctx.arc(CX,CY,rOut-0.7,0,TAU); ctx.stroke();
+  ctx.beginPath(); ctx.arc(CX,CY,rIn+0.7,0,TAU); ctx.stroke();
+  ctx.strokeStyle='rgba(255,241,200,0.6)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(CX,CY,rIn+3,0,TAU); ctx.stroke();
+  /* engraved ticks every 5°, longer at 15° / 30° */
+  for (let a=0; a<360; a+=5){
+    const len = (a%30===0)?ringW*0.5 : (a%15===0?ringW*0.34:ringW*0.19);
+    const th = a*DEG;
+    const x = -Math.sin(th), y = -Math.cos(th);          // E on the left
+    ctx.strokeStyle = a%15===0 ? 'rgba(43,28,6,0.95)' : 'rgba(43,28,6,0.55)';
+    ctx.lineWidth = a%15===0 ? 1.6 : 1;
+    ctx.beginPath();
+    ctx.moveTo(CX+x*(rIn+2), CY+y*(rIn+2));
+    ctx.lineTo(CX+x*(rIn+2+len), CY+y*(rIn+2+len));
+    ctx.stroke();
+  }
+  /* compass letters, rotated tangentially */
+  ctx.fillStyle='#2b1c06'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  const lr = rIn + ringW*0.74;
+  for (const [lab,a] of [["N",0],["NE",45],["E",90],["SE",135],["S",180],["SW",225],["W",270],["NW",315]]){
+    const th = a*DEG;
+    ctx.save();
+    ctx.translate(CX - Math.sin(th)*lr, CY - Math.cos(th)*lr);
+    ctx.rotate(th);
+    ctx.font = lab.length===1
+      ? '600 16px "Iowan Old Style", Palatino, Georgia, serif'
+      : '10.5px "Iowan Old Style", Palatino, Georgia, serif';
+    ctx.fillText(lab,0,0);
+    ctx.restore();
+  }
+  ctx.textBaseline='alphabetic';
+}
+
+/* ============================================================
+   hover: halo, parchment tooltip, star card
+   ============================================================ */
+function fmtHM(h){ let m=Math.round(h*60); m=((m%1440)+1440)%1440;
+  return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+function fmtRA(h){ h=((h%24)+24)%24;
+  return String(Math.floor(h)).padStart(2,'0')+'ʰ '+String(Math.round((h%1)*60)).padStart(2,'0')+'ᵐ'; }
+function fmtDec(d){ const s=d<0?'−':'+'; d=Math.abs(d);
+  return s+Math.floor(d)+'° '+String(Math.round((d%1)*60)).padStart(2,'0')+'′'; }
+function distStr(s){ return s<100 ? s.toFixed(1)+' ly' : Math.round(s).toLocaleString('en-US')+' ly'; }
+
+canvas.addEventListener('pointermove', e=>{
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX-rect.left, my = e.clientY-rect.top;
+  let best=null, bd=14;
+  for (const s of STARS){
+    const p = pos.get(s); if(!p || !p.vis) continue;
+    const d = Math.hypot(p.x-mx, p.y-my);
+    if (d<bd){ bd=d; best=s; }
+  }
+  if (best!==state.hover){ state.hover=best; updateCard(); if(state.paused||state.drift===0) draw(); }
+  if (best){
+    const p = pos.get(best);
+    tooltip.style.display='block';
+    tooltip.style.left=p.x+'px'; tooltip.style.top=p.y+'px';
+    tooltip.innerHTML =
+      `<div class="tname">${best.name}</div><div class="tcon">${best.con}</div>`+
+      `<div class="tnum">mag ${best.mag.toFixed(2)} · ${distStr(best.ly)}</div>`;
+    canvas.style.cursor='pointer';
+  } else { tooltip.style.display='none'; canvas.style.cursor='crosshair'; }
+});
+canvas.addEventListener('pointerleave', ()=>{
+  state.hover=null; tooltip.style.display='none'; updateCard();
+  if(state.paused||state.drift===0) draw();
+});
+function updateCard(){
+  const card = document.getElementById('starcard');
+  const s = state.hover;
+  if (!s){ card.innerHTML='<div class="empty">Hover a charted star to raise its card.</div>'; return; }
+  const p = pos.get(s);
+  const kind = s.tint ? ({orange:'an orange supergiant',red:'a red giant',amber:'an amber giant',blue:'a blue-white star'})[s.tint] : 'a white star';
+  card.innerHTML =
+    `<div class="sc-name">${s.name}</div><div class="sc-con">${s.con} · ${kind}</div>`+
+    `<div class="sc-row">RA ${fmtRA(s.ra)}&ensp;Dec ${fmtDec(s.dec)}<br>`+
+    `mag ${s.mag.toFixed(2)}&ensp;·&ensp;${distStr(s.ly)}<br>`+
+    `altitude ${p?p.alt.toFixed(1):'—'}°&ensp;·&ensp;azimuth ${p?p.az.toFixed(0):'—'}°</div>`;
+}
+
+/* ============================================================
+   controls
+   ============================================================ */
+const elHour=document.getElementById('hour'), elLat=document.getElementById('lat'),
+      elDrift=document.getElementById('drift'), elDate=document.getElementById('date');
+function dateStr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+elDate.value = dateStr(state.date);
+elHour.addEventListener('input', ()=>{
+  state.minutes = +elHour.value;
+  document.getElementById('hourVal').textContent = fmtHM(state.minutes/60);
+  if(state.drift===0||state.paused) draw();
+});
+elLat.addEventListener('input', ()=>{
+  document.getElementById('latVal').textContent = ((+elLat.value>=0?'+':'')+(+elLat.value).toFixed(1))+'°';
+  if(state.drift===0||state.paused) draw();
+});
+elDrift.addEventListener('input', ()=>{
+  state.drift = +elDrift.value;
+  document.getElementById('driftVal').textContent = state.drift+'×';
+});
+elDate.addEventListener('change', ()=>{
+  const [y,m,d] = elDate.value.split('-').map(Number);
+  if (y) state.date = new Date(y, m-1, d);
+  if(state.drift===0||state.paused) draw();
+});
+['tLines','tFigures','tLabels','tMW','tEcl','tGrid'].forEach(id=>
+  document.getElementById(id).addEventListener('change', ()=>{ if(state.drift===0||state.paused) draw(); }));
+document.getElementById('btnNow').addEventListener('click', ()=>{
+  const n = new Date();
+  state.date = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  state.minutes = n.getHours()*60 + n.getMinutes();
+  elHour.value = state.minutes; elDate.value = dateStr(state.date);
+  document.getElementById('hourVal').textContent = fmtHM(state.minutes/60);
+  draw();
+});
+const btnPause = document.getElementById('btnPause');
+btnPause.addEventListener('click', ()=>{
+  state.paused = !state.paused;
+  btnPause.textContent = state.paused ? 'Resume' : 'Pause';
+  btnPause.classList.toggle('paused', state.paused);
+});
+
+/* ============================================================
+   animation
+   ============================================================ */
+let lastTs = 0;
+function frame(ts){
+  requestAnimationFrame(frame);
+  if (!lastTs) lastTs = ts;
+  let dt = Math.min(0.25, (ts-lastTs)/1000); lastTs = ts;
+  perf = ts/1000;
+  if (!state.paused && state.drift>0){
+    state.minutes += dt*state.drift/60;        // drift× real time, in clock-minutes
+    let rolled = false;
+    while (state.minutes >= 1440){ state.minutes -= 1440; rolled = true; }
+    while (state.minutes < 0){ state.minutes += 1440; rolled = true; }
+    if (rolled){ state.date = new Date(state.date.getTime()+86400000); elDate.value = dateStr(state.date); }
+    elHour.value = Math.round(state.minutes);
+    document.getElementById('hourVal').textContent = fmtHM(state.minutes/60);
+  }
+  if (!state.paused) draw();
+  else if (state.drift===0){} // idle: redraws driven by controls
+  else draw();
+}
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

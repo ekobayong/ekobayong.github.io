@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Keeper's Light — A Lighthouse in a Night Storm</title>
+<style>
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%; overflow:hidden; background:#03060c;}
+  body{font-family:"Iowan Old Style", Georgia, Palatino, "Palatino Linotype", serif; color:#cdd8e4;}
+
+  #scene{position:fixed; inset:0;}
+  #scene::after{ /* lightning "lit" frame */
+    content:""; position:absolute; inset:0; pointer-events:none; z-index:30;
+    box-shadow:inset 0 0 180px 40px rgba(208,224,255,0);
+    transition:box-shadow .09s linear;
+  }
+  #scene.lit::after{ box-shadow:inset 0 0 160px 34px rgba(208,224,255,.75); }
+
+  .sky{
+    position:absolute; inset:0; z-index:0;
+    background:linear-gradient(180deg, #050a14 0%, #081323 34%, #0b1a30 62%, #12314a 100%);
+  }
+  .moon{
+    position:absolute; z-index:1; top:9%; right:13%;
+    width:clamp(64px, 8.4vw, 120px); aspect-ratio:1; border-radius:50%;
+    background:radial-gradient(circle at 38% 36%, #e9f1f7 0%, #cfdbe4 46%, #8fa2b1 100%);
+    box-shadow:0 0 60px 22px rgba(210,228,244,.16), 0 0 180px 90px rgba(180,205,230,.10);
+  }
+  .clouds{position:absolute; inset:-2% 0 auto 0; height:66%; z-index:2; pointer-events:none;}
+  .clouds svg{width:100%; height:100%;}
+  .clouds-far, .clouds-near{will-change:transform;}
+  .clouds-far{filter:blur(16px); animation:drift 150s ease-in-out -40s infinite alternate;}
+  .clouds-near{filter:blur(22px); animation:drift 90s ease-in-out -10s infinite alternate;}
+  @keyframes drift{ from{transform:translateX(-9%);} to{transform:translateX(9%);} }
+
+  #ground{position:absolute; inset:0; width:100%; height:100%; z-index:3;}
+
+  /* ---- rotating beam (anchored in JS to the SVG lamp) ---- */
+  #beams{position:absolute; left:0; top:0; width:0; height:0; z-index:4; pointer-events:none; mix-blend-mode:screen;}
+  #beams .beam{position:absolute; width:240vmax; height:240vmax; left:-120vmax; top:-120vmax; border-radius:4px;}
+  .beam-core{
+    filter:blur(14px);
+    background:conic-gradient(from 0deg,
+      rgba(255,217,138,.42) 0deg, rgba(255,217,138,.20) 6deg, rgba(255,217,138,0) 16deg,
+      transparent 16deg, transparent 344deg, rgba(255,217,138,0) 344deg);
+  }
+  .beam-halo{
+    filter:blur(30px);
+    background:conic-gradient(from 0deg,
+      rgba(255,179,71,.14) 0deg, rgba(255,179,71,.06) 26deg, rgba(255,179,71,0) 58deg,
+      transparent 58deg, transparent 302deg, rgba(255,179,71,0) 302deg);
+  }
+  #lampDisc{
+    position:absolute; z-index:5; width:74px; height:74px; margin:-37px 0 0 -37px;
+    border-radius:50%; pointer-events:none; mix-blend-mode:screen;
+    background:radial-gradient(circle, rgba(255,242,207,.95) 0%, rgba(255,217,138,.55) 26%, rgba(255,179,71,.18) 55%, transparent 72%);
+    animation:lampPulse 2.6s ease-in-out infinite;
+  }
+  @keyframes lampPulse{ 0%,100%{transform:scale(1); opacity:.85;} 50%{transform:scale(1.22); opacity:1;} }
+
+  #fx{position:absolute; inset:0; z-index:6; pointer-events:none;}
+
+  #flash{
+    position:absolute; inset:0; z-index:29; opacity:0; pointer-events:none; mix-blend-mode:screen;
+    background:radial-gradient(130% 95% at 58% -10%, rgba(214,230,255,.95), rgba(158,188,236,.45) 42%, transparent 74%);
+    transition:opacity .1s linear;
+  }
+  #scene.quake{animation:quake .62s cubic-bezier(.36,.07,.19,.97);}
+  @keyframes quake{
+    0%{transform:translate(0,0)} 12%{transform:translate(-9px,5px)} 25%{transform:translate(8px,-6px)}
+    38%{transform:translate(-7px,-5px)} 52%{transform:translate(7px,5px)} 66%{transform:translate(-5px,3px)}
+    80%{transform:translate(4px,-3px)} 100%{transform:translate(0,0)}
+  }
+
+  /* ---- UI ---- */
+  .titlecard{position:absolute; top:26px; left:30px; z-index:40; max-width:min(46ch, 60vw); pointer-events:none;}
+  .titlecard h1{font-size:clamp(24px, 3.2vw, 40px); font-weight:600; color:#e7eef5; letter-spacing:.5px; text-shadow:0 2px 18px rgba(0,0,0,.6);}
+  .titlecard h1 em{font-style:italic; color:#ffd98a; text-shadow:0 0 22px rgba(255,200,110,.5);}
+  .titlecard p{margin-top:6px; font-style:italic; font-size:clamp(13px,1.35vw,17px); color:#93a7ba;}
+
+  .logline{
+    position:absolute; left:30px; bottom:26px; z-index:40; max-width:min(52ch, 62vw);
+    font-style:italic; font-size:clamp(13px, 1.3vw, 17px); color:#aebfcd;
+    text-shadow:0 1px 10px rgba(0,0,0,.8); pointer-events:none;
+    transition:opacity .6s;
+  }
+
+  .panel{
+    position:absolute; right:24px; bottom:22px; z-index:41;
+    width:min(320px, 86vw);
+    background:rgba(5,12,24,.55);
+    -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:12px; padding:16px 18px 14px;
+    box-shadow:0 12px 34px rgba(0,0,0,.5);
+  }
+  .panel h2{
+    font-family:ui-monospace, "Courier New", monospace;
+    font-size:10px; letter-spacing:.28em; text-transform:uppercase;
+    color:#8fa6ba; font-weight:400; margin-bottom:9px;
+  }
+  #storm{-webkit-appearance:none; appearance:none; width:100%; height:22px; background:transparent; cursor:pointer;}
+  #storm::-webkit-slider-runnable-track{
+    height:6px; border-radius:3px;
+    background:linear-gradient(90deg, #0f4a5c, #2e8fa8 55%, #e8f4f6);
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.5);
+  }
+  #storm::-webkit-slider-thumb{
+    -webkit-appearance:none; width:17px; height:17px; margin-top:-5.5px; border-radius:50%;
+    background:radial-gradient(circle at 35% 32%, #ffe9b8, #d9a44a 60%, #8a5f1e);
+    border:1px solid #5c421a;
+    box-shadow:0 0 12px 3px rgba(255,196,96,.55);
+  }
+  #storm::-moz-range-track{height:6px; border-radius:3px; background:linear-gradient(90deg,#0f4a5c,#2e8fa8 55%,#e8f4f6);}
+  #storm::-moz-range-thumb{width:15px;height:15px;border-radius:50%;border:1px solid #5c421a;background:radial-gradient(circle at 35% 32%,#ffe9b8,#d9a44a 60%,#8a5f1e);box-shadow:0 0 12px 3px rgba(255,196,96,.55);}
+  .scale{display:flex; justify-content:space-between; margin-top:2px;
+    font-family:ui-monospace,"Courier New",monospace; font-size:9px; letter-spacing:.08em; color:#5f7789;}
+  .readouts{display:flex; gap:8px; margin-top:12px;}
+  .ro{flex:1; text-align:center; background:rgba(150,200,220,.06); border:1px solid rgba(255,255,255,.07); border-radius:8px; padding:7px 4px 6px;}
+  .ro b{display:block; font-family:ui-monospace,"Courier New",monospace; font-size:15px; font-weight:400; color:#dcecf2;}
+  .ro span{font-family:ui-monospace,"Courier New",monospace; font-size:8.5px; letter-spacing:.14em; text-transform:uppercase; color:#6d8798;}
+
+  @media (max-width:640px){
+    .logline{max-width:70vw; bottom:96px;}
+    .titlecard{left:18px; top:16px;}
+    .panel{right:12px; left:auto; width:min(300px, 92vw);}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .clouds-far,.clouds-near{animation:none;}
+    #lampDisc{animation:none;}
+    #scene.quake{animation:none;}
+  }
+</style>
+</head>
+<body>
+<div id="scene">
+  <div class="sky"></div>
+  <div class="moon"></div>
+
+  <div class="clouds" aria-hidden="true">
+    <svg viewBox="0 0 1600 460" preserveAspectRatio="xMidYMin slice">
+      <g class="clouds-far" fill="#1a2c44">
+        <ellipse cx="1210" cy="86" rx="330" ry="52"/>
+        <ellipse cx="1420" cy="128" rx="260" ry="42"/>
+        <ellipse cx="900"  cy="60"  rx="240" ry="36"/>
+        <ellipse cx="1560" cy="66"  rx="190" ry="30"/>
+        <ellipse cx="1330" cy="168" rx="380" ry="46"/>
+      </g>
+      <g class="clouds-near" fill="#0f1d30">
+        <ellipse cx="1120" cy="150" rx="360" ry="44"/>
+        <ellipse cx="1480" cy="108" rx="280" ry="38"/>
+        <ellipse cx="840"  cy="196" rx="330" ry="40"/>
+        <ellipse cx="1300" cy="216" rx="420" ry="48"/>
+      </g>
+    </svg>
+  </div>
+
+  <svg id="ground" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+    <defs>
+      <linearGradient id="rockFarG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#1d2632"/><stop offset="1" stop-color="#0b1119"/>
+      </linearGradient>
+      <linearGradient id="rockNearG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#182130"/><stop offset="1" stop-color="#070b12"/>
+      </linearGradient>
+      <linearGradient id="towerG" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#6c7480"/><stop offset=".3" stop-color="#e8ebef"/>
+        <stop offset=".66" stop-color="#b3bac4"/><stop offset="1" stop-color="#4c535d"/>
+      </linearGradient>
+      <linearGradient id="bandG" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#5a1c1c"/><stop offset=".34" stop-color="#c13a34"/>
+        <stop offset=".72" stop-color="#9a2c28"/><stop offset="1" stop-color="#5a1c1c"/>
+      </linearGradient>
+      <linearGradient id="seaBackG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#124258"/><stop offset="1" stop-color="#0a2a3a"/>
+      </linearGradient>
+      <linearGradient id="seaFrontG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#10384a"/><stop offset=".55" stop-color="#0a2a3a"/>
+        <stop offset="1" stop-color="#03111b"/>
+      </linearGradient>
+      <linearGradient id="winG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffe7a8"/><stop offset="1" stop-color="#e59b2c"/>
+      </linearGradient>
+      <radialGradient id="haloG">
+        <stop offset="0" stop-color="rgba(255,222,140,.4)"/><stop offset="1" stop-color="rgba(255,222,140,0)"/>
+      </radialGradient>
+      <radialGradient id="lampG">
+        <stop offset="0" stop-color="#fff3d1"/><stop offset=".6" stop-color="#ffd98a"/><stop offset="1" stop-color="#ffb347"/>
+      </radialGradient>
+      <clipPath id="towerClip"><polygon points="504,605 596,605 579,300 521,300"/></clipPath>
+    </defs>
+
+    <!-- far sea -->
+    <path id="seaBack" fill="url(#seaBackG)" d="M-40,590 H1640 V900 H-40 Z"/>
+
+    <!-- headland -->
+    <polygon fill="url(#rockFarG)" points="150,900 200,742 320,662 440,616 560,576 700,600 800,652 930,720 1030,900"/>
+    <polygon fill="url(#rockNearG)" points="240,900 296,748 420,668 546,618 650,640 762,704 850,788 942,900"/>
+    <polygon fill="#0a0f18" points="608,900 668,780 742,714 812,778 884,900"/>
+    <polygon fill="#060a11" points="986,900 1010,842 1042,812 1076,850 1096,900"/>
+
+    <!-- lighthouse -->
+    <g>
+      <rect x="496" y="596" width="108" height="16" rx="3" fill="#2b323c"/>
+      <polygon points="504,605 596,605 579,300 521,300" fill="url(#towerG)"/>
+      <g clip-path="url(#towerClip)">
+        <rect x="480" y="342" width="140" height="36" fill="url(#bandG)"/>
+        <rect x="480" y="432" width="140" height="38" fill="url(#bandG)"/>
+        <rect x="480" y="522" width="140" height="40" fill="url(#bandG)"/>
+      </g>
+      <path d="M536,605 v-26 a14,14 0 0 1 28,0 v26 z" fill="#241a12"/>
+      <rect x="543" y="484" width="14" height="20" rx="7" fill="#1e2836"/>
+      <rect x="543" y="394" width="14" height="20" rx="7" fill="#1e2836"/>
+      <!-- gallery + rail -->
+      <rect x="506" y="292" width="88" height="9" rx="2" fill="#2c333d"/>
+      <g stroke="#242b35" stroke-width="2.4">
+        <line x1="512" y1="272" x2="588" y2="272"/>
+        <line x1="514" y1="272" x2="514" y2="292"/><line x1="528" y1="272" x2="528" y2="292"/>
+        <line x1="542" y1="272" x2="542" y2="292"/><line x1="556" y1="272" x2="556" y2="292"/>
+        <line x1="570" y1="272" x2="570" y2="292"/><line x1="584" y1="272" x2="584" y2="292"/>
+      </g>
+      <!-- lamp room -->
+      <rect x="521" y="238" width="58" height="55" fill="#20242c"/>
+      <rect x="525" y="241" width="50" height="49" fill="url(#lampG)" opacity=".95"/>
+      <g stroke="#3a2f1e" stroke-width="2.4">
+        <line x1="537" y1="241" x2="537" y2="290"/><line x1="550" y1="241" x2="550" y2="290"/>
+        <line x1="563" y1="241" x2="563" y2="290"/><line x1="525" y1="266" x2="575" y2="266"/>
+      </g>
+      <polygon points="515,240 585,240 550,198" fill="#171d25"/>
+      <line x1="550" y1="198" x2="550" y2="186" stroke="#171d25" stroke-width="3"/>
+      <circle cx="550" cy="183" r="3.4" fill="#2a323d"/>
+      <ellipse id="lampAnchor" cx="550" cy="266" rx="9" ry="9" fill="#fff3d1"/>
+      <circle cx="550" cy="266" r="34" fill="url(#haloG)"/>
+    </g>
+
+    <!-- keeper's cottage -->
+    <g>
+      <rect x="700" y="700" width="82" height="50" fill="#131a25"/>
+      <polygon points="692,702 741,666 790,702" fill="#0c121b"/>
+      <rect x="764" y="674" width="9" height="24" fill="#0c121b"/>
+      <circle cx="722" cy="722" r="26" fill="url(#haloG)"/>
+      <rect x="712" y="712" width="20" height="18" fill="url(#winG)">
+        <animate attributeName="opacity" values="1;.58;.9;.68;1;.82;1" dur="3.6s" repeatCount="indefinite"/>
+      </rect>
+      <line x1="722" y1="712" x2="722" y2="730" stroke="#4a3212" stroke-width="1.6"/>
+      <line x1="712" y1="721" x2="732" y2="721" stroke="#4a3212" stroke-width="1.6"/>
+    </g>
+
+    <!-- front sea + foam -->
+    <path id="seaFront" fill="url(#seaFrontG)" d="M-40,720 H1640 V900 H-40 Z"/>
+    <path id="foam" fill="none" stroke="#bfe0ea" stroke-width="2.2" opacity=".5" d="M-40,720 H1640"/>
+    <path id="foam2" fill="none" stroke="#7fb6c6" stroke-width="1.6" opacity=".28" d="M-40,760 H1640"/>
+  </svg>
+
+  <div id="beams" aria-hidden="true">
+    <div class="beam beam-halo"></div>
+    <div class="beam beam-core"></div>
+  </div>
+  <div id="lampDisc" aria-hidden="true"></div>
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <div id="flash" aria-hidden="true"></div>
+
+  <div class="titlecard">
+    <h1>The Keeper's <em>Light</em></h1>
+    <p>Nine miles of black water, and one patient flame.</p>
+  </div>
+
+  <p class="logline" id="log"></p>
+
+  <section class="panel" aria-label="Storm controls">
+    <h2>Storm intensity</h2>
+    <input id="storm" type="range" min="0" max="100" value="46" aria-label="Storm intensity, calm to gale">
+    <div class="scale" aria-hidden="true"><span>calm</span><span>moderate</span><span>fresh</span><span>heavy</span><span>gale</span></div>
+    <div class="readouts">
+      <div class="ro"><b id="roWind">—</b><span>wind · kn</span></div>
+      <div class="ro"><b id="roSwell">—</b><span>swell · m</span></div>
+      <div class="ro"><b id="roRain">—</b><span>rain · mm/h</span></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const scene = document.getElementById("scene");
+  const svg   = document.getElementById("ground");
+  const canvas= document.getElementById("fx");
+  const ctx   = canvas.getContext("2d");
+  const beams = document.getElementById("beams");
+  const disc  = document.getElementById("lampDisc");
+  const lampEl= document.getElementById("lampAnchor");
+  const flash = document.getElementById("flash");
+  const seaBack = document.getElementById("seaBack");
+  const seaFront= document.getElementById("seaFront");
+  const foam  = document.getElementById("foam");
+  const foam2 = document.getElementById("foam2");
+  const panel = document.querySelector(".panel");
+
+  let W = innerWidth, H = innerHeight, DPR = 1;
+  let storm = +document.getElementById("storm").value / 100;
+  let lampX = 0, lampY = 0;
+  let beamDeg = 0;
+
+  function resize() {
+    W = innerWidth; H = innerHeight;
+    DPR = Math.min(2, devicePixelRatio || 1);
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    anchorBeam();
+    seedRain(true);
+  }
+  function anchorBeam() {
+    const r = lampEl.getBoundingClientRect();
+    lampX = r.left + r.width / 2; lampY = r.top + r.height / 2;
+    beams.style.left = lampX + "px"; beams.style.top = lampY + "px";
+    disc.style.left = lampX + "px";  disc.style.top  = lampY + "px";
+    const sc = Math.max(0.4, Math.min(1.6, W / 1400));
+    disc.style.transform = `scale(${sc})`;
+  }
+  addEventListener("resize", resize);
+  addEventListener("scroll", anchorBeam, { passive: true });
+  setTimeout(anchorBeam, 60);
+
+  /* ---------- sea waves (SVG d regenerated per frame) ---------- */
+  const T0 = performance.now();
+  function waveY(x, t, base, a1, a2, a3, sp) {
+    return base
+      + a1 * Math.sin(x * 0.0080 + t * 1.05 * sp)
+      + a2 * Math.sin(x * 0.0165 - t * 0.68 * sp + 1.3)
+      + a3 * Math.sin(x * 0.0031 + t * 0.42 * sp + 4.1);
+  }
+  function seaPath(t, base, A, sp, close) {
+    let d = "";
+    for (let x = -40; x <= 1660; x += 40) {
+      const y = waveY(x, t, base, A[0], A[1], A[2], sp);
+      d += (d ? " L" : "M") + x + "," + y.toFixed(1);
+    }
+    return close ? d + " L1660,910 L-40,910 Z" : d;
+  }
+  function updateSea(t) {
+    const amp = 0.3 + 1.7 * storm, sp = 0.5 + 1.3 * storm;
+    seaBack.setAttribute("d", seaPath(t, 592, [5 * amp, 3 * amp, 8 * amp], sp, true));
+    seaFront.setAttribute("d", seaPath(t, 726, [15 * amp, 9 * amp, 24 * amp], sp, true));
+    foam.setAttribute("d",  seaPath(t, 726, [15 * amp, 9 * amp, 24 * amp], sp, false));
+    foam2.setAttribute("d", seaPath(t + 7.3, 768, [11 * amp, 6 * amp, 17 * amp], sp * 0.8, false));
+  }
+
+  /* ---------- rain ---------- */
+  const drops = [];
+  function targetCount() { return Math.round(RM ? Math.min(60 + storm * 200, 240) : 60 + storm * 1400); }
+  function seedRain(force) {
+    const n = targetCount();
+    while (drops.length < n) drops.push({ x: Math.random() * (W + 300) - 150, y: Math.random() * H, k: 0.7 + Math.random() * 0.6 });
+    if (force || drops.length > n) drops.length = n;
+  }
+  function drawRain(dt, t) {
+    seedRain(false);
+    const windA = 0.10 + 0.44 * storm;             // radians from vertical
+    const speed = 430 + 1050 * storm;
+    ctx.lineCap = "round";
+    for (let i = 0; i < drops.length; i++) {
+      const d = drops[i];
+      const v = speed * d.k;
+      d.x += Math.sin(windA) * v * dt;
+      d.y += Math.cos(windA) * v * dt;
+      const len = 10 + v * 0.024;
+      if (d.y > H + 30 || d.x > W + 200 || d.x < -200) {
+        d.x = Math.random() * (W + 300) - 150; d.y = -20 - Math.random() * H * 0.5;
+      }
+      let warm = false;
+      if (i % 3 === 0 && !RM) {                    // lit by the sweeping beam
+        const dx = d.x - lampX, dy = d.y - lampY;
+        const ang = (Math.atan2(dx, -dy) * 57.2958 + 360) % 360;
+        let diff = Math.abs(ang - (beamDeg % 360)); if (diff > 180) diff = 360 - diff;
+        warm = diff < 13 && Math.hypot(dx, dy) < Math.max(W, H);
+      }
+      ctx.strokeStyle = warm ? "rgba(255,222,150,.62)" : "rgba(168,198,224,.30)";
+      ctx.lineWidth = warm ? 1.6 : 1.1;
+      ctx.beginPath();
+      ctx.moveTo(d.x, d.y);
+      ctx.lineTo(d.x - Math.sin(windA) * len, d.y - Math.cos(windA) * len);
+      ctx.stroke();
+    }
+  }
+
+  /* ---------- spray ---------- */
+  const spray = [];
+  let sprayAcc = 0;
+  function spawnSpray(t) {
+    const pt = svg.createSVGPoint();
+    pt.x = 842;
+    const amp = 0.3 + 1.7 * storm, sp = 0.5 + 1.3 * storm;
+    pt.y = waveY(842, t, 726, [15 * amp, 9 * amp, 24 * amp], sp, false) || 726;
+    const ctm = svg.getScreenCTM(); if (!ctm) return;
+    const s = pt.matrixTransform(ctm);
+    const n = 1 + Math.round(storm * 2);
+    for (let i = 0; i < n; i++)
+      spray.push({
+        x: s.x + (Math.random() - 0.5) * 40, y: s.y - Math.random() * 8,
+        vx: 40 + Math.random() * 240 * (0.4 + storm), vy: -(150 + Math.random() * 380) * (0.4 + storm * 1.1),
+        r: 1 + Math.random() * 2.2, life: 0, max: 0.7 + Math.random() * 0.9,
+      });
+  }
+  function drawSpray(dt) {
+    for (let i = spray.length - 1; i >= 0; i--) {
+      const p = spray[i];
+      p.life += dt; if (p.life > p.max) { spray.splice(i, 1); continue; }
+      p.vy += 950 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+      const a = Math.max(0, 1 - p.life / p.max);
+      ctx.fillStyle = `rgba(205,232,240,${(0.5 * a * (0.3 + storm)).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.283); ctx.fill();
+    }
+  }
+
+  /* ---------- lightning ---------- */
+  let nextStrike = 0, striking = false;
+  function scheduleStrike(now) {
+    if (storm < 0.15) { nextStrike = Infinity; return; }
+    const every = (26 - 21.5 * storm) * (0.55 + Math.random() * 0.95);
+    nextStrike = now + every * 1000;
+  }
+  function strike() {
+    if (striking) return;
+    striking = true;
+    flash.style.transition = "opacity .04s";
+    flash.style.opacity = 0.92; scene.classList.add("lit");
+    setTimeout(() => { flash.style.opacity = 0.05; }, 70);
+    setTimeout(() => { flash.style.opacity = 0.7;  }, 150);
+    setTimeout(() => { flash.style.opacity = 0; scene.classList.remove("lit"); }, 300);
+    if (!RM) setTimeout(() => {
+      scene.classList.add("quake");
+      setTimeout(() => scene.classList.remove("quake"), 640);
+    }, 450 + Math.random() * 500);
+    setTimeout(() => { striking = false; }, 1100);
+  }
+  scene.addEventListener("pointerdown", e => {
+    if (e.target.closest(".panel")) return;
+    strike();
+  });
+
+  /* ---------- storm slider ---------- */
+  const logs = [
+    [0.0, "00:40 — Sea flat as poured tin. The lamp turns for no one, and for everyone."],
+    [0.2, "01:55 — Wind freshening off the point. Two gulls sheltering under the gallery rail."],
+    [0.45,"03:20 — Spray reaching the first band of paint. Trimmed the wick twice already."],
+    [0.7, "04:05 — Glass shaking in the lamp room. Kettle on, both hands flat on the rail."],
+    [0.9, "05:40 — She's blowing herself out against the tower. The light holds. The light holds."],
+  ];
+  const logEl = document.getElementById("log");
+  const roW = document.getElementById("roWind"), roS = document.getElementById("roSwell"), roR = document.getElementById("roRain");
+  const cloudsFar = document.querySelector(".clouds-far"), cloudsNear = document.querySelector(".clouds-near");
+  const cloudState = new Map();
+  function setCloud(el, newDur) {
+    if (RM) return;
+    const now = performance.now() / 1000;
+    const st = cloudState.get(el) || { dur: parseFloat(getComputedStyle(el).animationDuration), t0: now, off: 0 };
+    const phase = ((now - st.t0) / st.dur + st.off) % 1;
+    st.dur = newDur; st.t0 = now; st.off = phase;
+    cloudState.set(el, st);
+    el.style.animationDuration = newDur.toFixed(2) + "s";
+    el.style.animationDelay = (-phase * newDur).toFixed(2) + "s";
+  }
+  function applyStorm() {
+    storm = +document.getElementById("storm").value / 100;
+    roW.textContent = Math.round(4 + 56 * storm) + " kn";
+    roS.textContent = (0.2 + 4.3 * storm).toFixed(1) + " m";
+    roR.textContent = Math.round(2 + 118 * storm * storm) + " mm/h";
+    let msg = logs[0][1];
+    for (const band of logs) if (storm >= band[0]) msg = band[1];
+    if (logEl.textContent !== msg) { logEl.style.opacity = 0; setTimeout(() => { logEl.textContent = msg; logEl.style.opacity = 1; }, 280); }
+    setCloud(cloudsFar, 160 - 118 * storm);
+    setCloud(cloudsNear, 96 - 70 * storm);
+    scheduleStrike(performance.now());
+  }
+  document.getElementById("storm").addEventListener("input", applyStorm);
+
+  /* ---------- main loop ---------- */
+  let last = performance.now(), simT = 0;
+  function frame(now) {
+    let dt = (now - last) / 1000; last = now;
+    if (dt > 0.05) dt = 0.05;
+    simT += dt;
+    // beam: 38°/s, dim as it swings away from the viewer
+    if (!RM) beamDeg = (beamDeg + 38 * dt) % 360; else beamDeg = 135;
+    const away = (1 - Math.cos(beamDeg * Math.PI / 180)) / 2;   // 0 pointing "up/away"
+    beams.style.transform = `rotate(${beamDeg.toFixed(2)}deg)`;
+    beams.style.opacity = (0.34 + 0.66 * away).toFixed(3);
+    updateSea(simT);
+    ctx.clearRect(0, 0, W, H);
+    drawRain(dt, simT);
+    sprayAcc += dt * (2 + storm * 34);
+    while (sprayAcc >= 1) { sprayAcc -= 1; spawnSpray(simT); }
+    drawSpray(dt);
+    if (now >= nextStrike && !striking) { strike(); scheduleStrike(now); }
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  applyStorm();
+  scheduleStrike(performance.now());
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

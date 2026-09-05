@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spectrum — Palette Studio</title>
+<style>
+  @property --h { syntax:'<number>'; inherits:true; initial-value:212; }
+  @property --s { syntax:'<number>'; inherits:true; initial-value:62; }
+  @property --l { syntax:'<number>'; inherits:true; initial-value:52; }
+
+  :root{
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --serif:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace;
+    --hair:hsl(var(--h) 42% 88%);
+    --ink-body:hsl(var(--h) 24% 22%);
+    --muted:hsl(var(--h) 14% 48%);
+    --base:hsl(var(--h) calc(var(--s) * 1%) calc(var(--l) * 1%));
+    --shadow-1:hsl(var(--h) 45% 35% / .07);
+    --shadow-2:hsl(var(--h) 50% 42% / .14);
+    --ease:cubic-bezier(.22,.7,.3,1);
+  }
+  html{
+    transition:--h 600ms var(--ease), --s 600ms var(--ease), --l 600ms var(--ease);
+  }
+  *{box-sizing:border-box; margin:0}
+  body{
+    min-height:100vh;
+    font-family:var(--sans);
+    color:var(--ink-body);
+    background:
+      radial-gradient(90rem 46rem at 8% -10%, hsl(var(--h) 70% 94% / .8), transparent 60%),
+      radial-gradient(70rem 40rem at 100% 0%, hsl(calc(var(--h) + 30) 60% 93% / .7), transparent 55%),
+      linear-gradient(hsl(var(--h) 58% 97.5%), hsl(calc(var(--h) + 18) 48% 95.5%) 60%, hsl(var(--h) 42% 94%));
+    background-attachment:fixed;
+    transition:background-color 600ms var(--ease);
+    padding:clamp(20px,4vw,44px) clamp(16px,4vw,40px) 120px;
+  }
+
+  .wrap{max-width:1200px; margin:0 auto}
+
+  header.hero{margin-bottom:clamp(22px,3.4vw,38px)}
+  header.hero h1{
+    font-family:var(--serif); font-weight:600;
+    font-size:clamp(30px,4.6vw,50px);
+    letter-spacing:-.022em; line-height:1.05;
+    color:hsl(var(--h) 30% 16%);
+  }
+  header.hero h1 em{font-style:italic; color:var(--base); font-weight:500}
+  header.hero p{margin-top:10px; color:var(--muted); font-size:15px; max-width:56ch}
+
+  .grid{
+    display:grid;
+    grid-template-columns:1.15fr 1fr;
+    gap:clamp(16px,2vw,24px);
+    align-items:start;
+  }
+  @media (max-width:900px){ .grid{grid-template-columns:1fr} }
+
+  .col{display:flex; flex-direction:column; gap:clamp(16px,2vw,24px); min-width:0}
+
+  .card{
+    background:rgba(255,255,255,.78);
+    -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+    border:1px solid var(--hair);
+    border-radius:18px;
+    box-shadow:0 1px 2px var(--shadow-1), 0 40px 80px -30px var(--shadow-2);
+    padding:clamp(18px,2.4vw,26px);
+    transition:border-color 600ms var(--ease), box-shadow 600ms var(--ease);
+  }
+  .card > h2{
+    font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--muted);
+    display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+    margin-bottom:16px;
+  }
+  .card > h2 .now{font-family:var(--mono); font-weight:400; letter-spacing:.02em; text-transform:none; color:var(--base); font-size:12px}
+
+  /* ---------- base color ---------- */
+  .plane{
+    position:relative;
+    aspect-ratio:16/10;
+    border-radius:12px;
+    border:1px solid var(--hair);
+    overflow:hidden;
+    cursor:crosshair;
+    touch-action:none;
+    background:
+      linear-gradient(to bottom, hsl(0 0% 50% / 0) 0%, hsl(0 0% 50% / 1) 100%),
+      linear-gradient(90deg,
+        hsl(0 100% 50%), hsl(60 100% 50%), hsl(120 100% 50%), hsl(180 100% 50%),
+        hsl(240 100% 50%), hsl(300 100% 50%), hsl(360 100% 50%));
+  }
+  .plane:focus-visible{outline:2px solid var(--base); outline-offset:3px}
+  .puck{
+    position:absolute; width:26px; height:26px; border-radius:50%;
+    border:3px solid #fff;
+    box-shadow:0 0 0 1px hsl(0 0% 0% / .25), 0 3px 10px hsl(0 0% 0% / .35);
+    transform:translate(-50%,-50%) scale(1);
+    transition:transform .18s var(--ease);
+    pointer-events:none;
+  }
+  .plane.dragging .puck{transform:translate(-50%,-50%) scale(1.22)}
+
+  .lrow{display:flex; align-items:center; gap:14px; margin-top:18px}
+  .lrow label{font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); white-space:nowrap}
+  .lrow output{font-family:var(--mono); font-size:12px; color:var(--ink-body); min-width:44px; text-align:right}
+
+  input[type=range]{
+    -webkit-appearance:none; appearance:none;
+    flex:1; height:14px; border-radius:99px; outline:none;
+    background:var(--trk, #ccc);
+    border:1px solid var(--hair);
+    cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:22px; height:22px; border-radius:50%;
+    background:#fff; border:1px solid hsl(0 0% 0% / .18);
+    box-shadow:0 1px 4px hsl(0 0% 0% / .28);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:20px; height:20px; border-radius:50%;
+    background:#fff; border:1px solid hsl(0 0% 0% / .18);
+    box-shadow:0 1px 4px hsl(0 0% 0% / .28);
+  }
+  input[type=range]:focus-visible{outline:2px solid var(--base); outline-offset:3px}
+
+  /* ---------- harmony ---------- */
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px}
+  .chip{
+    font-size:12.5px; font-weight:550;
+    padding:7px 14px; border-radius:99px;
+    border:1px solid var(--hair);
+    background:rgba(255,255,255,.6);
+    color:var(--muted);
+    cursor:pointer;
+    transition:all .35s var(--ease);
+  }
+  .chip:hover{color:var(--ink-body); border-color:hsl(var(--h) 40% 78%)}
+  .chip.on{
+    background:var(--base); border-color:var(--base); color:#fff;
+    box-shadow:0 6px 18px -4px hsl(var(--h) calc(var(--s) * 1%) calc(var(--l) * 1%) / .55);
+  }
+  .chip:focus-visible{outline:2px solid var(--base); outline-offset:2px}
+
+  .swatches{display:grid; grid-template-columns:repeat(5,1fr); gap:12px}
+  @media (max-width:640px){ .swatches{grid-template-columns:repeat(3,1fr)} }
+  .sw{
+    position:relative; aspect-ratio:3/4; border-radius:12px; overflow:hidden;
+    border:1px solid hsl(0 0% 0% / .06);
+    cursor:pointer;
+    display:flex; flex-direction:column; justify-content:flex-end;
+    transition:transform .3s var(--ease), box-shadow .3s var(--ease);
+    animation:pop .5s var(--ease) backwards;
+  }
+  @keyframes pop{
+    from{opacity:0; transform:translateY(14px) scale(.94)}
+    to{opacity:1; transform:none}
+  }
+  .sw:hover{transform:translateY(-4px); box-shadow:0 12px 28px -8px hsl(0 0% 20% / .35)}
+  .sw:focus-visible{outline:2px solid var(--base); outline-offset:2px}
+  .sw .scrim{
+    position:absolute; inset:0;
+    background:linear-gradient(to top, var(--fgA,rgba(0,0,0,.22)) 0%, transparent 52%);
+  }
+  .sw .cap{position:relative; padding:10px 11px; color:var(--fg,#fff)}
+  .sw .role{position:absolute; top:10px; left:11px; font-size:9.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--fg); opacity:.85}
+  .sw .hex{font-family:var(--mono); font-weight:700; font-size:13px; letter-spacing:.01em}
+  .sw .vals{font-family:var(--mono); font-size:9.5px; opacity:.72; line-height:1.5; margin-top:3px; white-space:nowrap}
+  .sw .copyi{
+    position:absolute; top:8px; right:8px; width:26px; height:26px; border-radius:8px;
+    background:var(--fg); color:var(--bgc);
+    display:grid; place-items:center;
+    opacity:0; transform:translateY(-4px);
+    transition:opacity .25s, transform .25s;
+    font-size:12px;
+  }
+  .sw:hover .copyi, .sw:focus-visible .copyi{opacity:.92; transform:none}
+
+  /* ---------- contrast ---------- */
+  .crow{
+    display:grid; grid-template-columns:44px 1fr auto auto; gap:14px; align-items:center;
+    padding:11px 0;
+    border-top:1px solid var(--hair);
+  }
+  .crow:first-of-type{border-top:none}
+  .aat{
+    width:44px; height:44px; border-radius:10px;
+    display:grid; place-items:center;
+    font-family:var(--serif); font-size:19px; font-weight:600;
+    border:1px solid hsl(0 0% 50% / .18);
+    transition:background-color .6s var(--ease), color .6s var(--ease);
+  }
+  .crel{font-size:13px}
+  .crel b{font-weight:600}
+  .crel span{display:block; font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:2px}
+  .cratio{font-family:var(--mono); font-size:13px; font-weight:600; text-align:right}
+  .cpill{
+    font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    padding:4px 10px; border-radius:99px; min-width:64px; text-align:center;
+  }
+  .cpill.aaa{background:#e2f6ea; color:#0c6b3d}
+  .cpill.aa{background:#e3f0fc; color:#1d5fa8}
+  .cpill.aal{background:#fdf3dc; color:#8a5b00}
+  .cpill.fail{background:#fbe6e6; color:#a32020}
+  @media (max-width:560px){ .cpill{min-width:0} }
+
+  /* ---------- live preview ---------- */
+  .shop{
+    border-radius:14px; overflow:hidden;
+    border:1px solid var(--hair);
+    background:var(--pv-bg,#fff);
+    color:var(--pv-ink,#111);
+    transition:background-color .6s var(--ease), color .6s var(--ease);
+  }
+  .shop .bar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px;
+    border-bottom:1px solid var(--pv-line,rgba(0,0,0,.08));
+    transition:border-color .6s var(--ease);
+  }
+  .shop .brand{display:flex; align-items:center; gap:9px; font-weight:650; font-size:14px; letter-spacing:-.01em}
+  .shop .dot{width:9px; height:9px; border-radius:50%; background:var(--pv-accent,#f60); transition:background-color .6s var(--ease)}
+  .shop .menu{display:flex; gap:16px; font-size:12px; color:var(--pv-muted,#777); transition:color .6s var(--ease)}
+  .shop .body{padding:18px}
+  .shop h3{font-family:var(--serif); font-size:22px; letter-spacing:-.02em; font-weight:600}
+  .shop p{font-size:12.5px; color:var(--pv-muted); margin-top:6px; transition:color .6s var(--ease)}
+  .shop .prog{height:6px; border-radius:99px; background:var(--pv-track,rgba(0,0,0,.08)); margin:16px 0 6px; overflow:hidden; transition:background-color .6s var(--ease)}
+  .shop .prog i{display:block; height:100%; width:72%; border-radius:99px; background:linear-gradient(90deg, var(--pv-primary), var(--pv-accent)); transition:background-color .6s var(--ease)}
+  .shop .ship{font-family:var(--mono); font-size:10px; color:var(--pv-muted)}
+  .shop .btns{display:flex; gap:10px; margin-top:16px}
+  .shop .btn{font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:10px; cursor:default; border:1px solid transparent; transition:all .6s var(--ease)}
+  .shop .btn.pri{background:var(--pv-primary); color:var(--pv-btn-ink)}
+  .shop .btn.gho{border-color:var(--pv-primary); color:var(--pv-primary); background:transparent}
+  .shop .tags{display:flex; gap:8px; margin-top:16px; flex-wrap:wrap}
+  .shop .tag{font-size:10.5px; font-weight:600; padding:4px 11px; border-radius:99px; background:var(--pv-tag-bg); color:var(--pv-tag-ink); transition:all .6s var(--ease)}
+
+  /* ---------- export ---------- */
+  .exrow{display:flex; gap:10px; margin-bottom:14px}
+  .btnb{
+    font-size:13px; font-weight:600; padding:9px 18px; border-radius:11px; cursor:pointer;
+    border:1px solid transparent;
+    transition:all .3s var(--ease);
+  }
+  .btnb.solid{background:var(--base); color:#fff; box-shadow:0 8px 20px -6px hsl(var(--h) var(--s)% var(--l)% / .5)}
+  .btnb.solid:hover{filter:brightness(1.06)}
+  .btnb.ghost{border-color:var(--hair); background:rgba(255,255,255,.6); color:var(--ink-body)}
+  .btnb.ghost:hover{border-color:hsl(var(--h) 40% 74%)}
+  .btnb:focus-visible{outline:2px solid var(--base); outline-offset:2px}
+  textarea{
+    width:100%; min-height:210px; resize:vertical;
+    font-family:var(--mono); font-size:11.5px; line-height:1.65;
+    color:var(--ink-body);
+    background:hsl(var(--h) 45% 98.5%);
+    border:1px solid var(--hair); border-radius:12px;
+    padding:14px 16px;
+    transition:border-color .6s var(--ease), background-color .6s var(--ease);
+  }
+  textarea:focus-visible{outline:2px solid var(--base); outline-offset:2px}
+
+  /* ---------- toast ---------- */
+  .toast{
+    position:fixed; left:50%; bottom:26px; transform:translate(-50%,20px);
+    display:flex; align-items:center; gap:10px;
+    background:#211f29; color:#f4f2f8;
+    font-size:13px; font-weight:550;
+    padding:11px 18px 11px 14px; border-radius:99px;
+    box-shadow:0 16px 40px -10px rgba(10,10,20,.5);
+    opacity:0; pointer-events:none;
+    transition:opacity .3s, transform .3s var(--ease);
+    z-index:50;
+  }
+  .toast.show{opacity:1; transform:translate(-50%,0)}
+  .toast i{width:16px; height:16px; border-radius:5px; display:block; border:1px solid rgba(255,255,255,.25)}
+  .toast code{font-family:var(--mono); font-size:12px; color:#cfcbe0}
+
+  @media (prefers-reduced-motion: reduce){
+    *, .card, body, html, .sw, .chip, .toast, .shop, .shop *{
+      transition-duration:.01ms !important;
+      animation-duration:.01ms !important;
+      animation-delay:0s !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>Spectrum <em>studio</em></h1>
+    <p>A calm, hue-tinted palette workbench. Pick a base color, choose a harmony rule, and let the whole room drift toward that hue.</p>
+  </header>
+
+  <main class="grid">
+    <!-- ============ left column ============ -->
+    <div class="col">
+      <section class="card" aria-label="Base color">
+        <h2>Base color <span class="now" id="baseNow">hsl(212, 62%, 52%)</span></h2>
+        <div class="plane" id="plane" tabindex="0" role="application"
+             aria-label="Hue and saturation plane. Arrow keys adjust hue and saturation, hold shift for ten steps.">
+          <div class="puck" id="puck"></div>
+        </div>
+        <div class="lrow">
+          <label for="light">Lightness</label>
+          <input type="range" id="light" min="4" max="96" step="1" value="52" aria-label="Lightness">
+          <output id="lightOut" for="light">52%</output>
+        </div>
+      </section>
+
+      <section class="card" aria-label="Harmony">
+        <h2>Harmony <span class="now" id="ruleNow">Analogous</span></h2>
+        <div class="chips" id="chips" role="radiogroup" aria-label="Harmony rule">
+          <button class="chip on" role="radio" aria-checked="true"  data-rule="analogous">Analogous</button>
+          <button class="chip"    role="radio" aria-checked="false" data-rule="complementary">Complementary</button>
+          <button class="chip"    role="radio" aria-checked="false" data-rule="triadic">Triadic</button>
+          <button class="chip"    role="radio" aria-checked="false" data-rule="split">Split-complementary</button>
+          <button class="chip"    role="radio" aria-checked="false" data-rule="mono">Monochrome</button>
+        </div>
+        <div class="swatches" id="swatches"></div>
+      </section>
+    </div>
+
+    <!-- ============ right column ============ -->
+    <div class="col">
+      <section class="card" aria-label="Contrast check">
+        <h2>Contrast check <span class="now">WCAG 2.1</span></h2>
+        <div id="contrast"></div>
+      </section>
+
+      <section class="card" aria-label="Live preview">
+        <h2>Live preview</h2>
+        <div class="shop" id="shop">
+          <div class="bar">
+            <div class="brand"><span class="dot"></span>Marigold Studio</div>
+            <nav class="menu"><span>Shop</span><span>Journal</span><span>About</span></nav>
+          </div>
+          <div class="body">
+            <h3>Autumn collection is live</h3>
+            <p>Twelve pieces, dyed in small batches. Early access closes when the progress bar fills.</p>
+            <div class="prog"><i></i></div>
+            <span class="ship">72% claimed · ships Fri</span>
+            <div class="btns">
+              <button class="btn pri" type="button">Shop the drop</button>
+              <button class="btn gho" type="button">Lookbook</button>
+            </div>
+            <div class="tags">
+              <span class="tag">Hand-dyed</span><span class="tag">Small batch</span><span class="tag">Wool · Linen</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-label="Export">
+        <h2>Export</h2>
+        <div class="exrow">
+          <button class="btnb solid" id="shuffle" type="button">Shuffle</button>
+          <button class="btnb ghost" id="copyCss" type="button">Copy CSS</button>
+        </div>
+        <textarea id="cssOut" readonly spellcheck="false" aria-label="Generated CSS custom properties"></textarea>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <i id="toastSwatch"></i><span id="toastMsg">Copied</span>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const root = document.documentElement;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+
+  /* ---------------- state ---------------- */
+  const state = { h: 212, s: 62, l: 52, rule: 'analogous' };
+
+  /* ---------------- color math ---------------- */
+  const wrapH = h => ((h % 360) + 360) % 360;
+  function hsl2rgb(h, s, l){
+    h = wrapH(h); s /= 100; l /= 100;
+    const c = (1 - Math.abs(2*l - 1)) * s,
+          x = c * (1 - Math.abs((h/60) % 2 - 1)),
+          m = l - c/2;
+    let r,g,b;
+    if (h < 60)        [r,g,b] = [c,x,0];
+    else if (h < 120)  [r,g,b] = [x,c,0];
+    else if (h < 180)  [r,g,b] = [0,c,x];
+    else if (h < 240)  [r,g,b] = [0,x,c];
+    else if (h < 300)  [r,g,b] = [x,0,c];
+    else               [r,g,b] = [c,0,x];
+    return [Math.round((r+m)*255), Math.round((g+m)*255), Math.round((b+m)*255)];
+  }
+  const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+  const hex = ([r,g,b]) => '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0').toUpperCase()).join('');
+  const rgbStr = ([r,g,b]) => `rgb(${r}, ${g}, ${b})`;
+  const lum = ([r,g,b]) => {
+    const f = v => { v /= 255; return v <= .03928 ? v/12.92 : Math.pow((v+.055)/1.055, 2.4); };
+    return .2126*f(r) + .7152*f(g) + .0722*f(b);
+  };
+  const ratio = (a, b) => {
+    const [L1, L2] = [lum(a), lum(b)].sort((x,y) => y-x);
+    return (L1 + .05) / (L2 + .05);
+  };
+
+  /* ---------------- harmony rules ---------------- */
+  /* secondary / accent derivations from the base {h,s,l}; surface & ink derive from the hue */
+  const RULES = {
+    analogous:     (h,s,l) => ({ sec:[h-30, s,     clamp(l+6,0,96)],  acc:[h+32, s,             clamp(l-10,8,96)] }),
+    complementary: (h,s,l) => ({ sec:[h+180, s*.92, clamp(l+8,0,96)],  acc:[h+180, clamp(s+8,0,100), clamp(l-16,8,96)] }),
+    triadic:       (h,s,l) => ({ sec:[h+120, s,     clamp(l+4,0,96)],  acc:[h+240, s,            clamp(l-8,8,96)] }),
+    split:         (h,s,l) => ({ sec:[h+150, s,     clamp(l+4,0,96)],  acc:[h+210, s,            clamp(l-8,8,96)] }),
+    mono:          (h,s,l) => ({ sec:[h, s*.5,      clamp(l+20,20,92)], acc:[h, clamp(s*1.12,0,100), clamp(l-16,14,90)] }),
+  };
+  const RULE_NAMES = { analogous:'Analogous', complementary:'Complementary', triadic:'Triadic', split:'Split-complementary', mono:'Monochrome' };
+
+  function palette(){
+    const { h, s, l, rule } = state;
+    const d = RULES[rule](h, s, l);
+    return {
+      primary:   { h, s, l, rgb: hsl2rgb(h,s,l) },
+      secondary: { h:wrapH(d.sec[0]), s:clamp(d.sec[1],0,100), l:d.sec[2], rgb: hsl2rgb(d.sec[0], d.sec[1], d.sec[2]) },
+      accent:    { h:wrapH(d.acc[0]),  s:clamp(d.acc[1],0,100), l:d.acc[2], rgb: hsl2rgb(d.acc[0], d.acc[1], d.acc[2]) },
+      surface:   { h, s: s*.28, l: 96.5, rgb: hsl2rgb(h, s*.28, 96.5) },
+      ink:       { h, s: s*.42, l: 13,   rgb: hsl2rgb(h, s*.42, 13) },
+    };
+  }
+
+  /* ---------------- DOM refs ---------------- */
+  const plane = $('plane'), puck = $('puck'), light = $('light'), lightOut = $('lightOut');
+  const swatches = $('swatches'), contrastBox = $('contrast'), cssOut = $('cssOut');
+  const toast = $('toast'), toastSwatch = $('toastSwatch'), toastMsg = $('toastMsg');
+
+  /* ---------------- swatches ---------------- */
+  const ROLE_ORDER = ['primary','secondary','accent','surface','ink'];
+  const ROLE_LABEL = { primary:'Primary', secondary:'Secondary', accent:'Accent', surface:'Surface', ink:'Ink' };
+
+  function renderSwatches(pal, animate){
+    swatches.innerHTML = '';
+    ROLE_ORDER.forEach((role, i) => {
+      const c = pal[role];
+      const hx = hex(c.rgb);
+      const lightBg = lum(c.rgb) > 0.42;
+      const el = document.createElement('div');
+      el.className = 'sw';
+      el.tabIndex = 0;
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', `Copy ${ROLE_LABEL[role]} ${hx}`);
+      el.style.background = `linear-gradient(160deg, hsl(${wrapH(c.h)} ${c.s}% ${clamp(c.l+7,0,99)}%), ${hx} 62%)`;
+      el.style.setProperty('--fg', lightBg ? `hsl(${wrapH(c.h)} 30% 16%)` : '#fdfdfc');
+      el.style.setProperty('--fgA', lightBg ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.26)');
+      el.style.setProperty('--bgc', hx);
+      el.style.animation = animate && !reduce.matches
+        ? `pop .5s var(--ease) ${i*70}ms backwards` : 'none';
+      el.innerHTML =
+        `<span class="role">${ROLE_LABEL[role]}</span>
+         <span class="scrim"></span>
+         <span class="copyi" aria-hidden="true">
+           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+             <rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>
+           </svg>
+         </span>
+         <span class="cap">
+           <span class="hex">${hx}</span>
+           <span class="vals">${rgbStr(c.rgb)}<br>hsl(${Math.round(c.h)}, ${Math.round(c.s)}%, ${Math.round(c.l)}%)</span>
+         </span>`;
+      const grab = () => copyText(hx, hx, ROLE_LABEL[role]);
+      el.addEventListener('click', grab);
+      el.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); grab(); } });
+      swatches.appendChild(el);
+    });
+  }
+
+  /* ---------------- contrast rows ---------------- */
+  const PAIRS = [
+    ['ink','surface','Ink on Surface'],
+    ['primary','surface','Primary on Surface'],
+    ['surface','primary','Surface on Primary'],
+    ['ink','primary','Ink on Primary'],
+    ['surface','ink','Surface on Ink'],
+    ['accent','surface','Accent on Surface'],
+  ];
+  function renderContrast(pal){
+    contrastBox.innerHTML = '';
+    PAIRS.forEach(([fgk, bgk, label]) => {
+      const fg = pal[fgk].rgb, bg = pal[bgk].rgb;
+      const r = ratio(fg, bg);
+      const grade = r >= 7 ? ['aaa','AAA'] : r >= 4.5 ? ['aa','AA'] : r >= 3 ? ['aal','AA Large'] : ['fail','Fail'];
+      const row = document.createElement('div');
+      row.className = 'crow';
+      row.innerHTML =
+        `<span class="aat" style="background:${hex(bg)};color:${hex(fg)}">Aa</span>
+         <span class="crel"><b>${label}</b><span>${hex(fg)} on ${hex(bg)}</span></span>
+         <span class="cratio">${r.toFixed(2)}</span>
+         <span class="cpill ${grade[0]}">${grade[1]}</span>`;
+      contrastBox.appendChild(row);
+    });
+  }
+
+  /* ---------------- live preview ---------------- */
+  function renderPreview(pal){
+    const shop = $('shop');
+    const onPrimaryDark = lum(pal.primary.rgb) < 0.45;
+    shop.style.setProperty('--pv-bg', hex(pal.surface.rgb));
+    shop.style.setProperty('--pv-ink', hex(pal.ink.rgb));
+    shop.style.setProperty('--pv-muted', hex(hsl2rgb(pal.ink.h, pal.ink.s * .8, 42)));
+    shop.style.setProperty('--pv-line', `hsl(${Math.round(pal.ink.h)} ${Math.round(pal.ink.s)}% ${Math.round(pal.ink.l)}% / .12)`);
+    shop.style.setProperty('--pv-primary', hex(pal.primary.rgb));
+    shop.style.setProperty('--pv-accent', hex(pal.accent.rgb));
+    shop.style.setProperty('--pv-btn-ink', onPrimaryDark ? '#fff' : hex(pal.surface.rgb));
+    shop.style.setProperty('--pv-track', `hsl(${Math.round(pal.ink.h)} 20% 40% / .16)`);
+    shop.style.setProperty('--pv-tag-bg', hex(hsl2rgb(pal.secondary.h, clamp(pal.secondary.s*.55,0,60), 90)));
+    shop.style.setProperty('--pv-tag-ink', hex(hsl2rgb(pal.secondary.h, clamp(pal.secondary.s*.8,0,80), 26)));
+  }
+
+  /* ---------------- export ---------------- */
+  function renderExport(pal){
+    const lines = Object.keys(ROLE_LABEL).map(role => {
+      const c = pal[role], hx = hex(c.rgb);
+      return `  --color-${role}: ${hx};\n  --color-${role}-hsl: hsl(${Math.round(c.h)}, ${Math.round(c.s)}%, ${Math.round(c.l)}%);`;
+    });
+    cssOut.value =
+`/* Spectrum — harmony: ${RULE_NAMES[state.rule]}
+   base: hsl(${Math.round(state.h)}, ${Math.round(state.s)}%, ${Math.round(state.l)}%) · ${hex(hsl2rgb(state.h,state.s,state.l))} */
+:root {
+${lines.join('\n')}
+}`;
+  }
+
+  /* ---------------- master update ---------------- */
+  function update(animate = true){
+    root.style.setProperty('--h', state.h);
+    root.style.setProperty('--s', state.s);
+    root.style.setProperty('--l', state.l);
+
+    puck.style.left = (state.h / 360 * 100) + '%';
+    puck.style.top  = (100 - state.s) + '%';
+    puck.style.background = `hsl(${state.h}, ${state.s}%, ${state.l}%)`;
+
+    light.value = Math.round(state.l);
+    lightOut.textContent = Math.round(state.l) + '%';
+    light.style.setProperty('--trk',
+      `linear-gradient(90deg, hsl(${state.h} ${state.s}% 6%), hsl(${state.h} ${state.s}% 50%), hsl(${state.h} ${state.s}% 94%))`);
+
+    $('baseNow').textContent = `hsl(${Math.round(state.h)}, ${Math.round(state.s)}%, ${Math.round(state.l)}%)`;
+    $('ruleNow').textContent = RULE_NAMES[state.rule];
+
+    const pal = palette();
+    renderSwatches(pal, animate);
+    renderContrast(pal);
+    renderPreview(pal);
+    renderExport(pal);
+  }
+
+  /* ---------------- plane interaction ---------------- */
+  function planePick(ev){
+    const r = plane.getBoundingClientRect();
+    state.h = clamp0f((ev.clientX - r.left) / r.width) * 360;
+    state.s = (1 - clamp0f((ev.clientY - r.top) / r.height)) * 100;
+    update(false);
+  }
+  const clamp0f = v => v < 0 ? 0 : v > 1 ? 1 : v;
+
+  let dragging = false;
+  plane.addEventListener('pointerdown', ev => {
+    dragging = true;
+    plane.classList.add('dragging');
+    try { plane.setPointerCapture(ev.pointerId); } catch (_) { /* unmatched synthetic pointer */ }
+    plane.focus({ preventScroll:true });
+    planePick(ev);
+  });
+  plane.addEventListener('pointermove', ev => { if (dragging) planePick(ev); });
+  const stopDrag = () => { dragging = false; plane.classList.remove('dragging'); };
+  plane.addEventListener('pointerup', stopDrag);
+  plane.addEventListener('pointercancel', stopDrag);
+
+  plane.addEventListener('keydown', ev => {
+    const step = ev.shiftKey ? 10 : 1;
+    let hit = true;
+    switch (ev.key) {
+      case 'ArrowLeft':  state.h = wrapH(state.h - step); break;
+      case 'ArrowRight': state.h = wrapH(state.h + step); break;
+      case 'ArrowUp':    state.s = clamp(state.s + step, 0, 100); break;
+      case 'ArrowDown':  state.s = clamp(state.s - step, 0, 100); break;
+      default: hit = false;
+    }
+    if (hit) { ev.preventDefault(); update(false); }
+  });
+
+  light.addEventListener('input', () => { state.l = +light.value; update(false); });
+
+  /* ---------------- chips ---------------- */
+  $('chips').addEventListener('click', ev => {
+    const chip = ev.target.closest('.chip');
+    if (!chip) return;
+    state.rule = chip.dataset.rule;
+    document.querySelectorAll('.chip').forEach(c => {
+      const on = c === chip;
+      c.classList.toggle('on', on);
+      c.setAttribute('aria-checked', on);
+    });
+    update(true);
+  });
+
+  /* ---------------- shuffle ---------------- */
+  $('shuffle').addEventListener('click', () => {
+    state.h = Math.round(Math.random() * 360);
+    state.s = 52 + Math.round(Math.random() * 22);      /* pleasant, never acid */
+    state.l = 42 + Math.round(Math.random() * 16);
+    update(true);
+    toastShow(hsl2rgb(state.h, state.s, state.l), `New base · hsl(${state.h}, ${state.s}%, ${state.l}%)`, 'Shuffle');
+  });
+
+  /* ---------------- copy + toast ---------------- */
+  async function copyText(text, colorHex, label){
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (_) { /* clipboard unavailable offline */ }
+      ta.remove();
+    }
+    toastShow(colorHex ? (typeof colorHex === 'string' ? colorHex : '#fff') : '#fff', text, label);
+  }
+  function toastShow(hx, value, label){
+    if (typeof hx !== 'string') hx = hex(hx);
+    toastSwatch.style.background = hx;
+    toastMsg.innerHTML = `Copied <code>${value}</code> — ${label}`;
+    toast.classList.add('show');
+    clearTimeout(toastShow._t);
+    toastShow._t = setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+  $('copyCss').addEventListener('click', () => {
+    try { navigator.clipboard.writeText(cssOut.value).catch(()=>legacyCopy(cssOut.value)); }
+    catch (e) { legacyCopy(cssOut.value); }
+    toastShow(hex(palette().primary.rgb), 'CSS custom-property block', 'CSS export');
+  });
+  function legacyCopy(text){
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (_) {}
+    ta.remove();
+  }
+
+  update(true);
+})();
+</script>
+</body>
+</html>

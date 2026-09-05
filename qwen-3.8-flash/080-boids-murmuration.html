@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Murmuration — Starlings at Dusk</title>
+<style>
+  :root{ --night:0; }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%; overflow:hidden;}
+  body{
+    font-family:"Iowan Old Style", Georgia, Palatino, serif;
+    background:#2a2f4a; cursor:none;
+  }
+  .stage{position:fixed; inset:0;}
+
+  /* ---------- sky layers ---------- */
+  #dusk{
+    position:absolute; inset:0; z-index:0;
+    background:linear-gradient(180deg, #2a2f4a 0%, #5a4a6e 38%, #b26a5a 66%, #e3a06a 86%, #f0c48c 100%);
+  }
+  #glow{
+    position:absolute; inset:0; z-index:1;
+    background:radial-gradient(120% 70% at 50% 108%, rgba(255,150,60,.55), rgba(240,150,70,.22) 45%, transparent 70%);
+  }
+  #nightSky{
+    position:absolute; inset:0; z-index:2; opacity:var(--night);
+    background:
+      radial-gradient(120% 60% at 50% 106%, rgba(120,80,170,.35), transparent 60%),
+      linear-gradient(180deg, #05060c 0%, #0b0f1e 42%, #1a1c33 74%, #2b2540 100%);
+  }
+  #stars{position:absolute; inset:0 0 40% 0; z-index:3; opacity:var(--night);}
+  .star{
+    position:absolute; width:5px; height:5px; border-radius:50%;
+    background:radial-gradient(circle, rgba(255,250,240,.95) 0%, rgba(255,250,240,.4) 40%, transparent 70%);
+  }
+
+  /* ---------- flock canvas ---------- */
+  #flock{position:absolute; inset:0; z-index:4;}
+
+  /* ---------- landscape ---------- */
+  #land{position:absolute; left:0; right:0; bottom:0; height:40vh; min-height:190px; z-index:5; pointer-events:none;}
+  #land svg{width:100%; height:100%; display:block;}
+
+  /* ---------- hawk ---------- */
+  #hawk{
+    position:absolute; z-index:6; width:34px; height:34px; margin:-17px 0 0 -17px;
+    opacity:0; transition:opacity .25s; pointer-events:none; will-change:transform;
+  }
+  #hawk.on{opacity:.9;}
+
+  /* ---------- title ---------- */
+  .titlecard{
+    position:absolute; top:30px; left:34px; z-index:10; pointer-events:none;
+    text-shadow:0 2px 16px rgba(20,15,35,.5);
+  }
+  .titlecard h1{font-size:clamp(30px,4.4vw,54px); font-weight:400; color:#f5e9da; letter-spacing:.01em;}
+  .titlecard h1 em{font-style:italic; color:#d9a466;}
+  .titlecard p{margin-top:7px; font-style:italic; font-size:clamp(13px,1.4vw,17px); color:rgba(245,233,218,.85); max-width:44ch;}
+
+  /* ---------- panel ---------- */
+  #panel{
+    position:absolute; top:24px; right:24px; z-index:20; width:250px;
+    background:rgba(13,15,20,.55);
+    -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:12px;
+    padding:14px 16px 12px; cursor:auto;
+    transition:transform .45s cubic-bezier(.22,1,.36,1), opacity .45s;
+  }
+  #panel.hidden{transform:translateX(calc(100% + 32px)); opacity:0; pointer-events:none;}
+  #panel h2{
+    font-family:ui-monospace,"Courier New",monospace; font-size:10px; font-weight:400;
+    letter-spacing:.24em; text-transform:uppercase; color:#9aa0a8; margin-bottom:12px;
+  }
+  .row{margin-bottom:10px;}
+  .row label{display:flex; justify-content:space-between; align-items:baseline; font-style:italic; font-size:14px; color:#e8ddcf;}
+  .row label output{font-family:ui-monospace,"Courier New",monospace; font-style:normal; font-size:12px; color:#d9a466;}
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:16px; background:transparent; cursor:pointer; }
+  input[type=range]::-webkit-slider-runnable-track{height:2px; background:rgba(255,255,255,.25); border-radius:1px;}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:12px; height:12px; margin-top:-5px; border-radius:50%;
+    background:#d9a466; box-shadow:0 0 8px 2px rgba(217,164,102,.5);
+  }
+  input[type=range]::-moz-range-track{height:2px; background:rgba(255,255,255,.25); border-radius:1px;}
+  input[type=range]::-moz-range-thumb{width:12px; height:12px; border:none; border-radius:50%; background:#d9a466; box-shadow:0 0 8px 2px rgba(217,164,102,.5);}
+  .btns{display:flex; gap:8px; margin-top:14px;}
+  .btns button{
+    flex:1; font-family:ui-monospace,"Courier New",monospace; font-size:10.5px;
+    letter-spacing:.1em; text-transform:uppercase;
+    background:transparent; color:#e8ddcf; border:1px solid rgba(232,221,207,.5);
+    border-radius:7px; padding:7px 2px; cursor:pointer; transition:background .2s, border-color .2s;
+  }
+  .btns button:hover{background:rgba(255,255,255,.1); border-color:#d9a466;}
+  .btns button[aria-pressed="true"]{background:rgba(217,164,102,.28); border-color:#d9a466; color:#ffd9a8;}
+
+  #panelPill{
+    position:absolute; bottom:22px; right:24px; z-index:21;
+    font-family:ui-monospace,"Courier New",monospace; font-size:10.5px; letter-spacing:.14em; text-transform:uppercase;
+    background:rgba(13,15,20,.55); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+    color:#e8ddcf; border:1px solid rgba(255,255,255,.08); border-radius:999px;
+    padding:9px 18px; cursor:pointer; transition:background .2s;
+  }
+  #panelPill:hover{background:rgba(13,15,20,.8);}
+
+  footer{
+    position:absolute; left:34px; bottom:24px; z-index:10; pointer-events:none;
+    font-family:ui-monospace,"Courier New",monospace; font-size:11px; letter-spacing:.08em;
+    color:rgba(245,233,218,.6); text-shadow:0 1px 8px rgba(20,15,35,.6);
+  }
+  @media (max-width:700px){
+    .titlecard{left:18px; top:18px;}
+    #panel{top:auto; bottom:64px; right:12px; width:220px;}
+    footer{left:18px; bottom:20px; font-size:9.5px;}
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div id="dusk"></div>
+  <div id="glow"></div>
+  <div id="stars">
+    <i class="star" style="left:12%; top:8%"></i><i class="star" style="left:24%; top:18%"></i>
+    <i class="star" style="left:38%; top:6%"></i><i class="star" style="left:51%; top:14%"></i>
+    <i class="star" style="left:63%; top:5%"></i><i class="star" style="left:72%; top:22%"></i>
+    <i class="star" style="left:84%; top:9%"></i><i class="star" style="left:91%; top:26%"></i>
+    <i class="star" style="left:8%;  top:30%"></i><i class="star" style="left:31%; top:34%"></i>
+    <i class="star" style="left:57%; top:27%"></i><i class="star" style="left:78%; top:38%"></i>
+  </div>
+  <div id="nightSky"></div>
+
+  <canvas id="flock"></canvas>
+
+  <div id="land">
+    <svg viewBox="0 0 1600 340" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <defs>
+        <linearGradient id="treeG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#1c1620"/><stop offset="1" stop-color="#0a0a10"/>
+        </linearGradient>
+      </defs>
+      <path fill="#2a2333" opacity=".9"
+        d="M0,205 Q200,130 430,178 T880,158 T1330,182 L1600,164 V340 H0 Z"/>
+      <path fill="#231c2b" opacity=".9"
+        d="M0,240 Q260,175 520,220 T1040,205 T1600,225 V340 H0 Z"/>
+      <polygon id="trees" fill="url(#treeG)" points="0,340 0,262 1600,262 1600,340"/>
+      <rect y="300" width="1600" height="40" fill="#0a0a10"/>
+      <g stroke="#0d0b13" fill="#0d0b13">
+        <g><rect x="297" y="126" width="7" height="180"/><rect x="274" y="140" width="53" height="4" rx="2"/><rect x="279" y="166" width="43" height="4" rx="2"/></g>
+        <g><rect x="757" y="112" width="7" height="194"/><rect x="734" y="126" width="53" height="4" rx="2"/><rect x="739" y="152" width="43" height="4" rx="2"/></g>
+        <g><rect x="1217" y="122" width="7" height="184"/><rect x="1194" y="136" width="53" height="4" rx="2"/><rect x="1199" y="162" width="43" height="4" rx="2"/></g>
+        <path fill="none" stroke-width="2.2"
+          d="M-20,136 Q140,182 300,130 Q530,190 760,116 Q990,178 1220,126 Q1420,168 1620,140"/>
+        <path fill="none" stroke-width="1.8"
+          d="M-20,160 Q140,206 300,156 Q530,214 760,142 Q990,200 1220,152 Q1420,192 1620,164"/>
+        <g stroke="none">
+          <ellipse cx="240" cy="163" rx="4.5" ry="6"/><circle cx="241" cy="154" r="2.6"/>
+          <ellipse cx="520" cy="176" rx="4.5" ry="6"/><circle cx="521" cy="167" r="2.6"/>
+          <ellipse cx="530" cy="178" rx="4.5" ry="6"/><circle cx="531" cy="169" r="2.6"/>
+          <ellipse cx="940" cy="183" rx="4.5" ry="6"/><circle cx="941" cy="174" r="2.6"/>
+          <ellipse cx="1100" cy="180" rx="4.5" ry="6"/><circle cx="1101" cy="171" r="2.6"/>
+          <ellipse cx="1430" cy="181" rx="4.5" ry="6"/><circle cx="1431" cy="172" r="2.6"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <div id="hawk">
+    <svg viewBox="0 0 34 34">
+      <path fill="#0e0d12" d="M17 4 L20 14 L32 19 L20 20 L18.4 30 L17 22 L15.6 30 L14 20 L2 19 L14 14 Z"/>
+    </svg>
+  </div>
+
+  <div class="titlecard">
+    <h1>Murmur<em>ation</em></h1>
+    <p>Ten thousand small decisions, falling upward as one.</p>
+  </div>
+
+  <section id="panel" aria-label="Flock parameters">
+    <h2>flock · <span id="fps">— fps</span></h2>
+    <div class="row"><label for="birds">Birds <output id="birdsV"></output></label>
+      <input id="birds" type="range" min="500" max="12000" step="100" value="3000"></div>
+    <div class="row"><label for="coh">Cohesion <output id="cohV"></output></label>
+      <input id="coh" type="range" min="0" max="3" step="0.05" value="1.1"></div>
+    <div class="row"><label for="ali">Alignment <output id="aliV"></output></label>
+      <input id="ali" type="range" min="0" max="3" step="0.05" value="1.2"></div>
+    <div class="row"><label for="sep">Separation <output id="sepV"></output></label>
+      <input id="sep" type="range" min="0" max="3" step="0.05" value="1.4"></div>
+    <div class="row"><label for="spd">Speed <output id="spdV"></output></label>
+      <input id="spd" type="range" min="1" max="7" step="0.1" value="3.6"></div>
+    <div class="row"><label for="per">Perception radius <output id="perV"></output></label>
+      <input id="per" type="range" min="10" max="80" step="1" value="46"></div>
+    <div class="row"><label for="nit">Dusk → night <output id="nitV"></output></label>
+      <input id="nit" type="range" min="0" max="1" step="0.01" value="0"></div>
+    <div class="btns">
+      <button id="pauseBtn" type="button" aria-pressed="false">Pause</button>
+      <button id="stepBtn" type="button">Step</button>
+      <button id="scatterBtn" type="button">Scatter</button>
+    </div>
+  </section>
+  <button id="panelPill" type="button">panel ✕</button>
+
+  <footer>click — scatter&nbsp;&nbsp;·&nbsp;&nbsp;move — hawk&nbsp;&nbsp;·&nbsp;&nbsp;space — pause&nbsp;&nbsp;·&nbsp;&nbsp;s — scatter</footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ================= landscape treeline (deterministic jagged polygon) ================= */
+  {
+    let pts = "0,340 ";
+    for (let x = 0; x <= 1600; x += 20) {
+      const i = x / 20;
+      const jag = [0, -74, -26, -96, -44, -82, -14, -66][i % 8];
+      pts += x + "," + (266 + jag - ((x * 37) % 11)) + " ";
+    }
+    pts += "1600,340";
+    document.getElementById("trees").setAttribute("points", pts);
+  }
+
+  /* ================= canvas ================= */
+  const cv = document.getElementById("flock"), ctx = cv.getContext("2d");
+  let W = 0, H = 0, DPR = 1;
+  function resize() {
+    W = innerWidth; H = innerHeight;
+    DPR = Math.min(2, devicePixelRatio || 1);
+    cv.width = W * DPR; cv.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  addEventListener("resize", resize); resize();
+
+  /* ================= boid state ================= */
+  const MAX = 12000;
+  const px = new Float32Array(MAX), py = new Float32Array(MAX);
+  const vx = new Float32Array(MAX), vy = new Float32Array(MAX);
+  const dens = new Uint8Array(MAX);
+  let head = new Int32Array(1), nxt = new Int32Array(MAX);
+  let n = 0;
+
+  const P = { birds: 3000, coh: 1.1, ali: 1.2, sep: 1.4, speed: 3.6, per: 46, night: 0 };
+  let paused = false;
+
+  function seedBird(i, x, y) {
+    px[i] = x; py[i] = y;
+    const a = Math.random() * 6.283;
+    const s = P.speed * 60 * (0.6 + Math.random() * 0.4);
+    vx[i] = Math.cos(a) * s; vy[i] = Math.sin(a) * s;
+  }
+  function setCount(m) {
+    m = Math.max(1, Math.min(MAX, m | 0));
+    if (m > n) {
+      const cx = W * 0.5, cy = H * 0.4;
+      for (let i = n; i < m; i++)
+        seedBird(i, cx + (Math.random() - 0.5) * W * 0.5, cy + (Math.random() - 0.5) * H * 0.4);
+    }
+    n = m;
+  }
+  setCount(P.birds);
+
+  /* ================= spatial hash ================= */
+  let gw = 1, gh = 1, cell = P.per;
+  function grid() {
+    cell = Math.max(10, P.per);
+    gw = Math.ceil(W / cell) + 1; gh = Math.ceil(H / cell) + 1;
+    const total = gw * gh;
+    if (head.length < total) head = new Int32Array(Math.max(total, 4096));
+    head.fill(-1, 0, total);
+    for (let i = 0; i < n; i++) {
+      let cx = (px[i] / cell) | 0, cy = (py[i] / cell) | 0;
+      if (cx < 0) cx = 0; else if (cx >= gw) cx = gw - 1;
+      if (cy < 0) cy = 0; else if (cy >= gh) cy = gh - 1;
+      const k = cy * gw + cx;
+      nxt[i] = head[k]; head[k] = i;
+    }
+  }
+
+  /* ================= attractor (Lissajous-like wander) ================= */
+  let atX = 0, atY = 0;
+  function attractor(t) {
+    atX = W * (0.5 + 0.34 * Math.sin(t * 0.083) + 0.06 * Math.sin(t * 0.21 + 2));
+    atY = H * (0.28 + 0.13 * Math.sin(t * 0.121 + 1.7) + 0.04 * Math.cos(t * 0.07));
+  }
+
+  /* ================= hawk / cursor ================= */
+  const hawk = document.getElementById("hawk");
+  const hawkPos = { x: -9999, y: -9999, vx: 0, vy: 0, live: false };
+  let lastPtr = null;
+  addEventListener("pointermove", e => {
+    if (e.pointerType !== "mouse") return;
+    const now = performance.now();
+    if (lastPtr) {
+      const d = Math.max(8, now - lastPtr.t) / 1000;
+      hawkPos.vx = (e.clientX - lastPtr.x) / d; hawkPos.vy = (e.clientY - lastPtr.y) / d;
+    }
+    lastPtr = { x: e.clientX, y: e.clientY, t: now };
+    hawkPos.x = e.clientX; hawkPos.y = e.clientY; hawkPos.live = true;
+    hawk.classList.add("on");
+    hawk.style.left = e.clientX + "px"; hawk.style.top = e.clientY + "px";
+    if (hawkPos.vx || hawkPos.vy) {
+      const deg = Math.atan2(hawkPos.vy, hawkPos.vx) * 57.2958 + 90;
+      hawk.style.transform = `rotate(${deg.toFixed(1)}deg)`;
+    }
+  }, { passive: true });
+  document.addEventListener("pointerleave", () => { hawk.classList.remove("on"); hawkPos.live = false; });
+
+  /* ================= simulation ================= */
+  function step(dt) {
+    grid();
+    const R = cell, R2 = R * R;
+    const sepR = R * 0.45, sepR2 = sepR * sepR;
+    const maxS = P.speed * 60, minS = maxS * 0.45, maxS2 = maxS * maxS, minS2 = minS * minS;
+    const margin = Math.min(150, W * 0.12), lineY = H * 0.7;
+    const cohK = P.coh * 26, aliK = P.ali * 3.2, sepK = P.sep * 2600;
+    const hawkOn = hawkPos.live, hawkR = 160, hawkR2 = hawkR * hawkR;
+
+    for (let i = 0; i < n; i++) {
+      const xi = px[i], yi = py[i];
+      let cnx = 0, cny = 0, avx = 0, avy = 0, sx = 0, sy = 0, cnt = 0;
+      let cx = (xi / R) | 0, cy = (yi / R) | 0;
+      if (cx < 0) cx = 0; else if (cx >= gw) cx = gw - 1;
+      if (cy < 0) cy = 0; else if (cy >= gh) cy = gh - 1;
+
+      for (let oy = -1; oy <= 1 && cnt < 24; oy++) {
+        const gy = cy + oy; if (gy < 0 || gy >= gh) continue;
+        for (let ox = -1; ox <= 1 && cnt < 24; ox++) {
+          const gx = cx + ox; if (gx < 0 || gx >= gw) continue;
+          for (let j = head[gy * gw + gx]; j !== -1 && cnt < 24; j = nxt[j]) {
+            if (j === i) continue;
+            const dx = px[j] - xi, dy = py[j] - yi;
+            const d2 = dx * dx + dy * dy;
+            if (d2 > R2) continue;
+            cnt++;
+            cnx += px[j]; cny += py[j];
+            avx += vx[j]; avy += vy[j];
+            if (d2 < sepR2 && d2 > 0.01) {       // inverse-square repulsion
+              const w = 1 / d2;
+              sx -= dx * w; sy -= dy * w;
+            }
+          }
+        }
+      }
+      dens[i] = cnt;
+
+      let ax = 0, ay = 0;
+      if (cnt > 0) {
+        const inv = 1 / cnt;
+        ax += (cnx * inv - xi) * cohK;             // cohesion
+        ay += (cny * inv - yi) * cohK;
+        ax += (avx * inv - vx[i]) * aliK;          // alignment
+        ay += (avy * inv - vy[i]) * aliK;
+        const sl = Math.sqrt(sx * sx + sy * sy) || 1;
+        ax += sx / sl * sepK; ay += sy / sl * sepK; // separation (normalised, weighted)
+      }
+      // attractor: gentle pull that grows with distance
+      {
+        const dx = atX - xi, dy = atY - yi;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const pull = Math.min(d * 0.05, 70);
+        ax += dx / d * pull; ay += dy / d * pull;
+      }
+      // soft edge repulsion
+      if (xi < margin)       ax += (margin - xi) / margin * 520;
+      if (xi > W - margin)   ax -= (xi - (W - margin)) / margin * 520;
+      if (yi < margin * 0.6) ay += (margin * 0.6 - yi) / (margin * 0.6) * 520;
+      if (yi > lineY)        ay -= Math.min((yi - lineY) * 2.6, 900);   // treeline
+      // hawk
+      if (hawkOn) {
+        const dx = xi - hawkPos.x, dy = yi - hawkPos.y, d2 = dx * dx + dy * dy;
+        if (d2 < hawkR2 && d2 > 1) {
+          const d = Math.sqrt(d2), f = (1 - d / hawkR) * 3400;
+          ax += dx / d * f; ay += dy / d * f;
+        }
+      }
+      // tiny turbulence for life
+      ax += (Math.random() - 0.5) * 60; ay += (Math.random() - 0.5) * 60;
+
+      let nvx = vx[i] + ax * dt, nvy = vy[i] + ay * dt;
+      const s2 = nvx * nvx + nvy * nvy;
+      if (s2 > maxS2)      { const k = maxS / Math.sqrt(s2); nvx *= k; nvy *= k; }
+      else if (s2 < minS2) { const k = (s2 > 0.001 ? minS / Math.sqrt(s2) : 1); nvx *= k; nvy *= k; }
+      vx[i] = nvx; vy[i] = nvy;
+      px[i] = Math.max(4, Math.min(W - 4, xi + nvx * dt));
+      py[i] = Math.max(4, Math.min(H - 4, yi + nvy * dt));
+    }
+  }
+
+  /* ================= render: 4 density buckets, batched ================= */
+  const BUCKETS = [
+    { a: 0.42, g: 22 }, { a: 0.62, g: 15 }, { a: 0.80, g: 9 }, { a: 0.96, g: 5 },
+  ];
+  const paths = BUCKETS.map(() => new Path2D());
+  function bucketOf(d) { return d < 4 ? 0 : d < 9 ? 1 : d < 16 ? 2 : 3; }
+
+  function render() {
+    for (let b = 0; b < 4; b++) paths[b] = new Path2D();
+    const len = Math.max(2.6, 6.8 - n / 2400);
+    const nt = P.night;
+    for (let i = 0; i < n; i++) {
+      const s = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]) || 1;
+      const ux = vx[i] / s, uy = vy[i] / s;
+      const p = paths[bucketOf(dens[i])];
+      p.moveTo(px[i] + ux * len, py[i] + uy * len);
+      p.lineTo(px[i] - ux * len * 0.55 - uy * len * 0.42, py[i] - uy * len * 0.55 + ux * len * 0.42);
+      p.lineTo(px[i] - ux * len * 0.55 + uy * len * 0.42, py[i] - uy * len * 0.55 - ux * len * 0.42);
+      p.closePath();
+    }
+    ctx.clearRect(0, 0, W, H);
+    for (let b = 0; b < 4; b++) {
+      const g = Math.max(4, BUCKETS[b].g - 6 * nt);
+      ctx.fillStyle = `rgba(${g | 0},${(g + 1) | 0},${(g + 8) | 0},${BUCKETS[b].a})`;
+      ctx.fill(paths[b]);
+    }
+  }
+
+  /* ================= scatter ================= */
+  function scatter(x, y) {
+    const rad = 430, rad2 = rad * rad;
+    for (let i = 0; i < n; i++) {
+      const dx = px[i] - x, dy = py[i] - y, d2 = dx * dx + dy * dy;
+      if (d2 < rad2) {
+        const d = Math.sqrt(d2) || 1, f = (1 - d / rad) * 1500 + 160;
+        vx[i] += dx / d * f; vy[i] += dy / d * f;
+      }
+    }
+  }
+  cv.addEventListener("pointerdown", e => scatter(e.clientX, e.clientY));
+  document.getElementById("scatterBtn").addEventListener("click", () => {
+    let cx = 0, cy = 0;
+    for (let i = 0; i < n; i++) { cx += px[i]; cy += py[i]; }
+    scatter(cx / n, cy / n);
+  });
+
+  /* ================= UI ================= */
+  const $ = id => document.getElementById(id);
+  function bind(id, key, fmt, after) {
+    const el = $("" + id), out = $(id + "V");
+    const show = () => out.textContent = fmt(P[key]);
+    el.addEventListener("input", () => { P[key] = +el.value; show(); after && after(); });
+    show();
+  }
+  const f1 = v => v.toFixed(1), i0 = v => String(v | 0), f2 = v => v.toFixed(2);
+  bind("birds", "birds", i0, () => setCount(P.birds));
+  bind("coh", "coh", f2); bind("ali", "ali", f2); bind("sep", "sep", f2);
+  bind("spd", "speed", f1); bind("per", "per", i0);
+  bind("nit", "night", f2, () => document.documentElement.style.setProperty("--night", P.night));
+
+  const pauseBtn = $("pauseBtn");
+  function setPause(on) {
+    paused = on;
+    pauseBtn.setAttribute("aria-pressed", String(on));
+    pauseBtn.textContent = on ? "Resume" : "Pause";
+  }
+  pauseBtn.addEventListener("click", () => setPause(!paused));
+  $("stepBtn").addEventListener("click", () => { setPause(true); step(1 / 60); render(); });
+  addEventListener("keydown", e => {
+    if (e.target.matches("input,button,textarea")) return;
+    if (e.code === "Space") { e.preventDefault(); setPause(!paused); }
+    else if (e.key === "s" || e.key === "S") $("scatterBtn").click();
+  });
+
+  const panel = $("panel"), pill = $("panelPill");
+  let panelOpen = true;
+  pill.addEventListener("click", () => {
+    panelOpen = !panelOpen;
+    panel.classList.toggle("hidden", !panelOpen);
+    pill.textContent = panelOpen ? "panel ✕" : "☂ panel";
+  });
+
+  /* ================= main loop ================= */
+  const fpsEl = $("fps");
+  let last = performance.now(), simT = 0, ema = 60, frames = 0;
+  function frame(now) {
+    let dt = (now - last) / 1000; last = now;
+    if (dt > 0.05) dt = 0.05;
+    ema += (1 / Math.max(dt, 1e-4) - ema) * 0.06;
+    frames++;
+    if ((frames & 15) === 0) fpsEl.textContent = Math.round(ema) + " fps";
+    if (!paused) {
+      const halfRate = RM && ((frames & 1) === 1);   // reduced motion: half the sim rate
+      if (!halfRate) { simT += dt; attractor(simT); step(dt); }
+    }
+    render();
+    requestAnimationFrame(frame);
+  }
+  attractor(0);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Origami Fold Menu — Kami &amp; Fold Paper Studio</title>
+<style>
+  :root{
+    --bg:#f7f3ec; --ink:#2a2622; --ink2:#7a716a; --coral:#e8846b;
+    --serif: Georgia,'Iowan Old Style',Palatino,ui-serif,"Times New Roman",serif;
+    --mono: ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans: ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    --paper-noise:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.30 0 0 0 0 0.24 0 0 0 0 0.16 0 0 0 0.42 0'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>");
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    background: var(--bg);
+    background-image: radial-gradient(90% 55% at 50% -8%, rgba(255,252,244,0.9), rgba(255,252,244,0) 60%);
+    color: var(--ink);
+    font-family: var(--sans);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- header ---------- */
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 34px; max-width:1240px; margin:0 auto;
+  }
+  .brand{display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--ink);}
+  .brand svg{display:block;}
+  .brand b{font-family:var(--serif);font-weight:400;font-size:19px;letter-spacing:0.01em;}
+  .brand b i{color:var(--coral);font-style:italic;}
+
+  .fold-btn{
+    display:inline-flex;align-items:center;gap:10px;
+    font-family:var(--mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;
+    color:var(--ink); background:#fffdf8; cursor:pointer;
+    border:1px solid rgba(42,38,34,0.28); border-radius:999px;
+    padding:9px 18px 9px 14px;
+    box-shadow:0 1px 0 rgba(42,38,34,0.10);
+    transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+  }
+  .fold-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(42,38,34,0.12);background:#fff;}
+  .fold-btn:active{transform:translateY(0);}
+  .crease{width:17px;height:17px;overflow:visible;}
+  .crease rect{transform-box:fill-box;transform-origin:center;transition:transform .5s cubic-bezier(.6,0,.25,1);}
+  .crease .sq1{fill:none;stroke:var(--ink);stroke-width:1.5;}
+  .crease .sq2{fill:var(--coral);}
+  .fold-btn[aria-expanded="true"] .crease .sq1{transform:rotate(45deg) scale(.82);}
+  .fold-btn[aria-expanded="true"] .crease .sq2{transform:rotate(45deg) scale(.82) translate(0,-2px);}
+
+  /* ---------- intro ---------- */
+  .intro{max-width:600px;margin:56px auto 8px;text-align:center;padding:0 24px;}
+  .eyebrow{
+    font-family:var(--mono);font-size:10.5px;letter-spacing:0.28em;text-transform:uppercase;
+    color:var(--ink2); margin-bottom:18px;
+  }
+  .intro h1{
+    font-family:var(--serif);font-weight:400;font-size:clamp(34px,5.4vw,52px);line-height:1.08;
+    margin-bottom:18px;
+  }
+  .intro h1 em{color:var(--coral);font-style:italic;}
+  .intro p{color:var(--ink2);font-size:15px;line-height:1.65;max-width:46ch;margin:0 auto;}
+
+  /* ---------- stage / scene ---------- */
+  .stage{
+    perspective:1600px; perspective-origin:50% 30%;
+    display:flex; justify-content:center; align-items:flex-start;
+    padding:86px 20px 150px;
+    min-height:560px;
+  }
+  .scaler{ transform:scale(var(--sc,1)); transform-origin:50% 0; transition:transform .5s ease; }
+  body.menu-open .scaler{ transform:scale(var(--sc,1)) translateX(-352px); }
+  .stack{
+    position:relative; width:176px; height:450px;
+    transform-style:preserve-3d;
+    transition:transform .35s ease;
+  }
+  .ground{
+    position:absolute; left:50%; bottom:-34px; width:760px; height:64px;
+    transform:translateX(-50%) translateZ(-60px);
+    background:radial-gradient(50% 50% at 50% 50%, rgba(42,38,34,0.22), rgba(42,38,34,0) 72%);
+    filter:blur(10px);
+    pointer-events:none;
+  }
+
+  /* ---------- panels ---------- */
+  .panel{
+    position:absolute; top:0; left:100%; width:176px; height:450px;
+    transform-origin:0% 50%;
+    transform-style:preserve-3d;
+    --fy:0;
+  }
+  .panel.p0{left:0;}
+  .pback{
+    position:absolute; inset:0; background-color:var(--back);
+    transform:rotateY(180deg); backface-visibility:hidden;
+    background-image:var(--paper-noise),
+      repeating-linear-gradient(108deg, rgba(60,45,25,0.05) 0 1px, transparent 1px 5px);
+    background-blend-mode:multiply;
+    box-shadow:inset 0 0 0 1px rgba(60,45,25,0.10);
+  }
+  .pshade{
+    position:absolute; top:0; left:0; width:176px; height:150px;
+    background:linear-gradient(90deg, rgba(30,20,10,0.38), rgba(255,255,255,0.10) 55%, rgba(30,20,10,0.30));
+    opacity:var(--fy); pointer-events:none; z-index:6;
+    transform:translateZ(0.5px);
+  }
+
+  /* ---------- segments ---------- */
+  .seg-face{
+    backface-visibility:hidden;
+    background-image:var(--paper-noise),
+      repeating-linear-gradient(108deg, rgba(60,45,25,0.045) 0 1px, transparent 1px 5px);
+    background-blend-mode:multiply;
+  }
+  .cover{
+    position:relative; z-index:5; display:block; width:176px; height:150px;
+    border:none; text-align:left; cursor:pointer; font:inherit; color:var(--ink);
+    background-color:var(--front);
+    clip-path:polygon(0 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%);
+    padding:16px 14px;
+  }
+  .cover .num{
+    font-family:var(--mono);font-size:10px;letter-spacing:0.3em;text-transform:uppercase;
+    color:rgba(42,38,34,0.55); display:block; margin-bottom:8px;
+  }
+  .cover .nm{font-family:var(--serif);font-size:26px;font-weight:400;line-height:1;}
+  .cover .hint{
+    position:absolute; left:14px; bottom:12px;
+    font-family:var(--mono);font-size:9px;letter-spacing:0.2em;text-transform:uppercase;
+    color:rgba(42,38,34,0.42);
+  }
+  .cover .hint::after{content:" ▾";}
+  .cover[aria-expanded="true"] .hint::after{content:" ▴";}
+  .cover:hover .hint{color:rgba(42,38,34,0.7);}
+
+  .segh{
+    position:absolute; left:0; top:150px; width:176px; height:300px;
+    transform-origin:50% 0; transform-style:preserve-3d;
+    --f:0;
+  }
+  .segh.s3{top:150px; height:150px; left:0;}
+  .segwrap{position:absolute; inset:0; transform-style:preserve-3d;}
+  .sfront{
+    position:absolute; inset:0; height:150px;
+    background-color:var(--front);
+    padding:14px 15px;
+    box-shadow:inset 0 9px 13px -10px rgba(40,26,12,0.55), inset 0 0 0 1px rgba(60,45,25,0.08);
+  }
+  .sback{
+    position:absolute; top:0; left:0; width:176px; height:150px;
+    background-color:var(--back);
+    transform:rotateX(180deg);
+  }
+  .sshade{
+    position:absolute; top:0; left:0; width:176px; height:150px;
+    background:linear-gradient(180deg, rgba(28,18,8,0.42), rgba(255,255,255,0.14) 68%, rgba(255,255,255,0.02));
+    opacity:var(--f); pointer-events:none; z-index:4;
+    transform:translateZ(0.4px);
+  }
+  .sfront h3{
+    font-family:var(--serif); font-weight:400; font-size:15.5px; margin-bottom:7px; line-height:1.2;
+  }
+  .sfront p{font-size:11.5px; line-height:1.55; color:#4a423a; margin-bottom:9px;}
+  .sfront .sub{font-family:var(--mono);font-size:8.5px;letter-spacing:0.22em;text-transform:uppercase;color:rgba(42,38,34,0.5);margin-bottom:7px;}
+  .sfront ul{list-style:none;}
+  .sfront li{margin-bottom:4px;}
+  .sfront a{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.04em;
+    color:var(--ink); text-decoration:none; border-bottom:1px solid rgba(232,132,107,0.75);
+    padding-bottom:1px; transition:color .15s ease, border-color .15s ease;
+  }
+  .sfront a:hover{color:#b64a2c; border-color:#b64a2c;}
+  .stamp{
+    position:absolute; right:12px; bottom:11px; z-index:3;
+    font-family:var(--mono); font-size:8px; letter-spacing:0.18em; text-transform:lowercase;
+    color:rgba(42,38,34,0.55);
+    border:1px solid rgba(42,38,34,0.35); border-radius:3px;
+    padding:3px 6px; transform:rotate(-7deg);
+    background:rgba(255,255,255,0.25);
+  }
+  .essay{display:block; font-size:11px; line-height:1.5; color:#4a423a; margin-bottom:6px;}
+  .essay time{font-family:var(--mono);font-size:8.5px;letter-spacing:0.12em;color:rgba(42,38,34,0.5);display:block;}
+  .essay b{font-weight:600;color:var(--ink);}
+
+  /* per-panel palette */
+  .panel.kraft {--front:#c9a677; --back:#a9865a;}
+  .panel.cream {--front:#f3e9d6; --back:#d9ccb2;}
+  .panel.coral {--front:#e8846b; --back:#c4644e;}
+  .panel.sage  {--front:#9fb096; --back:#7d8f75;}
+
+  :is(button,a):focus-visible{outline:2px solid #b64a2c; outline-offset:3px; border-radius:4px;}
+
+  footer{
+    text-align:center; padding:0 20px 46px;
+    font-family:var(--mono); font-size:9.5px; letter-spacing:0.24em; text-transform:uppercase;
+    color:rgba(122,113,106,0.8);
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width:1080px){ .scaler{--sc:0.82;} .stage{padding-top:60px;} }
+  @media (max-width:940px){ .scaler{--sc:0.68;} }
+  @media (max-width:719.98px){
+    .stage{perspective:none; min-height:0; padding:34px 18px 90px;}
+    .scaler{--sc:1 !important;}
+    body.menu-open .scaler{transform:none !important;}
+    .stack{width:min(100%,340px); height:auto; transform:none !important;}
+    .panel{
+      position:relative !important; left:auto !important; width:100%;
+      transform:none !important; height:150px; margin:0 0 14px;
+      transition:height .45s ease;
+    }
+    body.menu-open .panel{height:450px;}
+    .pback,.pshade{display:none;}
+    .cover{width:100%;}
+    .segh{width:100%;}
+    .segwrap,.sfront,.sback,.sshade{width:100%;}
+    .ground{width:100%;}
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .stack{transition:none;}
+    .crease rect{transition:none;}
+    .fold-btn{transition:none;}
+    .panel{transition:none;}
+    html{scroll-behavior:auto;}
+  }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="#" aria-label="Kami and Fold home">
+    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+      <polygon points="2,24 13,2 13,24" fill="#c9a677"/>
+      <polygon points="13,2 24,24 13,24" fill="#8a6a42"/>
+      <polygon points="13,2 13,24 18,24" fill="#e8846b"/>
+    </svg>
+    <b>Kami <i>&amp;</i> Fold</b>
+  </a>
+  <button class="fold-btn" id="foldBtn" aria-expanded="false" aria-controls="menu">
+    <svg class="crease" viewBox="0 0 17 17" aria-hidden="true">
+      <rect class="sq2" x="5.5" y="5.5" width="8" height="8" rx="1"/>
+      <rect class="sq1" x="2.5" y="2.5" width="8" height="8" rx="1"/>
+    </svg>
+    <span id="foldLbl">Unfold menu</span>
+  </button>
+</header>
+
+<section class="intro">
+  <p class="eyebrow">Navigation experiment · No. 038</p>
+  <h1>A menu you <em>unfold</em></h1>
+  <p>Five sections creased into one packet of paper. Pull it open and the concertina swings
+  panel by panel, each sheet dropping its own two folds — plain CSS on real hinges, no images.</p>
+</section>
+
+<main class="stage" id="stage">
+  <div class="scaler">
+    <div class="stack" id="menu">
+      <div class="ground" aria-hidden="true"></div>
+    </div>
+  </div>
+</main>
+
+<footer>Kami &amp; Fold · Nishijin, Kyoto · press M to fold</footer>
+
+<script>
+(() => {
+  "use strict";
+  const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const MOBILE  = matchMedia("(max-width:719.98px)");
+  const FINE    = matchMedia("(pointer:fine)");
+
+  const DATA = [
+    { cls:"kraft", num:"01", name:"Studio", stamp:"kraft 120g",
+      s2:`<div class="sub">Since MMXIV</div><h3>An atelier of paper, light and patience.</h3>
+          <p>We have folded from a machiya workshop in Kyoto's Nishijin ward since 2014 — one long table, two bone folders, endless reams.</p>`,
+      s3:`<div class="sub">Index</div><ul><li><a href="#">Our story</a></li><li><a href="#">People</a></li><li><a href="#">Press</a></li></ul>` },
+    { cls:"cream", num:"02", name:"Work", stamp:"cream 90g",
+      s2:`<div class="sub">Selected</div><h3>41 commissions, six countries.</h3>
+          <p>Lantern fields for hotel atria, unfolded canopies for stages, retail windows that breathe when the door opens.</p>`,
+      s3:`<div class="sub">Sectors</div><ul><li><a href="#">Lighting</a></li><li><a href="#">Retail</a></li><li><a href="#">Stage sets</a></li></ul>` },
+    { cls:"coral", num:"03", name:"Process", stamp:"coral 120g",
+      s2:`<div class="sub">Method</div><h3>crease · score · fold.</h3>
+          <p>Every piece begins as a single crease pattern on one sheet, folded a hundred passes until the paper remembers its shape.</p>`,
+      s3:`<div class="sub">Study</div><ul><li><a href="#">Crease patterns</a></li><li><a href="#">Materials</a></li><li><a href="#">Workshops</a></li></ul>` },
+    { cls:"sage", num:"04", name:"Journal", stamp:"sage 100g",
+      s2:`<div class="sub">Short essays</div>
+          <span class="essay"><time>AUG 2026</time><b>The memory of a crease</b></span>
+          <span class="essay"><time>MAY 2026</time><b>Why kozo dries flat</b></span>
+          <span class="essay"><time>FEB 2026</time><b>Six folds for a lamp</b></span>`,
+      s3:`<div class="sub">Archive</div><ul><li><a href="#">All entries</a></li><li><a href="#">Notebooks</a></li><li><a href="#">Feeds</a></li></ul>` },
+    { cls:"cream", num:"05", name:"Contact", stamp:"cream 90g",
+      s2:`<div class="sub">Visit</div><h3>2-chōme Nishijin, Kamigyō-ku, Kyoto.</h3>
+          <p>Open Thursday to Sunday, 10:00–17:00. Ring the brass bell twice; the kettle is usually on.</p>`,
+      s3:`<div class="sub">Write</div><ul><li><a href="#">hello@kami.fold</a></li><li><a href="#">Map</a></li><li><a href="#">Newsletter</a></li></ul>` },
+  ];
+
+  const menu = document.getElementById("menu");
+  const btn  = document.getElementById("foldBtn");
+  const lbl  = document.getElementById("foldLbl");
+
+  // ---------- build DOM (nested hinges: panel n inside panel n−1) ----------
+  const panels = [];
+  const closedRY = i => i === 0 ? 0 : (i % 2 === 1 ? 180 : -180);
+  const localTZ  = i => i === 0 ? 0 : ((i - 1) % 2 === 0 ? -1.5 : 1.5);
+
+  DATA.forEach((d, i) => {
+    const sec = document.createElement("section");
+    sec.className = `panel ${d.cls}`;
+    sec.innerHTML = `
+      <div class="pback seg-face" aria-hidden="true"></div>
+      <div class="pshade" aria-hidden="true"></div>
+      <button class="cover seg-face" aria-expanded="false">
+        <span class="num">${d.num} —</span><span class="nm">${d.name}</span>
+        <span class="hint">fold</span>
+      </button>
+      <div class="segh s2">
+        <div class="segwrap">
+          <div class="sfront seg-face">${d.s2}</div>
+          <div class="sback seg-face"></div>
+          <div class="sshade" aria-hidden="true"></div>
+        </div>
+        <div class="segh s3">
+          <div class="segwrap">
+            <div class="sfront seg-face">${d.s3}<span class="stamp">${d.stamp}</span></div>
+            <div class="sback seg-face"></div>
+            <div class="sshade" aria-hidden="true"></div>
+          </div>
+        </div>
+      </div>`;
+    if (i === 0) menu.appendChild(sec); else panels[i-1].root.appendChild(sec);
+    if (i === 0) sec.classList.add("p0");
+    const P = {
+      root: sec,
+      cover: sec.querySelector(":scope > .cover"),
+      ry: { kind:"ry", a: closedRY(i), closed: closedRY(i), el: sec, tz: localTZ(i), root: true, idx: i },
+    };
+    P.s2 = { kind:"sx", a:-180, closed:-180, el: sec.querySelector(":scope > .segh.s2"), tz:-0.8 };
+    P.s3 = { kind:"sx", a: 180, closed: 180, el: P.s2.el.querySelector(":scope > .segh.s3"), tz:-1.6 };
+    panels.push(P);
+  });
+
+  // ---------- transform + lighting writes ----------
+  function setRY(h, a){
+    h.a = a;
+    if (MOBILE.matches) return;
+    if (h.idx === 0){ h.el.style.transform = ""; h.el.style.setProperty("--fy", 0); return; }
+    h.el.style.transform = `translateZ(${h.tz}px) rotateY(${a}deg)`;
+    h.el.style.setProperty("--fy", Math.abs(Math.sin(a * Math.PI / 180)).toFixed(3));
+  }
+  function setX(h, a){
+    h.a = a;
+    h.el.style.transform = a === 0 ? "" : `translateZ(${h.tz}px) rotateX(${a}deg)`;
+    h.el.style.setProperty("--f", Math.abs(Math.sin(a * Math.PI / 180)).toFixed(3));
+    const folded = a === h.closed;
+    h.el.style.visibility = (folded && !h.anim) ? "hidden" : "visible";
+  }
+  function apply(h, a){ h.kind === "ry" ? setRY(h, a) : setX(h, a); }
+
+  // ---------- tween engine (cubic, rAF) ----------
+  const tweens = [];
+  let rafOn = false;
+  const ease = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+  function to(h, target, dur, delay = 0){
+    if (h.tw){ const j = tweens.indexOf(h.tw); if (j >= 0) tweens.splice(j, 1); h.tw = null; }
+    if (REDUCED || (MOBILE.matches && h.kind === "ry")){
+      if (MOBILE.matches && h.kind === "ry"){ h.a = target; return; }
+      h.anim = false; apply(h, target); settle(h); return;
+    }
+    const tw = { h, from: h.a, to: target, t0: performance.now() + delay, dur: Math.max(1, dur) };
+    h.tw = tw; h.anim = true;
+    if (h.kind === "sx") setX(h, h.a);          // un-hide while animating
+    if (h.kind === "ry") h.el.style.visibility = "visible";
+    tweens.push(tw);
+    if (!rafOn){ rafOn = true; requestAnimationFrame(tick); }
+  }
+  function settle(h){
+    h.anim = false; h.tw = null;
+    if (h.kind === "sx") setX(h, h.a); else syncPanelVis();
+  }
+  function tick(now){
+    for (let i = tweens.length - 1; i >= 0; i--){
+      const tw = tweens[i];
+      let p = (now - tw.t0) / tw.dur;
+      if (p < 0) continue;
+      if (p > 1) p = 1;
+      apply(tw.h, tw.from + (tw.to - tw.from) * ease(p));
+      if (p === 1){ tweens.splice(i, 1); settle(tw.h); }
+    }
+    rafOn = tweens.length > 0;
+    if (rafOn) requestAnimationFrame(tick);
+  }
+
+  // ---------- rest visibility for closed panels (tab order) ----------
+  function syncPanelVis(){
+    panels.forEach((P, i) => {
+      if (MOBILE.matches){ P.root.style.visibility = "visible"; return; }
+      const ryClosed = i === 0 || (Math.abs(P.ry.a - P.ry.closed) < 0.01 && !P.ry.anim);
+      const hidden = i > 0 && ryClosed;
+      P.root.style.visibility = hidden ? "hidden" : "visible";
+    });
+  }
+
+  // ---------- menu orchestration ----------
+  let menuOpen = false, touched = false;
+  const segOpen = [false,false,false,false,false];
+
+  function openSeg(P, i, o){
+    segOpen[i] = o;
+    P.cover.setAttribute("aria-expanded", String(o));
+    if (o){
+      to(P.s2, 0, 620, i * 140);            // panels staggered left→right
+      to(P.s3, 0, 620, i * 140 + 170);
+    } else {
+      to(P.s3, P.s3.closed, 620, (4 - i) * 90);   // right→left
+      to(P.s2, P.s2.closed, 620, (4 - i) * 90 + 60);
+    }
+  }
+
+  function openMenu(){
+    if (menuOpen) return;
+    menuOpen = true; touched = true;
+    document.body.classList.add("menu-open");
+    btn.setAttribute("aria-expanded", "true");
+    lbl.textContent = "Fold menu";
+    panels.forEach((P, i) => {
+      if (i > 0) openRY(P, i);
+      openSeg(P, i, true);
+    });
+  }
+  function openRY(P, i){
+    if (MOBILE.matches){ P.ry.a = 0; syncPanelVis(); return; }
+    P.root.style.visibility = "visible";
+    to(P.ry, 0, 760, (i - 1) * 140);        // 2–5 swing out in sequence
+  }
+  function closeMenu(){
+    if (!menuOpen) return;
+    menuOpen = false; touched = true;
+    document.body.classList.remove("menu-open");
+    btn.setAttribute("aria-expanded", "false");
+    lbl.textContent = "Unfold menu";
+    panels.forEach((P, i) => openSeg(P, i, false));   // segments fold up first (right→left)
+    if (MOBILE.matches){ syncPanelVis(); return; }
+    const after = 4 * 90 + 720;
+    panels.forEach((P, i) => {
+      if (i === 0) return;
+      to(P.ry, P.ry.closed, 620, after + (4 - i) * 100);
+    });
+    setTimeout(syncPanelVis, after + 620 + 4 * 100 + 150);
+  }
+
+  // cover tabs are real buttons controlling their own segments
+  panels.forEach((P, i) => {
+    P.cover.addEventListener("click", () => {
+      touched = true;
+      if (!menuOpen && i === 0){ openMenu(); return; }
+      openSeg(P, i, !segOpen[i]);
+    });
+  });
+  btn.addEventListener("click", () => { menuOpen ? closeMenu() : openMenu(); });
+  addEventListener("keydown", e => {
+    if (e.key === "Escape" && menuOpen){ closeMenu(); btn.focus(); }
+    else if ((e.key === "m" || e.key === "M") && !e.metaKey && !e.ctrlKey && !e.altKey){
+      e.preventDefault();
+      menuOpen ? closeMenu() : openMenu();
+    }
+  });
+
+  // ---------- pointer tilt (fine pointers only) ----------
+  const stage = document.getElementById("stage");
+  if (FINE.matches && !REDUCED){
+    stage.addEventListener("pointermove", e => {
+      const r = stage.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width - 0.5;
+      const y = (e.clientY - r.top) / r.height - 0.5;
+      menu.style.transform = `rotateX(${(-y * 8).toFixed(2)}deg) rotateY(${(x * 8).toFixed(2)}deg)`;
+    });
+    stage.addEventListener("pointerleave", () => { menu.style.transform = ""; });
+  }
+
+  // ---------- breakpoint handling ----------
+  function onBP(){
+    for (let i = tweens.length - 1; i >= 0; i--) if (tweens[i].h.kind === "ry") tweens.splice(i, 1);
+    if (MOBILE.matches){
+      panels.forEach(P => { P.ry.anim = false; P.ry.a = 0; P.root.style.transform = ""; });
+    } else {
+      panels.forEach((P, i) => { if (i > 0) apply(P.ry, menuOpen ? 0 : closedRY(i)); });
+    }
+    syncPanelVis();
+  }
+  MOBILE.addEventListener ? MOBILE.addEventListener("change", onBP) : MOBILE.addListener(onBP);
+
+  // ---------- init ----------
+  panels.forEach((P, i) => {
+    if (i > 0) setRY(P.ry, closedRY(i));
+    setX(P.s2, -180); setX(P.s3, 180);
+  });
+  syncPanelVis();
+  setTimeout(() => { if (!touched) openMenu(); }, REDUCED ? 120 : 1400);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kaleido — Symmetric Mandala Studio</title>
+<style>
+  :root{
+    --amber:#f0b35a;
+    --muted:#8b8c91;
+    --glass:rgba(255,255,255,.06);
+    --edge:rgba(255,255,255,.14);
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background:radial-gradient(120% 120% at 50% 50%,#1a1b1e 0%,#0d0e10 100%);
+    font-family:var(--sans);
+    color:#e6e6ea;
+    -webkit-user-select:none;user-select:none;
+  }
+  canvas#stage{position:fixed;inset:0;display:block;cursor:crosshair;touch-action:none;}
+  .vignette{
+    position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(95% 85% at 50% 50%,transparent 55%,rgba(0,0,0,.55) 100%);
+  }
+
+  /* ---------- brand + status ---------- */
+  .brand{position:fixed;top:22px;left:28px;pointer-events:none;}
+  .brand .name{font-weight:300;font-size:22px;letter-spacing:.32em;color:#f2f2f4;}
+  .brand .sub{margin-top:5px;font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);}
+  .status{
+    position:fixed;top:22px;right:28px;text-align:right;pointer-events:none;
+    font-family:var(--mono);font-size:11.5px;line-height:1.8;color:var(--muted);
+  }
+  .status b{font-weight:600;color:var(--amber);}
+
+  /* ---------- toolbar ---------- */
+  .toolbar{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
+    display:flex;align-items:center;gap:6px;
+    padding:8px;border-radius:999px;
+    background:var(--glass);
+    border:1px solid var(--edge);
+    -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+    box-shadow:0 24px 60px rgba(0,0,0,.6),0 4px 16px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.08);
+    z-index:10;max-width:calc(100vw - 20px);
+  }
+  .tb{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:var(--sans);font-size:13px;color:#dcdce2;
+    background:transparent;border:1px solid transparent;border-radius:999px;
+    padding:9px 15px;cursor:pointer;white-space:nowrap;
+    transition:background .2s ease,border-color .2s ease,color .2s ease;
+  }
+  .tb .ic{font-size:15px;line-height:1;}
+  .tb:hover{background:rgba(255,255,255,.08);}
+  .tb:focus-visible{outline:1px solid var(--amber);outline-offset:2px;}
+  .tb.on{color:var(--amber);border-color:rgba(240,179,90,.55);background:rgba(240,179,90,.12);}
+  .tb .val{font-family:var(--mono);font-size:11px;color:var(--amber);}
+  .sep{width:1px;height:26px;background:var(--edge);margin:0 5px;flex:none;}
+
+  /* ---------- popovers ---------- */
+  .popwrap{position:relative;}
+  .pop{
+    position:absolute;left:50%;bottom:calc(100% + 14px);
+    transform:translate(-50%,10px);opacity:0;pointer-events:none;
+    background:rgba(20,21,25,.92);
+    border:1px solid var(--edge);border-radius:16px;
+    -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+    box-shadow:0 20px 44px rgba(0,0,0,.6);
+    padding:12px;display:flex;gap:8px;align-items:center;
+    transition:opacity .25s ease,transform .25s cubic-bezier(.2,.8,.2,1);
+  }
+  .pop.open{opacity:1;transform:translate(-50%,0);pointer-events:auto;}
+  .chip{
+    min-width:44px;padding:9px 12px;border-radius:10px;
+    font-family:var(--mono);font-size:13px;color:#cfced6;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+    cursor:pointer;transition:all .18s ease;
+  }
+  .chip:hover{background:rgba(255,255,255,.12);}
+  .chip.sel{border-color:var(--amber);color:var(--amber);background:rgba(240,179,90,.14);box-shadow:0 0 14px rgba(240,179,90,.25);}
+  .sw{
+    width:40px;height:40px;border-radius:50%;cursor:pointer;border:2px solid rgba(255,255,255,.15);
+    transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;position:relative;
+  }
+  .sw:hover{transform:scale(1.12);}
+  .sw.sel{border-color:var(--amber);box-shadow:0 0 16px rgba(240,179,90,.4);}
+  .sw::after{
+    content:attr(data-name);position:absolute;top:calc(100% + 5px);left:50%;transform:translateX(-50%);
+    font-family:var(--mono);font-size:9px;color:var(--muted);white-space:nowrap;
+  }
+
+  /* ---------- narrow: icons only ---------- */
+  @media (max-width:720px){
+    .tb .lb{display:none;}
+    .tb{padding:10px 13px;}
+    .brand{left:16px;top:16px;}
+    .status{right:16px;top:16px;font-size:10px;}
+    .toolbar{bottom:16px;gap:2px;}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<div class="brand" aria-hidden="true">
+  <div class="name">KALEIDO</div>
+  <div class="sub">symmetric mandala studio</div>
+</div>
+
+<div class="status" aria-hidden="true">
+  symmetry <b id="stSym">8</b><br>
+  mirror&nbsp;&nbsp;<b id="stMir">off</b><br>
+  strokes&nbsp; <b id="stCnt">0</b><br>
+  palette&nbsp; <b id="stPal">drift</b>
+</div>
+
+<div class="toolbar" role="toolbar" aria-label="Kaleido controls">
+  <button class="tb" id="bClear" title="Clear (C)"><span class="ic">✕</span><span class="lb">Clear</span></button>
+  <button class="tb" id="bUndo" title="Undo (Z)"><span class="ic">↶</span><span class="lb">Undo</span></button>
+  <button class="tb" id="bSave" title="Save PNG (S)"><span class="ic">⤓</span><span class="lb">Save PNG</span></button>
+  <span class="sep"></span>
+  <div class="popwrap">
+    <button class="tb" id="bSym" title="Symmetry" aria-haspopup="true" aria-expanded="false">
+      <span class="ic">✳</span><span class="lb">Symmetry</span><span class="val" id="symVal">8</span>
+    </button>
+    <div class="pop" id="pSym" role="menu" aria-label="Symmetry segments">
+      <button class="chip" data-s="6">6</button>
+      <button class="chip" data-s="8">8</button>
+      <button class="chip" data-s="12">12</button>
+      <button class="chip" data-s="16">16</button>
+    </div>
+  </div>
+  <button class="tb" id="bMirror" title="Mirror (M)"><span class="ic">⇋</span><span class="lb">Mirror</span></button>
+  <div class="popwrap">
+    <button class="tb" id="bPal" title="Palette" aria-haspopup="true" aria-expanded="false">
+      <span class="ic">◐</span><span class="lb">Palette</span>
+    </button>
+    <div class="pop" id="pPal" role="menu" aria-label="Palettes" style="padding:14px 12px 22px;"></div>
+  </div>
+  <span class="sep"></span>
+  <button class="tb" id="bAuto" title="Auto-draw (A)"><span class="ic">❋</span><span class="lb">Auto-draw</span></button>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ================= state ================= */
+  const PALETTES = {
+    drift:  null,
+    ember:  ["#ffb347","#ff7a3a","#ff5e3a","#e0335a","#c81d5a"],
+    lagoon: ["#a7f3d0","#5eead4","#22d3ee","#3b82f6","#1e3a8a"],
+    gilded: ["#fff6d5","#f7dd9a","#f0b35a","#c98a2c","#7a4b12"],
+    ivory:  ["#ffffff","#f7f3ea","#e8e0d2","#cfc7b8","#a89e8e"],
+  };
+  let sym = 8, mirror = false, palette = "drift";
+  let hue = Math.floor(Math.random() * 360);
+  let strokes = [];              // [{points:[{dx,dy,w,c}]}]
+  let live = null;               // in-progress stroke
+  let palTick = 0;
+
+  const cv = document.getElementById("stage");
+  const ctx = cv.getContext("2d");
+  const dprCap = Math.min(window.devicePixelRatio || 1, 3);
+  let vw = 0, vh = 0, cx = 0, cy = 0;
+
+  function fit() {
+    vw = innerWidth; vh = innerHeight; cx = vw / 2; cy = vh / 2;
+    cv.width = Math.round(vw * dprCap);
+    cv.height = Math.round(vh * dprCap);
+    cv.style.width = vw + "px"; cv.style.height = vh + "px";
+    ctx.setTransform(dprCap, 0, 0, dprCap, 0, 0);
+    redraw();
+  }
+
+  /* ================= rendering ================= */
+  const mid = (a, b) => ({ dx: (a.dx + b.dx) / 2, dy: (a.dy + b.dy) / 2 });
+
+  function paintSymmetry(fn) {
+    ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.globalAlpha = 0.92;
+    const step = (Math.PI * 2) / sym;
+    ctx.save(); ctx.translate(cx, cy);
+    for (let k = 0; k < sym; k++) {
+      ctx.save(); ctx.rotate(step * k);
+      fn();
+      if (mirror) { ctx.scale(1, -1); fn(); }
+      ctx.restore();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
+
+  function drawSegment(pts, i) {
+    // i = index of the control (actual) sample; segments run mid→mid.
+    const p = pts[i];
+    ctx.strokeStyle = p.c; ctx.lineWidth = p.w;
+    ctx.shadowColor = p.c; ctx.shadowBlur = Math.min(18, 6 + p.w);
+    const a = mid(pts[i - 1], p), b = mid(p, pts[i + 1]);
+    paintSymmetry(() => {
+      ctx.beginPath();
+      ctx.moveTo(a.dx, a.dy);
+      ctx.quadraticCurveTo(p.dx, p.dy, b.dx, b.dy);
+      ctx.stroke();
+    });
+  }
+
+  function drawTail(pts) {
+    // final stub: last midpoint → actual last sample
+    const n = pts.length, p = pts[n - 1], q = pts[n - 2];
+    const m = mid(q, p);
+    ctx.strokeStyle = p.c; ctx.lineWidth = p.w;
+    ctx.shadowColor = p.c; ctx.shadowBlur = Math.min(18, 6 + p.w);
+    paintSymmetry(() => {
+      ctx.beginPath(); ctx.moveTo(m.dx, m.dy); ctx.lineTo(p.dx, p.dy); ctx.stroke();
+    });
+  }
+
+  function drawStroke(s) {
+    const pts = s.points;
+    if (pts.length === 1) {
+      const p = pts[0];
+      ctx.fillStyle = p.c; ctx.shadowColor = p.c; ctx.shadowBlur = 8;
+      paintSymmetry(() => { ctx.beginPath(); ctx.arc(p.dx, p.dy, p.w / 2, 0, 7); ctx.fill(); });
+      ctx.shadowBlur = 0;
+      return;
+    }
+    for (let i = 1; i < pts.length - 1; i++) drawSegment(pts, i);
+    drawTail(pts);
+  }
+
+  function redraw() {
+    ctx.clearRect(0, 0, vw, vh);
+    for (const s of strokes) drawStroke(s);
+  }
+
+  /* ================= input ================= */
+  let lastT = 0, lastW = 7, lastPt = null;
+
+  function colorFor() {
+    if (palette === "drift") {
+      hue = (hue + 1.4) % 360;
+      return `hsl(${hue.toFixed(1)}, 85%, 62%)`;
+    }
+    const list = PALETTES[palette];
+    if (++palTick % 9 === 0) s_step += 1;   // step slowly through the palette
+    return list[s_step % list.length];
+  }
+  let s_step = 0;
+
+  function drawPair(a, b) {
+    ctx.strokeStyle = b.c; ctx.lineWidth = b.w;
+    ctx.shadowColor = b.c; ctx.shadowBlur = 6 + b.w;
+    paintSymmetry(() => { ctx.beginPath(); ctx.moveTo(a.dx, a.dy); ctx.lineTo(b.dx, b.dy); ctx.stroke(); });
+    ctx.shadowBlur = 0;
+  }
+
+  function addSample(s, dx, dy, speed) {
+    const target = Math.max(1.2, Math.min(14, 1680 / (speed + 140) + 1.2));
+    s.lastW = (s.lastW ?? 7) + (target - (s.lastW ?? 7)) * 0.25; // low-pass the width
+    const p = { dx, dy, w: s.lastW, c: colorFor() };
+    s.points.push(p);
+    const n = s.points.length;
+    if (n >= 3) drawSegment(s.points, n - 2);
+    else if (n === 2) drawPair(s.points[0], p);
+  }
+
+  cv.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    cv.setPointerCapture(e.pointerId);
+    live = { points: [], lastW: 7 };
+    lastT = e.timeStamp || performance.now();
+    lastPt = { x: e.clientX, y: e.clientY };
+    addSample(live, e.clientX - cx, e.clientY - cy, 40);
+  });
+  cv.addEventListener("pointermove", (e) => {
+    if (!live) return;
+    const t = e.timeStamp || performance.now();
+    const dt = Math.max(1, t - lastT);
+    const dist = Math.hypot(e.clientX - lastPt.x, e.clientY - lastPt.y);
+    if (dist < 1.5) return;
+    const speed = (dist / dt) * 1000;
+    addSample(live, e.clientX - cx, e.clientY - cy, speed);
+    lastT = t; lastPt = { x: e.clientX, y: e.clientY };
+  });
+  function endStroke() {
+    if (!live) return;
+    drawTail(live.points);
+    strokes.push({ points: live.points });
+    live = null;
+    stCnt.textContent = String(strokes.length);
+  }
+  cv.addEventListener("pointerup", endStroke);
+  cv.addEventListener("pointercancel", endStroke);
+
+  /* ================= auto-draw (value-noise driven) ================= */
+  function hash1(n) { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); }
+  function vnoise(x) {
+    const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f);
+    return hash1(i) * (1 - u) + hash1(i + 1) * u;  // 0..1
+  }
+  let auto = null, autoRAF = 0;
+  function newAutoStroke() {
+    const scale = Math.min(vw, vh);
+    const rings = [0.07, 0.14, 0.21, 0.29, 0.38];
+    auto.ring = scale * rings[Math.floor(Math.random() * 5)];
+    auto.spread = auto.ring * (0.25 + Math.random() * 0.7);
+    auto.dir = Math.random() < 0.5 ? 1 : -1;
+    auto.ang = Math.random() * Math.PI * 2;
+    auto.life = 120 + Math.floor(Math.random() * 160);   // 120–280 samples
+    auto.t = 0;
+    auto.seedA = Math.random() * 500;
+    auto.seedR = Math.random() * 500;
+    auto.seedW = Math.random() * 500;
+    auto.baseW = 1.5 + Math.random() * 5;
+    auto.s = { points: [], lastW: auto.baseW };
+  }
+  function autoTick() {
+    if (!auto) return;
+    auto.t++;
+    const vel = auto.dir * (0.008 + vnoise(auto.t * 0.012 + auto.seedA) * 0.028);
+    auto.ang += vel;
+    const wob = (vnoise(auto.t * 0.02 + auto.seedR) - 0.5) * 2 * auto.spread;
+    const r = Math.max(6, auto.ring + wob);
+    const w = Math.max(1.2, Math.min(14, auto.baseW * (0.55 + vnoise(auto.t * 0.05 + auto.seedW))));
+    const dx = Math.cos(auto.ang) * r, dy = Math.sin(auto.ang) * r;
+    auto.s.points.push({ dx, dy, w, c: colorFor() });
+    const n = auto.s.points.length;
+    if (n >= 3) drawSegment(auto.s.points, n - 2);
+    else if (n === 2) drawPair(auto.s.points[0], auto.s.points[1]);
+    if (auto.t >= auto.life) {
+      drawTail(auto.s.points);
+      strokes.push({ points: auto.s.points });
+      stCnt.textContent = String(strokes.length);
+      newAutoStroke();
+    }
+    autoRAF = requestAnimationFrame(autoTick);
+  }
+  function setAuto(on) {
+    const b = document.getElementById("bAuto");
+    if (on && !auto) {
+      auto = {}; newAutoStroke();
+      autoTick();
+      b.classList.add("on");
+    } else if (!on && auto) {
+      cancelAnimationFrame(autoRAF);
+      if (auto.s && auto.s.points.length > 1) {
+        drawTail(auto.s.points);
+        strokes.push({ points: auto.s.points });
+        stCnt.textContent = String(strokes.length);
+      }
+      auto = null;
+      b.classList.remove("on");
+    }
+  }
+
+  /* ================= UI ================= */
+  const stSym = document.getElementById("stSym");
+  const stMir = document.getElementById("stMir");
+  const stCnt = document.getElementById("stCnt");
+  const stPal = document.getElementById("stPal");
+  const symVal = document.getElementById("symVal");
+
+  function setSym(n) {
+    sym = n;
+    symVal.textContent = String(n);
+    stSym.textContent = String(n);
+    for (const c of document.querySelectorAll("#pSym .chip"))
+      c.classList.toggle("sel", +c.dataset.s === n);
+    redraw();
+  }
+
+  /* palette swatches (built once) */
+  const pPal = document.getElementById("pPal");
+  const swDefs = [
+    ["drift", "drift", "conic-gradient(#ff5e5e,#ffd75e,#8dff5e,#5effe8,#5e8aff,#d75eff,#ff5e5e)"],
+    ["ember", "ember", "linear-gradient(135deg,#ffb347,#ff7a3a,#ff5e3a,#e0335a,#c81d5a)"],
+    ["lagoon", "lagoon", "linear-gradient(135deg,#a7f3d0,#5eead4,#22d3ee,#3b82f6,#1e3a8a)"],
+    ["gilded", "gilded", "linear-gradient(135deg,#fff6d5,#f7dd9a,#f0b35a,#c98a2c,#7a4b12)"],
+    ["ivory", "ivory", "linear-gradient(135deg,#ffffff,#f7f3ea,#e8e0d2,#cfc7b8,#a89e8e)"],
+  ];
+  for (const [id, name, bg] of swDefs) {
+    const s = document.createElement("button");
+    s.className = "sw"; s.dataset.name = name; s.dataset.p = id;
+    s.style.backgroundImage = bg;
+    s.title = "Palette: " + name;
+    s.addEventListener("click", () => { palette = id; redraw(); refreshPalUI(); closePops(); });
+    pPal.appendChild(s);
+  }
+  function refreshPalUI() {
+    stPal.textContent = palette;
+    for (const s of pPal.children) s.classList.toggle("sel", s.dataset.p === palette);
+  }
+
+  function toggleMirror() {
+    mirror = !mirror;
+    document.getElementById("bMirror").classList.toggle("on", mirror);
+    stMir.textContent = mirror ? "on" : "off";
+    redraw();
+  }
+
+  /* popovers */
+  const pops = [["bSym", "pSym"], ["bPal", "pPal"]];
+  function closePops(except) {
+    for (const [b, p] of pops) {
+      if (p === except) continue;
+      document.getElementById(p).classList.remove("open");
+      document.getElementById(b).setAttribute("aria-expanded", "false");
+    }
+  }
+  function bindPop(btn, pop) {
+    const b = document.getElementById(btn), p = document.getElementById(pop);
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = !p.classList.contains("open");
+      closePops(open ? pop : null);
+      p.classList.toggle("open", open);
+      b.setAttribute("aria-expanded", String(open));
+    });
+    p.addEventListener("click", (e) => e.stopPropagation());
+  }
+  bindPop("bSym", "pSym");
+  bindPop("bPal", "pPal");
+  document.getElementById("pSym").addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (chip) { setSym(+chip.dataset.s); closePops(); }
+  });
+  document.addEventListener("click", () => closePops());
+
+  /* actions */
+  document.getElementById("bClear").addEventListener("click", () => {
+    strokes = []; redraw(); stCnt.textContent = "0";
+  });
+  document.getElementById("bUndo").addEventListener("click", undo);
+  function undo() {
+    strokes.pop(); redraw();
+    stCnt.textContent = String(strokes.length);
+  }
+  document.getElementById("bSave").addEventListener("click", savePNG);
+  function savePNG() {
+    const o = document.createElement("canvas");
+    o.width = cv.width; o.height = cv.height;
+    const oc = o.getContext("2d");
+    oc.fillStyle = "#0d0e10"; oc.fillRect(0, 0, o.width, o.height);
+    const g = oc.createRadialGradient(o.width / 2, o.height / 2, 0,
+      o.width / 2, o.height / 2, Math.hypot(o.width, o.height) / 2);
+    g.addColorStop(0, "#1a1b1e"); g.addColorStop(1, "#0d0e10");
+    oc.fillStyle = g; oc.fillRect(0, 0, o.width, o.height);
+    oc.drawImage(cv, 0, 0);
+    o.toBlob((blob) => {
+      if (!blob) return;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "kaleido-mandala.png";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }, "image/png");
+  }
+  function toggleAuto() { setAuto(!auto); }
+  document.getElementById("bAuto").addEventListener("click", toggleAuto);
+
+  /* keyboard */
+  document.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    switch (e.key.toLowerCase()) {
+      case "a": toggleAuto(); break;
+      case "c": strokes = []; redraw(); stCnt.textContent = "0"; break;
+      case "z": undo(); break;
+      case "s": savePNG(); break;
+      case "m": toggleMirror(); break;
+      case "escape": closePops(); break;
+    }
+  });
+
+  addEventListener("resize", () => { fit(); });
+
+  /* boot */
+  fit();
+  setSym(8);
+  refreshPalUI();
+})();
+</script>
+</body>
+</html>

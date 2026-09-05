@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orbit — A CSS 3D Solar System</title>
+<style>
+  :root {
+    --bg: #02030a;
+    --text: #e8ecf5;
+    --amber: #ffb52e;
+    --panel: rgba(10, 14, 30, 0.72);
+    --line: rgba(255, 255, 255, 0.10);
+    --serif: Georgia, 'Iowan Old Style', Palatino, serif;
+    --sans: ui-sans-serif, system-ui, 'Helvetica Neue', Arial, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(ellipse 60% 55% at 12% 92%, rgba(60, 30, 120, 0.25), transparent 62%),
+      radial-gradient(ellipse 55% 50% at 90% 8%, rgba(20, 70, 120, 0.22), transparent 62%),
+      var(--bg);
+    font-family: var(--sans);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #stars { position: fixed; inset: 0; z-index: 0; }
+
+  /* ---------- 3D stage ---------- */
+  #stage {
+    position: fixed;
+    inset: 0;
+    perspective: 1400px;
+    z-index: 1;
+    cursor: grab;
+  }
+  #stage.dragging { cursor: grabbing; }
+  #pivot {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 0; height: 0;
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+  #pivot *, #pivot { transform-style: preserve-3d; }
+
+  .ring {
+    position: absolute;
+    left: 0; top: 0;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 50%;
+    box-shadow: 0 0 7px rgba(90, 140, 255, 0.20), inset 0 0 7px rgba(90, 140, 255, 0.20);
+    pointer-events: none;
+  }
+
+  .holder {
+    position: absolute;
+    left: 0; top: 0;
+    width: 0; height: 0;
+  }
+
+  .body {
+    position: absolute;
+    border-radius: 50%;
+    display: block;
+    padding: 0;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    /* set per planet: --w (diameter), left/top via inline transform offsets */
+    width: var(--w);
+    height: var(--w);
+    margin-left: calc(var(--w) / -2);
+    margin-top: calc(var(--w) / -2);
+    will-change: transform;
+    -webkit-appearance: none;
+  }
+  .body:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+  .body:active { outline: none; }
+
+  /* terminator shadow — light point --lx/--ly updated per frame */
+  .body::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at var(--lx, 50%) var(--ly, 40%),
+      rgba(0,0,8,0) 30%, rgba(0,0,8,0.28) 55%, rgba(0,0,8,0.72) 82%);
+    pointer-events: none;
+  }
+  .sun-disc::after { display: none; }
+
+  .label {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(232, 236, 245, 0.85);
+    text-shadow: 0 1px 6px #000;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.45s ease;
+    pointer-events: none;
+  }
+  :root.show-labels .label { opacity: 1; }
+
+  /* ---------- surfaces ---------- */
+  .mercury { background:
+    radial-gradient(circle at 32% 30%, rgba(0,0,0,0.30) 0 9%, transparent 10%),
+    radial-gradient(circle at 66% 58%, rgba(0,0,0,0.28) 0 7%, transparent 8%),
+    radial-gradient(circle at 35% 32%, #cfc9bf, #8a847b 48%, #46423d 88%); }
+  .venus { background:
+    repeating-linear-gradient(38deg, rgba(255,255,255,0.10) 0 3px, transparent 3px 9px),
+    radial-gradient(circle at 35% 32%, #f6e3b4, #d9a95f 52%, #9c6a3a 90%); }
+  .earth { background:
+    radial-gradient(ellipse 46% 30% at 30% 42%, #4a9a3e 0 60%, transparent 62%),
+    radial-gradient(ellipse 30% 40% at 66% 62%, #3c8a3a 0 58%, transparent 60%),
+    radial-gradient(ellipse 34% 16% at 52% 24%, rgba(255,255,255,0.75) 0 55%, transparent 58%),
+    radial-gradient(circle at 35% 32%, #3b7be0, #1c4f9e 52%, #0a2a66 90%); }
+  .mars { background:
+    radial-gradient(ellipse 40% 22% at 58% 66%, rgba(70,20,5,0.55) 0 55%, transparent 60%),
+    radial-gradient(ellipse 42% 20% at 50% 8%, rgba(255,255,255,0.9) 0 45%, transparent 50%),
+    radial-gradient(circle at 35% 32%, #e6845a, #a8542c 52%, #6a2810 90%); }
+  .jupiter { background:
+    radial-gradient(ellipse 26% 16% at 63% 62%, #c8583c 0 60%, transparent 64%),
+    repeating-linear-gradient(180deg,
+      #d7bd9c 0 12%, #b18866 12% 24%, #ecdcc7 24% 34%, #a56b4d 34% 47%,
+      #cfa781 47% 60%, #d7bd9c 60% 72%, #a56b4d 72% 84%, #ecdcc7 84% 100%),
+    radial-gradient(circle at 35% 32%, #d7bd9c, #96683f 90%);
+    background-blend-mode: normal, normal, multiply; }
+  .saturn { background:
+    repeating-linear-gradient(180deg,
+      #ecd9ae 0 14%, #d3b183 14% 28%, #f3e6c4 28% 42%, #c49f74 42% 58%,
+      #e8d0a0 58% 74%, #d3b183 74% 100%),
+    radial-gradient(circle at 35% 32%, #ecd9ae, #a87e50 92%);
+    background-blend-mode: multiply; }
+  .saturn-ring {
+    transform: rotateX(74deg);
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 230%; height: 230%;
+    margin-left: -115%; margin-top: -115%;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+      transparent 0 37.5%,
+      rgba(203, 178, 130, 0.35) 38% 44%,
+      rgba(226, 205, 160, 0.75) 44.5% 51%,
+      rgba(150, 128, 90, 0.5) 51% 54.5%,
+      transparent 54.6% 57.5%,
+      rgba(235, 216, 175, 0.8) 57.6% 66%,
+      rgba(195, 172, 132, 0.55) 66% 72%,
+      rgba(160, 140, 105, 0.28) 72% 77%,
+      transparent 77.2%);
+    pointer-events: none;
+  }
+  .uranus { background: radial-gradient(circle at 35% 32%, #d6f6f7, #83cfd4 45%, #3a9aa3 90%); }
+  .neptune { background:
+    repeating-linear-gradient(180deg, rgba(255,255,255,0.07) 0 8%, transparent 8% 22%),
+    radial-gradient(circle at 35% 32%, #6d95f5, #3858b8 50%, #142f8f 92%); }
+  .moon { background: radial-gradient(circle at 35% 32%, #d9d6cf, #948f86 52%, #55524c 92%); }
+
+  /* ---------- sun ---------- */
+  .corona {
+    position: absolute;
+    left: -190px; top: -190px;
+    width: 380px; height: 380px;
+    border-radius: 50%;
+    filter: blur(16px);
+    opacity: 0.5;
+    pointer-events: none;
+    background: conic-gradient(from 0deg,
+      rgba(255,180,40,0) 0deg, rgba(255,190,60,0.7) 40deg, rgba(255,120,20,0) 100deg,
+      rgba(255,200,90,0.55) 170deg, rgba(255,110,20,0) 235deg, rgba(255,180,60,0.65) 300deg,
+      rgba(255,120,20,0) 360deg);
+    animation: spin 46s linear infinite;
+  }
+  .corona.c2 {
+    left: -150px; top: -150px;
+    width: 300px; height: 300px;
+    filter: blur(10px);
+    opacity: 0.38;
+    background: conic-gradient(from 90deg,
+      rgba(255,120,26,0) 0deg, rgba(255,170,50,0.6) 60deg, rgba(255,80,0,0) 130deg,
+      rgba(255,200,80,0.5) 210deg, rgba(255,90,0,0) 290deg, rgba(255,150,40,0.45) 340deg,
+      rgba(255,120,26,0) 360deg);
+    animation: spin 31s linear infinite reverse;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .sun-disc {
+    background: radial-gradient(circle at 42% 40%,
+      #fff9d6 0%, #ffe28a 28%, #ffb428 52%, #ff7a12 76%, #ff4d00 100%);
+    box-shadow:
+      0 0 60px 24px rgba(255, 190, 70, 0.55),
+      0 0 140px 60px rgba(255, 150, 40, 0.32),
+      0 0 240px 110px rgba(255, 110, 20, 0.16),
+      0 0 320px 160px rgba(255, 90, 10, 0.08);
+    animation: sunpulse 5s ease-in-out infinite;
+  }
+  @keyframes sunpulse {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.18); }
+  }
+
+  /* ---------- UI ---------- */
+  header {
+    position: fixed;
+    top: 24px; left: 28px;
+    z-index: 20;
+    pointer-events: none;
+  }
+  header h1 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 34px;
+    letter-spacing: 0.01em;
+  }
+  header h1 i { color: var(--amber); font-style: normal; }
+  header p { font-size: 12px; opacity: 0.65; margin-top: 3px; letter-spacing: 0.06em; }
+
+  #toolbar {
+    position: fixed;
+    left: 50%; bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 14px 40px rgba(0,0,0,0.5);
+    white-space: nowrap;
+  }
+  #toolbar .tl { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.6; }
+  #speed { display: flex; align-items: center; gap: 9px; }
+  #speedOut { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--amber); width: 3.2em; }
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 130px; height: 20px;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 3px; border-radius: 2px;
+    background: linear-gradient(90deg, rgba(255,181,46,0.65), rgba(255,181,46,0.25));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px; margin-top: -5.5px;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 10px rgba(255,181,46,0.7);
+    transition: transform 0.15s ease;
+  }
+  input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.25); }
+  input[type="range"]::-moz-range-track {
+    height: 3px; border-radius: 2px;
+    background: linear-gradient(90deg, rgba(255,181,46,0.65), rgba(255,181,46,0.25));
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; border: 0;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 10px rgba(255,181,46,0.7);
+  }
+  button.tbtn {
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text);
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: background-color 0.25s ease, border-color 0.25s ease;
+  }
+  button.tbtn:hover { background: rgba(255,255,255,0.13); }
+  button.tbtn[aria-pressed="true"] {
+    background: rgba(255,181,46,0.18);
+    border-color: rgba(255,181,46,0.55);
+    color: var(--amber);
+  }
+  button.tbtn:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  #toolbar .sep { width: 1px; height: 20px; background: var(--line); }
+
+  /* ---------- info card ---------- */
+  #card {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: min(340px, 88vw);
+    z-index: 21;
+    padding: 34px 26px;
+    background: var(--panel);
+    border-left: 1px solid var(--line);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transform: translateX(105%);
+    transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+    overflow-y: auto;
+  }
+  #card.open { transform: translateX(0); }
+  #card .type {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.28em; text-transform: uppercase;
+    color: var(--amber);
+  }
+  #card h2 { font-family: var(--serif); font-weight: 500; font-size: 30px; margin: 6px 0 18px; }
+  #card dl { display: grid; grid-template-columns: auto 1fr; gap: 9px 14px; font-size: 12.5px; }
+  #card dt { opacity: 0.55; letter-spacing: 0.04em; }
+  #card dd { text-align: right; font-variant-numeric: tabular-nums; }
+  #card .fact { margin-top: 20px; font-size: 13px; line-height: 1.62; opacity: 0.85; }
+  #cardClose {
+    position: absolute;
+    top: 16px; right: 16px;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: rgba(255,255,255,0.05);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  #cardClose:hover { background: rgba(255,255,255,0.15); }
+
+  #hint {
+    position: fixed;
+    left: 28px; bottom: 26px;
+    z-index: 20;
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.42;
+    pointer-events: none;
+  }
+
+  @media (max-width: 640px) {
+    #card {
+      top: auto; left: 0; right: 0; bottom: 0;
+      width: 100%;
+      max-height: 62vh;
+      border-left: 0;
+      border-top: 1px solid var(--line);
+      border-radius: 18px 18px 0 0;
+      transform: translateY(105%);
+    }
+    #card.open { transform: translateY(0); }
+    #toolbar { gap: 10px; padding: 9px 12px; }
+    input[type="range"] { width: 90px; }
+    #hint { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .corona, .corona.c2 { animation: none; }
+    .sun-disc { animation: none; }
+    #card { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="stars" aria-hidden="true"></canvas>
+
+<div id="stage" aria-label="Solar system, drag to rotate">
+  <div id="pivot"></div>
+</div>
+
+<header>
+  <h1>Orbit<i>.</i></h1>
+  <p>A CSS 3D solar system · drag to look around · click a world</p>
+</header>
+
+<div id="toolbar" role="group" aria-label="Scene controls">
+  <div id="speed">
+    <span class="tl">Speed</span>
+    <input id="speedSlider" type="range" min="0" max="40" step="0.5" value="1" aria-label="Simulation speed">
+    <span id="speedOut">1.0×</span>
+  </div>
+  <span class="sep"></span>
+  <button class="tbtn" id="labelsBtn" type="button" aria-pressed="false">Labels</button>
+  <button class="tbtn" id="resetBtn" type="button">Reset view</button>
+</div>
+
+<aside id="card" role="dialog" aria-label="Body information" aria-hidden="true">
+  <button id="cardClose" type="button" aria-label="Close">✕</button>
+  <div class="type" id="cType"></div>
+  <h2 id="cName"></h2>
+  <dl>
+    <dt>Diameter</dt><dd id="cDia"></dd>
+    <dt>Day length</dt><dd id="cDay"></dd>
+    <dt>Year</dt><dd id="cYear"></dd>
+    <dt>Moons</dt><dd id="cMoons"></dd>
+    <dt>Mean temp</dt><dd id="cTemp"></dd>
+  </dl>
+  <p class="fact" id="cFact"></p>
+</aside>
+
+<p id="hint">drag · rotate &nbsp; wheel · pitch &nbsp; esc · close</p>
+
+<script>
+(() => {
+  'use strict';
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const root = document.documentElement;
+  const pivot = document.getElementById('pivot');
+  const stage = document.getElementById('stage');
+
+  /* ============ starfield ============ */
+  const starCanvas = document.getElementById('stars');
+  function drawStars() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const w = innerWidth, h = innerHeight;
+    starCanvas.width = Math.round(w * dpr);
+    starCanvas.height = Math.round(h * dpr);
+    starCanvas.style.width = w + 'px';
+    starCanvas.style.height = h + 'px';
+    const c = starCanvas.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, w, h);
+    const n = Math.round(w * h / 3200);
+    const tints = [
+      'rgba(205,220,255,',  /* blue-white */
+      'rgba(255,244,225,',  /* warm-white */
+      'rgba(255,190,140,',  /* faint orange */
+    ];
+    for (let i = 0; i < n; i++) {
+      const t = tints[Math.floor(Math.random() * (Math.random() < 0.72 ? (Math.random() < 0.5 ? 2 : 1) : 3))];
+      const r = 0.3 + Math.random() * (Math.random() < 0.92 ? 1.0 : 1.9);
+      c.fillStyle = t + (0.25 + Math.random() * 0.7).toFixed(2) + ')';
+      c.beginPath();
+      c.arc(Math.random() * w, Math.random() * h, r, 0, 6.2832);
+      c.fill();
+    }
+    /* a few hollow ring "distant galaxies" */
+    for (let i = 0; i < 7; i++) {
+      c.strokeStyle = `rgba(180,190,230,${(0.06 + Math.random() * 0.09).toFixed(2)})`;
+      c.lineWidth = 1;
+      c.beginPath();
+      c.arc(Math.random() * w, Math.random() * h, 4 + Math.random() * 9, 0, 6.2832);
+      c.stroke();
+    }
+  }
+  drawStars();
+  let rsT = 0;
+  addEventListener('resize', () => { clearTimeout(rsT); rsT = setTimeout(drawStars, 150); });
+
+  /* ============ bodies ============ */
+  const YEAR = 12; /* seconds per Earth year at 1× */
+  const PLANETS = [
+    { id: 'mercury', name: 'Mercury', r: 105, inc: 7,   size: 10, days: 87.97,  cls: 'mercury' },
+    { id: 'venus',   name: 'Venus',   r: 140, inc: 3.4, size: 14, days: 224.7,  cls: 'venus' },
+    { id: 'earth',   name: 'Earth',   r: 180, inc: 0,   size: 15, days: 365.25, cls: 'earth' },
+    { id: 'mars',    name: 'Mars',    r: 222, inc: 1.9, size: 12, days: 686.98, cls: 'mars' },
+    { id: 'jupiter', name: 'Jupiter', r: 300, inc: 1.3, size: 34, days: 4332.6, cls: 'jupiter' },
+    { id: 'saturn',  name: 'Saturn',  r: 380, inc: 2.5, size: 29, days: 10759,  cls: 'saturn' },
+    { id: 'uranus',  name: 'Uranus',  r: 450, inc: 0.8, size: 21, days: 30687,  cls: 'uranus' },
+    { id: 'neptune', name: 'Neptune', r: 512, inc: 1.8, size: 20, days: 60190,  cls: 'neptune' },
+  ];
+  const FACTS = {
+    sun: ['G-type main-sequence star', 'The Sun', '1,392,700 km', '25.4 days (equator)', '—', '8 planets', '5,500 °C surface',
+      'The Sun holds 99.86% of the mass of the solar system, and every second it converts roughly four million tonnes of matter into light and heat — the entire planetary family is a rounding error orbiting a furnace.'],
+    mercury: ['Terrestrial planet', 'Mercury', '4,879 km', '58.6 Earth days (sidereal)', '88 Earth days', '0', '167 °C mean',
+      'Mercury is locked in a 3:2 spin–orbit resonance: it turns exactly three times on its axis for every two laps around the Sun, so a solar day there lasts two Mercurian years.'],
+    venus: ['Terrestrial planet', 'Venus', '12,104 km', '243 Earth days (retrograde)', '225 Earth days', '0', '464 °C',
+      'Venus spins backwards, and so slowly that its day is longer than its year. Its carbon-dioxide atmosphere also keeps the surface hot enough to melt lead — the hottest planet, ahead of Mercury.'],
+    earth: ['Terrestrial planet', 'Earth', '12,742 km', '23h 56m (sidereal)', '365.25 days', '1', '15 °C',
+      'Earth is the only known world with liquid-water oceans and the densest planet in the solar system. Its oversized Moon stabilises the axial tilt, keeping seasons broadly regular for billions of years.'],
+    mars: ['Terrestrial planet', 'Mars', '6,779 km', '24h 37m', '687 Earth days', '2', '−63 °C',
+      'Mars hosts Olympus Mons, a volcano roughly three times the height of Everest, and Valles Marineris, a canyon system that would stretch across the continental United States.'],
+    jupiter: ['Gas giant', 'Jupiter', '139,820 km', '9h 56m', '11.9 Earth years', '95 known', '−110 °C',
+      'Jupiter is more than twice as massive as all the other planets combined. The Great Red Spot is an anticyclone wider than Earth that has been observed raging for at least 190 years.'],
+    saturn: ['Gas giant', 'Saturn', '116,460 km', '10h 42m', '29.5 Earth years', '146 known', '−140 °C',
+      'Saturn\'s density is lower than water\'s — it would float in a sufficiently large ocean. Its rings are mostly water ice and, oddly, geologically young, perhaps only a few hundred million years old.'],
+    uranus: ['Ice giant', 'Uranus', '50,724 km', '17h 14m (retrograde)', '84 Earth years', '28 known', '−195 °C',
+      'Uranus orbits tipped almost fully on its side, with an axial tilt of 98°, so each pole spends around 42 years in continuous sunlight followed by 42 years of darkness.'],
+    neptune: ['Ice giant', 'Neptune', '49,244 km', '16h 06m', '164.8 Earth years', '16 known', '−200 °C',
+      'Neptune was found by mathematics before it was seen by telescope: its discovery in 1846 followed from unexplained perturbations in Uranus\'s orbit. Its winds reach 2,100 km/h, the fastest in the solar system.'],
+  };
+
+  const stage3d = []; /* {planet, holder, disc, angle0} */
+  let earthHolder = null;
+
+  function el(cls, parent) {
+    const d = document.createElement('div');
+    if (cls) d.className = cls;
+    (parent || pivot).appendChild(d);
+    return d;
+  }
+
+  PLANETS.forEach((p, i) => {
+    const ring = el('ring');
+    ring.style.width = p.r * 2 + 'px';
+    ring.style.height = p.r * 2 + 'px';
+    ring.style.marginLeft = ring.style.marginTop = -p.r + 'px';
+    ring.style.transform = `rotateX(${90 + p.inc}deg)`;
+
+    const holder = el('holder');
+    const disc = document.createElement('button');
+    disc.type = 'button';
+    disc.className = 'body ' + p.cls;
+    disc.dataset.id = p.id;
+    disc.style.setProperty('--w', p.size + 'px');
+    disc.setAttribute('aria-label', `${p.name} — open info card`);
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = p.name;
+    disc.appendChild(label);
+    if (p.id === 'saturn') disc.appendChild(el('saturn-ring', disc));
+    holder.appendChild(disc);
+    stage3d.push({ p, holder, disc, angle0: i * 51.7 % 360 });
+    if (p.id === 'earth') earthHolder = holder;
+  });
+
+  /* Moon: orbits Earth every 27.3 days of simulated time */
+  const moonHolder = el('holder', earthHolder);
+  const moonDisc = document.createElement('button');
+  moonDisc.type = 'button';
+  moonDisc.className = 'body moon';
+  moonDisc.dataset.id = 'moon';
+  moonDisc.style.setProperty('--w', '6px');
+  moonDisc.setAttribute('aria-label', 'The Moon — open info card');
+  moonDisc.setAttribute('tabindex', '-1');
+  moonHolder.appendChild(moonDisc);
+  FACTS.moon = ['Natural satellite', 'The Moon', '3,475 km', '29.5 Earth days', '27.3 days around Earth', '—', '−20 °C mean',
+    'The Moon drifts away from Earth by about 3.8 cm a year, and it is exactly 400 times smaller than the Sun while being also 400 times closer — which is why solar eclipses fit so improbably well.'];
+
+  /* Sun at the center (billboarded disc + flat coronas + rings of glow) */
+  const sunHolder = el('holder');
+  const coronaBill = el('holder', sunHolder);
+  const corona1 = el('corona', coronaBill);
+  const corona2 = el('corona c2', coronaBill);
+  const sunDisc = document.createElement('button');
+  sunDisc.type = 'button';
+  sunDisc.className = 'body sun-disc';
+  sunDisc.dataset.id = 'sun';
+  sunDisc.style.setProperty('--w', '90px');
+  sunDisc.setAttribute('aria-label', 'The Sun — open info card');
+  const sunLabel = document.createElement('span');
+  sunLabel.className = 'label';
+  sunLabel.textContent = 'Sun';
+  sunDisc.appendChild(sunLabel);
+  sunHolder.appendChild(sunDisc);
+
+  /* ============ camera ============ */
+  let pitch = 62, yaw = -28;
+  let autoYaw = !reduced;
+  const scale = 1;
+  let dragging = false, moved = 0, wasDrag = false, lastX = 0, lastY = 0;
+
+  stage.addEventListener('pointerdown', (e) => {
+    dragging = true; moved = 0;
+    lastX = e.clientX; lastY = e.clientY;
+    stage.classList.add('dragging');
+    stage.setPointerCapture(e.pointerId);
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    moved += Math.abs(dx) + Math.abs(dy);
+    yaw += dx * 0.32;
+    pitch = Math.min(89, Math.max(2, pitch + dy * 0.25));
+    autoYaw = false;
+  });
+  const endDrag = () => { dragging = false; wasDrag = moved > 6; stage.classList.remove('dragging'); };
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+  addEventListener('wheel', (e) => {
+    if (e.target.closest('#card, #toolbar')) return;
+    autoYaw = false;
+    pitch = Math.min(89, Math.max(2, pitch - e.deltaY * 0.03));
+  }, { passive: true });
+
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    pitch = 62; yaw = -28;
+    autoYaw = !reduced;
+  });
+
+  /* ============ simulation loop ============ */
+  let simT = 0, lastTs = null, speed = 1;
+  const deg = 180 / Math.PI;
+
+  function frame(ts) {
+    if (lastTs == null) lastTs = ts;
+    const dt = Math.min((ts - lastTs) / 1000, 0.1);
+    lastTs = ts;
+    simT += dt * speed;
+    if (autoYaw && !dragging) yaw += 1.5 * dt;
+
+    pivot.style.transform =
+      `scale3d(${scale},${scale},${scale}) rotateX(${pitch.toFixed(3)}deg) rotateY(${yaw.toFixed(3)}deg)`;
+
+    const pRad = pitch * Math.PI / 180, yRad = yaw * Math.PI / 180;
+    const cosP = Math.cos(pRad), sinP = Math.sin(pRad), cosY = Math.cos(yRad), sinY = Math.sin(yRad);
+
+    for (const s of stage3d) {
+      const angle = (s.angle0 + simT * (360 / (YEAR * s.p.days / 365.25))) * Math.PI / 180;
+      const aDeg = s.angle0 + simT * (360 / (YEAR * s.p.days / 365.25));
+      const iRad = s.p.inc * Math.PI / 180;
+      s.holder.style.transform =
+        `rotateX(${s.p.inc}deg) rotateY(${aDeg.toFixed(3)}deg) translateX(${s.p.r}px)`;
+      s.disc.style.transform =
+        `rotateY(${(-aDeg).toFixed(3)}deg) rotateX(${-s.p.inc}deg) ` +
+        `rotateY(${(-yaw).toFixed(3)}deg) rotateX(${(-pitch).toFixed(3)}deg)`;
+      /* terminator: light point from planet's projected position vs the Sun at center */
+      const a = angle, r = s.p.r;
+      const Lx = r * Math.cos(a);
+      const Ly = r * Math.sin(a) * Math.sin(iRad);
+      const Lz = -r * Math.sin(a) * Math.cos(iRad);
+      /* world = Rx(pitch) * Ry(yaw) * local */
+      const wx = cosY * Lx + sinY * Lz;
+      const wz1 = -sinY * Lx + cosY * Lz;
+      const wy = cosP * Ly - sinP * wz1;
+      const wz = sinP * Ly + cosP * wz1;
+      const persp = 1400 / Math.max(1400 - wz, 200);
+      const sx = wx * persp, sy = wy * persp;
+      const len = Math.hypot(sx, sy) || 1;
+      const ux = -sx / len, uy = -sy / len;
+      s.disc.style.setProperty('--lx', (50 + ux * 44).toFixed(1) + '%');
+      s.disc.style.setProperty('--ly', (50 + uy * 44).toFixed(1) + '%');
+    }
+
+    /* Moon: 27.3 Earth-days of sim time per lap */
+    const mDeg = simT * (360 / (YEAR * 27.3 / 365.25));
+    moonHolder.style.transform = `rotateY(${mDeg.toFixed(2)}deg) translateX(18px)`;
+    const eDeg = stage3d[2].angle0 + simT * (360 / YEAR);
+    moonDisc.style.transform =
+      `rotateY(${(-mDeg - eDeg).toFixed(2)}deg) rotateY(${(-yaw).toFixed(2)}deg) rotateX(${(-pitch).toFixed(2)}deg)`;
+    sunDisc.style.transform = `rotateY(${-yaw}deg) rotateX(${-pitch}deg)`;
+    coronaBill.style.transform = sunDisc.style.transform;
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  /* ============ controls ============ */
+  const speedSlider = document.getElementById('speedSlider');
+  const speedOut = document.getElementById('speedOut');
+  speedSlider.addEventListener('input', () => {
+    speed = parseFloat(speedSlider.value);
+    speedOut.textContent = speed.toFixed(1) + '×';
+  });
+
+  const labelsBtn = document.getElementById('labelsBtn');
+  labelsBtn.addEventListener('click', () => {
+    const on = root.classList.toggle('show-labels');
+    labelsBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+
+  /* ============ info card ============ */
+  const card = document.getElementById('card');
+  function openCard(id) {
+    const f = FACTS[id];
+    if (!f) return;
+    const [type, name, dia, day, year, moons, temp, fact] = f;
+    document.getElementById('cType').textContent = type;
+    document.getElementById('cName').textContent = name;
+    document.getElementById('cDia').textContent = dia;
+    document.getElementById('cDay').textContent = day;
+    document.getElementById('cYear').textContent = year;
+    document.getElementById('cMoons').textContent = moons;
+    document.getElementById('cTemp').textContent = temp;
+    document.getElementById('cFact').textContent = fact;
+    card.classList.add('open');
+    card.setAttribute('aria-hidden', 'false');
+  }
+  function closeCard() {
+    card.classList.remove('open');
+    card.setAttribute('aria-hidden', 'true');
+  }
+  document.getElementById('cardClose').addEventListener('click', closeCard);
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCard(); });
+
+  stage.addEventListener('click', (e) => {
+    if (wasDrag) { wasDrag = false; return; } /* click right after a drag: ignore once */
+    const hit = e.target.closest('.body');
+    if (hit) openCard(hit.dataset.id);
+  });
+})();
+</script>
+</body>
+</html>

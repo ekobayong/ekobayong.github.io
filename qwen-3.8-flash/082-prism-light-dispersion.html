@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dispersion — An Interactive Prism</title>
+<style>
+  :root{
+    --ink:#e8eef7;
+    --dim:#8b97a8;
+    --cyan:#8fd3ff;
+    --panel:rgba(14,16,24,.72);
+    --hairline:rgba(255,255,255,.12);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:#04050a;
+    font-family:system-ui,'Helvetica Neue',Helvetica,Arial,sans-serif;
+    color:var(--ink);overflow:hidden;
+  }
+  #view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+  .ui{position:fixed;z-index:5}
+  header.ui{top:26px;left:30px;max-width:min(46vw,480px);pointer-events:none}
+  .kicker{
+    font-size:10px;letter-spacing:.32em;text-transform:uppercase;
+    color:var(--cyan);margin-bottom:10px;font-weight:600;
+  }
+  h1{font-size:clamp(20px,2.6vw,30px);font-weight:300;line-height:1.22;letter-spacing:.01em}
+  h1 b{font-weight:700}
+  .hint{margin-top:12px;font-size:12px;color:var(--dim);letter-spacing:.04em}
+  .panel{
+    background:var(--panel);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    border:1px solid var(--hairline);border-radius:10px;
+    padding:14px 16px;box-shadow:0 12px 40px rgba(0,0,0,.35);
+  }
+  #controls{top:26px;right:30px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+  .seg{display:inline-flex;border:1px solid var(--hairline);border-radius:8px;overflow:hidden}
+  .seg button{
+    font-family:inherit;font-size:11px;letter-spacing:.05em;color:var(--dim);
+    background:transparent;border:0;padding:8px 12px;cursor:pointer;transition:color .2s,background .2s;
+  }
+  .seg button[aria-pressed="true"]{background:rgba(143,211,255,.14);color:#d7ecff}
+  .chk{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--dim);cursor:pointer}
+  .chk input{accent-color:var(--cyan)}
+  .ghostbtn{
+    font-family:inherit;font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--dim);background:transparent;border:1px solid var(--hairline);
+    border-radius:8px;padding:8px 12px;cursor:pointer;transition:color .2s,border-color .2s;
+  }
+  .ghostbtn:hover{color:var(--ink);border-color:rgba(255,255,255,.3)}
+  #readout{bottom:26px;left:30px;max-width:400px;font-size:12.5px;line-height:1.6;color:var(--dim)}
+  #readout details summary{
+    cursor:pointer;font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:var(--cyan);
+    margin-bottom:6px;font-weight:600;list-style-position:outside;
+  }
+  #readout details[open] summary{margin-bottom:10px}
+  #readout .formula{
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,'Courier New',monospace;
+    color:#c6d3e2;font-size:12px;
+  }
+  #readout p{margin:6px 0}
+  .stats{
+    display:grid;grid-template-columns:auto auto;gap:2px 14px;margin-top:10px;
+    padding-top:10px;border-top:1px solid var(--hairline);
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,'Courier New',monospace;font-size:11.5px;
+  }
+  .stats dt{color:var(--dim)}
+  .stats dd{color:var(--cyan)}
+  #floater{
+    position:fixed;z-index:8;pointer-events:none;display:none;
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,'Courier New',monospace;
+    font-size:11.5px;line-height:1.55;color:#dfe9f5;
+    background:rgba(8,10,16,.88);border:1px solid var(--hairline);border-radius:8px;
+    padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.5);white-space:nowrap;
+  }
+  #floater .nm{color:var(--cyan)}
+  @media (min-width:721px){
+    #readout details summary{display:none}
+  }
+  @media (max-width:720px){
+    .hint{display:none}
+    header.ui{max-width:64vw}
+    #controls{top:auto;bottom:26px;right:16px}
+    #readout{left:16px;bottom:auto;top:44vh;max-width:min(320px,86vw)}
+  }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<header class="ui">
+  <div class="kicker">Gallery of Optics · Exhibit 07</div>
+  <h1>Why the rainbow lives<br><b>inside glass</b></h1>
+  <p class="hint">Drag the lamp. Drag the prism. Hover the screen to interrogate a ray.</p>
+</header>
+
+<div class="ui panel" id="controls" role="group" aria-label="Exhibit controls">
+  <div class="seg" role="radiogroup" aria-label="Spread model">
+    <button type="button" data-mode="phys" aria-pressed="true">Physics-accurate</button>
+    <button type="button" data-mode="art"  aria-pressed="false">Artistic spread</button>
+  </div>
+  <label class="chk"><input type="checkbox" id="p2cb"> Second (inverted) prism</label>
+  <button type="button" class="ghostbtn" id="resetBtn">Reset layout</button>
+</div>
+
+<section class="ui panel" id="readout">
+  <details id="how">
+    <summary>How it works</summary>
+    <p>A white ray is a crowd of wavelengths. Glass slows each colour by a slightly
+      different amount, so each bends by a slightly different angle at every surface:</p>
+    <p class="formula">Snell&nbsp;&nbsp;n₁·sin θ₁ = n₂·sin θ₂</p>
+    <p class="formula">Cauchy&nbsp;n(λ) = A + B / λ² &nbsp;·&nbsp; A = 1.5046, B = 0.0042 (λ in µm)</p>
+    <p>The 400–680&nbsp;nm fan traced here uses that index at every refraction — violet,
+      which glass slows most, is bent hardest and lands farthest from the beam axis.</p>
+  </details>
+  <dl class="stats">
+    <dt>n(400 nm)</dt><dd id="stN4">—</dd>
+    <dt>n(680 nm)</dt><dd id="stN6">—</dd>
+    <dt>Δ violet↔red</dt><dd id="stSpread">—</dd>
+  </dl>
+</section>
+
+<div id="floater" aria-hidden="true"></div>
+
+<script>
+(function(){
+  'use strict';
+  var REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var canvas = document.getElementById('view');
+  var ctx = canvas.getContext('2d');
+  var stage = document.createElement('canvas');
+  var sctx = stage.getContext('2d');
+  var floater = document.getElementById('floater');
+  var DPR = 1, W = 0, H = 0;
+
+  /* ---------- state (positions normalised 0..1) ---------- */
+  var DEF = {
+    lamp: {x:0.135, y:0.42},
+    p1:   {x:0.44, y:0.50, s:0.155},
+    p2:   {x:0.665, y:0.53, s:0.155},
+    screen: {x:0.895, top:0.14, bot:0.78}
+  };
+  var lamp, p1, p2, mode = 'phys', secondOn = false;
+  function clone(o){ return JSON.parse(JSON.stringify(o)); }
+  function resetLayout(){
+    lamp = clone(DEF.lamp);
+    p1 = clone(DEF.p1); p1.rot = 0;
+    p2 = clone(DEF.p2); p2.rot = Math.PI;   /* inverted */
+  }
+  resetLayout();
+
+  /* ---------- optics ---------- */
+  function nOf(lam){ /* lam in nm */
+    var um = lam/1000;
+    var B = mode === 'art' ? 0.0042*11 : 0.0042;
+    return 1.5046 + B/(um*um);
+  }
+  /* Bruton wavelength -> RGB, gamma 0.8 */
+  function spectrum(wl){
+    var r=0,g=0,b=0,f=1;
+    if (wl < 380 || wl > 780){ r=g=b=0; }
+    else if (wl < 440){ r=-(wl-440)/60; g=0; b=1; }
+    else if (wl < 490){ r=0; g=(wl-440)/50; b=1; }
+    else if (wl < 510){ r=0; g=1; b=-(wl-510)/20; }
+    else if (wl < 580){ r=(wl-510)/70; g=1; b=0; }
+    else if (wl < 645){ r=1; g=-(wl-645)/65; b=0; }
+    else { r=1; g=0; b=0; }
+    if (wl > 700) f = 0.3 + 0.7*(780-wl)/80;
+    else if (wl < 420) f = 0.3 + 0.7*(wl-380)/40;
+    var G = 0.8;
+    return [Math.pow(Math.max(0,r*f),G)*255, Math.pow(Math.max(0,g*f),G)*255, Math.pow(Math.max(0,b*f),G)*255];
+  }
+  var COLOR_BANDS = [
+    [400,'violet'],[425,'indigo'],[450,'blue'],[485,'cyan'],[505,'green'],
+    [565,'yellow'],[585,'amber'],[610,'orange'],[640,'red'],[781,'red']
+  ];
+  function colorName(lam){
+    for (var i=0;i<COLOR_BANDS.length;i++) if (lam < COLOR_BANDS[i][0]) return COLOR_BANDS[i][1];
+    return 'red';
+  }
+  var LINES = [
+    [656.3,'Hα 656'],[589.3,'Na D 589'],[486.1,'Hβ 486'],[434.0,'Hγ 434']
+  ];
+  function nearLine(lam){
+    for (var i=0;i<LINES.length;i++) if (Math.abs(lam-LINES[i][0]) < 8) return LINES[i][1];
+    return null;
+  }
+  /* vector helpers */
+  function sub(a,b){ return {x:a.x-b.x, y:a.y-b.y}; }
+  function add(a,b){ return {x:a.x+b.x, y:a.y+b.y}; }
+  function mul(a,s){ return {x:a.x*s, y:a.y*s}; }
+  function dot(a,b){ return a.x*b.x + a.y*b.y; }
+  function cross(a,b){ return a.x*b.y - a.y*b.x; }
+  function len(a){ return Math.sqrt(dot(a,a)); }
+  function norm(a){ var l = len(a) || 1; return {x:a.x/l, y:a.y/l}; }
+
+  function triVerts(pr){
+    var cx = pr.x*W, cy = pr.y*H, R = pr.s*H;
+    var v = [];
+    for (var k=0;k<3;k++){
+      var a = pr.rot - Math.PI/2 + k*2*Math.PI/3;
+      v.push({x:cx + R*Math.cos(a), y:cy + R*Math.sin(a)});
+    }
+    return v;
+  }
+  function edgeNormal(a,b,cen){
+    var e = sub(b,a);
+    var n = {x:e.y, y:-e.x};
+    var mid = {x:(a.x+b.x)/2, y:(a.y+b.y)/2};
+    if (dot(n, sub(mid,cen)) < 0){ n = mul(n,-1); }
+    return norm(n);
+  }
+  /* nearest ray/triangle hit: returns {t,pt,n,tri} */
+  function rayHit(ro, rd, tris){
+    var best = null;
+    for (var i=0;i<tris.length;i++){
+      var T = tris[i], cen = T.cen;
+      for (var e=0;e<3;e++){
+        var a = T.v[e], b = T.v[(e+1)%3];
+        var ed = sub(b,a);
+        var den = cross(rd, ed);
+        if (Math.abs(den) < 1e-12) continue;
+        var t = cross(sub(a,ro), ed)/den;
+        var u = cross(sub(a,ro), rd)/den;
+        if (t > 1e-3 && u >= 0 && u <= 1){
+          if (!best || t < best.t){
+            best = { t:t, pt:add(ro, mul(rd,t)), n:edgeNormal(a,b,cen), tri:i };
+          }
+        }
+      }
+    }
+    return best;
+  }
+  function refractDir(d, nFace, eta){ /* nFace points against d */
+    var cosi = -dot(d,nFace);
+    var s2 = eta*eta*(1-cosi*cosi);
+    if (s2 > 1) return null; /* total internal reflection */
+    var cost = Math.sqrt(1-s2);
+    return norm(add(mul(d,eta), mul(nFace, eta*cosi - cost)));
+  }
+  function reflectDir(d, n){ return norm(sub(d, mul(n, 2*dot(d,n)))); }
+  function fresnel(d, nFace, n1, n2){
+    var cosi = -dot(d,nFace);
+    var eta = n1/n2;
+    var s2 = eta*eta*(1-cosi*cosi);
+    if (s2 >= 1) return 1;
+    var cost = Math.sqrt(1-s2);
+    var rs = (n1*cosi - n2*cost)/(n1*cosi + n2*cost);
+    var rp = (n1*cost - n2*cosi)/(n1*cost + n2*cosi);
+    return 0.5*(rs*rs + rp*rp);
+  }
+
+  var rays = [];           /* traced rays for current frame */
+  var hoverIdx = -1;
+  function screenX(){ return DEF.screen.x*W; }
+  function bandTop(){ return DEF.screen.top*H; }
+  function bandBot(){ return DEF.screen.bot*H; }
+
+  /* clip a free segment to the screen plane; record landing y */
+  function clipScreen(a, b, hits){
+    var sx = screenX();
+    if (a.x <= sx && b.x > sx && !hits.full){
+      var f = (sx - a.x)/(b.x - a.x);
+      var y = a.y + (b.y - a.y)*f;
+      if (y >= bandTop() - 40 && y <= bandBot() + 40){
+        hits.full = true;
+        hits[0] = y;
+        return {x:sx, y:y};
+      }
+    }
+    return b;
+  }
+
+  function traceRay(lam, t01){
+    var tris = [];
+    tris.push({v:triVerts(p1), cen:{x:p1.x*W, y:p1.y*H}});
+    if (secondOn) tris.push({v:triVerts(p2), cen:{x:p2.x*W, y:p2.y*H}});
+    var L = {x:lamp.x*W, y:lamp.y*H};
+    /* aim at the prism's lamp-facing edge, spread 32%..68% along it */
+    var T = tris[0];
+    var bestEdge = 0, bestDot = 1e9;
+    for (var e=0;e<3;e++){
+      var a = T.v[e], b = T.v[(e+1)%3];
+      var n = edgeNormal(a,b,T.cen);
+      var mid = {x:(a.x+b.x)/2, y:(a.y+b.y)/2};
+      var d = dot(n, sub(L, mid));
+      if (d < bestDot){ bestDot = d; bestEdge = e; }
+    }
+    var ea = T.v[bestEdge], eb = T.v[(bestEdge+1)%3];
+    var target = {x:ea.x + (eb.x-ea.x)*(0.32 + 0.36*t01), y:ea.y + (eb.y-ea.y)*(0.32 + 0.36*t01)};
+    var ro = L, rd = norm(sub(target, L));
+    var nGlass = nOf(lam);
+    var segs = [], hits = [], reflects = [];
+    var inGlass = false, exitDir = null, done = false;
+    for (var bounce=0; bounce<8 && !done; bounce++){
+      var hit = rayHit(ro, rd, tris);
+      if (!hit){
+        /* run to screen plane or canvas edge */
+        var tWall = 1e18;
+        if (rd.x > 1e-9) tWall = (Math.max(W, screenX()) + 60 - ro.x)/rd.x;
+        else if (rd.x < -1e-9) tWall = (-60 - ro.x)/rd.x;
+        var tH1 = rd.y > 1e-9 ? (H + 60 - ro.y)/rd.y : 1e18;
+        var tH2 = rd.y < -1e-9 ? (-60 - ro.y)/rd.y : 1e18;
+        var tEnd = Math.min(tWall, tH1, tH2);
+        var end = add(ro, mul(rd, tEnd));
+        var clipped = clipScreen(ro, end, hits);
+        segs.push({a:ro, b:clipped, glass:inGlass});
+        done = true;
+      } else {
+        var entering = dot(rd, hit.n) < 0;
+        var nFace = entering ? hit.n : mul(hit.n,-1);
+        var n1 = inGlass ? nGlass : 1.0;
+        var n2 = entering ? nGlass : 1.0;
+        var R = fresnel(rd, nFace, n1, n2);
+        reflects.push({p:hit.pt, d:reflectDir(rd, hit.n), R:R});
+        var nd = refractDir(rd, nFace, n1/n2);
+        if (!nd){ /* total internal reflection: mirror inside the glass */
+          var refl = reflectDir(rd, hit.n);
+          segs.push({a:ro, b:hit.pt, glass:inGlass});
+          ro = add(hit.pt, mul(refl, 0.7));
+          rd = refl;
+          continue;
+        }
+        var cut = clipScreen(ro, hit.pt, hits);
+        segs.push({a:ro, b:cut, glass:inGlass});
+        if (cut !== hit.pt){ done = true; break; }   /* absorbed by the screen */
+        if (inGlass && !entering){ inGlass = false; if (!exitDir) exitDir = nd; }
+        if (entering) inGlass = true;
+        ro = add(hit.pt, mul(nd, 0.7));
+        rd = nd;
+      }
+    }
+    return {lam:lam, segs:segs, reflects:reflects, hitY:(hits.length?hits[0]:null),
+            exitDir:exitDir, rgb:spectrum(lam)};
+  }
+
+  function traceAll(){
+    rays = [];
+    for (var i=0;i<40;i++){
+      var lam = 400 + (680-400)*i/39;
+      rays.push(traceRay(lam, i/39));
+    }
+  }
+
+  /* ---------- drawing ---------- */
+  var prismR = 100;
+  function drawPrism(T, cen, time){
+    sctx.save();
+    sctx.beginPath();
+    sctx.moveTo(T[0].x, T[0].y); sctx.lineTo(T[1].x, T[1].y); sctx.lineTo(T[2].x, T[2].y);
+    sctx.closePath();
+    var g = sctx.createLinearGradient(cen.x - 60, cen.y - 80, cen.x + 60, cen.y + 80);
+    g.addColorStop(0,'rgba(180,220,255,.16)');
+    g.addColorStop(1,'rgba(200,230,255,.14)');
+    sctx.fillStyle = g;
+    sctx.fill();
+    /* three faint caustic ribbons drifting inside the glass */
+    sctx.save();
+    sctx.clip();
+    sctx.globalCompositeOperation = 'lighter';
+    for (var rib=0; rib<3; rib++){
+      sctx.beginPath();
+      for (var s=0;s<=40;s++){
+        var f = s/40;
+        var px = cen.x + (f-0.5)*2.2*prismR;
+        var py = cen.y + (f-0.5)*prismR*0.7 + (rib-1)*prismR*0.34
+               + Math.sin(f*7 + time*0.7 + rib*2.4)*prismR*0.09;
+        if (s===0) sctx.moveTo(px,py); else sctx.lineTo(px,py);
+      }
+      sctx.strokeStyle = 'rgba(190,225,255,0.05)';
+      sctx.lineWidth = 9;
+      sctx.stroke();
+    }
+    sctx.restore();
+    /* luminous edges with a blue flare */
+    sctx.beginPath();
+    sctx.moveTo(T[0].x, T[0].y); sctx.lineTo(T[1].x, T[1].y); sctx.lineTo(T[2].x, T[2].y);
+    sctx.closePath();
+    sctx.save();
+    sctx.shadowColor = 'rgba(120,180,255,.85)';
+    sctx.shadowBlur = 14;
+    sctx.strokeStyle = 'rgba(205,230,255,.75)';
+    sctx.lineWidth = 1.6;
+    sctx.stroke();
+    sctx.restore();
+    /* vertex lens-flare blooms */
+    for (var v=0; v<3; v++){
+      var rg = sctx.createRadialGradient(T[v].x, T[v].y, 0, T[v].x, T[v].y, 20);
+      rg.addColorStop(0,'rgba(220,240,255,.5)');
+      rg.addColorStop(1,'rgba(220,240,255,0)');
+      sctx.fillStyle = rg;
+      sctx.beginPath(); sctx.arc(T[v].x, T[v].y, 20, 0, 6.2832); sctx.fill();
+    }
+    sctx.restore();
+  }
+
+  function drawLamp(L, time){
+    sctx.save();
+    sctx.globalCompositeOperation = 'lighter';
+    var g = sctx.createRadialGradient(L.x, L.y, 2, L.x, L.y, 110);
+    g.addColorStop(0,'rgba(255,255,255,.95)');
+    g.addColorStop(0.16,'rgba(235,244,255,.5)');
+    g.addColorStop(0.55,'rgba(190,215,255,.12)');
+    g.addColorStop(1,'rgba(160,190,255,0)');
+    sctx.fillStyle = g;
+    sctx.beginPath(); sctx.arc(L.x, L.y, 110, 0, 6.2832); sctx.fill();
+    sctx.restore();
+    sctx.save();
+    sctx.fillStyle = '#ffffff';
+    sctx.shadowColor = 'rgba(255,255,255,.9)'; sctx.shadowBlur = 16;
+    sctx.beginPath(); sctx.arc(L.x, L.y, 9, 0, 6.2832); sctx.fill();
+    sctx.shadowBlur = 0;
+    sctx.setLineDash([5,6]);
+    sctx.lineDashOffset = REDUCED ? 0 : -time*12;
+    sctx.strokeStyle = 'rgba(143,211,255,.65)';
+    sctx.lineWidth = 1.4;
+    sctx.beginPath(); sctx.arc(L.x, L.y, 32, 0, 6.2832); sctx.stroke();
+    sctx.setLineDash([]);
+    sctx.fillStyle = 'rgba(190,210,230,.85)';
+    sctx.font = '600 9px system-ui, Helvetica, Arial';
+    sctx.textAlign = 'center';
+    sctx.fillText('L A M P', L.x, L.y + 50);
+    sctx.restore();
+  }
+
+  function drawStage(time){
+    sctx.setTransform(DPR,0,0,DPR,0,0);
+    sctx.clearRect(0,0,W,H);
+    prismR = p1.s*H;
+    sctx.globalCompositeOperation = 'source-over';
+
+    /* --- white beam from the lamp --- */
+    var L = {x:lamp.x*W, y:lamp.y*H};
+    var T1 = triVerts(p1);
+    sctx.save();
+    sctx.globalCompositeOperation = 'lighter';
+    var beam = sctx.createLinearGradient(L.x, L.y, p1.x*W, p1.y*H);
+    beam.addColorStop(0,'rgba(255,255,255,.16)');
+    beam.addColorStop(1,'rgba(255,255,255,.03)');
+    var eA = {x:L.x + (p1.x*W - L.x)*0.35, y:L.y + ((p1.y*H - prismR*0.55) - L.y)*0.35};
+    var eB = {x:L.x + (p1.x*W - L.x)*0.35, y:L.y + ((p1.y*H + prismR*0.55) - L.y)*0.35};
+    sctx.fillStyle = beam;
+    sctx.beginPath();
+    sctx.moveTo(L.x, L.y-2); sctx.lineTo(eA.x, eA.y); sctx.lineTo(eB.x, eB.y); sctx.lineTo(L.x, L.y+2);
+    sctx.closePath(); sctx.fill();
+    sctx.restore();
+
+    /* --- the 40 monochromatic rays --- */
+    sctx.save();
+    sctx.globalCompositeOperation = 'lighter';
+    sctx.lineCap = 'round';
+    for (var i=0;i<rays.length;i++){
+      var r = rays[i];
+      var c = 'rgb(' + r.rgb[0].toFixed(0) + ',' + r.rgb[1].toFixed(0) + ',' + r.rgb[2].toFixed(0) + ')';
+      var hi = (i === hoverIdx);
+      for (var sN=0;sN<r.segs.length;sN++){
+        var sg = r.segs[sN];
+        sctx.strokeStyle = c;
+        sctx.globalAlpha = hi ? 0.95 : (sg.glass ? 0.13 : 0.085);
+        sctx.lineWidth = hi ? 2.2 : 1.1;
+        sctx.beginPath(); sctx.moveTo(sg.a.x, sg.a.y); sctx.lineTo(sg.b.x, sg.b.y); sctx.stroke();
+      }
+      /* faint Fresnel reflections leaving each surface */
+      if (!hi){
+        for (var f2=0;f2<r.reflects.length;f2++){
+          var rf = r.reflects[f2];
+          if (rf.R < 0.02) continue;
+          sctx.globalAlpha = Math.min(0.16, rf.R*0.55);
+          sctx.lineWidth = 0.8;
+          sctx.beginPath();
+          sctx.moveTo(rf.p.x, rf.p.y);
+          sctx.lineTo(rf.p.x + rf.d.x*200, rf.p.y + rf.d.y*200);
+          sctx.stroke();
+        }
+      }
+    }
+    sctx.globalAlpha = 1;
+    /* soft vertical colour blobs where exit rays land */
+    for (var j=0;j<rays.length;j++){
+      var rr = rays[j];
+      if (rr.hitY == null) continue;
+      var col = 'rgb(' + rr.rgb[0].toFixed(0) + ',' + rr.rgb[1].toFixed(0) + ',' + rr.rgb[2].toFixed(0) + ')';
+      sctx.save();
+      sctx.translate(screenX(), rr.hitY);
+      sctx.scale(0.34, 1.35);
+      var bg = sctx.createRadialGradient(0,0,0, 0,0,16);
+      bg.addColorStop(0, col);
+      bg.addColorStop(1, 'rgba(0,0,0,0)');
+      sctx.globalAlpha = 0.55;
+      sctx.fillStyle = bg;
+      sctx.beginPath(); sctx.arc(0,0,16,0,6.2832); sctx.fill();
+      sctx.restore();
+    }
+    sctx.restore();
+
+    /* --- projection screen --- */
+    var sx = screenX();
+    sctx.save();
+    var sgr = sctx.createLinearGradient(sx-6,0,sx+8,0);
+    sgr.addColorStop(0,'rgba(24,28,38,.95)');
+    sgr.addColorStop(0.7,'rgba(38,44,58,.95)');
+    sgr.addColorStop(1,'rgba(16,19,26,.95)');
+    sctx.fillStyle = sgr;
+    sctx.fillRect(sx-6, bandTop(), 14, bandBot()-bandTop());
+    sctx.strokeStyle = 'rgba(255,255,255,.16)';
+    sctx.lineWidth = 1;
+    sctx.strokeRect(sx-6.5, bandTop()-0.5, 15, bandBot()-bandTop()+1);
+    sctx.strokeStyle = 'rgba(255,255,255,.22)';
+    for (var y=bandTop(); y<=bandBot(); y+=30){
+      sctx.beginPath(); sctx.moveTo(sx-6, y); sctx.lineTo(sx-13, y); sctx.stroke();
+    }
+    sctx.fillStyle = 'rgba(160,175,195,.8)';
+    sctx.font = '600 9px system-ui, Helvetica, Arial';
+    sctx.save();
+    sctx.translate(sx+18, bandTop()+62);
+    sctx.rotate(Math.PI/2);
+    sctx.fillText('S C R E E N', 0, 0);
+    sctx.restore();
+    sctx.restore();
+
+    /* --- prisms and lamp on top --- */
+    drawPrism(T1, {x:p1.x*W, y:p1.y*H}, time);
+    if (secondOn) drawPrism(triVerts(p2), {x:p2.x*W, y:p2.y*H}, time);
+    drawLamp(L, time);
+  }
+
+  /* ---------- composite to screen with polished-floor reflection ---------- */
+  function composite(){
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    var bg = ctx.createRadialGradient(W/2, H*0.45, 0, W/2, H*0.45, Math.max(W,H)*0.75);
+    bg.addColorStop(0, '#0d1018');
+    bg.addColorStop(1, '#04050a');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0,0,W,H);
+    var floorY = H*0.84;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0,0,W,floorY); ctx.clip();
+    ctx.drawImage(stage, 0, 0, W, H);
+    ctx.restore();
+    /* flipped, 28%-alpha, slightly blurred copy below the floor line */
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, floorY, W, H - floorY); ctx.clip();
+    ctx.translate(0, 2*floorY);
+    ctx.scale(1,-1);
+    ctx.globalAlpha = 0.28;
+    try { ctx.filter = 'blur(2.5px)'; } catch(e){}
+    ctx.drawImage(stage, 0, 0, W, H);
+    try { ctx.filter = 'none'; } catch(e){}
+    ctx.restore();
+    /* fade the reflection into the dark */
+    var fade = ctx.createLinearGradient(0, floorY, 0, H);
+    fade.addColorStop(0,'rgba(4,5,10,0)');
+    fade.addColorStop(0.85,'rgba(4,5,10,.96)');
+    fade.addColorStop(1,'rgba(4,5,10,1)');
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, floorY, W, H-floorY);
+    ctx.fillStyle = 'rgba(255,255,255,.05)';
+    ctx.fillRect(0, floorY, W, 1);
+  }
+
+  /* ---------- stats ---------- */
+  var stN4 = document.getElementById('stN4'),
+      stN6 = document.getElementById('stN6'),
+      stSpread = document.getElementById('stSpread');
+  function updateStats(){
+    stN4.textContent = nOf(400).toFixed(4);
+    stN6.textContent = nOf(680).toFixed(4);
+    var a = rays.length ? rays[0].exitDir : null;
+    var b = rays.length ? rays[rays.length-1].exitDir : null;
+    if (a && b){
+      var ang = Math.acos(Math.max(-1, Math.min(1, dot(a,b)))) * 180/Math.PI;
+      stSpread.textContent = ang.toFixed(2) + '°';
+    } else stSpread.textContent = '—';
+  }
+
+  /* ---------- hover ---------- */
+  function updateHover(mx, my){
+    hoverIdx = -1;
+    if (mx == null){ floater.style.display = 'none'; return; }
+    var sx = screenX();
+    if (Math.abs(mx - sx) < 80){
+      var bestD = 26, bestI = -1;
+      for (var i=0;i<rays.length;i++){
+        if (rays[i].hitY == null) continue;
+        var d = Math.abs(rays[i].hitY - my);
+        if (d < bestD){ bestD = d; bestI = i; }
+      }
+      hoverIdx = bestI;
+    }
+    if (hoverIdx >= 0){
+      var r = rays[hoverIdx];
+      var ln = nearLine(r.lam);
+      floater.innerHTML = '<span class="nm">' + r.lam.toFixed(0) + ' nm</span> · ' + colorName(r.lam) +
+        (ln ? '<br>near ' + ln : '') + '<br>' +
+        'n = ' + nOf(r.lam).toFixed(4) + (r.hitY!=null ? ' · y = ' + Math.round(r.hitY) + 'px' : '');
+      floater.style.display = 'block';
+      floater.style.left = Math.min(W - 210, sx + 26) + 'px';
+      floater.style.top = Math.max(8, Math.min(H - 90, (r.hitY||my) - 30)) + 'px';
+    } else {
+      floater.style.display = 'none';
+    }
+  }
+
+  /* ---------- loop / static rendering ---------- */
+  function renderStatic(){
+    traceAll();
+    drawStage(0);
+    composite();
+    updateStats();
+  }
+  function frame(now){
+    traceAll();
+    drawStage(now/1000);
+    composite();
+    updateStats();
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- size ---------- */
+  function resize(){
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W*DPR); canvas.height = Math.round(H*DPR);
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    stage.width = canvas.width; stage.height = canvas.height;
+    sctx.setTransform(DPR,0,0,DPR,0,0);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', function(){ resize(); renderStatic(); });
+
+  /* ---------- dragging ---------- */
+  var drag = null, dragOff = {x:0,y:0};
+  function pick(x, y){
+    var L = {x:lamp.x*W, y:lamp.y*H};
+    if (Math.hypot(x-L.x, y-L.y) < 46) return {o:lamp};
+    var cands = [{o:p1, c:{x:p1.x*W, y:p1.y*H}, s:p1.s}];
+    if (secondOn) cands.push({o:p2, c:{x:p2.x*W, y:p2.y*H}, s:p2.s});
+    for (var i=0;i<cands.length;i++){
+      var d = Math.hypot(x - cands[i].c.x, y - cands[i].c.y);
+      if (d < cands[i].s*H + 26) return cands[i];
+    }
+    return null;
+  }
+  canvas.addEventListener('pointerdown', function(e){
+    var r = pick(e.clientX, e.clientY);
+    if (!r) return;
+    drag = r;
+    dragOff.x = e.clientX - r.o.x*W;
+    dragOff.y = e.clientY - r.o.y*H;
+    canvas.setPointerCapture(e.pointerId);
+    canvas.style.cursor = 'grabbing';
+    updateHover(null);
+    if (REDUCED) renderStatic();
+  });
+  canvas.addEventListener('pointermove', function(e){
+    if (drag){
+      drag.o.x = Math.max(0.03, Math.min(0.97, (e.clientX - dragOff.x)/W));
+      drag.o.y = Math.max(0.06, Math.min(0.92, (e.clientY - dragOff.y)/H));
+      if (REDUCED) renderStatic();
+    } else {
+      var r = pick(e.clientX, e.clientY);
+      canvas.style.cursor = r ? 'grab' : 'crosshair';
+      updateHover(e.clientX, e.clientY);
+      if (REDUCED) renderStatic();
+    }
+  });
+  window.addEventListener('pointerup', function(){
+    if (drag){ drag = null; canvas.style.cursor = 'crosshair'; }
+  });
+
+  /* ---------- controls ---------- */
+  document.querySelectorAll('.seg button').forEach(function(b){
+    b.addEventListener('click', function(){
+      mode = b.dataset.mode;
+      document.querySelectorAll('.seg button').forEach(function(o){
+        o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
+      });
+      if (REDUCED) renderStatic();
+    });
+  });
+  document.getElementById('p2cb').addEventListener('change', function(e){
+    secondOn = e.target.checked;
+    if (REDUCED) renderStatic();
+  });
+  document.getElementById('resetBtn').addEventListener('click', function(){
+    resetLayout();
+    if (REDUCED) renderStatic();
+  });
+
+  /* mobile: explanatory text collapses into the details summary */
+  var how = document.getElementById('how');
+  function syncHow(){
+    if (window.innerWidth > 720) how.open = true;
+  }
+  window.addEventListener('resize', syncHow);
+
+  /* ---------- go ---------- */
+  resize();
+  syncHow();
+  if (REDUCED){
+    renderStatic();
+  } else {
+    requestAnimationFrame(frame);
+  }
+})();
+</script>
+</body>
+</html>

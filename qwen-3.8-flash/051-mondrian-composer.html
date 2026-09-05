@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Composer — A De Stijl Generator</title>
+<style>
+  :root{
+    --serif: Georgia,'Iowan Old Style','Palatino Linotype',Palatino,serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --red:#d7301f; --blue:#1e4d9b; --yellow:#f2c40f; --black:#161616; --white:#f6f3ec;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html{ min-height:100%; }
+  body{
+    min-height:100vh;
+    font-family:var(--serif);
+    color:#241f18;
+    background:linear-gradient(180deg,#cfc8bb 0%,#d9d3c7 46%,#c8c1b3 100%);
+    overflow-x:hidden;
+  }
+  /* ---- gallery environment ---- */
+  body::before{
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:1;
+    background:radial-gradient(62% 46% at 50% 22%, rgba(255,248,230,0.75) 0%, rgba(255,248,230,0.28) 52%, transparent 78%);
+  }
+  body::after{
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:2;
+    mix-blend-mode:multiply; opacity:0.5;
+    background:
+      repeating-linear-gradient(0deg, rgba(120,110,95,0.05) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgba(120,110,95,0.04) 0 2px, transparent 2px 5px);
+  }
+  #floor{
+    position:fixed; left:0; right:0; bottom:0; height:22vh; z-index:0;
+    background:linear-gradient(180deg,#6b6358 0%,#5a5248 100%);
+    box-shadow:inset 0 6px 18px -6px rgba(20,16,10,0.55), 0 -2px 0 rgba(20,16,10,0.35);
+  }
+  main{
+    position:relative; z-index:3;
+    display:flex; flex-direction:column; align-items:center;
+    padding:40px 20px 30vh;
+  }
+  header{ text-align:center; margin-bottom:26px; }
+  .eyebrow{
+    font-family:var(--sans);
+    font-size:10.5px; letter-spacing:0.42em; text-transform:uppercase;
+    color:#6d6354;
+  }
+  h1{ font-size:clamp(26px,4vw,40px); font-weight:normal; font-style:italic; color:#2c2519; }
+  h1 b{ font-style:normal; font-weight:normal; }
+  /* ---- controls ---- */
+  #controls{
+    display:flex; align-items:center; gap:22px; flex-wrap:wrap; justify-content:center;
+    margin-bottom:34px;
+  }
+  .btn{
+    position:relative; overflow:hidden;
+    font-family:var(--sans);
+    font-size:11px; letter-spacing:0.24em; text-transform:uppercase;
+    color:#161310; background:transparent;
+    border:2px solid #161310;
+    padding:12px 20px;
+    cursor:pointer;
+    box-shadow:4px 4px 0 #161310;
+    transition:transform .12s ease, box-shadow .12s ease, color .25s ease;
+  }
+  .btn span{ position:relative; z-index:1; }
+  .btn::before{
+    content:''; position:absolute; inset:0; z-index:0;
+    background:#161310;
+    transform:translateX(-101%);
+    transition:transform .28s cubic-bezier(.6,.1,.2,1);
+  }
+  .btn:hover{ color:var(--yellow); }
+  .btn:hover::before{ transform:translateX(0); }
+  .btn:active{ transform:translate(2px,2px); box-shadow:2px 2px 0 #161310; }
+  .btn[aria-pressed="true"]{ color:#fff; }
+  .btn[aria-pressed="true"]::before{ transform:translateX(0); background:var(--red); }
+  .slider-wrap{ display:flex; align-items:center; gap:12px; }
+  .slider-wrap label{
+    font-family:var(--sans); font-size:10.5px; letter-spacing:0.24em; text-transform:uppercase; color:#4c4436;
+  }
+  #depth{
+    -webkit-appearance:none; appearance:none;
+    width:140px; height:2px; background:#161310; outline:none; cursor:pointer;
+  }
+  #depth::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:18px; height:18px; background:var(--red);
+    border:2px solid #161310; border-radius:0; cursor:grab;
+  }
+  #depth::-moz-range-thumb{
+    width:14px; height:14px; background:var(--red);
+    border:2px solid #161310; border-radius:0; cursor:grab;
+  }
+  #depthVal{ font-family:var(--sans); font-size:12px; color:#161310; min-width:14px; }
+  /* ---- easel ---- */
+  #easelWrap{ perspective:1200px; }
+  #easel{
+    width:min(92vw,720px); height:min(92vw,720px);
+    padding:20px;
+    background:linear-gradient(135deg,#2b2b2b 0%,#0d0d0d 34%,#202020 62%,#050505 100%);
+    border-radius:2px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.16),
+      inset 0 0 0 1px rgba(255,255,255,0.05),
+      inset 0 -2px 6px rgba(0,0,0,0.6),
+      0 34px 60px -20px rgba(25,18,10,0.65),
+      0 12px 22px rgba(25,18,10,0.4);
+    position:relative;
+    transition:transform 1.6s cubic-bezier(.3,.7,.25,1);
+  }
+  #easel::after{ /* diagonal glass glare */
+    content:''; position:absolute; inset:0; pointer-events:none; z-index:5;
+    background:linear-gradient(118deg, transparent 34%, rgba(255,255,255,0.07) 42%, rgba(255,255,255,0.12) 47%, rgba(255,255,255,0.03) 53%, transparent 62%);
+  }
+  #painting{
+    width:100%; height:100%;
+    display:grid;
+    background:#1a1a1a;
+    gap:10px;
+    position:relative;
+    transition: grid-template-columns 1100ms cubic-bezier(.65,0,.25,1),
+                grid-template-rows 1100ms cubic-bezier(.65,0,.25,1);
+  }
+  #painting.no-transition{ transition:none; }
+  .cell{
+    border:none; padding:0; cursor:pointer;
+    transition:background-color 380ms ease, transform 0.2s ease;
+    position:relative;
+    transform:scale(1);
+    animation:reveal 420ms cubic-bezier(.2,.8,.3,1) backwards;
+    animation-delay:calc(var(--i,0) * 28ms);
+  }
+  .cell:hover{ transform:scale(0.985); }
+  .cell:focus{ outline:none; }
+  .cell:focus-visible{ outline:3px solid #fff; outline-offset:-3px; }
+  @keyframes reveal{
+    from{ opacity:0; transform:scale(0.72); }
+    to  { opacity:1; transform:scale(1); }
+  }
+  /* palette */
+  .k-white { background-color:var(--white); }
+  .k-white::before{
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background:
+      repeating-linear-gradient(0deg, rgba(90,80,60,0.05) 0 1px, transparent 1px 4px),
+      repeating-linear-gradient(90deg, rgba(90,80,60,0.04) 0 1px, transparent 1px 4px);
+  }
+  .k-red   { background-color:var(--red); }
+  .k-blue  { background-color:var(--blue); }
+  .k-yellow{ background-color:var(--yellow); }
+  .k-black { background-color:var(--black); }
+  .cell:not(.k-white)::after{
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 46%, rgba(0,0,0,0.12) 100%);
+  }
+  /* ---- wall plate ---- */
+  #plate{
+    margin-top:44px;
+    max-width:520px; width:92vw;
+    background:linear-gradient(180deg,#faf7f0 0%,#f3efe6 100%);
+    border:1px solid #c9c2b4;
+    border-radius:3px;
+    padding:20px 34px 18px;
+    position:relative;
+    box-shadow:0 10px 24px -10px rgba(30,24,16,0.45), inset 0 1px 0 rgba(255,255,255,0.7);
+    text-align:center;
+  }
+  .screw{
+    position:absolute; top:50%; margin-top:-4px;
+    width:8px; height:8px; border-radius:50%;
+    background:radial-gradient(circle at 38% 34%, #eeeade, #b6b0a2 62%, #8d8778);
+    box-shadow:inset 0 0 0 1px rgba(70,64,52,0.4), 0 1px 1px rgba(0,0,0,0.18);
+  }
+  .screw::after{
+    content:''; position:absolute; left:1px; right:1px; top:3px; height:1.6px;
+    background:rgba(70,64,52,0.55); transform:rotate(24deg);
+  }
+  .screw.l{ left:9px; } .screw.r{ right:9px; }
+  #plateText{ transition:opacity 0.45s ease; }
+  #plateText.hidden{ opacity:0; }
+  #artist{
+    font-family:var(--sans);
+    font-size:9.5px; letter-spacing:0.34em; text-transform:uppercase;
+    color:#7a7160; margin-bottom:8px;
+  }
+  #pTitle{ font-style:italic; font-size:clamp(16px,2.6vw,21px); color:#2c2519; line-height:1.3; }
+  #pMeta{ font-size:12.5px; font-style:italic; color:#6d6354; margin-top:6px; }
+  #pDims{ font-family:var(--sans); font-size:9px; letter-spacing:0.26em; text-transform:uppercase; color:#948a77; margin-top:8px; }
+  #hint{
+    margin-top:26px; font-family:var(--sans);
+    font-size:9.5px; letter-spacing:0.3em; text-transform:uppercase; color:#6d6354; opacity:0.75;
+    text-align:center;
+  }
+  /* ---- reduced motion ---- */
+  @media (prefers-reduced-motion: reduce){
+    #easel, #painting, .cell, #plateText{ transition:none !important; animation:none !important; }
+    .cell{ animation:none !important; opacity:1 !important; }
+  }
+</style>
+</head>
+<body>
+<div id="floor" aria-hidden="true"></div>
+<main>
+  <header>
+    <div class="eyebrow">The Interaction Gallery &middot; Room 4</div>
+    <h1><b>Composer</b> — a De Stijl generator</h1>
+  </header>
+
+  <div id="controls">
+    <button class="btn" id="newBtn" type="button"><span>New composition</span></button>
+    <button class="btn" id="animBtn" type="button" aria-pressed="false"><span>Animate</span></button>
+    <div class="slider-wrap">
+      <label for="depth">Depth</label>
+      <input type="range" id="depth" min="2" max="7" step="1" value="4">
+      <span id="depthVal">4</span>
+    </div>
+  </div>
+
+  <div id="easelWrap">
+    <div id="easel">
+      <div id="painting" role="group" aria-label="Generated De Stijl composition"></div>
+    </div>
+  </div>
+
+  <div id="plate">
+    <span class="screw l" aria-hidden="true"></span>
+    <span class="screw r" aria-hidden="true"></span>
+    <div id="plateText">
+      <div id="artist">Piet Anonymous (b.&nbsp;1872)</div>
+      <div id="pTitle">Composition No. I</div>
+      <div id="pMeta">Oil and gouache on canvas, 1924</div>
+      <div id="pDims">81 &times; 81 cm (square)</div>
+    </div>
+  </div>
+
+  <div id="hint">Click cells to repaint &middot; N — new composition &middot; A — breathing</div>
+</main>
+
+<script>
+(function(){
+  'use strict';
+  var REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var painting = document.getElementById('painting');
+  var easel = document.getElementById('easel');
+  var N = 16;
+  var baseCols = [], baseRows = [];
+  var cells = [];               // {el, kind}
+  var opus = 1;
+  var breathing = false, breathRAF = 0;
+  var phases = [];
+
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+  /* ---------- random fractional tracks ---------- */
+  function rollTracks(){
+    var out = [];
+    for (var i=0;i<N;i++){
+      var r = Math.random();
+      if (r < 0.18)      out.push(+rand(0.45,0.7).toFixed(3));   // narrow
+      else if (r < 0.36) out.push(+rand(1.5,2.2).toFixed(3));    // generous
+      else               out.push(+rand(0.8,1.3).toFixed(3));    // normal
+    }
+    return out;
+  }
+  function applyTracks(c, r){
+    painting.style.gridTemplateColumns = c.map(function(v){return v+'fr';}).join(' ');
+    painting.style.gridTemplateRows    = r.map(function(v){return v+'fr';}).join(' ');
+  }
+
+  /* ---------- recursive subdivision ---------- */
+  function splitRect(rect, depth, maxDepth, out){
+    var w = rect.w, h = rect.h;
+    var canV = w >= 2, canH = h >= 2;
+    if (depth >= maxDepth || (!canV && !canH)){ out.push(rect); return; }
+    // occasionally leave a generous rectangle whole (never the first two levels,
+    // so the field always subdivides a few times before a plane survives)
+    if (depth >= 2 && w*h >= 14 && Math.random() < 0.26){ out.push(rect); return; }
+    if (depth >= 3 && Math.random() < 0.12){ out.push(rect); return; }
+    // axis probability proportional to the long side
+    var pV = canV && canH ? w/(w+h) : (canV ? 1 : 0);
+    var axis = Math.random() < pV ? 'v' : 'h';
+    if (axis==='v' && !canV) axis='h';
+    if (axis==='h' && !canH) axis='v';
+    var side = axis==='v' ? w : h;
+    var ratio = pick([0.382, 0.618]) + rand(-0.15, 0.15);
+    ratio = Math.max(0.18, Math.min(0.82, ratio));
+    var cut = Math.max(1, Math.min(side-1, Math.round(side*ratio)));
+    var a, b;
+    if (axis==='v'){
+      a = {x:rect.x,       y:rect.y,     w:cut,   h:h};
+      b = {x:rect.x+cut,   y:rect.y,     w:w-cut, h:h};
+    } else {
+      a = {x:rect.x,       y:rect.y,     w:w,     h:cut};
+      b = {x:rect.x,       y:rect.y+cut, w:w,     h:h-cut};
+    }
+    splitRect(a, depth+1, maxDepth, out);
+    splitRect(b, depth+1, maxDepth, out);
+  }
+
+  /* ---------- painting the leaves ---------- */
+  function assignColors(rects){
+    var colored = Math.round(rects.length * rand(0.16, 0.28));
+    var idx = rects.map(function(_,i){return i;});
+    for (var i=idx.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=idx[i]; idx[i]=idx[j]; idx[j]=t; }
+    var kinds = rects.map(function(){ return 'white'; });
+    // prefer bigger planes for colour, so it reads like paint not confetti
+    var big = idx.slice().sort(function(p,q){ return rects[q].w*rects[q].h - rects[p].w*rects[p].h; })
+                  .slice(0, Math.max(colored,1));
+    for (var c=0;c<colored && c<big.length;c++){
+      kinds[big[c]] = Math.random() < 0.08 ? 'black' : pick(['red','blue','yellow']);
+    }
+    return kinds;
+  }
+
+  /* ---------- build ---------- */
+  function build(animate){
+    var maxDepth = +document.getElementById('depth').value;
+    baseCols = rollTracks();
+    baseRows = rollTracks();
+    phases = [];
+    for (var i=0;i<N;i++) phases.push({ a:rand(0,Math.PI*2), b:rand(0,Math.PI*2), sa:rand(0.13,0.30), sb:rand(0.7,1.4) });
+
+    var rects = [];
+    splitRect({x:0,y:0,w:N,h:N}, 0, maxDepth, rects);
+    var kinds = assignColors(rects);
+
+    painting.innerHTML = '';
+    cells = [];
+    rects.forEach(function(r, i){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cell k-'+kinds[i];
+      b.style.gridColumn = (r.x+1)+' / span '+r.w;
+      b.style.gridRow    = (r.y+1)+' / span '+r.h;
+      var cell = { el:b, kind:kinds[i] };
+      if (animate && !REDUCED) b.style.setProperty('--i', i);
+      else b.style.animation = 'none';
+      b.setAttribute('aria-label','Cell, '+(kinds[i]==='white'?'off-white':kinds[i])+'. Click to repaint.');
+      b.addEventListener('click', function(){
+        var order = ['white','red','blue','yellow','black'];
+        var next = order[(order.indexOf(cell.kind)+1)%order.length];
+        setKind(cell, next);
+        updatePlateFromCells();
+      });
+      cells.push(cell);
+      painting.appendChild(b);
+    });
+
+    applyTracks(baseCols.slice(), baseRows.slice());
+    // framed easel tilt
+    if (!REDUCED) easel.style.transform = 'rotate('+rand(-0.6,0.6).toFixed(3)+'deg)';
+    updatePlate();
+  }
+
+  function setKind(cell, kind){
+    cell.el.classList.remove('k-'+cell.kind);
+    cell.el.classList.add('k-'+kind);
+    cell.kind = kind;
+    cell.el.setAttribute('aria-label','Cell, '+(kind==='white'?'off-white':kind)+'. Click to repaint.');
+  }
+
+  /* ---------- wall plate ---------- */
+  function roman(n){
+    var map=[[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+    var s='';
+    map.forEach(function(p){ while(n>=p[0]){ s+=p[1]; n-=p[0]; } });
+    return s;
+  }
+  function titleFor(kinds){
+    var present = ['red','blue','yellow'].filter(function(k){ return kinds.indexOf(k)>=0; });
+    var named = { red:'Red', blue:'Blue', yellow:'Yellow' };
+    if (present.length===0) return 'Composition in White'+(kinds.indexOf('black')>=0?' and Black':'');
+    if (present.length===1) return 'Tableau with '+named[present[0]];
+    var names = present.map(function(k){return named[k];});
+    var joined = names.length===2 ? names[0]+' and '+names[1] : names[0]+', '+names[1]+' and '+names[2];
+    return 'Composition No. '+roman(opus)+' with '+joined;
+  }
+  var plateState = { year:1924, dims:'81 × 81 cm' };
+  function writePlate(title){
+    document.getElementById('pTitle').textContent = title;
+    document.getElementById('pMeta').textContent = 'Oil and gouache on canvas, '+plateState.year;
+    document.getElementById('pDims').textContent = plateState.dims+' (square)';
+  }
+  function swapPlate(title){
+    var pt = document.getElementById('plateText');
+    if (REDUCED){ writePlate(title); return; }
+    pt.classList.add('hidden');
+    setTimeout(function(){ writePlate(title); pt.classList.remove('hidden'); }, 460);
+  }
+  function updatePlate(){
+    opus++;
+    plateState.year = 1919 + Math.floor(Math.random()*24);      // 1919–1942
+    var side = 40 + Math.floor(Math.random()*17)*5;             // square dimensions
+    plateState.dims = side+' \u00d7 '+side+' cm';
+    swapPlate(titleFor(cells.map(function(c){return c.kind;})));
+  }
+  var plateTimer = 0;
+  function updatePlateFromCells(){
+    clearTimeout(plateTimer);
+    plateTimer = setTimeout(function(){
+      var title = titleFor(cells.map(function(c){return c.kind;}));
+      if (document.getElementById('pTitle').textContent === title) return;
+      swapPlate(title);
+    }, 300);
+  }
+
+  /* ---------- breathing mode ---------- */
+  var t0 = 0;
+  function breathFrame(now){
+    if (!breathing) return;
+    var t = (now - t0)/1000;
+    var cols = baseCols.map(function(v,i){
+      var p = phases[i];
+      var m = 1 + 0.16*Math.sin(t*p.sa + p.a) + 0.06*Math.sin(t*p.sb*2.4 + p.b);
+      return (v*m).toFixed(3)+'fr';
+    });
+    var rows = baseRows.map(function(v,i){
+      var p = phases[(i+N/2)%N];
+      var m = 1 + 0.16*Math.sin(t*p.sa*0.8 + p.b) + 0.06*Math.sin(t*p.sb*2.1 + p.a);
+      return (v*m).toFixed(3)+'fr';
+    });
+    painting.style.gridTemplateColumns = cols.join(' ');
+    painting.style.gridTemplateRows = rows.join(' ');
+    breathRAF = requestAnimationFrame(breathFrame);
+  }
+  function toggleBreath(){
+    if (REDUCED) return;                     // breathing disabled under reduced motion
+    var btn = document.getElementById('animBtn');
+    breathing = !breathing;
+    btn.setAttribute('aria-pressed', String(breathing));
+    if (breathing){
+      painting.classList.add('no-transition');
+      t0 = performance.now();
+      breathRAF = requestAnimationFrame(breathFrame);
+    } else {
+      cancelAnimationFrame(breathRAF);
+      painting.classList.remove('no-transition');
+      applyTracks(baseCols.slice(), baseRows.slice());   // ease home
+    }
+  }
+
+  /* ---------- controls ---------- */
+  document.getElementById('newBtn').addEventListener('click', function(){ newComposition(); });
+  document.getElementById('animBtn').addEventListener('click', toggleBreath);
+  var depth = document.getElementById('depth');
+  depth.addEventListener('input', function(){
+    document.getElementById('depthVal').textContent = depth.value;
+    newComposition();
+  });
+  function newComposition(){
+    if (breathing) toggleBreath();           // rebuild static, leave breathing off
+    build(true);
+  }
+  document.addEventListener('keydown', function(e){
+    if (e.target && (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA')) return;
+    if (e.key==='n'||e.key==='N') newComposition();
+    if (e.key==='a'||e.key==='A') toggleBreath();
+  });
+
+  build(true);
+})();
+</script>
+</body>
+</html>

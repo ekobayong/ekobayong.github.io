@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apiary Studio — Honeycomb Navigation</title>
+<style>
+  :root{
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+    --honey: #F0A83A;
+    --honey-deep: #C47A18;
+    --wax1: #6B3A0A;
+    --wax2: #3D2005;
+    --ink: #1C0F03;
+    --light-honey: #FFDFA0;
+    --ease-hex: 0.5s cubic-bezier(.2,.8,.2,1);
+    --ease-panel: 0.7s cubic-bezier(.6,0,.2,1);
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    overflow:hidden; font-family:var(--serif); color:#F7E3B8;
+    background: radial-gradient(ellipse 130% 120% at 12% 8%, #4A2606 0%, #2A1604 52%, #150A02 100%);
+    perspective: 1200px;
+    -webkit-user-select:none; user-select:none;
+  }
+  /* ---------------- comb ---------------- */
+  #comb-wrap{
+    position:fixed; inset:0; overflow:hidden;
+    transform-style:preserve-3d;
+    transition:opacity 0.6s ease;
+  }
+  #comb{ position:absolute; inset:0; transform-style:preserve-3d; }
+  .hex{
+    position:absolute;
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    background: linear-gradient(155deg, var(--wax1) 0%, var(--wax2) 100%);
+    transition: transform var(--ease-hex), filter var(--ease-hex), opacity 0.5s ease;
+    will-change: transform, filter;
+    transform-style:preserve-3d;
+  }
+  .hex::before{ /* diagonal wax highlight */
+    content:""; position:absolute; inset:0;
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    background: linear-gradient(135deg, rgba(255,216,150,0.10) 0%, rgba(255,216,150,0.02) 30%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.28) 100%);
+  }
+  .hex::after{ /* inner rim, inset 3px, same clip */
+    content:""; position:absolute; inset:3px;
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    background: linear-gradient(155deg, #5A3008 0%, #331904 100%);
+    z-index:-1;
+  }
+  #comb-wrap.dim{ opacity:0.22; }
+  #comb-wrap.dim .hex{ transform:none !important; filter:none !important; transition-duration:0.6s; }
+  .hex.nav{ cursor:pointer; }
+  .hex.nav::after{
+    background: radial-gradient(ellipse 130% 100% at 50% 8%, rgba(255,240,200,0.5), rgba(255,240,200,0) 55%),
+                linear-gradient(160deg, #F0A83A 0%, #C47A18 100%);
+    z-index:-1;
+  }
+  .hex.nav .inner{
+    position:absolute; inset:0; z-index:2;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.35em;
+    color:var(--ink); outline:none;
+  }
+  .hex.nav .inner svg{
+    width:34%; height:auto; stroke:var(--ink); fill:none;
+    stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round;
+    filter:drop-shadow(0 1px 0 rgba(255,235,180,0.4));
+  }
+  .hex.nav .inner b{
+    font-family:var(--sans); font-weight:600; font-size:clamp(9px, calc(100vw/110), 15px);
+    letter-spacing:0.22em; text-transform:uppercase;
+  }
+  .hex.nav:hover .inner{ color:#000; }
+  .hex.nav:focus-visible .inner{ filter:drop-shadow(0 0 3px #FFEFC8) drop-shadow(0 0 7px #FFEFC8); }
+  .hex.nav:focus-visible::before{ background: rgba(255,235,185,0.22); }
+  .hex.gone{ opacity:0 !important; transition-delay:0.15s; }
+
+  /* ---------------- light sweep ---------------- */
+  #sweep{
+    position:fixed; top:-20%; left:0; width:44vw; height:140%; pointer-events:none; z-index:6;
+    mix-blend-mode:screen;
+    background: linear-gradient(100deg,
+      rgba(255,210,122,0) 0%,
+      rgba(255,210,122,0.16) 38%,
+      rgba(255,210,122,0.28) 47%,
+      rgba(255,240,200,0.34) 50%,
+      rgba(255,210,122,0.28) 53%,
+      rgba(255,210,122,0.16) 62%,
+      rgba(255,210,122,0) 100%);
+    will-change: transform;
+    transform: translateX(-60vw);
+  }
+
+  /* ---------------- brand & hint ---------------- */
+  #brand{ position:fixed; top:34px; left:40px; z-index:7; pointer-events:none; transition:opacity 0.5s ease; }
+  #brand h1{ font-weight:400; font-size:clamp(22px, 3vw, 34px); color:#FFEBBE; text-shadow:0 2px 18px rgba(0,0,0,0.6); }
+  #brand h1 em{ font-style:italic; color:#F5C56A; }
+  #brand p{
+    margin-top:7px; font-family:var(--sans); font-size:9.5px; letter-spacing:0.34em;
+    text-transform:uppercase; color:rgba(240,168,58,0.75);
+  }
+  #hint{
+    position:fixed; left:50%; bottom:30px; transform:translateX(-50%); z-index:7;
+    font-family:var(--sans); font-size:10px; letter-spacing:0.3em; text-transform:uppercase;
+    color:rgba(255,223,160,0.4); pointer-events:none; transition:opacity 0.5s ease;
+  }
+  body.open #hint{ opacity:0; }
+
+  /* ---------------- content panel ---------------- */
+  #panel{
+    position:fixed; z-index:9; visibility:hidden;
+    background:
+      radial-gradient(ellipse 90% 60% at 50% -8%, rgba(255,225,160,0.14), rgba(255,225,160,0) 60%),
+      linear-gradient(168deg, #45260A 0%, #2C1705 62%, #1E0F02 100%);
+    border:1px solid rgba(240,168,58,0.5);
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    box-shadow: 0 40px 90px rgba(0,0,0,0.7), inset 0 0 90px rgba(255,170,60,0.05);
+    transition:
+      left var(--ease-panel), top var(--ease-panel), width var(--ease-panel), height var(--ease-panel),
+      clip-path var(--ease-panel), border-radius var(--ease-panel);
+    overflow:hidden;
+  }
+  #panel.vis{ visibility:visible; }
+  #panel .pad{
+    position:absolute; inset:0; padding:56px 64px 40px; overflow:auto;
+    opacity:0; transform:translateY(14px);
+    transition:opacity 0.5s ease 0.35s, transform 0.5s ease 0.35s;
+  }
+  #panel.filled .pad{ opacity:1; transform:none; }
+  #panel .kicker{
+    font-family:var(--sans); font-size:10px; letter-spacing:0.34em; text-transform:uppercase;
+    color:var(--honey); margin-bottom:14px;
+  }
+  #panel h2{
+    font-weight:400; font-size:clamp(30px, 4.6vw, 64px); line-height:1.04; color:#FFE9C2;
+    margin-bottom:18px; max-width:14ch;
+  }
+  #panel h2 em{ font-style:italic; color:var(--light-honey); }
+  #panel p{ font-size:15px; line-height:1.72; color:rgba(250,230,195,0.82); margin-bottom:12px; max-width:60ch; }
+  #panel .tags{ list-style:none; margin-top:18px; display:flex; flex-wrap:wrap; gap:8px 18px; }
+  #panel .tags li{
+    font-family:var(--sans); font-size:10.5px; letter-spacing:0.18em; text-transform:uppercase;
+    color:rgba(255,215,150,0.85); display:flex; align-items:center; gap:8px;
+  }
+  #panel .tags li::before{
+    content:""; width:9px; height:10px; flex:none;
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    background: var(--honey);
+  }
+  #close{
+    position:absolute; top:20px; right:22px; z-index:3;
+    width:44px; height:44px; border-radius:50%; cursor:pointer;
+    background:rgba(240,168,58,0.12); color:#FFDFA0;
+    border:1px solid rgba(240,168,58,0.55);
+    display:grid; place-items:center; padding:0;
+    transition:transform 0.35s cubic-bezier(.2,.8,.2,1), background 0.25s ease;
+  }
+  #close svg{ width:16px; height:16px; stroke:currentColor; stroke-width:1.8; fill:none; stroke-linecap:round; }
+  #close:hover{ transform:rotate(90deg); background:rgba(240,168,58,0.28); }
+  #close:focus-visible{ outline:1px solid var(--light-honey); outline-offset:3px; }
+
+  @media (max-width:640px){
+    #brand{ top:18px; left:18px; }
+    #panel .pad{ padding:52px 26px 26px; }
+    #hint{ letter-spacing:0.18em; font-size:8.5px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    :root{ --ease-hex: 0.02s linear; --ease-panel: 0.02s linear; }
+    #sweep{ transform:translateX(28vw) !important; opacity:0.6; }
+    #panel .pad{ transition-delay:0s; }
+  }
+</style>
+</head>
+<body>
+
+<div id="comb-wrap">
+  <div id="comb"></div>
+</div>
+<div id="sweep" aria-hidden="true"></div>
+
+<header id="brand">
+  <h1>Apiary <em>Studio</em></h1>
+  <p>Design made by hand · est. MMXIV</p>
+</header>
+<div id="hint">Move across the comb · six gold cells open</div>
+
+<section id="panel" role="dialog" aria-modal="true" aria-label="cell contents">
+  <button id="close" aria-label="Close cell"><svg viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button>
+  <div class="pad" id="panel-content"></div>
+</section>
+
+<script>
+(() => {
+"use strict";
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const clamp = (v,a,b) => Math.min(b, Math.max(a,v));
+const POLY  = "polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)";
+const RECT  = "polygon(0% 0%, 100% 0%, 100% 0%, 100% 100%, 100% 100%, 0% 100%)";
+
+/* ================= comb geometry ================= */
+const combEl  = document.getElementById("comb");
+const combWrap= document.getElementById("comb-wrap");
+let hexW=0, hexH=0, stepX=0, stepY=0, cols=0, rows=0, offsX=0, offsY=0;
+let hexes = [];                                   /* {el,row,col,x,y,cx,cy,nav} */
+
+function hexSize(){
+  const w = window.innerWidth;
+  if (w < 640)  return 64;
+  if (w < 1024) return 82;
+  if (w < 1440) return 100;
+  if (w < 2560) return 132;
+  return 180;
+}
+function build(){
+  hexW = hexSize(); hexH = hexW * 1.1547;
+  stepX = hexW + 4;                               /* 4px wax wall */
+  stepY = hexH * 0.75 + 3;                        /* 3px vertical gap */
+  cols = Math.ceil(window.innerWidth /stepX) + 2;
+  rows = Math.ceil(window.innerHeight/stepY) + 2;
+  offsX = (window.innerWidth  - (cols*stepX - 4)) / 2;
+  offsY = (window.innerHeight - (rows*stepY - 3)) / 2;
+  combEl.innerHTML = "";
+  hexes = [];
+  const frag = document.createDocumentFragment();
+  for (let r=0;r<rows;r++) for (let c=0;c<cols;c++){
+    const x = offsX + c*stepX + (r%2 ? stepX/2 : 0);
+    const y = offsY + r*stepY;
+    const el = document.createElement("div");
+    el.className = "hex";
+    el.style.left = x+"px"; el.style.top = y+"px";
+    el.style.width = hexW+"px"; el.style.height = hexH+"px";
+    const h = { el, row:r, col:c, x, y, cx:x+hexW/2, cy:y+hexH/2, nav:null, last:0 };
+    hexes.push(h); frag.appendChild(el);
+  }
+  combEl.appendChild(frag);
+  placeNavs();
+}
+
+/* ================= nav ring around the centre cell ================= */
+const ICONS = {
+  briefcase:'<path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7"/><rect x="4" y="7" width="16" height="13" rx="1.5"/><path d="M4 12h16"/><path d="M10.5 12.5v2h3v-2"/>',
+  house:'<path d="M4.5 10.5 12 4l7.5 6.5"/><path d="M6.5 9.5V18a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V9.5"/><path d="M10 19v-5h4v5"/>',
+  notebook:'<rect x="6" y="3.5" width="13" height="17" rx="1.5"/><path d="M6 8H3.5M6 12H3.5M6 16H3.5"/><path d="M9.5 8.5h6M9.5 12h6M9.5 15.5h4"/>',
+  flask:'<path d="M10 3.5h4"/><path d="M11 3.5v6L5.6 18a1.6 1.6 0 0 0 1.4 2.5h10a1.6 1.6 0 0 0 1.4-2.5L13 9.5v-6"/><path d="M8 14.5h8"/>',
+  people:'<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.5-3.4 2.7-5.2 5.5-5.2s5 1.8 5.5 5.2"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M15.5 13.9c2.4.2 4.2 1.8 4.7 4.6"/>',
+  envelope:'<rect x="3.5" y="6" width="17" height="12.5" rx="1.5"/><path d="M4.5 7.5 12 13.5l7.5-6"/>'
+};
+const NAVS = [
+  { key:"Work",    icon:"briefcase" },
+  { key:"Studio",  icon:"house" },
+  { key:"Journal", icon:"notebook" },
+  { key:"Lab",     icon:"flask" },
+  { key:"People",  icon:"people" },
+  { key:"Contact", icon:"envelope" },
+];
+const CONTENT = {
+  Work: { kick:"Cell 01 · Notes from the comb", title:"Selected <em>Work</em>",
+    p:[ "Our bench keeps long hours. In the last three seasons we have re-laid the identity for the Nordkapp Ferries — a wordmark cut from foghorn signals — and rebuilt the wayfinding for the Mercator Railway's six oldest terminals so that a tired person at 23:40 can still find the right platform by feel.",
+        "For the Rijksmuseum Winter Show we printed a catalogue the size of a serving tray, and for the Postal Museum we spent nine months in the archives finding out what a stamp was before it was a stamp. Both are still in print.",
+        "We take six projects a year. No more — the comb only holds so much honey." ],
+    tags:["Identity","Editorial","Wayfinding","Type","Motion","Exhibition"] },
+  Studio: { kick:"Cell 02 · Notes from the comb", title:"The <em>Studio</em>",
+    p:[ "Apiary is eleven people and a dog in a former bakery on Vårborgate. The ovens are gone but the floor still tilts half a degree south-east, and every drawing we make is secretly leaning with it.",
+        "We started in 2014 with two letterpresses and one client who has since stayed for a decade. Everything we sell is made here: no subcontracted logos, no borrowed photographs unless the photographer is in the room when it is chosen.",
+        "If you would like to visit, the door code is the second line of the sign — the kettle is usually on." ],
+    tags:["Oslo","Since 2014","Letterpress","Open studio","Dog-friendly"] },
+  Journal: { kick:"Cell 03 · Notes from the comb", title:"From the <em>Journal</em>",
+    p:[ "Issue 9 — <i>The Cell and the Sentence</i>: on why a line of body copy is a honeycomb with six sides of very unequal length, and what happens if you cap one side at fourteen words. With diagrams, unfortunately.",
+        "Issue 8 — <i>Fog Signals</i>: field notes from the Nordkapp sound recordings, and how a two-second pause at 440 Hz became the seed of a whole identity. Audio appendix included.",
+        "Issues appear twice a year, printed loose in grey boards. Back numbers are listed at the end of the comb, or under 'Lab', depending on how honest we are being." ],
+    tags:["Issues 1–9","Printed twice a year","Field notes","Audio appendix"] },
+  Lab: { kick:"Cell 04 · Notes from the comb", title:"The <em>Lab</em>",
+    p:[ "The back room is for experiments that cannot be invoiced. Current work: a variable font whose counters swell with the reader's scroll speed, built for a waterfall encyclopaedia that will probably never exist.",
+        "Last winter we fed twelve years of ferry timetables into a pen plotter and got, by accident, the best poster we have ever made. It hangs by the door. The plotter — a 1978 Calcomp — has a name and a cleaning schedule.",
+        "We publish lab failures too. The shelf of them is, frankly, taller." ],
+    tags:["Variable type","Plotter work","Sound studies","Happy accidents","Failures"] },
+  People: { kick:"Cell 05 · Notes from the comb", title:"The <em>People</em>",
+    p:[ "Sana Haugen, founder — draws until a letter stops arguing. Tomas Vik, technology — believes every page is a machine if you look at it sadly enough. Ilse Brandt, press — ran the bakery's ovens before she ran ours.",
+        "Four designers, two engineers, a production lead who can bend any paper on earth to her will, an intern who rotates every spring from the Antwerp programme, and the dog, who reviews everything and approves little.",
+        "We hire by asking you to spend a paid day with us. Nobody has ever been good at our kind of work who was bad at that day." ],
+    tags:["Eleven people","One dog","Paid trial day","Antwerp interns"] },
+  Contact: { kick:"Cell 06 · Notes from the comb", title:"Say <em>Hello</em>",
+    p:[ "Write to hello@apiary.studio, or post a drawing to Vårborgate 21, 0459 Oslo. Enquiries about new work go to Sana; about technology, to Tomas; about visiting, to anyone — the kettle is usually on.",
+        "We answer everything except spam, usually within two working days, always in the language you wrote in. If you are in a hurry, say so: honest hurry we can work with.",
+        "The studio is closed in July, and on the three days a year the presses are serviced. The dog is off-duty at all times." ],
+    tags:["hello@apiary.studio","Vårborgate 21, Oslo","Tue–Fri, 9–17","Closed July"] },
+};
+
+function placeNavs(){
+  navHexes = [];
+  const cRow = clamp(Math.round((window.innerHeight/2 - offsY)/stepY), 1, rows-2);
+  const cCol = clamp(Math.round(((window.innerWidth/2 - offsX)/stepX) - (cRow%2 ? 0.5 : 0)), 1, cols-2);
+  const center = hexes.find(h => h.row===cRow && h.col===cCol);
+  if (!center) return;
+  const even = cRow % 2 === 0;
+  const offs = even
+    ? [[0,-1],[0,1],[-1,-1],[-1,0],[1,-1],[1,0]]
+    : [[0,-1],[0,1],[-1,0],[-1,1],[1,0],[1,1]];
+  const ring = offs.map(([dr,dc]) => hexes.find(h => h.row===cRow+dr && h.col===cCol+dc)).filter(Boolean);
+  ring.sort((a,b) => Math.atan2(a.cy-center.cy, a.cx-center.cx) - Math.atan2(b.cy-center.cy, b.cx-center.cx));
+  ring.slice(0,6).forEach((h, i) => {
+    const nav = NAVS[i];
+    h.el.classList.add("nav");
+    h.el.style.zIndex = 2;
+    h.el.setAttribute("role","button");
+    h.el.setAttribute("tabindex","0");
+    h.el.setAttribute("aria-label", nav.key);
+    const inner = document.createElement("div");
+    inner.className = "inner";
+    inner.innerHTML = `<svg viewBox="0 0 24 24">${ICONS[nav.icon]}</svg><b>${nav.key}</b>`;
+    h.el.appendChild(inner);
+    h.nav = nav;
+    h.el.addEventListener("click", e => { e.stopPropagation(); openPanel(h); });
+    h.el.addEventListener("keydown", e => {
+      if (e.key==="Enter" || e.key===" "){ e.preventDefault(); openPanel(h); }
+    });
+    navHexes.push(h);
+  });
+  if (openHex){                                   /* keep a morph honest across rebuilds */
+    const nh = navHexes.find(h => h.nav.key === openHex.nav.key);
+    if (nh){ nh.el.classList.add("gone"); openHex = nh; }
+  }
+}
+let navHexes = [];
+
+/* ================= pointer field & phantom wander ================= */
+let mx = -1e4, my = -1e4, lastTouch = performance.now(), fieldDirty = true, closeSeq = 0;
+window.addEventListener("pointermove", e => { mx = e.clientX; my = e.clientY; lastTouch = e.timeStamp; fieldDirty = true; }, { passive:true });
+window.addEventListener("pointerdown", e => { mx = e.clientX; my = e.clientY; lastTouch = e.timeStamp; fieldDirty = true; }, { passive:true });
+
+function smooth11(x){ return x*x*(3-2*x); }
+function updateField(){
+  const R = 3.2 * hexW, R2 = R*R;
+  for (const h of hexes){
+    const dx = mx - h.cx, dy = my - h.cy;
+    const d2 = dx*dx + dy*dy;
+    const s = d2 < R2 ? 1 - smooth11(Math.sqrt(d2)/R) : 0;
+    if (s <= 0.002){
+      if (h.last !== 0){ h.el.style.transform = ""; h.el.style.filter = ""; h.last = 0; }
+      continue;
+    }
+    h.last = s;
+    const lift = 34*s;
+    const scale = 0.96 + 0.06*s;                  /* 0.96 at the rim of influence → 1.02 at the cursor */
+    const ry = 14*s*clamp(dx/R, -1, 1);
+    const rx = -14*s*clamp(dy/R, -1, 1);
+    h.el.style.transform = `translate3d(0,0,${lift.toFixed(1)}px) scale(${scale.toFixed(3)}) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`;
+    h.el.style.filter = `brightness(${(1+0.55*s).toFixed(3)}) saturate(${(1+0.3*s).toFixed(3)})`;
+  }
+}
+
+/* ================= light sweep ================= */
+const sweep = document.getElementById("sweep");
+function updateSweep(t){
+  const ph = (1 - Math.cos(2*Math.PI*(t%14000)/14000)) / 2;   /* sinusoidal ease, 14 s cycle */
+  sweep.style.transform = `translateX(${(-45 + ph*(window.innerWidth*1.55)).toFixed(1)}px)`;
+}
+
+/* ================= panel morph ================= */
+const panel = document.getElementById("panel");
+const content = document.getElementById("panel-content");
+let openHex = null, panelOpen = false, lastFocus = null;
+
+function openPanel(h){
+  if (panelOpen) return;
+  panelOpen = true; lastFocus = document.activeElement;
+  openHex = h;
+  combWrap.classList.add("dim");
+  document.body.classList.add("open");
+  h.el.classList.add("gone");
+  const c = CONTENT[h.nav.key];
+  content.innerHTML =
+    `<div class="kicker">${c.kick}</div><h2>${c.title}</h2>` +
+    c.p.map(x=>`<p>${x}</p>`).join("") +
+    `<ul class="tags">${c.tags.map(t=>`<li>${t}</li>`).join("")}</ul>`;
+  panel.classList.add("vis");
+  panel.classList.remove("filled");
+  panel.style.transition = "none";
+  panel.style.left = h.x+"px"; panel.style.top = h.y+"px";
+  panel.style.width = hexW+"px"; panel.style.height = hexH+"px";
+  panel.style.clipPath = POLY; panel.style.borderRadius = "0px";
+  void panel.offsetWidth;                                          /* reflow, then morph */
+  panel.style.transition = "";
+  const pw = Math.min(880, window.innerWidth - 24), phh = Math.min(620, window.innerHeight - 24);
+  panel.style.left = (window.innerWidth - pw)/2 + "px";
+  panel.style.top  = (window.innerHeight - phh)/2 + "px";
+  panel.style.width = pw+"px"; panel.style.height = phh+"px";
+  panel.style.clipPath = RECT; panel.style.borderRadius = "24px";
+  requestAnimationFrame(() => panel.classList.add("filled"));
+}
+function closePanel(){
+  if (!panelOpen) return;
+  panelOpen = false;
+  const seq = ++closeSeq;
+  panel.classList.remove("filled");
+  const h = openHex;
+  if (h){
+    panel.style.left = h.x+"px"; panel.style.top = h.y+"px";
+    panel.style.width = hexW+"px"; panel.style.height = hexH+"px";
+    panel.style.clipPath = POLY; panel.style.borderRadius = "0px";
+  }
+  combWrap.classList.remove("dim");
+  document.body.classList.remove("open");
+  fieldDirty = true;
+  const finish = () => {
+    if (panelOpen || closeSeq !== seq) return;                     /* superseded or reopened */
+    panel.classList.remove("vis");
+    if (h) h.el.classList.remove("gone");
+    openHex = null;
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  };
+  panel.addEventListener("transitionend", function te(ev){
+    if (ev.propertyName === "clip-path" || ev.propertyName === "left"){
+      panel.removeEventListener("transitionend", te); finish();
+    }
+  });
+  setTimeout(finish, REDUCED ? 60 : 950);                          /* safety net */
+}
+document.getElementById("close").addEventListener("click", closePanel);
+window.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
+
+/* ================= master loop & resize ================= */
+function loop(t){
+  if (!panelOpen){
+    if (!REDUCED && t - lastTouch > 4000){
+      const p = t/1000;                                            /* phantom cursor on a Lissajous path */
+      mx = window.innerWidth *0.5 + Math.sin(p*0.55)*window.innerWidth *0.40;
+      my = window.innerHeight*0.5 + Math.sin(p*0.37 + 1.3)*window.innerHeight*0.38;
+      fieldDirty = true;
+    }
+    if (fieldDirty){ updateField(); fieldDirty = false; }
+    if (!REDUCED) updateSweep(t);
+  }
+  requestAnimationFrame(loop);
+}
+let rsTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(rsTimer);
+  rsTimer = setTimeout(() => {
+    build();
+    if (panelOpen && openHex){
+      const pw = Math.min(880, window.innerWidth-24), phh = Math.min(620, window.innerHeight-24);
+      panel.style.transition = "none";
+      panel.style.left = (window.innerWidth-pw)/2+"px"; panel.style.top = (window.innerHeight-phh)/2+"px";
+      panel.style.width = pw+"px"; panel.style.height = phh+"px";
+      void panel.offsetWidth; panel.style.transition = "";
+    }
+  }, 120);
+});
+build();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

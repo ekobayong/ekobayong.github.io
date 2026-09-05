@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stillwater — a zen focus timer</title>
+<style>
+@property --h {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 200;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --h: 200;
+}
+
+html, body {
+  transition: --h 3s linear;
+}
+
+body {
+  min-height: 100vh;
+  font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: hsl(var(--h) 30% 94%);
+  background:
+    radial-gradient(120% 130% at 50% 8%,
+      hsl(calc(var(--h) + 40) 28% 16%) 0%,
+      hsl(var(--h) 30% 10%) 70%);
+  background-attachment: fixed;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- starfield ---------- */
+.stars {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ---------- layout ---------- */
+.page {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(20px, 4vw, 48px);
+  gap: clamp(16px, 3vh, 32px);
+}
+
+.wordmark {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: hsl(var(--h) 30% 94% / 0.6);
+}
+
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 390px);
+  gap: clamp(32px, 6vw, 72px);
+  align-items: center;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+@media (max-width: 920px) {
+  main { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+  .tasks-card { width: 100%; max-width: 480px; }
+}
+
+/* ---------- timer column ---------- */
+.timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+  min-width: 0;
+}
+
+.ring-wrap {
+  position: relative;
+  width: min(78vw, 440px);
+  aspect-ratio: 1;
+}
+
+.halo {
+  position: absolute;
+  inset: 9%;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    hsl(calc(var(--h) + 60) 70% 70% / 0.34) 0%,
+    hsl(var(--h) 70% 65% / 0.12) 52%,
+    transparent 68%);
+  filter: blur(26px);
+  opacity: 0;
+  transition: opacity 2.4s ease;
+  pointer-events: none;
+}
+body.break .halo {
+  opacity: 1;
+  animation: breathe 7s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% { transform: scale(0.92); }
+  50%      { transform: scale(1.08); }
+}
+
+svg.ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.tick { stroke: hsl(var(--h) 30% 94% / 0.12); stroke-width: 1; }
+.tick.major { stroke: hsl(var(--h) 30% 94% / 0.26); stroke-width: 1.4; }
+
+.track {
+  fill: none;
+  stroke: hsl(var(--h) 30% 94% / 0.08);
+  stroke-width: 6;
+}
+
+.progress {
+  fill: none;
+  stroke: url(#ringGrad);
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.9s linear;
+}
+
+#gleam {
+  transform-origin: 100px 100px;
+  animation: orbit 14s linear infinite;
+}
+body:not(.running) #gleam { animation-play-state: paused; }
+@keyframes orbit { to { transform: rotate(360deg); } }
+
+/* ---------- ring centre ---------- */
+.centre {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mode-label {
+  font-size: clamp(10px, 1.6vw, 13px);
+  font-weight: 600;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: hsl(var(--h) 30% 94% / 0.6);
+  padding-left: 0.4em;
+}
+
+.numerals {
+  font-size: clamp(64px, 16vw, 124px);
+  font-weight: 200;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 18px;
+  padding: 4px 10px;
+  transition: background 0.4s ease;
+}
+.numerals:hover { background: hsl(var(--h) 30% 94% / 0.06); }
+
+.edit-hint {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: hsl(var(--h) 30% 94% / 0.32);
+}
+
+/* ---------- session dots ---------- */
+.dots { display: flex; gap: 16px; }
+.dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  border: 1px solid hsl(var(--h) 30% 94% / 0.35);
+  transition: all 0.6s ease;
+}
+.dot.done {
+  background: hsl(calc(var(--h) + 20) 80% 71%);
+  border-color: transparent;
+  box-shadow: 0 0 12px 2px hsl(calc(var(--h) + 20) 80% 71% / 0.55);
+}
+.dot.current { transform: scale(1.65); border-color: hsl(var(--h) 30% 94% / 0.65); }
+.dot.done.current { transform: scale(1.65); }
+
+/* ---------- controls ---------- */
+.controls { display: flex; align-items: center; gap: 22px; }
+
+.btn {
+  border: 1px solid hsl(var(--h) 30% 94% / 0.12);
+  background: hsl(var(--h) 30% 90% / 0.05);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  color: hsl(var(--h) 30% 94% / 0.85);
+  border-radius: 50%;
+  width: 46px; height: 46px;
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+}
+.btn:hover { background: hsl(var(--h) 30% 94% / 0.1); transform: translateY(-2px); }
+.btn:active { transform: translateY(0) scale(0.96); }
+.btn svg { width: 18px; height: 18px; }
+
+.btn-reset svg { transition: transform 0.6s cubic-bezier(0.3, 0.7, 0.3, 1); }
+.btn-reset:hover svg { transform: rotate(-320deg); }
+
+.btn-main {
+  width: 68px; height: 68px;
+  border: none;
+  background: linear-gradient(140deg,
+    hsl(calc(var(--h) - 20) 80% 72%),
+    hsl(calc(var(--h) + 60) 80% 70%));
+  color: hsl(var(--h) 40% 10%);
+  box-shadow: 0 12px 34px -10px hsl(calc(var(--h) + 20) 80% 60% / 0.5);
+}
+.btn-main:hover { transform: translateY(-2px) scale(1.03); background: linear-gradient(140deg,
+    hsl(calc(var(--h) - 20) 82% 75%),
+    hsl(calc(var(--h) + 60) 82% 73%)); }
+.btn-main svg { width: 26px; height: 26px; }
+
+/* play / pause icon morph */
+#iconMain path { fill: currentColor; transition: d 0.38s cubic-bezier(0.4, 0, 0.2, 1); }
+#ip1 { d: path("M 8 5.2 L 13.6 8.6 L 13.6 15.4 L 8 18.8 Z"); }
+#ip2 { d: path("M 13.6 8.6 L 19 12 L 19 12 L 13.6 15.4 Z"); }
+body.running #ip1 { d: path("M 6.2 4.8 L 10.4 4.8 L 10.4 19.2 L 6.2 19.2 Z"); }
+body.running #ip2 { d: path("M 13.6 4.8 L 17.8 4.8 L 17.8 19.2 L 13.6 19.2 Z"); }
+
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 18px;
+  font-size: 11.5px;
+  color: hsl(var(--h) 30% 94% / 0.42);
+}
+.keys span { display: inline-flex; align-items: center; gap: 6px; }
+kbd {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  padding: 2.5px 7px;
+  border-radius: 6px;
+  border: 1px solid hsl(var(--h) 30% 94% / 0.16);
+  background: hsl(var(--h) 30% 94% / 0.05);
+  color: hsl(var(--h) 30% 94% / 0.7);
+}
+
+/* ---------- tasks card ---------- */
+.tasks-card {
+  background: hsl(var(--h) 30% 90% / 0.05);
+  border: 1px solid hsl(var(--h) 30% 94% / 0.12);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  border-radius: 24px;
+  padding: 30px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+}
+
+.tasks-card h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: 0.01em;
+  margin-bottom: 20px;
+  font-style: italic;
+}
+
+.add-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid hsl(var(--h) 30% 94% / 0.12);
+  padding-bottom: 14px;
+  margin-bottom: 6px;
+}
+.add-row input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: hsl(var(--h) 30% 94%);
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 2px;
+}
+.add-row input::placeholder { color: hsl(var(--h) 30% 94% / 0.35); }
+.add-btn {
+  width: 32px; height: 32px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid hsl(var(--h) 30% 94% / 0.16);
+  background: hsl(var(--h) 30% 94% / 0.06);
+  color: hsl(var(--h) 30% 94% / 0.8);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid; place-items: center;
+  transition: background 0.3s ease, transform 0.3s ease;
+}
+.add-btn:hover { background: hsl(var(--h) 30% 94% / 0.14); transform: rotate(90deg); }
+
+ul.tasks { list-style: none; flex: 1; overflow-y: auto; }
+ul.tasks li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 4px;
+  border-bottom: 1px solid hsl(var(--h) 30% 94% / 0.07);
+}
+.check {
+  width: 19px; height: 19px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid hsl(var(--h) 30% 94% / 0.35);
+  background: transparent;
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: border-color 0.35s ease;
+  padding: 0;
+}
+.check::after {
+  content: "";
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: hsl(calc(var(--h) + 20) 80% 71%);
+  transform: scale(0);
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+li.done .check { border-color: hsl(calc(var(--h) + 20) 80% 71% / 0.7); }
+li.done .check::after { transform: scale(1); }
+
+.t-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  line-height: 1.4;
+  position: relative;
+  color: hsl(var(--h) 30% 94% / 0.9);
+  transition: color 0.5s ease;
+  overflow-wrap: break-word;
+}
+.t-label::after {
+  content: "";
+  position: absolute;
+  left: 0; top: 52%;
+  height: 1px;
+  width: 0;
+  background: currentColor;
+  transition: width 0.45s cubic-bezier(0.65, 0, 0.35, 1);
+}
+li.done .t-label { color: hsl(var(--h) 30% 94% / 0.35); }
+li.done .t-label::after { width: 100%; }
+
+.t-remove {
+  flex: none;
+  width: 24px; height: 24px;
+  border: none;
+  background: transparent;
+  color: hsl(var(--h) 30% 94% / 0.5);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.3s ease, color 0.3s ease;
+}
+ul.tasks li:hover .t-remove, .t-remove:focus-visible { opacity: 1; }
+.t-remove:hover { color: hsl(0 75% 72%); }
+@media (hover: none) { .t-remove { opacity: 0.6; } }
+
+.stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid hsl(var(--h) 30% 94% / 0.12);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--h) 30% 94% / 0.45);
+  font-variant-numeric: tabular-nums;
+}
+.stats b { font-weight: 600; color: hsl(var(--h) 30% 94% / 0.75); }
+
+/* ---------- bloom & toast ---------- */
+.bloom {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.bloom i {
+  display: block;
+  width: 240px; height: 240px;
+  border-radius: 50%;
+  filter: blur(30px);
+  background: radial-gradient(circle,
+    hsl(var(--h) 85% 85% / 0.9) 0%,
+    hsl(calc(var(--h) + 60) 80% 70% / 0.4) 55%,
+    transparent 72%);
+  opacity: 0;
+  transform: scale(0.2);
+}
+.bloom.play i { animation: bloom 3.2s cubic-bezier(0.16, 0.6, 0.35, 1) forwards; }
+@keyframes bloom {
+  0%   { opacity: 0.95; transform: scale(0.2); }
+  55%  { opacity: 0.45; }
+  100% { opacity: 0; transform: scale(9); }
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 40px;
+  z-index: 70;
+  transform: translate(-50%, 160%);
+  padding: 13px 26px;
+  border-radius: 999px;
+  background: hsl(var(--h) 30% 90% / 0.08);
+  border: 1px solid hsl(var(--h) 30% 94% / 0.14);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+  color: hsl(var(--h) 30% 94% / 0.9);
+  box-shadow: 0 18px 50px -18px hsl(var(--h) 40% 4% / 0.8);
+  transition: transform 0.65s cubic-bezier(0.34, 1.3, 0.5, 1), opacity 0.5s ease;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  #gleam { animation: none !important; }
+  body.break .halo { animation: none; }
+  .bloom.play i { animation: none; }
+  .progress { transition: none; }
+  .btn, .add-btn, .toast, .halo, .check::after, .t-label::after { transition: none; }
+  html, body { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="stars" id="stars" aria-hidden="true"></div>
+<div class="bloom" id="bloom" aria-hidden="true"><i></i></div>
+<div class="toast" id="toast" role="status"></div>
+
+<div class="page">
+  <header class="wordmark">Stillwater</header>
+
+  <main>
+    <section class="timer" aria-label="Focus timer">
+      <div class="ring-wrap">
+        <div class="halo" aria-hidden="true"></div>
+        <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+          <defs>
+            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop id="gs1" offset="0%" stop-color="hsl(180 80% 72%)"/>
+              <stop id="gs2" offset="100%" stop-color="hsl(260 80% 70%)"/>
+            </linearGradient>
+          </defs>
+          <g id="ticks"></g>
+          <circle class="track" cx="100" cy="100" r="88"/>
+          <circle class="progress" id="progress" cx="100" cy="100" r="88"
+                  transform="rotate(-90 100 100)"/>
+          <g id="gleam"><circle cx="100" cy="12" r="2.6" fill="#ffffff" opacity="0.9"/></g>
+        </svg>
+        <div class="centre">
+          <div class="mode-label" id="modeLabel">Focus</div>
+          <div class="numerals" id="numerals" role="button" tabindex="0"
+               aria-label="Time remaining — click to edit session length">25:00</div>
+          <div class="edit-hint">click the numerals to edit</div>
+        </div>
+      </div>
+
+      <div class="dots" id="dots" role="img" aria-label="Session progress"></div>
+
+      <div class="controls">
+        <button class="btn btn-reset" id="btnReset" title="Reset (r)" aria-label="Reset timer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 3.2-6.9"/>
+            <path d="M3 4v5h5"/>
+          </svg>
+        </button>
+        <button class="btn btn-main" id="btnMain" title="Start / pause (space)" aria-label="Start or pause timer">
+          <svg id="iconMain" viewBox="0 0 24 24">
+            <path id="ip1" d="M 8 5.2 L 13.6 8.6 L 13.6 15.4 L 8 18.8 Z"/>
+            <path id="ip2" d="M 13.6 8.6 L 19 12 L 19 12 L 13.6 15.4 Z"/>
+          </svg>
+        </button>
+        <button class="btn btn-skip" id="btnSkip" title="Skip (n)" aria-label="Skip session">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M5 5l9 7-9 7V5z"/>
+            <rect x="16.5" y="5" width="2.4" height="14" rx="1.2"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="keys" aria-hidden="true">
+        <span><kbd>space</kbd> start / pause</span>
+        <span><kbd>r</kbd> reset</span>
+        <span><kbd>n</kbd> skip</span>
+        <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> modes</span>
+      </div>
+    </section>
+
+    <aside class="tasks-card" aria-label="Attention list">
+      <h2>What deserves your attention?</h2>
+      <form class="add-row" id="addForm" autocomplete="off">
+        <input type="text" id="taskInput" placeholder="Add one thing…" aria-label="New task">
+        <button class="add-btn" type="submit" aria-label="Add task">+</button>
+      </form>
+      <ul class="tasks" id="taskList"></ul>
+      <div class="stats">
+        <span id="statTasks"></span>
+        <span id="statMinutes"></span>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ============================== starfield ============================== */
+  (function stars() {
+    var el = document.getElementById('stars');
+    var g = [];
+    for (var i = 0; i < 130; i++) {
+      var x = (Math.random() * 100).toFixed(2), y = (Math.random() * 100).toFixed(2);
+      var r = (0.5 + Math.random() * 1.1).toFixed(2);
+      var a = (0.12 + Math.random() * 0.38).toFixed(2);
+      g.push('radial-gradient(' + r + 'px ' + r + 'px at ' + x + '% ' + y + '%, hsl(var(--h) 30% 95% / ' + a + '), transparent 100%)');
+    }
+    el.style.backgroundImage = g.join(',');
+  })();
+
+  /* ============================== ring ticks ============================== */
+  (function ticks() {
+    var g = document.getElementById('ticks');
+    var NS = 'http://www.w3.org/2000/svg';
+    for (var i = 0; i < 60; i++) {
+      var ang = (i / 60) * Math.PI * 2 - Math.PI / 2;
+      var major = i % 5 === 0;
+      var r1 = 94.5, r2 = major ? 99 : 97;
+      var ln = document.createElementNS(NS, 'line');
+      ln.setAttribute('x1', (100 + Math.cos(ang) * r1).toFixed(2));
+      ln.setAttribute('y1', (100 + Math.sin(ang) * r1).toFixed(2));
+      ln.setAttribute('x2', (100 + Math.cos(ang) * r2).toFixed(2));
+      ln.setAttribute('y2', (100 + Math.sin(ang) * r2).toFixed(2));
+      ln.setAttribute('class', major ? 'tick major' : 'tick');
+      g.appendChild(ln);
+    }
+  })();
+
+  /* ============================== timer state ============================== */
+  var MODES = {
+    focus: { hue: 200, name: 'Focus' },
+    short: { hue: 150, name: 'Short break' },
+    long:  { hue: 270, name: 'Long break' }
+  };
+  var durations = { focus: 25, short: 5, long: 15 };   // minutes, editable
+  var mode = 'focus';
+  var focusDone = 0;          // focus sessions completed in the current cycle of four
+  var total = durations.focus * 60;
+  var remaining = total;
+  var running = false;
+  var endTime = 0;
+  var lastSec = -1;
+  var focusSeconds = 0;
+  var audio = null;
+
+  var CIRC = 2 * Math.PI * 88;
+  var progressEl = document.getElementById('progress');
+  progressEl.style.strokeDasharray = CIRC.toFixed(2);
+  progressEl.style.strokeDashoffset = '0';
+
+  var numerals = document.getElementById('numerals');
+  var modeLabel = document.getElementById('modeLabel');
+  var dotsEl = document.getElementById('dots');
+  var gs1 = document.getElementById('gs1'), gs2 = document.getElementById('gs2');
+
+  function currentHue() {
+    var p = total > 0 ? 1 - remaining / total : 0;
+    return MODES[mode].hue + 50 * Math.min(1, Math.max(0, p));
+  }
+
+  function applyHue() {
+    document.documentElement.style.setProperty('--h', currentHue().toFixed(2));
+    var h = currentHue();
+    gs1.setAttribute('stop-color', 'hsl(' + (h - 20).toFixed(1) + ' 80% 72%)');
+    gs2.setAttribute('stop-color', 'hsl(' + (h + 60).toFixed(1) + ' 80% 70%)');
+  }
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function fmt(s) { s = Math.max(0, Math.ceil(s)); return pad(Math.floor(s / 60)) + ':' + pad(s % 60); }
+
+  function renderDots() {
+    dotsEl.innerHTML = '';
+    var filled = focusDone % 4;
+    var currentIdx = mode === 'focus' ? filled : filled; // dot the next focus occupies
+    for (var i = 0; i < 4; i++) {
+      var d = document.createElement('i');
+      d.className = 'dot' + (i < filled ? ' done' : '') + (i === currentIdx ? ' current' : '');
+      dotsEl.appendChild(d);
+    }
+  }
+
+  function renderIcon() {
+    document.body.classList.toggle('running', running);
+    var supportsD = window.CSS && CSS.supports && CSS.supports('d', 'path("M0 0 L1 1")');
+    if (!supportsD) { // JS attribute fallback for the morph
+      document.getElementById('ip1').setAttribute('d', running
+        ? 'M 6.2 4.8 L 10.4 4.8 L 10.4 19.2 L 6.2 19.2 Z'
+        : 'M 8 5.2 L 13.6 8.6 L 13.6 15.4 L 8 18.8 Z');
+      document.getElementById('ip2').setAttribute('d', running
+        ? 'M 13.6 4.8 L 17.8 4.8 L 17.8 19.2 L 13.6 19.2 Z'
+        : 'M 13.6 8.6 L 19 12 L 19 12 L 13.6 15.4 Z');
+    }
+  }
+
+  function updateUI() {
+    numerals.textContent = fmt(remaining);
+    var elapsedFrac = total > 0 ? 1 - remaining / total : 0;
+    progressEl.style.strokeDashoffset = (CIRC * elapsedFrac).toFixed(2);
+    modeLabel.textContent = MODES[mode].name;
+    document.body.classList.toggle('break', mode !== 'focus');
+    applyHue();
+    renderDots();
+    renderIcon();
+    var sec = Math.ceil(remaining);
+    if (sec !== lastSec) {
+      lastSec = sec;
+      document.title = (running || remaining < total)
+        ? fmt(remaining) + ' · ' + MODES[mode].name + ' — Stillwater'
+        : 'Stillwater — a zen focus timer';
+    }
+  }
+
+  function setMode(m, keepRunning) {
+    mode = m;
+    total = durations[m] * 60;
+    remaining = total;
+    if (keepRunning) endTime = Date.now() + remaining * 1000;
+    updateUI();
+  }
+
+  function start() {
+    if (remaining <= 0.01) remaining = total;
+    if (!audio) {
+      try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audio = null; }
+    }
+    running = true;
+    endTime = Date.now() + remaining * 1000;
+    updateUI();
+  }
+  function pause() {
+    if (!running) return;
+    remaining = Math.max(0, (endTime - Date.now()) / 1000);
+    running = false;
+    updateUI();
+  }
+  function toggle() { running ? pause() : start(); }
+
+  function reset() {
+    running = false;
+    remaining = total;
+    updateUI();
+  }
+
+  /* toast + bloom */
+  var toastEl = document.getElementById('toast'), toastTimer = null;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 4200);
+  }
+  var bloomEl = document.getElementById('bloom'), bloomTimer = null;
+  function bloom() {
+    if (reduced) return;
+    bloomEl.classList.remove('play');
+    void bloomEl.offsetWidth;
+    bloomEl.classList.add('play');
+    clearTimeout(bloomTimer);
+    bloomTimer = setTimeout(function () { bloomEl.classList.remove('play'); }, 3400);
+  }
+
+  /* chime — four sine partials + detuned triangle octave */
+  function chime() {
+    if (!audio) return;
+    try {
+      if (audio.state === 'suspended') audio.resume();
+      var t0 = audio.currentTime;
+      var master = audio.createGain();
+      master.gain.setValueAtTime(0.0001, t0);
+      master.gain.exponentialRampToValueAtTime(0.55, t0 + 0.03);
+      master.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.8);
+      master.connect(audio.destination);
+      var notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+      notes.forEach(function (f, i) {
+        var at = t0 + i * 0.18;
+        var o = audio.createOscillator(), g = audio.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, at);
+        g.gain.exponentialRampToValueAtTime(0.26, at + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, at + 1.9);
+        o.connect(g); g.connect(master);
+        o.start(at); o.stop(at + 2.2);
+        var o2 = audio.createOscillator(), g2 = audio.createGain();
+        o2.type = 'triangle'; o2.frequency.value = f / 2; o2.detune.value = 8;
+        g2.gain.setValueAtTime(0.0001, at);
+        g2.gain.exponentialRampToValueAtTime(0.05, at + 0.03);
+        g2.gain.exponentialRampToValueAtTime(0.0001, at + 1.5);
+        o2.connect(g2); g2.connect(master);
+        o2.start(at); o2.stop(at + 1.8);
+      });
+    } catch (e) { /* silence beats errors */ }
+  }
+
+  function complete() {
+    running = false;
+    var wasFocus = mode === 'focus';
+    if (wasFocus) focusDone += 1;
+    chime();
+    bloom();
+    var next;
+    if (wasFocus) {
+      next = (focusDone % 4 === 0) ? 'long' : 'short';
+      toast('Session complete. Time to rest.');
+    } else {
+      next = 'focus';
+      toast('Break complete. Back to the water.');
+    }
+    setMode(next, true);
+    start();
+  }
+
+  function skip() {
+    running = false;
+    var wasFocus = mode === 'focus';
+    var next = wasFocus ? (focusDone % 4 === 3 ? 'long' : 'short') : 'focus';
+    toast(wasFocus ? 'Focus session skipped.' : 'Break skipped — back to focus.');
+    setMode(next, false);
+  }
+
+  /* edit length */
+  function editLength() {
+    var v = window.prompt('Minutes for ' + MODES[mode].name + ' (1–120):', String(durations[mode]));
+    if (v === null) return;
+    var n = Math.round(parseFloat(v));
+    if (!isFinite(n)) return;
+    n = Math.min(120, Math.max(1, n));
+    durations[mode] = n;
+    total = n * 60;
+    remaining = running ? Math.min(remaining, total) : total;
+    if (running) endTime = Date.now() + remaining * 1000;
+    updateUI();
+    renderStats();
+  }
+  numerals.addEventListener('click', editLength);
+  numerals.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editLength(); }
+  });
+
+  /* ticker — 4× per second for drift + title accuracy */
+  setInterval(function () {
+    if (!running) return;
+    var now = Date.now();
+    var prev = remaining;
+    remaining = Math.max(0, (endTime - now) / 1000);
+    if (mode === 'focus') focusSeconds += (prev - remaining);
+    updateUI();
+    renderStats();
+    if (remaining <= 0) complete();
+  }, 250);
+
+  document.getElementById('btnMain').addEventListener('click', toggle);
+  document.getElementById('btnReset').addEventListener('click', reset);
+  document.getElementById('btnSkip').addEventListener('click', skip);
+
+  /* keyboard */
+  window.addEventListener('keydown', function (e) {
+    var tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.code === 'Space') { e.preventDefault(); toggle(); }
+    else if (e.key === 'r' || e.key === 'R') reset();
+    else if (e.key === 'n' || e.key === 'N') skip();
+    else if (e.key === '1') setMode('focus', running);
+    else if (e.key === '2') setMode('short', running);
+    else if (e.key === '3') setMode('long', running);
+  });
+
+  /* ============================== tasks ============================== */
+  var tasks = [
+    { text: 'Write five hundred honest words of the chapter draft', done: false },
+    { text: 'Reply to Ana about the studio lease', done: true },
+    { text: 'Ten minutes of stretching away from the screen', done: false }
+  ];
+  var listEl = document.getElementById('taskList');
+  var statTasks = document.getElementById('statTasks');
+  var statMin = document.getElementById('statMinutes');
+
+  function renderStats() {
+    var done = tasks.filter(function (t) { return t.done; }).length;
+    statTasks.innerHTML = '<b>' + done + ' / ' + tasks.length + '</b> attended to';
+    statMin.innerHTML = '<b>' + Math.floor(focusSeconds / 60) + '</b> focus minutes today';
+  }
+
+  function renderTasks() {
+    listEl.innerHTML = '';
+    tasks.forEach(function (t, idx) {
+      var li = document.createElement('li');
+      if (t.done) li.className = 'done';
+
+      var cb = document.createElement('button');
+      cb.type = 'button';
+      cb.className = 'check';
+      cb.setAttribute('role', 'checkbox');
+      cb.setAttribute('aria-checked', String(t.done));
+      cb.setAttribute('aria-label', 'Mark "' + t.text + '" ' + (t.done ? 'not done' : 'done'));
+      cb.addEventListener('click', function () {
+        t.done = !t.done;
+        li.classList.toggle('done', t.done);
+        cb.setAttribute('aria-checked', String(t.done));
+        renderStats();
+      });
+
+      var label = document.createElement('span');
+      label.className = 't-label';
+      label.textContent = t.text;
+
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 't-remove';
+      rm.setAttribute('aria-label', 'Remove task');
+      rm.textContent = '×';
+      rm.addEventListener('click', function () {
+        tasks.splice(idx, 1);
+        renderTasks();
+      });
+
+      li.appendChild(cb); li.appendChild(label); li.appendChild(rm);
+      listEl.appendChild(li);
+    });
+    renderStats();
+  }
+
+  document.getElementById('addForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var input = document.getElementById('taskInput');
+    var v = input.value.trim();
+    if (!v) return;
+    tasks.push({ text: v, done: false });
+    input.value = '';
+    renderTasks();
+  });
+
+  renderTasks();
+  updateUI();
+})();
+</script>
+</body>
+</html>

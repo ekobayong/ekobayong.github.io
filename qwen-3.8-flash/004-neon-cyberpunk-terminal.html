@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KESTREL//OS v9.4.1 Nightjar</title>
+<style>
+:root{
+  --bg:#05060a;
+  --lift:#10142a;
+  --mag:#ff2bd6;
+  --cyn:#00f0ff;
+  --amb:#ffb830;
+  --mint:#5cff8a;
+  --slate:#6b7390;
+  --text:#d8e6ff;
+  --panel:rgba(10,12,22,.82);
+  --edge:rgba(0,240,255,.28);
+  --edge-m:rgba(255,43,214,.3);
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono","Courier New",monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:var(--mono);font-size:13px;color:var(--text);
+  background:
+    radial-gradient(120% 70% at 50% -10%, var(--lift) 0%, transparent 55%),
+    var(--bg);
+  overflow:hidden;
+}
+
+/* ================= CRT layers ================= */
+.crt{position:fixed;inset:0;pointer-events:none;z-index:90}
+.scanlines{
+  background:repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0,0,0,.42) 2px 3px);
+  mix-blend-mode:multiply;
+}
+.sweep{
+  background:linear-gradient(to bottom, transparent 0%, rgba(0,240,255,.06) 46%, rgba(0,240,255,.16) 50%, rgba(0,240,255,.06) 54%, transparent 100%);
+  height:36vh;top:-40vh;
+  animation:sweep-move 7s linear infinite;
+}
+@keyframes sweep-move{from{transform:translateY(0)}to{transform:translateY(400vh)}}
+.flicker{
+  background:#fff;opacity:0;
+  animation:flick .12s steps(2) infinite;
+}
+@keyframes flick{0%{opacity:0}50%{opacity:.02}100%{opacity:0}}
+.vignette{
+  background:radial-gradient(120% 100% at 50% 46%, transparent 52%, rgba(0,0,0,.5) 88%, rgba(0,0,0,.82) 100%);
+}
+.floor{
+  position:fixed;left:-60%;right:-60%;bottom:-42vh;height:88vh;z-index:0;pointer-events:none;
+  transform:perspective(520px) rotateX(62deg);
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 43px, rgba(255,43,214,.22) 43px 44px),
+    repeating-linear-gradient(to right, transparent 0 87px, rgba(0,240,255,.12) 87px 88px);
+  -webkit-mask-image:linear-gradient(to top, #000 8%, transparent 92%);
+          mask-image:linear-gradient(to top, #000 8%, transparent 92%);
+  animation:floor-scroll 1.15s linear infinite;
+}
+@keyframes floor-scroll{from{background-position:0 0,0 0}to{background-position:0 44px,0 0}}
+
+/* ================= app shell ================= */
+.app{
+  position:relative;z-index:2;height:100vh;height:100dvh;
+  display:grid;grid-template-rows:auto 1fr;gap:14px;
+  padding:14px clamp(10px,2vw,24px);
+  max-width:1720px;margin-inline:auto;
+}
+
+/* ---- header ---- */
+header{
+  background:var(--panel);
+  border:1px solid var(--edge);
+  box-shadow:0 0 26px rgba(0,240,255,.08), inset 0 0 40px rgba(0,240,255,.03);
+  clip-path:polygon(18px 0, calc(100% - 18px) 0, 100% 18px, 100% calc(100% - 18px), calc(100% - 18px) 100%, 18px 100%, 0 calc(100% - 18px), 0 18px);
+  padding:14px 34px;
+  display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+}
+.gtitle{
+  position:relative;display:inline-block;
+  font-weight:700;font-size:clamp(17px,2vw,23px);letter-spacing:.18em;
+  color:var(--cyn);text-shadow:0 0 10px rgba(0,240,255,.75),0 0 28px rgba(0,240,255,.35);
+  text-transform:uppercase;
+}
+.gtitle .slash{color:var(--mag);text-shadow:0 0 10px rgba(255,43,214,.8)}
+.gtitle::before,.gtitle::after{
+  content:attr(data-text);
+  position:absolute;left:0;top:0;right:0;white-space:nowrap;
+  opacity:0;pointer-events:none;
+}
+.gtitle::before{color:var(--mag)}
+.gtitle::after{color:var(--cyn)}
+.gtitle.glitching{animation:gl-shift .42s steps(2,end) 1}
+.gtitle.glitching::before{
+  opacity:.9;
+  animation:gl-a .42s steps(2,end) 1;
+}
+.gtitle.glitching::after{
+  opacity:.85;
+  animation:gl-b .42s steps(2,end) 1;
+}
+@keyframes gl-shift{
+  0%{transform:translate(0)}
+  25%{transform:translate(-3px,1px) skewX(-9deg)}
+  50%{transform:translate(2px,-2px) skewX(6deg)}
+  75%{transform:translate(-1px,1px) skewX(-3deg)}
+  100%{transform:translate(0)}
+}
+@keyframes gl-a{
+  0%{clip-path:inset(0 100% 0 0);text-shadow:-4px 0 var(--mag)}
+  20%{clip-path:inset(10% 0 55% 0);text-shadow:-5px 0 var(--mag)}
+  40%{clip-path:inset(60% 0 8% 0);text-shadow:5px 0 var(--mag)}
+  60%{clip-path:inset(28% 0 34% 0);text-shadow:-7px 0 var(--mag)}
+  80%{clip-path:inset(78% 0 2% 0);text-shadow:6px 0 var(--mag)}
+  100%{clip-path:inset(0 100% 0 0);text-shadow:-4px 0 var(--mag)}
+}
+@keyframes gl-b{
+  0%{clip-path:inset(0 0 0 100%);text-shadow:4px 0 var(--cyn)}
+  25%{clip-path:inset(48% 0 12% 0);text-shadow:6px 0 var(--cyn)}
+  50%{clip-path:inset(6% 0 72% 0);text-shadow:-6px 0 var(--cyn)}
+  75%{clip-path:inset(66% 0 4% 0);text-shadow:8px 0 var(--cyn)}
+  100%{clip-path:inset(0 0 0 100%);text-shadow:4px 0 var(--cyn)}
+}
+.status{display:flex;align-items:center;gap:22px;font-size:11px;color:var(--slate);letter-spacing:.08em;text-transform:uppercase;flex-wrap:wrap}
+.status b{color:var(--text);font-weight:400}
+.status .ok{color:var(--mint)}
+.led{
+  display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:var(--mint);box-shadow:0 0 8px var(--mint);
+  animation:blink 1.4s steps(2) infinite;vertical-align:1px;margin-right:7px;
+}
+@keyframes blink{0%,60%{opacity:1}61%,100%{opacity:.25}}
+
+/* ---- panels ---- */
+main{
+  display:grid;grid-template-columns:1fr minmax(280px,340px);gap:14px;min-height:0;
+}
+.panel{
+  position:relative;min-height:0;
+  background:var(--panel);
+  border:1px solid var(--edge);
+  box-shadow:0 0 26px rgba(0,240,255,.07), inset 0 0 60px rgba(0,240,255,.025);
+  padding:22px 18px 14px;
+  display:flex;flex-direction:column;
+}
+.panel::before{ /* floating label cut into top border */
+  content:attr(data-label);
+  position:absolute;top:-7px;left:16px;
+  background:#0a0c16;padding:0 9px;
+  font-size:10.5px;letter-spacing:.26em;text-transform:uppercase;
+  color:var(--mag);text-shadow:0 0 8px rgba(255,43,214,.7);
+}
+.cbr{position:absolute;width:11px;height:11px;pointer-events:none;opacity:.85}
+.cbr.tl{top:5px;left:5px;border-top:2px solid var(--cyn);border-left:2px solid var(--cyn)}
+.cbr.tr{top:5px;right:5px;border-top:2px solid var(--cyn);border-right:2px solid var(--cyn)}
+.cbr.bl{bottom:5px;left:5px;border-bottom:2px solid var(--cyn);border-left:2px solid var(--cyn)}
+.cbr.br{bottom:5px;right:5px;border-bottom:2px solid var(--cyn);border-right:2px solid var(--cyn)}
+
+/* ---- console ---- */
+#log{
+  flex:1;overflow-y:auto;min-height:0;
+  padding-right:8px;
+  scrollbar-width:thin;scrollbar-color:rgba(0,240,255,.35) transparent;
+}
+#log::-webkit-scrollbar{width:8px}
+#log::-webkit-scrollbar-thumb{background:rgba(0,240,255,.3);border-radius:9px}
+.ln{line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.ln .ts{color:var(--slate)}
+.ln .ok{color:var(--mint);text-shadow:0 0 8px rgba(92,255,138,.6)}
+.ln .warn{color:var(--amb);text-shadow:0 0 8px rgba(255,184,48,.55)}
+.ln .err{color:#ff4d5b;text-shadow:0 0 8px rgba(255,77,91,.5)}
+.ln .cy{color:var(--cyn);text-shadow:0 0 8px rgba(0,240,255,.5)}
+.ln .mg{color:var(--mag)}
+.ln .dim{color:var(--slate)}
+.cursor{
+  display:inline-block;width:.62em;height:1.05em;vertical-align:-.16em;
+  background:var(--cyn);box-shadow:0 0 9px rgba(0,240,255,.8);
+  animation:caret .85s steps(2) infinite;
+}
+@keyframes caret{0%,55%{opacity:1}56%,100%{opacity:0}}
+.banner{color:var(--cyn);text-shadow:0 0 12px rgba(0,240,255,.6);font-size:clamp(6px,1.05vw,11px);line-height:1.16;margin-bottom:10px}
+table{border-collapse:collapse;margin:4px 0 8px}
+td{padding:2px 22px 2px 0;vertical-align:top}
+td.k{color:var(--cyn);white-space:nowrap}
+td.v{color:var(--text)}
+.ok-v{color:var(--mint)}.warn-v{color:var(--amb)}
+.pbar{
+  display:inline-block;width:min(300px,60%);height:12px;vertical-align:-2px;
+  border:1px solid var(--edge-m);background:rgba(255,43,214,.05);position:relative;
+}
+.pbar i{
+  position:absolute;left:1px;top:1px;bottom:1px;width:0%;
+  background:linear-gradient(90deg,var(--cyn),var(--mag));
+  box-shadow:0 0 12px rgba(0,240,255,.5);
+  transition:width .12s linear;
+}
+.pct{color:var(--cyn);display:inline-block;min-width:46px}
+
+.prompt{
+  display:none;align-items:baseline;gap:10px;padding-top:10px;
+  border-top:1px solid rgba(0,240,255,.12);margin-top:8px;
+}
+.prompt.on{display:flex}
+.ps1{color:var(--mag);text-shadow:0 0 10px rgba(255,43,214,.75);white-space:nowrap;font-weight:700}
+#cmd{
+  flex:1;min-width:0;background:transparent;border:0;outline:none;
+  font:inherit;color:var(--text);caret-color:var(--cyn);
+}
+#cmd:disabled{opacity:.35}
+
+/* ---- telemetry ---- */
+aside.panel{gap:16px;overflow-y:auto}
+.core-wrap{position:relative;border:1px solid rgba(0,240,255,.14);background:rgba(0,20,30,.35)}
+#core{display:block;width:100%;height:180px}
+@media (min-width:1800px){#core{height:240px}}
+.sect-lab{font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:var(--slate);margin-bottom:6px}
+.sect-lab b{color:var(--mag);font-weight:400}
+.gauge{display:flex;align-items:center;gap:10px;margin-top:9px}
+.gauge .g-name{width:88px;color:var(--slate);text-transform:uppercase;font-size:10.5px;letter-spacing:.12em}
+.gauge .g-val{width:70px;text-align:right;color:var(--cyn);text-shadow:0 0 8px rgba(0,240,255,.55);font-variant-numeric:tabular-nums}
+.gauge .g-bar{flex:1;height:4px;background:rgba(255,43,214,.12);position:relative;overflow:hidden}
+.gauge .g-bar i{position:absolute;left:0;top:0;bottom:0;background:var(--mag);box-shadow:0 0 8px rgba(255,43,214,.8);transition:width 1s ease}
+#mem{
+  font-size:11px;line-height:1.65;
+  -webkit-mask-image:linear-gradient(to bottom,#000 58%,transparent 100%);
+          mask-image:linear-gradient(to bottom,#000 58%,transparent 100%);
+}
+#mem .addr{color:var(--mag)}
+#mem .hi{color:var(--cyn);text-shadow:0 0 7px rgba(0,240,255,.9);font-weight:700}
+#mem .ascii{color:var(--slate)}
+
+/* ================= responsive ================= */
+@media (max-width:860px){
+  body{overflow:auto}
+  .app{height:auto;min-height:100vh}
+  main{grid-template-columns:1fr}
+  #log{height:60vh}
+  .panel.console{min-height:60vh}
+  .hide-sm{display:none !important}
+}
+@media (max-width:480px){
+  header{flex-direction:column;align-items:flex-start;gap:10px;padding:16px 22px}
+  .pbar{width:46%;height:8px}
+  .pct{min-width:38px;font-size:11px}
+  .gauge .g-name{width:60px}
+}
+
+/* ================= reduced motion ================= */
+@media (prefers-reduced-motion:reduce){
+  .sweep,.flicker,.floor,.led,.cursor{animation:none !important}
+  .flicker{display:none}
+  .gauge .g-bar i{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div class="crt scanlines" aria-hidden="true"></div>
+<div class="crt sweep" aria-hidden="true"></div>
+<div class="crt flicker" aria-hidden="true"></div>
+<div class="crt vignette" aria-hidden="true"></div>
+<div class="floor" aria-hidden="true"></div>
+
+<div class="app">
+  <header>
+    <h1 class="gtitle" id="gtitle" data-text="KESTREL//OS">KESTREL<span class="slash">//</span>OS</h1>
+    <div class="status">
+      <span><span class="led" aria-hidden="true"></span><b class="ok">NOMINAL</b></span>
+      <span class="hide-sm">NODE&nbsp;·&nbsp;<b>KSTR-7F3A-09</b></span>
+      <span>UPLINK&nbsp;·&nbsp;<b id="uplink">GRAYMARK-7</b></span>
+      <span>LOCAL&nbsp;·&nbsp;<b id="clock">--:--:--</b></span>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel console" data-label="console" id="console">
+      <span class="cbr tl"></span><span class="cbr tr"></span><span class="cbr bl"></span><span class="cbr br"></span>
+      <div id="log" aria-live="polite"></div>
+      <div class="prompt" id="prompt">
+        <span class="ps1">operator@kestrel:~$</span>
+        <input id="cmd" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="command input" disabled>
+      </div>
+    </section>
+
+    <aside class="panel" data-label="telemetry" id="telemetry">
+      <span class="cbr tl"></span><span class="cbr tr"></span><span class="cbr bl"></span><span class="cbr br"></span>
+
+      <div>
+        <div class="sect-lab"><b>◢</b> core assembly</div>
+        <div class="core-wrap"><canvas id="core"></canvas></div>
+      </div>
+
+      <div>
+        <div class="sect-lab"><b>◢</b> vitals</div>
+        <div class="gauge">
+          <span class="g-name">Core temp</span><span class="g-val" id="gv-temp">61.4°C</span>
+          <span class="g-bar"><i id="gb-temp" style="width:62%"></i></span>
+        </div>
+        <div class="gauge">
+          <span class="g-name">Flux</span><span class="g-val" id="gv-flux">88.2%</span>
+          <span class="g-bar"><i id="gb-flux" style="width:88%"></i></span>
+        </div>
+      </div>
+
+      <div>
+        <div class="sect-lab"><b>◢</b> memory · 0x7f3a</div>
+        <div id="mem" aria-hidden="true"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var log = document.getElementById("log");
+  var input = document.getElementById("cmd");
+  var promptRow = document.getElementById("prompt");
+
+  function pad(n,w,ch){ n=""+n; ch=ch||"0"; while(n.length<w) n=ch+n; return n; }
+  function ts(){
+    var d = new Date();
+    return "["+pad(d.getHours(),2)+":"+pad(d.getMinutes(),2)+":"+pad(d.getSeconds(),2)+"."+pad(d.getMilliseconds(),3)+"] ";
+  }
+  function scrollDown(){ log.scrollTop = log.scrollHeight; }
+  function line(html, cls){
+    var e = document.createElement("div");
+    e.className = "ln " + (cls||"");
+    e.innerHTML = html;
+    log.appendChild(e); scrollDown();
+    return e;
+  }
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+  /* ============ header glitch ============ */
+  var title = document.getElementById("gtitle");
+  function glitch(){
+    if(reduced) return;
+    title.classList.remove("glitching");
+    void title.offsetWidth; /* restart animation */
+    title.classList.add("glitching");
+    setTimeout(function(){ title.classList.remove("glitching"); }, 440);
+  }
+  (function scheduleGlitch(){
+    setTimeout(function(){ glitch(); scheduleGlitch(); }, 2500 + Math.random()*6000);
+  })();
+
+  /* ============ clock ============ */
+  function tickClock(){
+    var d = new Date();
+    document.getElementById("clock").textContent =
+      pad(d.getHours(),2)+":"+pad(d.getMinutes(),2)+":"+pad(d.getSeconds(),2);
+  }
+  tickClock(); setInterval(tickClock, 1000);
+
+  /* ============ typing engine ============ */
+  function typeText(el, text, done){
+    if(reduced){ el.textContent = text; done(); return; }
+    var i = 0;
+    (function step(){
+      if(i >= text.length){ done(); return; }
+      var burst = (Math.random() < .16 && i+1 < text.length) ? 2 : 1;
+      el.textContent += text.slice(i, i+burst);
+      i += burst;
+      scrollDown();
+      setTimeout(step, 14 + Math.random()*20);
+    })();
+  }
+  function typeLine(text, tag, gap){
+    return new Promise(function(resolve){
+      var row = line('<span class="ts">'+ts()+'</span>', "");
+      var msg = document.createElement("span");
+      var cur = document.createElement("span"); cur.className = "cursor";
+      row.appendChild(msg); row.appendChild(cur);
+      typeText(msg, text, function(){
+        cur.remove();
+        if(tag){
+          var t = document.createElement("span");
+          t.className = tag === "WARN" ? "warn" : "ok";
+          t.textContent = tag === "WARN" ? "[WARN]" : "[ OK ]";
+          msg.appendChild(t);
+        }
+        scrollDown();
+        setTimeout(resolve, reduced ? 0 : (gap || 70 + Math.random()*90));
+      });
+    });
+  }
+  function progressBar(label, dur){
+    return new Promise(function(resolve){
+      line('<span class="ts">'+ts()+'</span><span class="cy">'+label+'</span>');
+      var row = line('<span class="ts">        </span><span class="pbar"><i></i></span> <span class="pct">0%</span>');
+      var fill = row.querySelector("i"), pct = row.querySelector(".pct");
+      if(reduced){ fill.style.width="100%"; pct.textContent="100%"; setTimeout(resolve,0); return; }
+      var t0 = performance.now();
+      (function anim(){
+        var p = Math.min(1,(performance.now()-t0)/dur);
+        var w = Math.round(p*100);
+        fill.style.width = w+"%"; pct.textContent = w+"%";
+        scrollDown();
+        if(p<1) requestAnimationFrame(anim); else setTimeout(resolve, 110);
+      })();
+    });
+  }
+
+  var BANNER =
+    "╔═╗╦  ╦╔═╗╔╗╔╔═╗╔═╗  K E S T R E L   O S\n"+
+    "║ ║║  ║╠═ ║║║║╠═ ║     bootrom v9.4.1 \"nightjar\"\n"+
+    "╚═╝╩═╝╩╩═╝╝╚╝╩═╝╩═╝  ⚠ unauthorized access is a lifestyle\n";
+
+  var BOOT = [
+    ["zero-copy kernel handoff — cold start accepted", "OK"],
+    ["verifying signature chain /dev/sig0 (2,048 hops)", "OK"],
+    ["mounting lattice volume /dev/kr0 · 512 TiB effective", "OK"],
+    "PROGRESS:LATTICE",
+    ["neural uplink handshake · GRAYMARK-7 relay", "WARN"],
+    ["spinning ICE shell daemon (pid 0x9F3A2C)", "OK"],
+    ["calibrating dream stack — 0 paradoxes detected", "OK"],
+    "PROGRESS:PROFILE",
+    ["loading operator profile · clearance: nightjar", "OK"],
+    ["peripherals online: optic feed, haptic rig, coyote drone x2", "OK"]
+  ];
+
+  async function boot(){
+    var b = line("", "banner");
+    b.textContent = BANNER;
+    await sleep(reduced?0:300);
+    for(var i=0;i<BOOT.length;i++){
+      var step = BOOT[i];
+      if(step === "PROGRESS:LATTICE"){ await progressBar("hydrating memory lattice · 512 banks", reduced?0:1600); }
+      else if(step === "PROGRESS:PROFILE"){ await progressBar("loading operator profile · nightjar.keys", reduced?0:1100); }
+      else { await typeLine(step[0], step[1]); }
+    }
+    await typeLine("all systems nominal — operator privileges granted.", null);
+    line('<span class="ts">'+ts()+'</span><span class="mg">type </span><span class="cy">`help`</span><span class="mg"> when you are ready. the city is listening.</span>');
+    promptRow.classList.add("on");
+    input.disabled = false;
+    input.focus();
+  }
+  boot();
+
+  /* ============ commands ============ */
+  var history = [], hIdx = -1, busy = false;
+  var COMMANDS = {
+    help: [["help","print this command table"],
+           ["status","subsystem health table"],
+           ["scan","sweep local spectrum for signals"],
+           ["about","what this page actually is"],
+           ["clear","wipe the console log"]],
+  };
+  function printHelp(){
+    line('<span class="ts">'+ts()+'</span><span class="mg">available commands</span>');
+    var t = document.createElement("table");
+    COMMANDS.help.forEach(function(r){
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td class="k">'+r[0]+'</td><td class="v">'+r[1]+'</td>';
+      t.appendChild(tr);
+    });
+    var wrap = document.createElement("div"); wrap.className="ln"; wrap.appendChild(t);
+    log.appendChild(wrap); scrollDown();
+  }
+  function printStatus(){
+    line('<span class="ts">'+ts()+'</span><span class="mg">subsystem report</span>');
+    var rows = [
+      ["nightjar kernel","9.4.1","ok","stable"],
+      ["memory lattice","512 banks","ok","hydrated"],
+      ["ICE shell daemon","0x9F3A2C","ok","watching"],
+      ["graymark uplink","GRAYMARK-7","warn","latency 412 ms"],
+      ["dream stack","paradoxes 0","ok","quiet"],
+      ["coyote drones","x2","ok","perched"]
+    ];
+    var t = document.createElement("table");
+    rows.forEach(function(r){
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td class="k">'+r[0]+'</td><td class="v">'+r[1]+'</td><td class="'+(r[2]==="ok"?"ok-v":"warn-v")+'">['+ (r[2]==="ok"?"OK  ":"WARN")+' ] '+r[3]+'</td>';
+      t.appendChild(tr);
+    });
+    var wrap = document.createElement("div"); wrap.className="ln"; wrap.appendChild(t);
+    log.appendChild(wrap); scrollDown();
+  }
+  function printAbout(){
+    line('<span class="ts">'+ts()+'</span>this is a single self-contained HTML file — no servers, no packets, no operators harmed.');
+    line('<span class="ts">'+ts()+'</span>every "system" on screen is simulated locally: boot typing, telemetry, the wireframe, the hex dump.');
+    line('<span class="ts">'+ts()+'</span>it will keep running in a tunnel, a dead zone, or a browser from 2013. <span class="cy">kestrel//os: offline by design.</span>');
+  }
+  async function runScan(){
+    busy = true; input.disabled = true;
+    line('<span class="ts">'+ts()+'</span><span class="mg">sweeping 2400–8500 MHz …</span>');
+    await progressBar("spectrum sweep · band B", reduced?0:1200);
+    var sigs = [
+      ["0x3F-A1","HOLLOW SAINT RELAY","-78 dBm","civilian mesh"],
+      ["0x8C-2D","GRAYMARK UPLIFT","-61 dBm","corp telemetry"],
+      ["0x11-9E","UNKNOWN · ENCRYPTED","-93 dBm","black ICE"]
+    ];
+    for(var i=0;i<sigs.length;i++){
+      await typeLine("signal "+sigs[i][0]+"  ·  "+sigs[i][1]+"  ·  "+sigs[i][2]+"  ·  "+sigs[i][3], null, 120);
+    }
+    line('<span class="ts">'+ts()+'</span>3 signals found · 1 unregistered · <span class="warn">attribution refused</span>');
+    glitch();
+    busy = false; input.disabled = false; input.focus();
+  }
+
+  function exec(raw){
+    var cmd = raw.trim().toLowerCase();
+    line('<span class="ts">'+ts()+'</span><span class="mg" style="font-weight:700">operator@kestrel:~$</span> '+raw.replace(/&/g,"&amp;").replace(/</g,"&lt;"));
+    if(!cmd) return;
+    history.unshift(raw.trim()); hIdx = -1;
+    switch(cmd){
+      case "help":  printHelp(); break;
+      case "status":printStatus(); break;
+      case "about": printAbout(); break;
+      case "clear": log.innerHTML = ""; break;
+      case "scan":  runScan(); break;
+      default:
+        line('<span class="ts">'+ts()+'</span><span class="err">kestrel: `'+cmd+'` is not a command — try `help`.</span>');
+    }
+  }
+
+  input.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ if(!busy) exec(input.value); input.value=""; }
+    else if(e.key === "ArrowUp"){
+      e.preventDefault();
+      if(history.length){ hIdx = Math.min(hIdx+1, history.length-1); input.value = history[hIdx]; }
+    }else if(e.key === "ArrowDown"){
+      e.preventDefault();
+      if(hIdx > 0){ hIdx--; input.value = history[hIdx]; }
+      else { hIdx = -1; input.value = ""; }
+    }
+  });
+  document.getElementById("console").addEventListener("click", function(e){
+    if(e.target.tagName !== "A" && !busy) input.focus();
+  });
+
+  /* ============ core assembly: icosahedron wireframe ============ */
+  var canvas = document.getElementById("core");
+  var ctx = canvas.getContext("2d");
+  (function(){
+    var phi = (1+Math.sqrt(5))/2;
+    var V = [[-1,phi,0],[1,phi,0],[-1,-phi,0],[1,-phi,0],
+             [0,-1,phi],[0,1,phi],[0,-1,-phi],[0,1,-phi],
+             [phi,0,-1],[phi,0,1],[-phi,0,-1],[-phi,0,1]];
+    var E = [];
+    for(var a=0;a<12;a++) for(var b=a+1;b<12;b++){
+      var dx=V[a][0]-V[b][0], dy=V[a][1]-V[b][1], dz=V[a][2]-V[b][2];
+      if(Math.abs(Math.sqrt(dx*dx+dy*dy+dz*dz)-2) < .01) E.push([a,b]);
+    }
+    var ang = 0, dpr = 1;
+    function resize(){
+      var r = canvas.getBoundingClientRect();
+      dpr = Math.min(3, window.devicePixelRatio || 1);
+      canvas.width = Math.max(1, Math.round(r.width*dpr));
+      canvas.height = Math.max(1, Math.round(r.height*dpr));
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    window.addEventListener("resize", function(){ resize(); if(reduced) render(); });
+    resize();
+    function render(){
+      var w = canvas.width/dpr, h = canvas.height/dpr;
+      ctx.clearRect(0,0,w,h);
+      var cx=w/2, cy=h/2, R=Math.min(w,h)*.38;
+      /* static outer ring */
+      ctx.beginPath(); ctx.arc(cx,cy,R*1.18,0,Math.PI*2);
+      ctx.strokeStyle="rgba(255,43,214,.5)"; ctx.lineWidth=1;
+      ctx.shadowColor="rgba(255,43,214,.7)"; ctx.shadowBlur=6; ctx.stroke();
+      ctx.shadowBlur=0;
+      /* dashed rotating arc */
+      ctx.beginPath(); ctx.setLineDash([5,9]); ctx.lineDashOffset = -ang*30;
+      ctx.arc(cx,cy,R*1.34, ang*.7, ang*.7+Math.PI*1.25);
+      ctx.strokeStyle="rgba(255,43,214,.65)"; ctx.stroke();
+      ctx.setLineDash([]);
+      /* rotate + project */
+      var ax = .48 + .2*Math.sin(ang*.33), ay = ang;
+      var P = V.map(function(v){
+        var x=v[0],y=v[1],z=v[2],c1=Math.cos(ay),s1=Math.sin(ay),c2=Math.cos(ax),s2=Math.sin(ax);
+        var x1=x*c1+z*s1, z1=-x*s1+z*c1;
+        var y1=y*c2-z1*s2, z2=y*s2+z1*c2;
+        var f=4.6, k=f/(f-z2);
+        return {x:cx+x1*k*R/1.9, y:cy+y1*k*R/1.9, z:z2};
+      });
+      /* edges, depth-shaded */
+      E.forEach(function(e){
+        var p=P[e[0]], q=P[e[1]], near=((p.z+q.z)/2+1.9)/3.8;
+        ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y);
+        ctx.strokeStyle="rgba(0,240,255,"+(0.12+0.75*near).toFixed(3)+")";
+        ctx.lineWidth = 0.7 + near*0.9;
+        ctx.shadowBlur = near>.68 ? 9 : 0;
+        ctx.shadowColor = "rgba(0,240,255,.9)";
+        ctx.stroke();
+      });
+      ctx.shadowBlur=0;
+      /* vertices */
+      P.forEach(function(p){
+        var near=(p.z+1.9)/3.8;
+        ctx.beginPath(); ctx.arc(p.x,p.y,1.2+2.1*near,0,Math.PI*2);
+        ctx.fillStyle="rgba(255,43,214,"+(0.35+0.65*near).toFixed(3)+")";
+        ctx.shadowColor="rgba(255,43,214,.9)"; ctx.shadowBlur=8*near;
+        ctx.fill();
+      });
+      ctx.shadowBlur=0;
+      /* corner readout */
+      ctx.font="10px ui-monospace,Menlo,Consolas,monospace";
+      ctx.fillStyle="rgba(0,240,255,.85)"; ctx.textAlign="right";
+      ctx.fillText("θ "+((ang*180/Math.PI)%360).toFixed(1)+"°", w-8, h-8);
+      ctx.textAlign="left";
+      ctx.fillStyle="rgba(107,115,144,.9)";
+      ctx.fillText("ICO-12/30", 8, h-8);
+    }
+    if(reduced){ render(); }
+    else{
+      (function loop(){
+        ang += 0.011; render();
+        requestAnimationFrame(loop);
+      })();
+    }
+  })();
+
+  /* ============ gauges ============ */
+  var temp = 61.4, flux = 88.2;
+  function updGauges(){
+    temp = Math.max(38, Math.min(79, temp + (Math.random()-.5)*5));
+    flux = Math.max(14, Math.min(99, flux + (Math.random()-.5)*16));
+    document.getElementById("gv-temp").textContent = temp.toFixed(1)+"°C";
+    document.getElementById("gb-temp").style.width = ((temp-30)/50*100).toFixed(0)+"%";
+    document.getElementById("gv-flux").textContent = flux.toFixed(1)+"%";
+    document.getElementById("gb-flux").style.width = flux.toFixed(0)+"%";
+  }
+  setInterval(updGauges, 1400);
+
+  /* ============ hex dump ============ */
+  var mem = document.getElementById("mem");
+  var memAddr = 0x7f3a00;
+  function hx(n){ return n.toString(16).toUpperCase(); }
+  function pad2(n){ return ("0"+hx(n)).slice(-2); }
+  function memRow(){
+    var bytes="", ascii="";
+    for(var i=0;i<8;i++){
+      var b = Math.floor(Math.random()*256);
+      var s = pad2(b);
+      if(Math.random() < .12) bytes += '<span class="hi">'+s+'</span> ';
+      else bytes += s+' ';
+      ascii += (b>=33 && b<=126) ? String.fromCharCode(b) : "·";
+    }
+    var d = document.createElement("div");
+    d.className = "ln";
+    d.innerHTML = '<span class="addr">'+('00000'+hx(memAddr).toUpperCase()).slice(-6)+' </span>'+bytes+'<span class="ascii">'+ascii+'</span>';
+    memAddr += 8;
+    return d;
+  }
+  for(var r=0;r<14;r++) mem.appendChild(memRow());
+  setInterval(function(){
+    mem.removeChild(mem.firstChild);
+    mem.appendChild(memRow());
+  }, reduced ? 1500 : 220);
+})();
+</script>
+</body>
+</html>

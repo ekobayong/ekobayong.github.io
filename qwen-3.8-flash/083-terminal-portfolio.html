@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="nova">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>nova@portfolio — zsh</title>
+<style>
+  :root,
+  html[data-theme="nova"]{
+    --bg:#0d1020; --ink:#dfe3ee; --dim:#8b90a8; --accent:#7dd3fc; --accent-ink:#04121d;
+    --line:rgba(255,255,255,.09); --glass:rgba(255,255,255,.055); --err:#ff6b81;
+    --d1:#1b1f3a; --d2:#3b2a6b; --d3:#0f4c5c; --base0:#08090f;
+    --blobA:#3b2a6b; --blobB:#0f4c5c;
+    --mat:#5ef08a; --panel:#101428;
+  }
+  html[data-theme="dracula"]{
+    --bg:#282a36; --ink:#f8f8f2; --dim:#6272a4; --accent:#bd93f9; --accent-ink:#1e1440;
+    --line:rgba(255,255,255,.1); --glass:rgba(255,255,255,.06); --err:#ff5555;
+    --d1:#21222c; --d2:#44475a; --d3:#343746; --base0:#191a21;
+    --blobA:#bd93f9; --blobB:#8be9fd;
+    --mat:#50fa7b; --panel:#21222c;
+  }
+  html[data-theme="solarized"]{
+    --bg:#002b36; --ink:#93a1a1; --dim:#586e75; --accent:#b58900; --accent-ink:#1a1400;
+    --line:rgba(255,255,255,.09); --glass:rgba(255,255,255,.05); --err:#dc322f;
+    --d1:#073642; --d2:#002b36; --d3:#0a4453; --base0:#00212b;
+    --blobA:#2aa198; --blobB:#b58900;
+    --mat:#859900; --panel:#073642;
+  }
+  html[data-theme="nord"]{
+    --bg:#2e3440; --ink:#eceff4; --dim:#7b88a1; --accent:#88c0d0; --accent-ink:#152028;
+    --line:rgba(255,255,255,.1); --glass:rgba(255,255,255,.06); --err:#bf616a;
+    --d1:#3b4252; --d2:#2e3440; --d3:#434c5e; --base0:#242933;
+    --blobA:#5e81ac; --blobB:#88c0d0;
+    --mat:#a3be8c; --panel:#3b4252;
+  }
+  html[data-theme="paper"]{
+    --bg:#fbf8f1; --ink:#2b2622; --dim:#8d857a; --accent:#b3541e; --accent-ink:#fff;
+    --line:rgba(40,30,20,.14); --glass:rgba(255,255,255,.55); --err:#c0392b;
+    --d1:#efe6d6; --d2:#e8d8c4; --d3:#dfe4d2; --base0:#f5efe2;
+    --blobA:#f0c8a0; --blobB:#b8d8c8;
+    --mat:#2e7d32; --panel:#f3ecdd;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono','Courier New',monospace;
+    color:var(--ink);overflow:hidden;
+  }
+  /* ---------- desktop ---------- */
+  .desktop{
+    position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:18px;padding:22px;
+    background:
+      radial-gradient(1100px 780px at 14% 8%, var(--d1), transparent 62%),
+      radial-gradient(1000px 720px at 88% 16%, var(--d2), transparent 58%),
+      radial-gradient(900px 860px at 62% 96%, var(--d3), transparent 60%),
+      linear-gradient(180deg, var(--d1), var(--base0) 80%);
+    overflow:hidden;
+  }
+  .blob{position:absolute;border-radius:50%;filter:blur(90px);opacity:.4;pointer-events:none}
+  .blob.b1{width:44vmax;height:44vmax;left:-10vmax;top:-12vmax;background:var(--blobA);animation:drift1 38s ease-in-out infinite alternate}
+  .blob.b2{width:38vmax;height:38vmax;right:-8vmax;bottom:-10vmax;background:var(--blobB);animation:drift2 46s ease-in-out infinite alternate}
+  @keyframes drift1{from{transform:translate(0,0) scale(1)}to{transform:translate(16vmax,10vmax) scale(1.18)}}
+  @keyframes drift2{from{transform:translate(0,0) scale(1.1)}to{transform:translate(-14vmax,-9vmax) scale(.92)}}
+
+  /* ---------- window ---------- */
+  .window{
+    position:relative;z-index:2;width:min(980px,100%);height:min(680px, calc(100vh - 150px));
+    border-radius:14px;display:flex;flex-direction:column;overflow:hidden;
+    border:1px solid var(--line);
+    background:var(--bg);
+    box-shadow:0 40px 90px rgba(0,0,0,.55), 0 8px 24px rgba(0,0,0,.35);
+  }
+  .chrome{
+    flex:0 0 auto;display:flex;align-items:flex-end;gap:0;height:44px;padding:0 14px;
+    background:var(--glass);
+    backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+    border-bottom:1px solid var(--line);
+  }
+  .lights{display:flex;gap:8px;align-items:center;padding-bottom:2px;margin-right:18px}
+  .lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights .r{background:#ff5f57}.lights .y{background:#febc2e}.lights .g{background:#28c840}
+  .tabs{display:flex;gap:6px;align-items:flex-end;flex:1;min-width:0;overflow:hidden}
+  .tab{
+    font-family:inherit;font-size:11.5px;color:var(--dim);background:transparent;border:0;
+    padding:7px 13px;border-radius:8px 8px 0 0;cursor:pointer;white-space:nowrap;
+    transition:color .2s,background .2s;
+  }
+  .tab:hover{color:var(--ink)}
+  .tab.active{color:var(--ink);background:rgba(125,211,252,.10)}
+  html[data-theme="paper"] .tab.active{background:rgba(179,84,30,.12)}
+  html[data-theme="dracula"] .tab.active{background:rgba(189,147,249,.12)}
+  html[data-theme="solarized"] .tab.active{background:rgba(181,137,0,.16)}
+  html[data-theme="nord"] .tab.active{background:rgba(136,192,208,.14)}
+
+  /* ---------- terminal body ---------- */
+  .term{position:relative;flex:1;display:flex;flex-direction:column;min-height:0}
+  #out{
+    flex:1;overflow-y:auto;padding:16px 18px 6px;font-size:13px;line-height:1.65;
+    scrollbar-width:thin;scrollbar-color:var(--dim) transparent;
+  }
+  #out::-webkit-scrollbar{width:8px;height:8px}
+  #out::-webkit-scrollbar-thumb{background:rgba(139,144,168,.5);border-radius:8px}
+  #out::-webkit-scrollbar-track{background:transparent}
+  .line{white-space:pre-wrap;word-break:break-word}
+  .logo-line{
+    color:var(--accent);
+    text-shadow:0 0 12px rgba(125,211,252,.5);
+    font-size:clamp(9px,2.6vw,15px);line-height:1.15;
+  }
+  .sys{color:var(--dim)}
+  .greet{color:var(--accent)}
+  .err{color:var(--err)}
+  .k{color:var(--dim)}.v{color:var(--ink)}
+  .ok{color:#50d890}
+  .dir{color:#3fc9e8}
+  .exe{color:#50d890}
+  .promptline .u{color:#50d890}
+  .promptline .at{color:var(--dim)}
+  .promptline .h{color:var(--dim)}
+  .promptline .d{color:#3fc9e8}
+  .promptline .p{color:#f07ad0}
+  h4.sect{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--accent);margin:10px 0 6px;font-weight:600}
+
+  /* help two-column list */
+  .cmdlist{display:grid;grid-template-columns:auto 1fr;gap:2px 16px;margin:2px 0 6px}
+  .cmdlist b{color:var(--accent);font-weight:600}
+  .cmdlist span{color:var(--dim)}
+  @media (max-width:560px){ .cmdlist{grid-template-columns:1fr} .cmdlist b{margin-top:4px} }
+
+  /* skills bars */
+  .bars{display:grid;grid-template-columns:150px 1fr 42px;gap:8px 12px;align-items:center;max-width:560px;margin:4px 0 8px}
+  .bars .bl{color:var(--ink);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bars .track{
+    height:14px;border-radius:7px;background:var(--glass);
+    border:1px solid var(--line);overflow:hidden;position:relative;
+  }
+  .bars .fill{
+    height:100%;width:0;border-radius:7px;position:relative;display:block;
+    background:linear-gradient(90deg, var(--accent), var(--mat));
+    transition:width 1.1s cubic-bezier(.16,.84,.44,1);
+  .bars .fill::after{
+    content:'';position:absolute;inset:0;border-radius:7px;
+    background:repeating-linear-gradient(90deg, rgba(0,0,0,.22) 0 1px, transparent 1px 9px);
+  }
+  .bars .pct{color:var(--dim);font-size:11px;text-align:right}
+  @media (max-width:560px){ .bars{grid-template-columns:110px 1fr 40px} }
+
+  /* project cards */
+  .projects{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:4px 0 8px}
+  .pcard{
+    background:var(--glass);border:1px solid var(--line);border-left:4px solid var(--pc);
+    border-radius:10px;padding:12px 14px;
+    animation:rise .5s cubic-bezier(.16,.84,.44,1) both;
+    transition:transform .2s ease, box-shadow .2s ease;
+    cursor:default;
+  }
+  .pcard:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(0,0,0,.3)}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  .pcard h5{font-size:13px;color:var(--ink);margin-bottom:4px}
+  .pcard p{font-size:11.5px;color:var(--dim);line-height:1.5;margin-bottom:8px}
+  .pills{display:flex;flex-wrap:wrap;gap:5px}
+  .pill{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);
+    border:1px solid var(--line);border-radius:99px;padding:2px 8px}
+  @media (max-width:560px){ .projects{grid-template-columns:1fr} }
+
+  /* input row */
+  #inputline{
+    flex:0 0 auto;display:flex;align-items:center;padding:10px 18px 14px;font-size:13px;
+  }
+  #inputline .promptline{white-space:nowrap}
+  #inp{
+    flex:0 0 auto;font:inherit;color:var(--ink);background:transparent;border:0;outline:0;
+    caret-color:transparent;padding:0;min-width:1ch;margin-left:2px;
+  }
+  #cursor{
+    flex:0 0 auto;width:.62em;height:1.1em;margin-left:1px;background:var(--accent);
+    animation:blink 1.06s steps(1) infinite;
+    transition:opacity .2s;
+  }
+  #cursor.dimmed{opacity:.28;animation:none}
+  @keyframes blink{0%,55%{opacity:1}56%,100%{opacity:0}}
+
+  /* tap-to-type pill */
+  .tap{
+    display:none;position:absolute;bottom:14px;right:16px;z-index:4;
+    font-size:11px;letter-spacing:.08em;color:var(--accent-ink);background:var(--accent);
+    border:0;border-radius:99px;padding:8px 16px;cursor:pointer;
+    animation:pulse 1.6s ease-in-out infinite;box-shadow:0 6px 18px rgba(0,0,0,.35);
+  }
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:.92}50%{transform:scale(1.06);opacity:1}}
+  @media (hover:none){
+    body.no-focus .tap{display:block}
+  }
+
+  /* matrix overlay */
+  #matrix{position:absolute;inset:0;z-index:6;background:rgba(6,8,12,.86);display:none}
+  #matrix canvas{position:absolute;inset:0;width:100%;height:100%}
+
+  /* ---------- dock ---------- */
+  .dock{
+    position:relative;z-index:2;display:flex;gap:10px;align-items:center;justify-content:center;
+    padding:10px 16px;border-radius:18px;
+    background:var(--glass);
+    backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+    border:1px solid var(--line);
+    box-shadow:0 20px 50px rgba(0,0,0,.4);
+  }
+  .app{
+    position:relative;width:46px;height:46px;border-radius:12px;border:1px solid rgba(255,255,255,.18);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;
+    transition:transform .18s cubic-bezier(.16,.84,.44,1);
+    box-shadow:0 6px 14px rgba(0,0,0,.3);
+  }
+  .app:hover,.app:focus-visible{transform:scale(1.22) translateY(-4px);outline:none;z-index:3}
+  .app:active{transform:scale(1.05)}
+  .app svg{width:24px;height:24px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+  .app[data-tip]::after{
+    content:attr(data-tip);position:absolute;bottom:calc(100% + 9px);left:50%;transform:translateX(-50%);
+    background:rgba(10,12,20,.92);color:#e6ebf5;font-size:10px;letter-spacing:.06em;
+    padding:4px 9px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;
+    transition:opacity .18s;border:1px solid rgba(255,255,255,.14);
+  }
+  .app:hover::after,.app:focus-visible::after{opacity:1}
+  .app.finder{background:linear-gradient(145deg,#4fc3f7,#1976d2)}
+  .app.projects{background:linear-gradient(145deg,#b39ddb,#5e35b1)}
+  .app.skills{background:linear-gradient(145deg,#81c784,#2e7d32)}
+  .app.contact{background:linear-gradient(145deg,#ffb74d,#f57c00)}
+  .app.themes{background:linear-gradient(145deg,#f48fb1,#ad1457)}
+
+  /* ---------- responsive / motion ---------- */
+  @media (max-width:640px){
+    .desktop{padding:8px;gap:10px;justify-content:flex-start;padding-top:10px}
+    .window{height:calc(100dvh - 96px);width:100%;flex:1}
+    .dock{padding:8px 10px;gap:8px}
+    .app{width:40px;height:40px}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .blob{animation:none}
+    #cursor{animation:none}
+    .bars .fill{transition:none}
+    .pcard{animation:none}
+    .app,.pcard{transition:none}
+    .tap{animation:none}
+  }
+</style>
+</head>
+<body class="no-focus">
+<div class="desktop">
+  <div class="blob b1"></div><div class="blob b2"></div>
+
+  <main class="window" aria-label="Terminal window">
+    <div class="chrome">
+      <div class="lights" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+      <div class="tabs" role="tablist">
+        <button class="tab active" role="tab" aria-selected="true">nova@portfolio — zsh</button>
+        <button class="tab" role="tab" aria-selected="false">notes.md</button>
+        <button class="tab" role="tab" aria-selected="false">server.log</button>
+      </div>
+    </div>
+    <div class="term">
+      <div id="out" aria-live="polite" role="log"></div>
+      <div id="inputline">
+        <span class="promptline"><span class="u">nova</span><span class="at">@</span><span class="h">reyes</span> <span class="d">~/portfolio</span> <span class="p">❯</span>&nbsp;</span>
+        <input id="inp" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Terminal input">
+        <span id="cursor" aria-hidden="true"></span>
+      </div>
+      <button class="tap" id="tapPill" type="button">Tap to type</button>
+      <div id="matrix" aria-hidden="true"></div>
+    </div>
+  </main>
+
+  <nav class="dock" aria-label="Quick actions">
+    <button class="app finder" data-cmd="ls" data-tip="ls — files" aria-label="List files">
+      <svg viewBox="0 0 24 24"><path d="M3 8.5 8 4h13v13l-4 3H3z"/><path d="M12 4v8"/><path d="M8 13c1.6 1.2 6.4 1.2 8 0"/><circle cx="9.3" cy="9.4" r=".8" fill="#fff" stroke="none"/><circle cx="14.7" cy="9.4" r=".8" fill="#fff" stroke="none"/></svg>
+    </button>
+    <button class="app projects" data-cmd="projects" data-tip="projects" aria-label="Show projects">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9h17M8 5V3M16 5V3M8 13h8M8 16.5h5"/></svg>
+    </button>
+    <button class="app skills" data-cmd="skills" data-tip="skills" aria-label="Show skills">
+      <svg viewBox="0 0 24 24"><path d="M4 19V9M9.3 19V5M14.7 19v-8M20 19v-4"/></svg>
+    </button>
+    <button class="app contact" data-cmd="contact" data-tip="contact" aria-label="Show contact">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>
+    </button>
+    <button class="app themes" data-cmd="theme" data-tip="themes" aria-label="Show themes">
+      <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-.9 2-1.8 0-1.5-1.4-1.6-1.4-3 0-1 .8-1.7 1.9-1.7H16a5 5 0 0 0 5-5c0-3.6-4-6.5-9-6.5z"/><circle cx="7.6" cy="11.4" r="1.1" fill="#fff" stroke="none"/><circle cx="10.4" cy="7" r="1.1" fill="#fff" stroke="none"/><circle cx="15" cy="7.4" r="1.1" fill="#fff" stroke="none"/></svg>
+    </button>
+  </nav>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var out = document.getElementById('out');
+  var inp = document.getElementById('inp');
+  var cur = document.getElementById('cursor');
+  var tap = document.getElementById('tapPill');
+  var term = document.querySelector('.term');
+  var hist = [], histIdx = -1;
+  var MATRIX_LIVE = false;
+
+  var PROMPT_HTML = '<span class="promptline"><span class="u">nova</span><span class="at">@</span><span class="h">reyes</span> <span class="d">~/portfolio</span> <span class="p">❯</span>&nbsp;</span>';
+
+  /* ---------- output helpers ---------- */
+  function print(html, cls){
+    var d = document.createElement('div');
+    d.className = 'line' + (cls ? ' ' + cls : '');
+    d.innerHTML = html;
+    out.appendChild(d);
+    scrollEnd();
+    return d;
+  }
+  function scrollEnd(){ out.scrollTop = out.scrollHeight; }
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function echoCmd(line){ print(PROMPT_HTML + esc(line)); }
+  function pad(s,n){ s = String(s); while (s.length < n) s += ' '; return s; }
+
+  /* ---------- input line width ---------- */
+  function fitInput(){
+    inp.style.width = Math.max(1, inp.value.length + 1) + 'ch';
+    scrollEnd();
+  }
+  inp.addEventListener('input', fitInput);
+  inp.addEventListener('focus', function(){
+    document.body.classList.remove('no-focus');
+    cur.classList.remove('dimmed');
+  });
+  inp.addEventListener('blur', function(){
+    document.body.classList.add('no-focus');
+    cur.classList.add('dimmed');
+  });
+  tap.addEventListener('click', function(){ inp.focus(); });
+
+  /* ---------- themes ---------- */
+  var THEMES = {
+    dracula:   {note:'purple haze, permanently'},
+    solarized: {note:'the one true contrast ratio'},
+    nord:      {note:'arctic calm, fjord blues'},
+    paper:     {note:'terracotta & daylight'}
+  };
+  var THEME_ALIASES = {dracula:'dracula', drac:'dracula', solarized:'solarized', sol:'solarized',
+    nord:'nord', paper:'paper', nova:'nova', dark:'nova'};
+  function setTheme(name){ document.documentElement.dataset.theme = name; }
+
+  /* ---------- skills / projects data ---------- */
+  var SKILLS = [
+    ['TypeScript', 92], ['WebGL & shaders', 84], ['CSS architecture', 88],
+    ['Node & edge', 79], ['Rust (weekends)', 61], ['Motion design', 90]
+  ];
+  var PROJECTS = [
+    ['Tidewater', '#38bdf8', 'Real-time flood-risk maps for coastal cities — tide gauges, model runs and neighbourhood alerts in one fluid view.', ['WebGL','Tiles','Alerts']],
+    ['Lantern', '#f59e0b', 'Privacy-first analytics that fit in a browser tab. No cookies, no cross-site tracking, still answers every question.', ['Edge','TypeScript','Ethics']],
+    ['Fieldnotes', '#34d399', 'Offline-first nature journal with a small species classifier that lives happily in a backpack on the Serra.', ['Offline','On-device ML','Field UI']],
+    ['Glasshouse', '#a78bfa', 'A generative glassmorphism design system: tokens, shaders and docs that compile to the same truth.', ['Design Systems','Shaders','Docs']]
+  ];
+
+  /* ---------- commands ---------- */
+  var CMDS = ['help','about','skills','projects','contact','theme','matrix','ls','whoami','date','echo','history','clear'];
+  function cmdHelp(){
+    print('<h4 class="sect">commands</h4>');
+    print('<div class="cmdlist">' +
+      '<b>help</b><span>this list</span>' +
+      '<b>about</b><span>who is behind the glass</span>' +
+      '<b>skills</b><span>animated bar chart of the toolchain</span>' +
+      '<b>projects</b><span>four things worth a look</span>' +
+      '<b>contact</b><span>email, github, mastodon, pgp</span>' +
+      '<b>theme &lt;name&gt;</b><span>dracula · solarized · nord · paper</span>' +
+      '<b>matrix</b><span>do not ask twice</span>' +
+      '<b>ls · whoami · date · echo</b><span>the usual suspects</span>' +
+      '<b>history · clear</b><span>↑ ↓ recall · Ctrl+L clears</span>' +
+      '</div>');
+    print('<span class="sys">press Tab to complete a command; unknown commands bite back.</span>');
+  }
+  function cmdAbout(){
+    print('<h4 class="sect">about</h4>');
+    [['name', 'Nova Reyes'],
+     ['role', 'creative engineer — half compiler, half darkroom'],
+     ['based', 'Lisbon, Portugal (UTC+1, golden light year-round)'],
+     ['stack', 'TypeScript · Rust · WebGL · stubborn CSS'],
+     ['built', 'maps that warn, tools that respect you, UIs that breathe'],
+     ['status', 'open to collaborations — especially the weird ones']
+    ].forEach(function(p){
+      print('<span class="k">' + pad(p[0],8) + '</span><span class="v">' + p[1] + '</span>');
+    });
+  }
+  function cmdSkills(){
+    print('<h4 class="sect">skills</h4>');
+    var d = document.createElement('div');
+    d.className = 'bars';
+    SKILLS.forEach(function(p){
+      var l = document.createElement('span'); l.className = 'bl'; l.textContent = p[0];
+      var t = document.createElement('span'); t.className = 'track';
+      var f = document.createElement('span'); f.className = 'fill';
+      t.appendChild(f);
+      var v = document.createElement('span'); v.className = 'pct'; v.textContent = p[1] + '%';
+      d.appendChild(l); d.appendChild(t); d.appendChild(v);
+      requestAnimationFrame(function(){ requestAnimationFrame(function(){ f.style.width = p[1] + '%'; }); });
+    });
+    out.appendChild(d); scrollEnd();
+    print('<span class="sys">bars animate from zero — the numbers do not flatter.</span>');
+  }
+  function cmdProjects(){
+    print('<h4 class="sect">selected projects</h4>');
+    var g = document.createElement('div');
+    g.className = 'projects';
+    PROJECTS.forEach(function(p, i){
+      var c = document.createElement('div');
+      c.className = 'pcard';
+      c.style.setProperty('--pc', p[1]);
+      if (!REDUCED) c.style.animationDelay = (i*0.12) + 's';
+      c.innerHTML = '<h5>' + p[0] + '</h5><p>' + p[2] + '</p><div class="pills">' +
+        p[3].map(function(t){ return '<span class="pill">' + t + '</span>'; }).join('') + '</div>';
+      g.appendChild(c);
+    });
+    out.appendChild(g); scrollEnd();
+  }
+  function cmdContact(){
+    print('<h4 class="sect">contact</h4>');
+    print('<span class="k">email&nbsp;&nbsp;&nbsp;</span> <span class="v">nova@reyes.sh</span>');
+    print('<span class="k">github&nbsp;</span> <span class="v">github.com/novareyes</span>');
+    print('<span class="k">mastodon</span> <span class="v">@nova@mas.to</span>');
+    print('<span class="k">pgp&nbsp;&nbsp;&nbsp;</span> <span class="v">4F2A 9C11 D3E7 6B58 0A44 · E9C2 71FA 0D5B 63CE 2A90</span>');
+    print('<span class="sys">signed mail gets a signed reply. postcards get postcards.</span>');
+  }
+  function cmdTheme(args){
+    if (!args.length){
+      print('<h4 class="sect">themes</h4>');
+      Object.keys(THEMES).forEach(function(t){
+        print('<span class="dir">' + pad(t, 11) + '</span><span class="sys">' + THEMES[t].note + '</span>');
+      });
+      print('<span class="sys">usage: <span class="greet">theme dracula</span> — try paper for daylight reading.</span>');
+      return;
+    }
+    var q = args[0].toLowerCase();
+    var t = THEME_ALIASES[q];
+    if (!t){
+      print('zsh: no such theme: ' + esc(q) + ' — try ' + Object.keys(THEMES).join(', '), 'err');
+      return;
+    }
+    setTheme(t);
+    print('theme set: <span class="ok">' + t + '</span> <span class="sys">(' + (THEMES[t] ? THEMES[t].note : 'home defaults') + ')</span>');
+  }
+  function cmdLs(){
+    print('<span class="dir">projects/</span>  <span class="dir">themes/</span>  <span class="dir">writing/</span>');
+    print('<span class="exe">about.md</span>  <span class="exe">contact.vcf</span>  <span class="exe">skills.toml</span>  <span class="exe">resume-2026.pdf</span>  <span class="v">cat_grump.png</span>  <span class="v">.zshrc</span>');
+  }
+  function cmdWhoami(){
+    print('nova — creative engineer, pixel carpenter, chaser of Lisbon light.');
+  }
+  var WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function p2(n){ return (n<10?'0':'') + n; }
+  function cmdDate(){
+    var d = new Date();
+    print(WD[d.getDay()] + ' ' + d.getDate() + ' ' + MO[d.getMonth()] + ' ' + d.getFullYear() + ' ' +
+      p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()) + ' WEST');
+  }
+  function cmdEcho(args){ print(esc(args.join(' ')) || '&nbsp;'); }
+  function cmdHistory(){
+    hist.forEach(function(h, i){
+      print('<span class="k">' + pad(i+1, 4) + '</span>  ' + esc(h));
+    });
+  }
+  function cmdClear(){ out.innerHTML = ''; }
+
+  /* ---------- matrix easter egg ---------- */
+  var MATRIX_GLYPHS = 'アカサタナハマヤラワイキシチニヒミリウクスツヌフムユルエケセテネヘメレオコソトノホモヨロヲ0123456789ABCDEF{}[]<>=+*/';
+  function cmdMatrix(){
+    if (MATRIX_LIVE) return;
+    MATRIX_LIVE = true;
+    var box = document.getElementById('matrix');
+    box.style.display = 'block';
+    var cv = document.createElement('canvas');
+    box.appendChild(cv);
+    var g = cv.getContext('2d');
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var r = term.getBoundingClientRect();
+    cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
+    g.setTransform(dpr,0,0,dpr,0,0);
+    var fs = 15, cols = Math.max(1, Math.floor(cv.width/dpr/fs));
+    var drops = [];
+    for (var i=0;i<cols;i++) drops[i] = Math.random()*-40;
+    var style = getComputedStyle(document.documentElement);
+    var green = style.getPropertyValue('--mat').trim() || '#5ef08a';
+    var bg = style.getPropertyValue('--bg').trim() || '#0d1020';
+    var rgba = 'rgba(8,10,16,.08)';
+    if (bg[0] === '#'){
+      var bb = bg.length === 4 ? [bg[1]+bg[1],bg[2]+bg[2],bg[3]+bg[3]]
+                              : [bg.slice(1,3),bg.slice(3,5),bg.slice(5,7)];
+      rgba = 'rgba(' + parseInt(bb[0],16) + ',' + parseInt(bb[1],16) + ',' + parseInt(bb[2],16) + ',.08)';
+    }
+    var alive = true, t0 = performance.now();
+    var timer = 0;
+    function stop(){
+      if (!alive) return;
+      alive = false;
+      clearTimeout(timer);
+      box.style.display = 'none';
+      box.innerHTML = '';
+      MATRIX_LIVE = false;
+      window._matrixKill = null;
+      print('wake up, nova — the matrix has you… <span class="sys">(still, the build fails: <span class="err">npm ERR! destiny already in dependencies</span>)</span>');
+      inp.focus();
+    }
+    timer = setTimeout(stop, 7000);
+    window._matrixKill = function(){ clearTimeout(timer); stop(); };
+    var keyStop = function(){ stop(); };
+    window.addEventListener('keydown', keyStop);
+    box.addEventListener('touchstart', keyStop);
+    window._matrixUnbind = function(){
+      window.removeEventListener('keydown', keyStop);
+      box.removeEventListener('touchstart', keyStop);
+    };
+    function rain(now){
+      if (!alive) return;
+      g.fillStyle = rgba;
+      g.fillRect(0, 0, cv.width/dpr, cv.height/dpr);
+      g.font = fs + 'px ui-monospace, Menlo, Consolas, monospace';
+      for (var i2=0;i2<cols;i2++){
+        var ch = MATRIX_GLYPHS[(Math.random()*MATRIX_GLYPHS.length)|0];
+        g.fillStyle = Math.random() > 0.975 ? '#ffffff' : green;
+        g.fillText(ch, i2*fs, drops[i2]*fs);
+        if (drops[i2]*fs > cv.height/dpr && Math.random() > 0.975) drops[i2] = 0;
+        drops[i2] += 1;
+      }
+      if (now - t0 < 7000) requestAnimationFrame(rain);
+    }
+    if (REDUCED){
+      g.fillStyle = 'rgba(0,0,0,.35)';
+      g.fillRect(0,0,cv.width/dpr,cv.height/dpr);
+      g.font = fs + 'px ui-monospace, Menlo, monospace';
+      g.fillStyle = green;
+      g.fillText('follow the white rabbit.', 30, 60);
+    } else {
+      requestAnimationFrame(rain);
+    }
+  }
+
+  function unknown(cmd){
+    print('zsh: command not found: ' + esc(cmd) + ' <span class="sys">— type <span class="greet">help</span>, or accept the void.</span>', 'err');
+  }
+
+  /* ---------- dispatcher ---------- */
+  function run(raw){
+    var line = raw.trim();
+    echoCmd(raw);
+    if (!line) return;
+    hist.push(line); histIdx = hist.length;
+    var parts = line.split(/\s+/);
+    var cmd = parts[0].toLowerCase(), args = parts.slice(1);
+    switch (cmd){
+      case 'help': cmdHelp(); break;
+      case 'about': cmdAbout(); break;
+      case 'skills': cmdSkills(); break;
+      case 'projects': cmdProjects(); break;
+      case 'contact': cmdContact(); break;
+      case 'theme': cmdTheme(args); break;
+      case 'themes': cmdTheme([]); break;
+      case 'matrix': cmdMatrix(); break;
+      case 'ls': cmdLs(); break;
+      case 'whoami': cmdWhoami(); break;
+      case 'date': cmdDate(); break;
+      case 'echo': cmdEcho(args); break;
+      case 'history': cmdHistory(); break;
+      case 'clear': cmdClear(); break;
+      case 'sudo':
+        print('nova is not in the sudoers file. <span class="sys">This incident will be reported to the design review.</span>');
+        break;
+      default: unknown(cmd);
+    }
+  }
+
+  /* ---------- tab completion ---------- */
+  function complete(){
+    var v = inp.value;
+    if (/^\s*$/.test(v)) return;
+    var parts = v.split(/\s+/);
+    if (parts.length === 1 || (parts.length === 2 && /\s$/.test(v) === false && parts[1] === '')){
+      var pool = CMDS.concat(['sudo']);
+      var m = pool.filter(function(c){ return c.indexOf(v.trim()) === 0 && c !== v.trim(); });
+      var trimmed = v.trim();
+      if (m.length === 1){ inp.value = m[0] + ' '; }
+      else if (m.length > 1){ echoCmd(v); print(m.join('   ')); }
+      else if (trimmed){ /* exact or no match: nothing to do */ }
+    } else if (parts[0].toLowerCase() === 'theme'){
+      var names = Object.keys(THEMES).concat(['nova']);
+      var pre = /\s$/.test(v) ? '' : parts[parts.length-1];
+      var mm = names.filter(function(c){ return c.indexOf(pre) === 0 && c !== pre; });
+      if (mm.length === 1){
+        inp.value = (/\s$/.test(v) ? v : v.slice(0, v.length - pre.length)) + mm[0] + ' ';
+      } else if (mm.length > 1){ echoCmd(v); print(mm.join('   ')); }
+    }
+    fitInput();
+  }
+
+  /* ---------- keyboard ---------- */
+  inp.addEventListener('keydown', function(e){
+    if (MATRIX_LIVE && window._matrixKill){
+      if (window._matrixUnbind) window._matrixUnbind();
+      window._matrixKill();
+    }
+    if (e.key === 'Enter'){ var v = inp.value; inp.value = ''; fitInput(); run(v); }
+    else if (e.key === 'Tab'){ e.preventDefault(); complete(); }
+    else if (e.key === 'ArrowUp'){
+      e.preventDefault();
+      if (hist.length){ histIdx = Math.max(0, histIdx-1); inp.value = hist[histIdx] || ''; fitInput(); }
+    } else if (e.key === 'ArrowDown'){
+      e.preventDefault();
+      if (hist.length){ histIdx = Math.min(hist.length, histIdx+1); inp.value = histIdx < hist.length ? hist[histIdx] : ''; fitInput(); }
+    }
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'l' && e.ctrlKey){ e.preventDefault(); cmdClear(); }
+    if (e.key === 'c' && e.ctrlKey && MATRIX_LIVE){ e.preventDefault(); }
+    else if (e.key === 'c' && e.ctrlKey){ e.preventDefault(); echoCmd(inp.value + '^C'); inp.value=''; fitInput(); }
+  });
+  /* focus the terminal when clicking anywhere in its body */
+  term.addEventListener('pointerdown', function(e){
+    if (!e.target.closest('button') && !e.target.closest('#matrix')) inp.focus();
+  });
+
+  /* ---------- dock + tabs ---------- */
+  document.querySelectorAll('.app').forEach(function(b){
+    b.addEventListener('click', function(){
+      inp.value = ''; fitInput();
+      run(b.dataset.cmd);
+      inp.focus();
+    });
+  });
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.addEventListener('click', function(){
+      document.querySelectorAll('.tab').forEach(function(o){
+        o.classList.toggle('active', o === t);
+        o.setAttribute('aria-selected', o === t ? 'true' : 'false');
+      });
+      var name = t.textContent.trim();
+      if (name.indexOf('notes.md') === 0)
+        print('<span class="sys">notes.md — one tab open, zero thoughts pending. rare.</span>');
+      else if (name.indexOf('server.log') === 0)
+        print('<span class="sys">server.log — <span class="ok">200</span> everything, quietly, since March.</span>');
+    });
+  });
+
+  /* ---------- boot ---------- */
+  var LOGO_ROWS = [
+    ['█   █','███ ','█   █','██ █'],
+    ['██  █','█ █ ','█   █','█  █'],
+    ['█ █ █','█ █ ',' █ █ ','████'],
+    ['█  ██','███ ',' ███ ','█  █']
+  ].map(function(r){ return r.join(' '); });
+
+  function boot(){
+    if (REDUCED){
+      LOGO_ROWS.forEach(function(r){ print(esc(r), 'logo-line'); });
+      finishBoot();
+      return;
+    }
+    var row = 0, ci = 0, node = null;
+    var iv = setInterval(function(){
+      if (row >= LOGO_ROWS.length){ clearInterval(iv); finishBoot(); return; }
+      if (ci === 0) node = print('', 'logo-line');
+      var line = LOGO_ROWS[row];
+      ci = Math.min(line.length, ci + 3);
+      node.textContent = line.slice(0, ci);
+      scrollEnd();
+      if (ci >= line.length){ row++; ci = 0; }
+    }, 24);
+  }
+  function finishBoot(){
+    var d = new Date();
+    print('<span class="sys">Last login: ' + WD[d.getDay()] + ' ' + MO[d.getMonth()] + ' ' + d.getDate() + ' ' +
+      p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()) + ' on ttys003</span>');
+    print('<span class="greet">welcome to nova@portfolio</span> <span class="sys">— type</span> <b class="greet">help</b> <span class="sys">for commands, or just start typing.</span>');
+    print('<span class="sys">creative engineer · Lisbon · this shell has four wheels and flies.</span>');
+    print('&nbsp;');
+    inp.focus();
+  }
+
+  fitInput();
+  boot();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Organic Wave Lab</title>
+<style>
+  :root{
+    --accent:#f0c98a;
+    --sans:'Helvetica Neue','Avenir Next','Segoe UI',system-ui,sans-serif;
+    --mono:ui-monospace,'Cascadia Mono','Courier New',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;background:#050208;}
+  body{font-family:var(--sans);color:#e8e9f0;-webkit-font-smoothing:antialiased;}
+  canvas#stage{position:fixed;inset:0;display:block;}
+  /* ---------- glass panel ---------- */
+  .panel{
+    position:fixed;top:18px;right:18px;bottom:18px;width:322px;z-index:10;
+    background:rgba(14,16,24,.42);
+    -webkit-backdrop-filter:blur(18px) saturate(1.2);backdrop-filter:blur(18px) saturate(1.2);
+    border:1px solid rgba(255,255,255,.16);border-radius:18px;
+    box-shadow:0 24px 70px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.08);
+    padding:22px 20px 20px;overflow-y:auto;
+    transition:transform .45s cubic-bezier(.2,.8,.2,1), opacity .3s;
+    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent;
+  }
+  .panel.hidden{transform:translateX(360px);opacity:0;pointer-events:none;}
+  .panel.light{background:rgba(250,246,238,.5);border-color:rgba(60,45,25,.28);color:#2c2418;
+    box-shadow:0 24px 70px rgba(90,65,30,.35);}
+  .panel h1{font-weight:200;font-size:23px;letter-spacing:.04em;margin-bottom:3px;}
+  .panel h1 em{font-style:normal;color:var(--accent);}
+  .panel .kicker{font-size:10.5px;letter-spacing:.34em;text-transform:uppercase;opacity:.55;margin-bottom:18px;}
+  .grp{margin-bottom:18px;}
+  .grp > label,.grp .head{display:block;font-variant:small-caps;letter-spacing:.22em;
+    font-size:11px;font-weight:300;opacity:.65;margin-bottom:8px;}
+  /* pills */
+  .pills{display:flex;flex-wrap:wrap;gap:7px;}
+  .pill{
+    font-family:var(--sans);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;
+    padding:7px 13px;border-radius:99px;cursor:pointer;
+    border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:inherit;
+    transition:background .2s,border-color .2s,transform .15s;
+  }
+  .panel.light .pill{border-color:rgba(60,45,25,.3);background:rgba(60,45,25,.06);}
+  .pill:hover{transform:translateY(-1px);}
+  .pill[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#181410;font-weight:500;}
+  /* switches */
+  .sw-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;
+    font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:300;}
+  .sw{position:relative;width:38px;height:20px;flex:0 0 38px;border-radius:11px;cursor:pointer;
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);transition:background .2s;}
+  .panel.light .sw{background:rgba(60,45,25,.14);border-color:rgba(60,45,25,.3);}
+  .sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+    background:#cfd3e0;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.4);}
+  .sw.on{background:rgba(240,201,138,.55);border-color:var(--accent);}
+  .sw.on::after{transform:translateX(18px);background:#fff;}
+  .subctl{overflow:hidden;max-height:0;transition:max-height .3s;opacity:.9;}
+  .subctl.open{max-height:64px;}
+  /* layer chips */
+  .chip{
+    display:flex;align-items:center;gap:9px;padding:9px 10px;margin-bottom:7px;
+    border:1px solid rgba(255,255,255,.13);border-radius:11px;cursor:pointer;
+    background:rgba(255,255,255,.045);transition:border-color .15s, background .15s;user-select:none;
+  }
+  .panel.light .chip{border-color:rgba(60,45,25,.18);background:rgba(60,45,25,.05);}
+  .chip:hover{background:rgba(255,255,255,.09);}
+  .chip.sel{border-color:var(--accent);background:rgba(240,201,138,.10);}
+  .chip.dragover{border-top:2px solid var(--accent);}
+  .chip .grip{opacity:.4;cursor:grab;font-size:13px;letter-spacing:-2px;}
+  .chip .swat{width:13px;height:13px;border-radius:4px;flex:0 0 13px;box-shadow:0 0 9px 1px currentColor;}
+  .chip .nm{font-size:13px;font-weight:300;letter-spacing:.06em;flex:1;}
+  .chip .rd{font-family:var(--mono);font-size:10px;opacity:.6;white-space:nowrap;}
+  .chip button{all:unset;cursor:pointer;opacity:.55;font-size:13px;padding:2px 3px;}
+  .chip button:hover{opacity:1;}
+  .chip.off .nm,.chip.off .rd{opacity:.35;}
+  /* sliders */
+  .ctl-row{display:grid;grid-template-columns:78px 1fr 52px;align-items:center;gap:8px;margin-bottom:9px;}
+  .ctl-row .k{font-variant:small-caps;letter-spacing:.16em;font-size:11px;opacity:.7;font-weight:300;}
+  .ctl-row .v{font-family:var(--mono);font-size:10.5px;opacity:.85;text-align:right;}
+  input[type=range]{width:100%;height:20px;accent-color:var(--accent);cursor:pointer;background:transparent;}
+  input[type=range]:disabled{opacity:.3;cursor:not-allowed;}
+  .hexrow{display:flex;align-items:center;gap:10px;}
+  input[type=color]{width:40px;height:28px;border:none;background:none;padding:0;cursor:pointer;}
+  .hex{font-family:var(--mono);font-size:12px;letter-spacing:.08em;}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .gbtn{
+    font-family:var(--sans);font-weight:300;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    padding:10px 14px;border-radius:11px;cursor:pointer;flex:1;white-space:nowrap;
+    border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.07);color:inherit;
+    transition:background .2s,transform .15s;
+  }
+  .panel.light .gbtn{border-color:rgba(60,45,25,.3);background:rgba(60,45,25,.06);}
+  .gbtn:hover{background:rgba(240,201,138,.2);transform:translateY(-1px);}
+  .gbtn.accent{border-color:var(--accent);background:rgba(240,201,138,.16);}
+  /* floating hide button */
+  #reveal{
+    position:fixed;top:22px;right:22px;z-index:11;width:44px;height:44px;border-radius:50%;
+    border:1px solid rgba(255,255,255,.3);background:rgba(14,16,24,.5);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+    color:var(--accent);font-size:18px;cursor:pointer;
+    opacity:0;pointer-events:none;transition:opacity .35s;
+  }
+  #reveal.show{opacity:1;pointer-events:auto;}
+  #hideBtn{
+    position:absolute;top:16px;right:16px;width:30px;height:30px;border-radius:50%;
+    border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:inherit;
+    font-size:14px;cursor:pointer;line-height:1;
+  }
+  .panel.light #hideBtn{border-color:rgba(60,45,25,.3);background:rgba(60,45,25,.06);}
+  /* toast */
+  #toast{
+    position:fixed;left:50%;bottom:34px;transform:translate(-50%,20px);z-index:20;
+    padding:11px 22px;border-radius:99px;font-size:13px;font-weight:300;letter-spacing:.08em;
+    background:rgba(14,16,24,.72);border:1px solid rgba(255,255,255,.25);color:#f3ead6;
+    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+    opacity:0;pointer-events:none;transition:opacity .3s, transform .3s;
+  }
+  #toast.show{opacity:1;transform:translate(-50%,0);}
+  .hint{font-size:10.5px;opacity:.45;letter-spacing:.1em;margin-top:12px;line-height:1.6;}
+  @media (max-width:720px){
+    .panel{top:auto;left:12px;right:12px;bottom:12px;width:auto;max-height:46vh;border-radius:16px;}
+    .panel.hidden{transform:translateY(120%);}
+    #reveal{top:auto;bottom:18px;right:18px;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .panel,.pill,.sw,.gbtn,.chip,#toast,#reveal{transition:none;}
+  }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<button id="reveal" title="Show panel (H)" aria-label="Show panel">☰</button>
+<div class="panel" id="panel">
+  <button id="hideBtn" title="Hide panel (H)" aria-label="Hide panel">✕</button>
+  <h1>Organic <em>Wave</em> Lab</h1>
+  <div class="kicker">Layered waveform composer</div>
+
+  <div class="grp">
+    <span class="head">Presets</span>
+    <div class="pills" id="pills"></div>
+  </div>
+
+  <div class="grp">
+    <div class="sw-row"><span>Flow</span><div class="sw on" id="swFlow" role="switch" aria-checked="true" tabindex="0"></div></div>
+    <div class="sw-row"><span>Harmony</span><div class="sw" id="swHarm" role="switch" aria-checked="false" tabindex="0"></div></div>
+    <div class="subctl" id="fundWrap">
+      <div class="ctl-row"><span class="k">Fundamental</span>
+        <input type="range" id="fund" min="0.3" max="3" step="0.01" value="1">
+        <span class="v" id="fundV">1.00×</span></div>
+    </div>
+  </div>
+
+  <div class="grp">
+    <span class="head">Layers <span style="opacity:.6" id="layerCount"></span></span>
+    <div id="layers"></div>
+    <div class="btn-row" style="margin-top:4px;">
+      <button class="gbtn" id="addLayer">＋ Add layer</button>
+    </div>
+  </div>
+
+  <div class="grp" id="selGrp" style="display:none;">
+    <span class="head" id="selHead">Selected layer</span>
+    <div class="ctl-row"><span class="k">Amplitude</span><input type="range" id="cAmp" min="6" max="190" step="1"><span class="v" id="cAmpV"></span></div>
+    <div class="ctl-row"><span class="k">Frequency</span><input type="range" id="cFreq" min="0.2" max="6" step="0.01"><span class="v" id="cFreqV"></span></div>
+    <div class="ctl-row"><span class="k">Phase</span><input type="range" id="cPhase" min="0" max="2" step="0.01"><span class="v" id="cPhaseV"></span></div>
+    <div class="ctl-row"><span class="k">Speed</span><input type="range" id="cSpeed" min="0" max="1.5" step="0.01"><span class="v" id="cSpeedV"></span></div>
+    <div class="ctl-row"><span class="k">Baseline</span><input type="range" id="cBase" min="12" max="100" step="0.5"><span class="v" id="cBaseV"></span></div>
+    <div class="hexrow">
+      <input type="color" id="cCol" aria-label="Layer colour">
+      <span class="hex" id="cHex"></span>
+    </div>
+  </div>
+
+  <div class="grp btn-row">
+    <button class="gbtn" id="surprise">✦ Surprise me</button>
+    <button class="gbtn accent" id="export">Export SVG</button>
+  </div>
+  <div class="hint">Drag the canvas to bend the water · Space pauses flow · H hides this panel · Alt+↑↓ reorders a layer</div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script>
+'use strict';
+/* =================== organic wave lab =================== */
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
+const lerp=(a,b,t)=>a+(b-a)*t;
+function hexRgb(h){ const n=parseInt(h.slice(1),16); return [n>>16&255,n>>8&255,n&255]; }
+function hexA(h,a){ const [r,g,b]=hexRgb(h); return `rgba(${r},${g},${b},${a})`; }
+function darkenHex(h,f){ const [r,g,b]=hexRgb(h);
+  return '#'+[r,g,b].map(v=>Math.round(v*f).toString(16).padStart(2,'0')).join(''); }
+function hslHex(h,s,l){
+  const a=s*(1-Math.abs(2*l-1));
+  const f=n=>{ const k=(n+h/30)%12;
+    return Math.round(255*(l - a*Math.max(-1, Math.min(k-3, 9-k, 1)))); };
+  return '#'+[f(0),f(8),f(4)].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+function rand(a,b){ return a+Math.random()*(b-a); }
+
+const NAMES = ['Crest','Swell','Drift','Undertow','Haze','Bed'];
+const RATIOS = [1, 3/2, 2, 5/4, 5/3, 5/2];          // just-intonation
+
+const PRESETS = {
+  dunes:{ label:'Dunes',  bg:['#f2e4cf','#c9a27a'], blend:'normal',  grad:'shade', light:true,
+    colors:['#e9cfa8','#d4a86f','#b7804a','#8a5a33','#5b3a22'] },
+  aurora:{ label:'Aurora', bg:['#03050f','#0b1b2b'], blend:'screen',  grad:'fade',  light:false,
+    colors:['#36f2b5','#3ac8ff','#a86cff','#ff6ad5','#1ef0d8'] },
+  tide:{ label:'Tide',     bg:['#dfeaf1','#7fa4bd'], blend:'multiply', grad:'shade', light:true,
+    colors:['#bcd8e6','#8fb2c9','#5f87a6','#35607e','#123a52'] },
+  silk:{ label:'Silk',     bg:['#1a1520','#3a2740'], blend:'screen',  grad:'fade',  light:false,
+    colors:['#f7c9d8','#c9b8f5','#9fd6f0','#f6e3b4','#e9a5c9'] },
+  nebula:{ label:'Nebula', bg:['#050208','#150a26'], blend:'lighter', grad:'fade',  light:false,
+    colors:['#5a1a8c','#c026a6','#ff4f7a','#3b3cff','#ffb26a','#22e0ff'] }
+};
+
+let preset = 'dunes';
+let layers = [];
+let selected = 0;
+let harmony = false;
+let fundamental = 1;
+let flow = !reduced;
+let bumps = [];            // {x,y,s,t}
+let simT = 0, lastFrame = 0;
+
+function makeLayers(pk){
+  const p = PRESETS[pk], out = [];
+  const n = p.colors.length;
+  for (let i=0;i<n;i++){
+    const t = i/(n-1);
+    out.push({
+      name: NAMES[i], color: p.colors[i],
+      amp:  lerp(95, 55, (i%3)/2) * rand(.85,1.15),
+      freq: lerp(0.5, 2.4, t) * rand(.9,1.1),
+      phase: rand(0,2),
+      speed: lerp(0.30, 0.06, t) * rand(.85,1.15),
+      baseline: lerp(38, 88, t) + rand(-2,2),
+      visible: true
+    });
+  }
+  return out;
+}
+
+/* =================== canvas =================== */
+const stage = document.getElementById('stage');
+const ctx = stage.getContext('2d');
+let DPR=1, W=0, H=0;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  stage.width = Math.round(W*DPR); stage.height = Math.round(H*DPR);
+  stage.style.width = W+'px'; stage.style.height = H+'px';
+  render();
+}
+addEventListener('resize', resize);
+
+/* wave surface: fundamental + 2.17× partial @38% + 4.3× partial @16% */
+function layerFreq(l, idx){ return harmony ? fundamental*RATIOS[idx%RATIOS.length] : l.freq; }
+function surfaceY(l, idx, x, t){
+  const f = layerFreq(l, idx);
+  const th = (x/W)*f*Math.PI*2 + t*l.speed*Math.PI*2 + l.phase*Math.PI;
+  const amp = l.amp * (H/800);
+  const base = l.baseline/100 * H;
+  let y = base - amp*(Math.sin(th) + 0.38*Math.sin(2.17*th + 1.7) + 0.16*Math.sin(4.3*th + 4.1));
+  for (const b of bumps){
+    const age = t - b.t;
+    if (age<0 || age>1.1) continue;
+    const decay = 1 - clamp(age/1.1,0,1);
+    const aff = Math.exp(-((base - b.y)**2)/(2*160*160));     // σy 160 px
+    y -= b.s * Math.exp(-((x - b.x)**2)/(2*110*110)) * aff * decay;   // σx 110 px
+  }
+  return y;
+}
+/* ~220 samples with quadratic mid-point smoothing */
+const SAMPLES = 220;
+function sampleLayer(l, idx, t){
+  const pts = [];
+  for (let i=0;i<=SAMPLES;i++){ const u=i/SAMPLES; pts.push([u*W, surfaceY(l, idx, u*W, t)]); }
+  return pts;
+}
+function pathThrough(pts){
+  let d = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  for (let i=1;i<pts.length-1;i++){
+    const mx=(pts[i][0]+pts[i+1][0])/2, my=(pts[i][1]+pts[i+1][1])/2;
+    d += ` Q ${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)} ${mx.toFixed(1)} ${my.toFixed(1)}`;
+  }
+  return d;
+}
+
+/* =================== render =================== */
+function render(){
+  const P = PRESETS[preset];
+  const t = simT;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,P.bg[0]); bg.addColorStop(1,P.bg[1]);
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+  /* soft radial light upper-left + faint vignette */
+  const light = ctx.createRadialGradient(W*0.16,H*0.10,0,W*0.16,H*0.10,Math.max(W,H)*0.75);
+  light.addColorStop(0, P.light? 'rgba(255,255,255,0.38)':'rgba(255,255,255,0.10)');
+  light.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=light; ctx.fillRect(0,0,W,H);
+  const vg = ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.42,W/2,H/2,Math.max(W,H)*0.78);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1, P.light?'rgba(60,40,10,0.14)':'rgba(0,0,0,0.26)');
+  ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+
+  ctx.globalCompositeOperation = P.blend;
+  layers.forEach((l, idx)=>{
+    if (!l.visible) return;
+    const pts = sampleLayer(l, idx, t);
+    const minY = pts.reduce((a,p)=>Math.min(a,p[1]),Infinity);
+    /* filled path closed to the bottom edge */
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i=1;i<pts.length-1;i++){
+      const mx=(pts[i][0]+pts[i+1][0])/2, my=(pts[i][1]+pts[i+1][1])/2;
+      ctx.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
+    }
+    ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath();
+    const g = ctx.createLinearGradient(0, minY-8, 0, H);
+    if (P.grad==='fade'){
+      g.addColorStop(0, l.color);
+      g.addColorStop(0.55, hexA(l.color,.55));
+      g.addColorStop(1, hexA(l.color,0));
+    } else {
+      g.addColorStop(0, l.color);
+      g.addColorStop(1, darkenHex(l.color, 0.55));
+    }
+    ctx.fillStyle=g; ctx.fill();
+    /* hairline crest highlight */
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i=1;i<pts.length-1;i++){
+      const mx=(pts[i][0]+pts[i+1][0])/2, my=(pts[i][1]+pts[i+1][1])/2;
+      ctx.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
+    }
+    ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=1; ctx.stroke();
+  });
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function frame(ts){
+  requestAnimationFrame(frame);
+  const dt = lastFrame ? Math.min(0.05,(ts-lastFrame)/1000) : 0.016;
+  lastFrame = ts;
+  if (flow) simT += dt;
+  bumps = bumps.filter(b => (simT - b.t) < 1.2);
+  render();
+}
+
+/* =================== pointer bending =================== */
+let bending = false, lastPY = 0;
+stage.addEventListener('pointerdown', e=>{ bending=true; lastPY=e.clientY; stage.setPointerCapture(e.pointerId); });
+stage.addEventListener('pointermove', e=>{
+  if (!bending) return;
+  const dy = e.clientY - lastPY; lastPY = e.clientY;
+  if (Math.abs(dy) < 1) return;
+  bumps.push({ x:e.clientX, y:e.clientY, s: clamp(dy*1.6, -70, 70), t: simT });
+  if (bumps.length>140) bumps.splice(0, bumps.length-140);
+  if (!flow) render();
+});
+addEventListener('pointerup', ()=> bending=false);
+
+/* =================== panel UI =================== */
+const panel = document.getElementById('panel');
+const $ = id=>document.getElementById(id);
+function toast(msg){
+  const tt=$('toast'); tt.textContent=msg; tt.classList.add('show');
+  clearTimeout(toast._h); toast._h=setTimeout(()=>tt.classList.remove('show'),2200);
+}
+function buildPills(){
+  const host=$('pills'); host.innerHTML='';
+  for (const [k,p] of Object.entries(PRESETS)){
+    const b=document.createElement('button');
+    b.className='pill'; b.textContent=p.label;
+    b.setAttribute('aria-pressed', String(k===preset));
+    b.addEventListener('click',()=>applyPreset(k));
+    host.appendChild(b);
+  }
+}
+function applyPreset(k){
+  preset=k; layers=makeLayers(k); selected=Math.min(selected,layers.length-1);
+  panel.classList.toggle('light', PRESETS[k].light);
+  buildPills(); buildLayers(); syncControls(); render();
+  toast(PRESETS[k].label+' loaded. Drag to bend it.');
+}
+function buildLayers(){
+  const host=$('layers'); host.innerHTML='';
+  $('layerCount').textContent = layers.length+' / 6';
+  layers.forEach((l,i)=>{
+    const chip=document.createElement('div');
+    chip.className='chip'+(i===selected?' sel':'')+(l.visible?'':' off');
+    chip.draggable=true; chip.dataset.i=i;
+    chip.innerHTML =
+      `<span class="grip">⠿</span><span class="swat" style="background:${l.color};color:${l.color}"></span>`+
+      `<span class="nm">${l.name}</span>`+
+      `<span class="rd">ƒ ${layerFreq(l,i).toFixed(2)} · a ${Math.round(l.amp)}</span>`+
+      `<button class="vis" title="Toggle visibility">${l.visible?'👁':'—'}</button>`+
+      `<button class="del" title="Delete layer">✕</button>`;
+    chip.addEventListener('click', e=>{
+      if (e.target.closest('button')) return;
+      selected=i; buildLayers(); syncControls();
+    });
+    chip.querySelector('.vis').addEventListener('click', ()=>{
+      l.visible=!l.visible; buildLayers(); render();
+    });
+    chip.querySelector('.del').addEventListener('click', ()=>{
+      layers.splice(i,1);
+      selected = clamp(selected, 0, Math.max(0,layers.length-1));
+      buildLayers(); syncControls(); render();
+      toast('Layer removed. The sea forgives.');
+    });
+    chip.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain', String(i)); });
+    chip.addEventListener('dragover', e=>{ e.preventDefault(); chip.classList.add('dragover'); });
+    chip.addEventListener('dragleave', ()=> chip.classList.remove('dragover'));
+    chip.addEventListener('drop', e=>{
+      e.preventDefault(); chip.classList.remove('dragover');
+      const from=+e.dataTransfer.getData('text/plain'), to=i;
+      if (!Number.isFinite(from) || from===to) return;
+      const [m]=layers.splice(from,1); layers.splice(to,0,m);
+      if (selected===from) selected=to;
+      else if (from<selected && to>=selected) selected--;
+      else if (from>selected && to<=selected) selected++;
+      buildLayers(); syncControls(); render();
+    });
+    host.appendChild(chip);
+  });
+  $('selGrp').style.display = layers.length? '' : 'none';
+}
+function syncControls(){
+  const l = layers[selected];
+  if (!l){ $('selGrp').style.display='none'; return; }
+  $('selGrp').style.display='';
+  $('selHead').textContent = 'Layer — '+l.name;
+  $('cAmp').value=l.amp;      $('cAmpV').textContent=Math.round(l.amp)+'px';
+  $('cFreq').value=l.freq;    $('cFreqV').textContent=(harmony? layerFreq(l,selected) : l.freq).toFixed(2);
+  $('cFreq').disabled=harmony;
+  $('cPhase').value=l.phase;  $('cPhaseV').textContent=l.phase.toFixed(2)+'π';
+  $('cSpeed').value=l.speed;  $('cSpeedV').textContent=l.speed.toFixed(2)+'×';
+  $('cBase').value=l.baseline;$('cBaseV').textContent=l.baseline.toFixed(0)+'%';
+  $('cCol').value=l.color;    $('cHex').textContent=l.color.toUpperCase();
+}
+$('cAmp').addEventListener('input', e=>{ layers[selected].amp=+e.target.value; $('cAmpV').textContent=Math.round(e.target.value)+'px'; buildLayers(); render(); });
+$('cFreq').addEventListener('input', e=>{ layers[selected].freq=+e.target.value; $('cFreqV').textContent=(+e.target.value).toFixed(2); buildLayers(); render(); });
+$('cPhase').addEventListener('input', e=>{ layers[selected].phase=+e.target.value; $('cPhaseV').textContent=(+e.target.value).toFixed(2)+'π'; render(); });
+$('cSpeed').addEventListener('input', e=>{ layers[selected].speed=+e.target.value; $('cSpeedV').textContent=(+e.target.value).toFixed(2)+'×'; render(); });
+$('cBase').addEventListener('input', e=>{ layers[selected].baseline=+e.target.value; $('cBaseV').textContent=(+e.target.value).toFixed(0)+'%'; render(); });
+$('cCol').addEventListener('input', e=>{
+  layers[selected].color=e.target.value; $('cHex').textContent=e.target.value.toUpperCase();
+  buildLayers(); render();
+});
+
+$('addLayer').addEventListener('click', ()=>{
+  if (layers.length>=6){ toast('Six layers is the whole orchestra. Somebody has to go.'); return; }
+  const base = PRESETS[preset].colors[Math.floor(rand(0,PRESETS[preset].colors.length))];
+  const i = layers.length;
+  layers.push({ name:NAMES[i]||('Extra '+i), color:base,
+    amp:rand(40,140), freq:rand(0.4,2.6), phase:rand(0,2), speed:rand(0.05,0.35),
+    baseline:clamp(46+i*8+rand(-4,4),16,98), visible:true });
+  selected=i; buildLayers(); syncControls(); render();
+});
+$('surprise').addEventListener('click', ()=>{
+  const hue = rand(0,360);
+  layers.forEach((l,i)=>{
+    l.color = hslHex((hue + i*rand(28,60))%360, rand(.45,.85), rand(.42,.62));
+    l.amp=rand(30,150); l.freq=rand(.4,2.6); l.phase=rand(0,2);
+    l.speed=rand(.04,.4); l.baseline=clamp(38+i*(52/layers.length)+rand(-4,4),14,98);
+    l.visible=true;
+  });
+  buildLayers(); syncControls(); render();
+  toast('Surprise, arranged.');
+});
+
+/* toggles */
+function setFlow(v){
+  flow=v; $('swFlow').classList.toggle('on',v); $('swFlow').setAttribute('aria-checked',String(v));
+}
+$('swFlow').addEventListener('click', ()=>{ setFlow(!flow); toast(flow?'Flowing.':'Held.'); });
+function setHarm(v){
+  harmony=v; $('swHarm').classList.toggle('on',v); $('swHarm').setAttribute('aria-checked',String(v));
+  $('fundWrap').classList.toggle('open',v);
+  buildLayers(); syncControls(); render();
+  toast(v?'Harmonised — frequencies locked to the fundamental.':'Free frequencies.');
+}
+$('swHarm').addEventListener('click', ()=> setHarm(!harmony));
+$('fund').addEventListener('input', e=>{
+  fundamental=+e.target.value; $('fundV').textContent=fundamental.toFixed(2)+'×';
+  buildLayers(); syncControls(); render();
+});
+[$('swFlow'),$('swHarm')].forEach(sw=>sw.addEventListener('keydown',e=>{
+  if(e.key===' '||e.key==='Enter'){ e.preventDefault(); sw.click(); }
+}));
+
+/* hide panel */
+function setPanel(show){
+  panel.classList.toggle('hidden', !show);
+  $('reveal').classList.toggle('show', !show);
+}
+$('hideBtn').addEventListener('click', ()=>setPanel(false));
+$('reveal').addEventListener('click', ()=>setPanel(true));
+addEventListener('keydown', e=>{
+  const tag=(e.target.tagName||'').toLowerCase();
+  if (tag==='input'||tag==='select'||tag==='textarea') return;
+  if (e.key==='h'||e.key==='H'){ setPanel(panel.classList.contains('hidden')); }
+  else if (e.key===' '){ e.preventDefault(); setFlow(!flow); toast(flow?'Flowing.':'Held.'); }
+  else if (e.altKey && (e.key==='ArrowUp'||e.key==='ArrowDown')){
+    e.preventDefault();
+    const i=selected, j = e.key==='ArrowUp'? i-1 : i+1;
+    if (j<0||j>=layers.length) return;
+    [layers[i],layers[j]]=[layers[j],layers[i]];
+    selected=j; buildLayers(); render();
+  }
+});
+
+/* =================== SVG export =================== */
+$('export').addEventListener('click', exportSVG);
+function exportSVG(){
+  const P = PRESETS[preset], t = simT;
+  const defs = [], body = [];
+  defs.push(`<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P.bg[0]}"/><stop offset="1" stop-color="${P.bg[1]}"/></linearGradient>`);
+  defs.push(`<radialGradient id="light" cx="0.16" cy="0.10" r="0.9"><stop offset="0" stop-color="#ffffff" stop-opacity="${P.light?0.38:0.10}"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>`);
+  defs.push(`<radialGradient id="vig" cx="0.5" cy="0.5" r="0.75"><stop offset="0.55" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="${P.light?0.14:0.26}"/></radialGradient>`);
+  body.push(`<rect width="${W}" height="${H}" fill="url(#bg)"/>`);
+  body.push(`<rect width="${W}" height="${H}" fill="url(#light)"/>`);
+  body.push(`<rect width="${W}" height="${H}" fill="url(#vig)"/>`);
+  layers.forEach((l,idx)=>{
+    if (!l.visible) return;
+    const pts = sampleLayer(l, idx, t);
+    const minY = pts.reduce((a,p)=>Math.min(a,p[1]),Infinity);
+    const surface = pathThrough(pts);
+    const dark = darkenHex(l.color, 0.55);
+    if (P.grad==='fade')
+      defs.push(`<linearGradient id="lg${idx}" gradientUnits="userSpaceOnUse" x1="0" y1="${(minY-8).toFixed(1)}" x2="0" y2="${H}"><stop offset="0" stop-color="${l.color}"/><stop offset="0.55" stop-color="${l.color}" stop-opacity="0.55"/><stop offset="1" stop-color="${l.color}" stop-opacity="0"/></linearGradient>`);
+    else
+      defs.push(`<linearGradient id="lg${idx}" gradientUnits="userSpaceOnUse" x1="0" y1="${(minY-8).toFixed(1)}" x2="0" y2="${H}"><stop offset="0" stop-color="${l.color}"/><stop offset="1" stop-color="${dark}"/></linearGradient>`);
+    body.push(`<path d="${surface} L ${W} ${H} L 0 ${H} Z" fill="url(#lg${idx})" style="mix-blend-mode:${P.blend}"/>`);
+    body.push(`<path d="${surface}" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1" style="mix-blend-mode:${P.blend}"/>`);
+  });
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><defs>${defs.join('')}</defs>${body.join('')}</svg>`;
+  const url = URL.createObjectURL(new Blob([svg], {type:'image/svg+xml'}));
+  const a = document.createElement('a');
+  a.href=url; a.download=`organic-waves-${preset}.svg`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  toast('Frame exported as SVG.');
+}
+
+/* =================== boot ================= */
+buildPills();
+panel.classList.toggle('light', PRESETS[preset].light);
+layers = makeLayers(preset);
+buildLayers(); syncControls();
+resize();
+if (reduced){ setFlow(false); toast('Flow frozen for reduced motion — press Space to start.'); }
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

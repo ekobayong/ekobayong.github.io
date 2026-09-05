@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Living Landscape — Animated Topographic Contours, Sheet 040</title>
+<style>
+  :root{
+    --serif: Georgia,'Iowan Old Style',Palatino,ui-serif,serif;
+    --mono: ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans: ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  body[data-p="paper"]{ --bg:#f3eee3; --txt:#2b2a28; --mut:rgba(43,42,40,0.62);
+    --glass:rgba(243,238,227,0.72); --edge:rgba(43,42,40,0.16); --accent:#b5482b;
+    --btn-bg:rgba(43,42,40,0.06); --blend:multiply; --grat:rgba(43,42,40,0.055); }
+  body[data-p="terrain"]{ --bg:#cdbf9d; --txt:#2e2318; --mut:rgba(46,35,24,0.62);
+    --glass:rgba(240,235,222,0.66); --edge:rgba(46,35,24,0.18); --accent:#8a4b2a;
+    --btn-bg:rgba(46,35,24,0.08); --blend:multiply; --grat:rgba(46,35,24,0.05); }
+  body[data-p="night"]{ --bg:#0a1a33; --txt:#d9ecff; --mut:rgba(217,236,255,0.58);
+    --glass:rgba(10,26,51,0.66); --edge:rgba(127,209,255,0.22); --accent:#7fd1ff;
+    --btn-bg:rgba(127,209,255,0.08); --blend:screen; --grat:rgba(127,209,255,0.05); }
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;overflow:hidden;}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);
+    transition:background .4s ease,color .4s ease;}
+
+  #map{position:fixed;inset:0;width:100%;height:100%;display:block;}
+  .graticule{
+    position:fixed;inset:0;pointer-events:none;z-index:2;
+    mix-blend-mode:var(--blend);
+    background-image:
+      linear-gradient(to right, var(--grat) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grat) 1px, transparent 1px);
+    background-size:120px 120px;
+  }
+
+  .card{
+    position:fixed; z-index:5;
+    background:var(--glass);
+    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid var(--edge); border-radius:6px;
+    box-shadow:0 10px 34px rgba(0,0,0,0.16);
+    transition:background .4s ease,border-color .4s ease;
+  }
+  .sc{font-variant:small-caps;letter-spacing:0.16em;}
+  .tnum{font-variant-numeric:tabular-nums;}
+
+  /* title card */
+  .title{ top:20px; left:20px; max-width:340px; padding:8px; }
+  .neatline{ border:1px solid var(--edge); padding:14px 16px 15px; }
+  .title .hdr{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:0.2em;text-transform:uppercase;
+    color:var(--mut);margin-bottom:8px;
+  }
+  .title h1{font-family:var(--serif);font-weight:400;font-size:25px;line-height:1.1;margin-bottom:8px;}
+  .title h1 em{font-style:italic;color:var(--accent);}
+  .title .desc{font-size:11.5px;line-height:1.55;color:var(--mut);max-width:32ch;}
+
+  /* palette buttons */
+  .palettes{ top:20px; right:20px; display:flex; gap:8px; z-index:6; position:fixed; }
+  .pal{
+    font-family:var(--mono);font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
+    color:var(--txt);background:var(--glass);border:1px solid var(--edge);border-radius:6px;
+    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:7px;
+    transition:transform .15s ease, border-color .15s ease;
+  }
+  .pal:hover{transform:translateY(-1px);}
+  .pal .sw{width:9px;height:9px;border-radius:2px;border:1px solid rgba(0,0,0,0.25);}
+  .pal[data-k="paper"] .sw{background:#f3eee3;}
+  .pal[data-k="terrain"] .sw{background:linear-gradient(135deg,#7a9652,#c8b27a);}
+  .pal[data-k="night"] .sw{background:#0a1a33;}
+  .pal.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);}
+  .pal kbd{
+    font-family:var(--mono);font-size:8px;color:var(--mut);background:var(--btn-bg);
+    border-radius:3px;padding:1px 4px;
+  }
+
+  /* readout card */
+  .readout{ left:20px; bottom:20px; padding:14px 18px 16px; width:300px; }
+  .ro-grid{display:flex;gap:20px;margin:6px 0 12px;}
+  .ro{min-width:0;}
+  .ro .lbl{font-size:9.5px;letter-spacing:0.2em;color:var(--mut);margin-bottom:1px;}
+  .ro .val{
+    font-family:var(--serif);font-size:26px;line-height:1.05;
+    font-variant-numeric:tabular-nums;
+  }
+  .ro .unit{font-size:11px;color:var(--mut);font-family:var(--sans);}
+  .divider{height:1px;background:var(--edge);margin:10px 0;}
+
+  .legend{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
+  .lg-row{display:flex;align-items:center;gap:9px;font-size:10px;color:var(--mut);}
+  .lg-line{width:34px;flex:none;}
+  .lg-minor{border-top:1px solid var(--txt);opacity:0.45;}
+  .lg-index{border-top:2.5px solid var(--txt);opacity:0.92;}
+
+  .controls{display:flex;align-items:center;gap:10px;}
+  .controls .lbl{font-size:9.5px;letter-spacing:0.2em;color:var(--mut);}
+  input[type="range"]{
+    -webkit-appearance:none;appearance:none;flex:1;height:3px;border-radius:2px;
+    background:linear-gradient(90deg, var(--mut), var(--accent));cursor:pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--accent);
+    border:2px solid var(--bg);box-shadow:0 1px 4px rgba(0,0,0,0.35);
+    transition:transform .15s cubic-bezier(.34,1.6,.5,1);
+  }
+  input[type="range"]:active::-webkit-slider-thumb{transform:scale(1.35);}
+  input[type="range"]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);}
+  .pause{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;
+    color:var(--txt);background:var(--btn-bg);border:1px solid var(--edge);border-radius:999px;
+    padding:6px 12px;cursor:pointer;white-space:nowrap;transition:border-color .15s ease;
+  }
+  .pause:hover{border-color:var(--accent);}
+
+  /* scale bar */
+  .scalebar{ margin-top:12px; }
+  .sb-bar{display:flex;height:7px;width:240px;border:1px solid var(--txt);}
+  .sb-bar i{flex:1;}
+  .sb-bar i:nth-child(odd){background:var(--txt);}
+  .sb-lbls{display:flex;justify-content:space-between;width:240px;font-family:var(--mono);font-size:8.5px;color:var(--mut);margin-top:2px;}
+
+  /* compass */
+  .compass{ right:26px; bottom:26px; width:118px; height:118px; background:none;border:none;box-shadow:none; }
+  .compass svg{width:100%;height:100%;display:block;animation:sway 12s ease-in-out infinite alternate;}
+  @keyframes sway{ from{ transform:rotate(-1.2deg);} to{ transform:rotate(1.2deg);} }
+  .c-ink{fill:var(--txt);}
+  .c-ink-soft{fill:var(--txt);opacity:0.35;}
+  .c-stroke{stroke:var(--txt);opacity:0.7;}
+  .c-needle{fill:var(--accent);}
+  .c-letter{fill:var(--txt);font-family:var(--serif);font-variant:small-caps;font-size:12px;}
+
+  button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+  @media (max-width:720px){
+    .title .desc{display:none;}
+    .compass{display:none;}
+    .palettes{ top:auto; bottom:12px; left:12px; right:12px; justify-content:center; }
+    .readout{ bottom:64px; width:calc(100vw - 24px); left:12px; }
+    .sb-bar,.sb-lbls{width:200px;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .compass svg{animation:none;}
+    .pal,input[type="range"]::-webkit-slider-thumb{transition:none;}
+  }
+</style>
+</head>
+<body data-p="paper">
+<canvas id="map" aria-label="Animated topographic contour map"></canvas>
+<div class="graticule"></div>
+
+<div class="card title">
+  <div class="neatline">
+    <div class="hdr">Sheet 040 · Series L-7 / 1 : 25 000</div>
+    <h1>The <em>Living</em> Landscape</h1>
+    <p class="desc">Contours are drawn at a 40 m interval above the 180 m datum — each hairline one step of climb. Every fifth line is an index contour at 200 m, drawn heavier and broken for its elevation.</p>
+  </div>
+</div>
+
+<div class="palettes" role="group" aria-label="Map palettes">
+  <button class="pal on" data-k="paper"><span class="sw"></span>Paper &amp; Ink<kbd>1</kbd></button>
+  <button class="pal" data-k="terrain"><span class="sw"></span>Terrain<kbd>2</kbd></button>
+  <button class="pal" data-k="night"><span class="sw"></span>Night<kbd>3</kbd></button>
+</div>
+
+<div class="card readout">
+  <div class="sc lbl" style="letter-spacing:0.22em;">Spot reading</div>
+  <div class="ro-grid">
+    <div class="ro"><div class="lbl sc">Elevation</div><div class="val tnum"><span id="roElev">—</span> <span class="unit">m</span></div></div>
+    <div class="ro"><div class="lbl sc">Slope</div><div class="val tnum"><span id="roSlope">—</span><span class="unit">°</span></div></div>
+    <div class="ro"><div class="lbl sc">Aspect</div><div class="val" id="roAspect">—</div></div>
+  </div>
+  <div class="divider"></div>
+  <div class="legend">
+    <div class="lg-row"><span class="lg-line lg-minor"></span><span class="sc">40 m contour</span></div>
+    <div class="lg-row"><span class="lg-line lg-index"></span><span class="sc">200 m index contour</span></div>
+  </div>
+  <div class="divider"></div>
+  <div class="controls">
+    <span class="lbl sc">Flow</span>
+    <input type="range" id="flow" min="0" max="100" value="35" aria-label="Flow rate">
+    <button class="pause" id="pauseBtn" aria-pressed="false">❚❚ Pause</button>
+  </div>
+  <div class="scalebar">
+    <div class="sb-bar" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="sb-lbls"><span>0</span><span>1 km</span></div>
+  </div>
+</div>
+
+<div class="card compass" aria-label="Compass rose">
+  <svg viewBox="0 0 100 100" id="rose">
+    <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" class="c-stroke" stroke-width="1"/>
+    <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" class="c-stroke" stroke-width="0.6" opacity="0.4"/>
+    <g id="roseTicks" class="c-stroke" stroke-width="1"></g>
+    <!-- smaller rotated four-point star behind -->
+    <g transform="rotate(45 50 50)">
+      <polygon points="50,16 53.5,50 50,84 46.5,50" class="c-ink-soft"/>
+      <polygon points="16,50 50,46.5 84,50 50,53.5" class="c-ink-soft"/>
+    </g>
+    <!-- main four-point star, alternating dark/light halves -->
+    <polygon points="50,10 50,50 42,50" class="c-ink"/>
+    <polygon points="50,10 50,50 58,50" class="c-ink-soft"/>
+    <polygon points="90,50 50,50 50,42" class="c-ink"/>
+    <polygon points="90,50 50,50 50,58" class="c-ink-soft"/>
+    <polygon points="50,90 50,50 58,50" class="c-ink"/>
+    <polygon points="50,90 50,50 42,50" class="c-ink-soft"/>
+    <polygon points="10,50 50,50 50,58" class="c-ink"/>
+    <polygon points="10,50 50,50 50,42" class="c-ink-soft"/>
+    <!-- rust north needle -->
+    <polygon points="50,8 46.8,26 50,24" class="c-needle"/>
+    <polygon points="50,8 53.2,26 50,24" class="c-needle" opacity="0.55"/>
+    <circle cx="50" cy="50" r="2.6" class="c-ink"/>
+    <text x="50" y="6" text-anchor="middle" class="c-letter">N</text>
+    <text x="50" y="99" text-anchor="middle" class="c-letter">S</text>
+    <text x="97" y="53" text-anchor="middle" class="c-letter">E</text>
+    <text x="3" y="53" text-anchor="middle" class="c-letter">W</text>
+  </svg>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const cv = document.getElementById("map");
+  const ctx = cv.getContext("2d");
+
+  // ---------- palettes ----------
+  const PAL = {
+    paper: {
+      labelBg: "#f3eee3",
+      minor: "rgba(43,42,40,0.42)", index: "rgba(43,42,40,0.92)", label: "#2b2a28",
+      accent: "#b5482b", accentRGB: [181,72,43],
+      base: (h, s) => { // gentle sepia lightness variation
+        const t = 0.90 + 0.16 * s - 0.05;
+        return [243 * t + 2, 238 * t - 1, 227 * t - 4];
+      },
+      spot: "rgba(255,250,238,0.55)"
+    },
+    terrain: {
+      labelBg: "#ded2b4",
+      minor: "rgba(58,42,26,0.45)", index: "rgba(46,32,20,0.92)", label: "#2e2014",
+      accent: "#8a4b2a", accentRGB: [138,75,42],
+      base: (h, s) => {
+        const stops = [[0,[62,110,74]],[0.28,[122,150,82]],[0.48,[200,178,122]],
+                       [0.66,[150,112,78]],[0.80,[120,104,92]],[0.93,[242,239,230]]];
+        let i = 0; while (i < stops.length - 2 && h > stops[i+1][0]) i++;
+        const [p0,c0] = stops[i], [p1,c1] = stops[i+1];
+        const u = Math.min(1, Math.max(0, (h - p0) / (p1 - p0)));
+        const m = 0.62 + 0.5 * s;
+        return [(c0[0]+(c1[0]-c0[0])*u)*m, (c0[1]+(c1[1]-c0[1])*u)*m, (c0[2]+(c1[2]-c0[2])*u)*m];
+      },
+      spot: "rgba(255,252,240,0.42)"
+    },
+    night: {
+      labelBg: "#0a1a33",
+      minor: "rgba(127,209,255,0.42)", index: "rgba(217,236,255,0.95)", label: "#d9ecff",
+      accent: "#7fd1ff", accentRGB: [127,209,255],
+      base: (h, s) => {
+        const b = 0.55 + 0.75 * s;
+        return [10 * b + 14 * s, 26 * b + 26 * s, 51 * b + 52 * s];
+      },
+      spot: "rgba(127,209,255,0.30)"
+    }
+  };
+  let pal = "paper";
+  function applyPal(){
+    document.body.dataset.p = pal;
+    document.querySelectorAll(".pal").forEach(b => b.classList.toggle("on", b.dataset.k === pal));
+  }
+
+  // ---------- noise ----------
+  const perm = new Uint8Array(512);
+  (() => {
+    const p = Array.from({length:256}, (_,i)=>i);
+    let s = 987654321;
+    const r = () => ((s = (s*1664525+1013904223)>>>0) / 4294967296);
+    for (let i=255;i>0;i--){ const j=(r()*(i+1))|0; const t=p[i]; p[i]=p[j]; p[j]=t; }
+    for (let i=0;i<512;i++) perm[i]=p[i&255];
+  })();
+  const GX=[1,-1,1,-1,1,-1,1,-1,0,0,0,0], GY=[1,1,-1,-1,0,0,0,0,1,1,-1,-1], GZ=[0,0,0,0,1,1,-1,-1,1,-1,-1,1];
+  const fade = t => t*t*t*(t*(t*6-15)+10);
+  function perlin3(x,y,z){
+    const X=Math.floor(x)&255, Y=Math.floor(y)&255, Z=Math.floor(z)&255;
+    x-=Math.floor(x); y-=Math.floor(y); z-=Math.floor(z);
+    const u=fade(x), v=fade(y), w=fade(z);
+    const A=perm[X]+Y, AA=perm[A]+Z, AB=perm[A+1]+Z, B=perm[X+1]+Y, BA=perm[B]+Z, BB=perm[B+1]+Z;
+    const g=(h,dx,dy,dz)=>{const i=h%12;return GX[i]*dx+GY[i]*dy+GZ[i]*dz;};
+    const l=(a,b,t)=>a+t*(b-a);
+    return l(l(l(g(perm[AA],x,y,z), g(perm[BA],x-1,y,z),u),
+               l(g(perm[AB],x,y-1,z), g(perm[BB],x-1,y-1,z),u),v),
+             l(l(g(perm[AA+1],x,y,z-1), g(perm[BA+1],x-1,y,z-1),u),
+               l(g(perm[AB+1],x,y-1,z-1), g(perm[BB+1],x-1,y-1,z-1),u),v),w);
+  }
+  function fbm(x,y,z,oct){
+    let s=0,a=0.5,f=1;
+    for(let i=0;i<oct;i++){ s+=a*perlin3(x*f+i*3.7,y*f-i*1.9,z*f); f*=2; a*=0.5; }
+    return s;
+  }
+
+  // ---------- field ----------
+  const DATUM = 180, STEP = 40, LEVELS = 26;   // 180 … 1180 m
+  const RANGE = 1040;
+  let cell = 8, cols = 0, rows = 0;
+  let E = null, Hh = null, shade = null;
+  let offC, offCtx, img;
+  let sceneC, sceneCtx;
+  let t = 7.3;               // noise time axis
+  let flow = 35;
+  let paused = false;
+  let contourSegs = [];      // per level arrays of segments
+  let W = 0, H = 0, DPR = 1;
+
+  function buildGrid(){
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+    cv.style.width = W+"px"; cv.style.height = H+"px";
+    cell = Math.max(5, Math.round(Math.max(W,H)/200));
+    cols = Math.ceil(W/cell)+1; rows = Math.ceil(H/cell)+1;
+    E = new Float32Array(cols*rows);
+    Hh = new Float32Array(cols*rows);
+    shade = new Float32Array(cols*rows);
+    offC = document.createElement("canvas"); offC.width=cols; offC.height=rows;
+    offCtx = offC.getContext("2d");
+    img = offCtx.createImageData(cols, rows);
+    sceneC = document.createElement("canvas");
+    sceneC.width = cv.width; sceneC.height = cv.height;
+    sceneCtx = sceneC.getContext("2d");
+  }
+
+  function computeField(){
+    const fx = 1/(cell*46);              // wide, gentle base features
+    const wScale = 1/(cell*70);
+    const warpK = cell*3.2;
+    for (let j=0;j<rows;j++){
+      const py = j*cell;
+      for (let i=0;i<cols;i++){
+        const px = i*cell;
+        const wx = fbm(px*wScale+11.3, py*wScale+4.1, t*0.20, 2);
+        const wy = fbm(px*wScale-6.7,  py*wScale+19.2, t*0.20, 2);
+        let v = fbm((px+wx*warpK)*fx, (py+wy*warpK)*fx + 5.5, t*0.11, 5);
+        let h01 = 0.5 + v*0.9;
+        h01 = Math.min(1, Math.max(0, h01));
+        h01 = h01*h01*(3-2*h01)*0.55 + h01*0.45; // soft step, keeps mid heights common
+        const idx = j*cols+i;
+        Hh[idx] = h01;
+        E[idx] = DATUM + 60 + h01*(RANGE - 100);
+      }
+    }
+    // one 3×3 smoothing pass so slopes read like a survey sheet, not static
+    const T = E.slice();
+    for (let j=1;j<rows-1;j++)
+      for (let i=1;i<cols-1;i++){
+        const k = j*cols+i;
+        E[k] = (T[k-cols-1]+T[k-cols]+T[k-cols+1]+T[k-1]+T[k]+T[k+1]+T[k+cols-1]+T[k+cols]+T[k+cols+1]) / 9;
+      }
+    // hillshade: finite differences, light from upper-left
+    const lz = 2.1, lnx = -0.62, lny = -0.62, ln = Math.sqrt(2*0.62*0.62+lz*lz);
+    for (let j=0;j<rows;j++){
+      const jm = Math.max(0,j-1), jp = Math.min(rows-1,j+1);
+      for (let i=0;i<cols;i++){
+        const im = Math.max(0,i-1), ip = Math.min(cols-1,i+1);
+        const gx = (E[j*cols+ip]-E[j*cols+im])/((ip-im)*cell);   // m per px
+        const gy = (E[jp*cols+i]-E[jm*cols+i])/((jp-jm)*cell);
+        const sx = -gx/RANGE*26, sy = -gy/RANGE*26;              // surface normal (x, y, lz)
+        const d = (sx*lnx + sy*lny + lz) / (Math.sqrt(sx*sx+sy*sy+lz*lz)*ln);
+        shade[j*cols+i] = Math.min(1, Math.max(0, 0.5 + 0.5*d)) ;
+      }
+    }
+  }
+
+  function paintRelief(){
+    const data = img.data, P = PAL[pal];
+    for (let idx=0, k=0; idx<cols*rows; idx++, k+=4){
+      const c = P.base(Hh[idx], shade[idx]);
+      data[k]   = Math.min(255, Math.max(0, c[0]));
+      data[k+1] = Math.min(255, Math.max(0, c[1]));
+      data[k+2] = Math.min(255, Math.max(0, c[2]));
+      data[k+3] = 255;
+    }
+    offCtx.putImageData(img, 0, 0);
+    sceneCtx.setTransform(DPR,0,0,DPR,0,0);
+    sceneCtx.imageSmoothingEnabled = true;
+    sceneCtx.clearRect(0,0,W,H);
+    sceneCtx.drawImage(offC, 0, 0, cols, rows, -cell*0.5, -cell*0.5,
+                       (cols)*cell, (rows)*cell);
+  }
+
+  // ---------- marching squares ----------
+  function traceContours(){
+    const P = PAL[pal];
+    contourSegs = [];
+    for (let l=0;l<LEVELS;l++) contourSegs.push([]);
+    for (let j=0;j<rows-1;j++){
+      for (let i=0;i<cols-1;i++){
+        const a=E[j*cols+i], b=E[j*cols+i+1], c=E[(j+1)*cols+i+1], d=E[(j+1)*cols+i];
+        const lo=Math.min(a,b,c,d), hi=Math.max(a,b,c,d);
+        if (hi < DATUM || lo > DATUM+(LEVELS-1)*STEP) continue;
+        let l0 = Math.max(0, Math.ceil((lo-DATUM)/STEP)-1);
+        let l1 = Math.min(LEVELS-1, Math.floor((hi-DATUM)/STEP)+1);
+        for (let l=l0;l<=l1;l++){
+          const lev = DATUM + l*STEP;
+          if (lev < lo || lev > hi) continue;
+          const ia = a>lev?1:0, ib = b>lev?2:0, ic = c>lev?4:0, id = d>lev?8:0;
+          const m = ia|ib|ic|id;
+          if (m===0||m===15) continue;
+          const x0=i*cell, y0=j*cell, x1=x0+cell, y1=y0+cell;
+          const T = ()=>[x0 + (lev-a)/(b-a)*(cell), y0];
+          const R = ()=>[x1, y0 + (lev-b)/(c-b)*(cell)];
+          const B = ()=>[x0 + (lev-d)/(c-d)*(cell), y1];
+          const L = ()=>[x0, y0 + (lev-a)/(d-a)*(cell)];
+          const seg = contourSegs[l];
+          switch (m){
+            case 1: case 14: seg.push(L(),T()); break;
+            case 2: case 13: seg.push(T(),R()); break;
+            case 3: case 12: seg.push(L(),R()); break;
+            case 4: case 11: seg.push(R(),B()); break;
+            case 6: case 9:  seg.push(T(),B()); break;
+            case 7: case 8:  seg.push(L(),B()); break;
+            case 5: case 10: {
+              const centerIn = ((a+b+c+d)/4) > lev;
+              const a5 = m===5;
+              if (centerIn === a5){ seg.push(T(),L()); seg.push(R(),B()); }
+              else { seg.push(T(),R()); seg.push(B(),L()); }
+              break;
+            }
+          }
+        }
+      }
+    }
+    // draw into scene
+    sceneCtx.lineWidth = 0.7;
+    sceneCtx.strokeStyle = P.minor;
+    for (let l=0;l<LEVELS;l++){
+      if (l%5===0) continue;
+      const s = contourSegs[l];
+      if (!s.length) continue;
+      sceneCtx.beginPath();
+      for (let k=0;k<s.length;k+=2){ sceneCtx.moveTo(s[k][0], s[k][1]); sceneCtx.lineTo(s[k+1][0], s[k+1][1]); }
+      sceneCtx.stroke();
+    }
+    sceneCtx.lineWidth = 1.6;
+    sceneCtx.strokeStyle = P.index;
+    for (let l=0;l<LEVELS;l+=5){
+      const s = contourSegs[l];
+      if (!s.length) continue;
+      sceneCtx.beginPath();
+      for (let k=0;k<s.length;k+=2){ sceneCtx.moveTo(s[k][0], s[k][1]); sceneCtx.lineTo(s[k+1][0], s[k+1][1]); }
+      sceneCtx.stroke();
+      labelLevel(l, s);
+    }
+  }
+
+  function labelLevel(l, segs){
+    const P = PAL[pal], lev = DATUM + l*STEP;
+    const text = String(lev);
+    sceneCtx.font = "bold 10px system-ui, sans-serif";
+    const tw = sceneCtx.measureText(text).width;
+    const placed = [];
+    for (let k=0;k<segs.length;k+=2){
+      const p0=segs[k], p1=segs[k+1];
+      const mx=(p0[0]+p1[0])/2, my=(p0[1]+p1[1])/2;
+      if (mx<40 || my<40 || mx>W-40 || my>H-40) continue;
+      let ok = true;
+      for (const q of placed) if ((q[0]-mx)**2 + (q[1]-my)**2 < 150*150){ ok=false; break; }
+      if (!ok) continue;
+      let dx=p1[0]-p0[0], dy=p1[1]-p0[1];
+      let ang = Math.atan2(dy, dx) * 180/Math.PI;
+      if (ang > 90) ang -= 180; if (ang < -90) ang += 180;
+      placed.push([mx,my]);
+      sceneCtx.save();
+      sceneCtx.translate(mx,my);
+      sceneCtx.rotate(ang*Math.PI/180);
+      sceneCtx.fillStyle = P.labelBg;
+      sceneCtx.globalAlpha = 0.9;
+      sceneCtx.fillRect(-tw/2-3.5, -7.5, tw+7, 15);
+      sceneCtx.globalAlpha = 1;
+      sceneCtx.fillStyle = P.label;
+      sceneCtx.textAlign = "center"; sceneCtx.textBaseline = "middle";
+      sceneCtx.fillText(text, 0, 0.5);
+      sceneCtx.restore();
+      if (placed.length >= 6) break;
+    }
+  }
+
+  // ---------- cursor + readout ----------
+  let mx = -999, my = -999, over = false;
+  const NAMES = ["N","NE","E","SE","S","SW","W","NW"];
+  function sampleAt(px, py){
+    const gx = px/cell, gy = py/cell;
+    const i = Math.floor(gx), j = Math.floor(gy);
+    if (i<0||j<0||i>=cols-1||j>=rows-1) return null;
+    const u = gx-i, v = gy-j;
+    const a=E[j*cols+i], b=E[j*cols+i+1], c=E[(j+1)*cols+i+1], d=E[(j+1)*cols+i];
+    const elev = a*(1-u)*(1-v)+b*u*(1-v)+d*(1-u)*v+c*u*v;
+    const gxE = (E[j*cols+Math.min(cols-1,i+1)]-E[j*cols+Math.max(0,i-1)])/(Math.min(cols-1,i+1)-Math.max(0,i-1))/cell; // m per px
+    const gyE = (E[Math.min(rows-1,j+1)*cols+i]-E[Math.max(0,j-1)*cols+i])/(Math.min(rows-1,j+1)-Math.max(0,j-1))/cell;
+    return { elev, gxE, gyE };
+  }
+  function updateReadout(){
+    const s = over ? sampleAt(mx,my) : null;
+    const eL = document.getElementById("roElev"),
+          sL = document.getElementById("roSlope"),
+          aL = document.getElementById("roAspect");
+    if (!s){ eL.textContent = "—"; sL.textContent = "—"; aL.textContent = "—"; return ""; }
+    eL.textContent = Math.round(s.elev);
+    // 2.5 m per pixel horizontal at 1:25 000
+    const g = Math.sqrt(s.gxE*s.gxE + s.gyE*s.gyE)/2.5;
+    const slope = Math.atan(g)*180/Math.PI;
+    sL.textContent = slope.toFixed(1);
+    let aspect = "—";
+    if (slope > 0.8){
+      let brg = Math.atan2(-s.gxE, s.gyE)*180/Math.PI; // downhill bearing (N up: +x east, +y south)
+      brg = (brg%360+360)%360;
+      aspect = NAMES[Math.round(brg/45)%8];
+    }
+    aL.textContent = aspect;
+    return s.elev;
+  }
+
+  function drawOverlay(){
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    ctx.drawImage(sceneC, 0, 0, sceneC.width, sceneC.height, 0, 0, W, H);
+    if (!over) return;
+    const P = PAL[pal];
+    // soft spotlight
+    const r0 = Math.min(W,H)*0.28;
+    const g = ctx.createRadialGradient(mx,my,0,mx,my,r0);
+    g.addColorStop(0, P.spot); g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.save();
+    ctx.globalCompositeOperation = pal==="night" ? "screen" : "soft-light";
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(mx,my,r0,0,7); ctx.fill();
+    ctx.restore();
+    // crosshair circle
+    ctx.strokeStyle = P.accent; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(mx,my,24,0,7); ctx.stroke();
+    ctx.beginPath();
+    for (const [dx,dy] of [[1,-0],[0,1],[-1,0],[0,-1]]){
+      ctx.moveTo(mx+dx*24, my+dy*24);
+      ctx.lineTo(mx+dx*32, my+dy*32);
+    }
+    ctx.stroke();
+    // boxed elevation reading
+    const s = sampleAt(mx,my);
+    if (s){
+      const txt = Math.round(s.elev) + " m";
+      ctx.font = "11px ui-monospace, Menlo, Consolas, monospace";
+      const w = ctx.measureText(txt).width;
+      let bx = mx+40, by = my-9;
+      if (bx + w + 14 > W) bx = mx - 54 - w;
+      ctx.fillStyle = P.labelBg; ctx.globalAlpha = 0.88;
+      ctx.fillRect(bx-6, by-9, w+14, 19);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = P.accent; ctx.strokeRect(bx-6.5, by-9.5, w+15, 20);
+      ctx.fillStyle = P.label; ctx.textAlign="left"; ctx.textBaseline="middle";
+      ctx.fillText(txt, bx+1, by+0.5);
+    }
+  }
+
+  // ---------- main loop (≤30 fps) ----------
+  let lastField = 0, lastFrame = 0;
+  function needsField(){ return !REDUCED && !paused && flow > 0; }
+  function step(now){
+    requestAnimationFrame(step);
+    if (now - lastFrame < 1000/31) return;
+    lastFrame = now;
+    if (needsField() || sceneDirty){
+      t += ((now - lastField)/1000) * (flow/100) * 0.045;
+      lastField = now;
+      computeField(); paintRelief(); traceContours();
+      sceneDirty = false;
+      updateReadout();
+    } else if (now - lastField > 400 && fieldPending){
+      lastField = now;
+      computeField(); paintRelief(); traceContours();
+      fieldPending = false; sceneDirty = false;
+      updateReadout();
+    }
+    drawOverlay();
+  }
+  let sceneDirty = true, fieldPending = true;
+
+  // ---------- events ----------
+  cv.addEventListener("pointermove", e => { mx=e.clientX; my=e.clientY; over=true; updateReadout(); });
+  cv.addEventListener("pointerdown", e => { mx=e.clientX; my=e.clientY; over=true; updateReadout(); });
+  cv.addEventListener("pointerleave", () => { over=false; updateReadout(); });
+
+  addEventListener("keydown", e => {
+    if (e.key === " " ){ e.preventDefault(); togglePause(); }
+    else if (e.key === "1"){ pal="paper";   applyPal(); sceneDirty=true; fieldPending=true; }
+    else if (e.key === "2"){ pal="terrain"; applyPal(); sceneDirty=true; fieldPending=true; }
+    else if (e.key === "3"){ pal="night";   applyPal(); sceneDirty=true; fieldPending=true; }
+  });
+  document.querySelectorAll(".pal").forEach(b => {
+    b.addEventListener("click", () => {
+      pal = b.dataset.k; applyPal(); sceneDirty = true; fieldPending = true;
+    });
+  });
+  const flowEl = document.getElementById("flow");
+  flowEl.addEventListener("input", () => { flow = +flowEl.value; });
+  const pauseBtn = document.getElementById("pauseBtn");
+  function togglePause(){
+    paused = !paused;
+    pauseBtn.setAttribute("aria-pressed", String(paused));
+    pauseBtn.textContent = paused ? "▶ Resume" : "❚❚ Pause";
+    if (!paused) lastField = performance.now();
+  }
+  pauseBtn.addEventListener("click", togglePause);
+
+  let rt = 0;
+  addEventListener("resize", () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => {
+      buildGrid();
+      sceneDirty = true; fieldPending = true; lastField = performance.now();
+    }, 180);
+  });
+
+  // compass ticks
+  (() => {
+    const g = document.getElementById("roseTicks");
+    let d = "";
+    for (let i=0;i<24;i++){
+      const a = i/24*Math.PI*2, long = i%6===0;
+      const r1 = 46, r2 = long ? 40 : 43;
+      d += `M${50+Math.sin(a)*r1} ${50-Math.cos(a)*r1}L${50+Math.sin(a)*r2} ${50-Math.cos(a)*r2}`;
+    }
+    const p = document.createElementNS("http://www.w3.org/2000/svg","path");
+    p.setAttribute("d", d);
+    p.setAttribute("stroke","currentColor");
+    g.appendChild(p);
+  })();
+
+  applyPal();
+  buildGrid();
+  lastField = performance.now();
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>

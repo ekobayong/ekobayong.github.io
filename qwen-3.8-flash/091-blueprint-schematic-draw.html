@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pavilion 07 — Self-Drawing Blueprint · Halden Studio</title>
+<style>
+  :root{
+    --ink:#ffffff;
+    --ink-soft:rgba(255,255,255,.72);
+    --ink-faint:rgba(255,255,255,.28);
+    --accent:#ffd978;
+    --grid-fine:rgba(255,255,255,.08);
+    --grid-major:rgba(255,255,255,.16);
+    --mono:ui-monospace,"Cascadia Mono","Courier New",monospace;
+    --serif:Georgia,"Iowan Old Style","Times New Roman",serif;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html{ overflow-x:hidden; }
+  body{
+    min-height:100vh;
+    background:linear-gradient(135deg, #0b3d91 0%, #14479f 55%, #1a4fa3 100%);
+    font-family:var(--mono);
+    color:var(--ink);
+    overflow-x:hidden;
+  }
+  /* paper layer for print mode, cross-faded */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:linear-gradient(135deg, #f4f1e8 0%, #f0ecdf 55%, #ece7da 100%);
+    opacity:0; transition:opacity .8s ease;
+  }
+  body.print::before{ opacity:1; }
+  /* grids: two stacks so the color can crossfade */
+  .grid-layer{ position:fixed; inset:0; z-index:1; pointer-events:none; transition:opacity .8s ease; }
+  .grid-blue{
+    opacity:1;
+    background:
+      repeating-linear-gradient(0deg, var(--grid-major) 0 1px, transparent 1px 80px),
+      repeating-linear-gradient(90deg, var(--grid-major) 0 1px, transparent 1px 80px),
+      repeating-linear-gradient(0deg, var(--grid-fine) 0 1px, transparent 1px 16px),
+      repeating-linear-gradient(90deg, var(--grid-fine) 0 1px, transparent 1px 16px);
+  }
+  .grid-paper{
+    opacity:0;
+    background:
+      repeating-linear-gradient(0deg, rgba(11,61,145,.18) 0 1px, transparent 1px 80px),
+      repeating-linear-gradient(90deg, rgba(11,61,145,.18) 0 1px, transparent 1px 80px),
+      repeating-linear-gradient(0deg, rgba(11,61,145,.09) 0 1px, transparent 1px 16px),
+      repeating-linear-gradient(90deg, rgba(11,61,145,.09) 0 1px, transparent 1px 16px);
+  }
+  body.print .grid-blue{ opacity:0; }
+  body.print .grid-paper{ opacity:1; }
+  /* feTurbulence noise, physical paper */
+  .noise{ position:fixed; inset:0; width:100%; height:100%; z-index:2; pointer-events:none;
+          mix-blend-mode:overlay; opacity:.5; }
+  /* print-mode ink swap */
+  body.print{
+    --ink:#0b3d91;
+    --ink-soft:rgba(11,61,145,.72);
+    --ink-faint:rgba(11,61,145,.28);
+    --accent:#c2410c;
+  }
+
+  .frame{
+    position:relative; z-index:3;
+    margin:14px; border:1px solid var(--ink-soft);
+    transition:border-color .8s;
+  }
+  .frame-inner{
+    margin:5px; border:1px solid var(--ink-faint);
+    padding:16px 20px 18px;
+    transition:border-color .8s;
+  }
+
+  /* ---------- header ---------- */
+  header{ display:flex; justify-content:space-between; align-items:flex-end; gap:14px; flex-wrap:wrap;
+          border-bottom:1px solid var(--ink-faint); padding-bottom:10px; transition:border-color .8s; }
+  .practice{ font-variant:small-caps; letter-spacing:.28em; font-size:11px; color:var(--ink-soft); transition:color .8s; }
+  h1{ font-family:var(--serif); font-weight:400; font-size:clamp(17px,2.6vw,24px); margin-top:4px;
+      letter-spacing:.02em; color:var(--ink); transition:color .8s; }
+  .controls{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .seg{ display:flex; border:1px solid var(--ink-soft); transition:border-color .8s; }
+  .seg button{
+    appearance:none; background:transparent; border:0; border-left:1px solid var(--ink-faint);
+    font:400 9.5px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase;
+    color:var(--ink-soft); padding:8px 11px; cursor:pointer; transition:color .8s, background .25s;
+  }
+  .seg button:first-child{ border-left:0; }
+  .seg button:hover{ color:var(--ink); }
+  .seg button[aria-pressed="true"]{ background:var(--ink); color:#0b3d91; }
+  body.print .seg button[aria-pressed="true"]{ color:#f4f1e8; }
+  .printbtn{
+    appearance:none; font:400 9.5px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase;
+    color:var(--ink-soft); background:transparent; border:1px solid var(--ink-faint);
+    padding:8px 11px; cursor:pointer; transition:color .8s, border-color .8s;
+  }
+  .printbtn:hover{ color:var(--ink); border-color:var(--ink-soft); }
+  .status{ display:flex; align-items:center; gap:7px; font-size:9.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-soft); transition:color .8s; }
+  .dot{ width:7px; height:7px; border-radius:50%; background:var(--accent); animation:blink 1.1s steps(2) infinite;
+        box-shadow:0 0 6px 1px rgba(255,217,120,.5); transition:background .8s; }
+  .dot.done{ animation:none; opacity:.55; box-shadow:none; }
+  @keyframes blink{ 50%{ opacity:.15; } }
+
+  /* ---------- stage ---------- */
+  .stage{ position:relative; margin-top:12px; }
+  svg.sheet-svg{ display:block; width:100%; height:auto; }
+  .dw, .fp, text, line, path, rect, circle, ellipse, polyline, polygon{
+    transition:stroke .8s, fill .8s;
+  }
+  .fp{ opacity:0; transition:opacity .9s ease .15s, stroke .8s; }
+  g.drawn .fp{ opacity:1; }
+  g.sheet{ display:none; }
+  g.sheet.live{ display:block; }
+  text{ fill:var(--ink); font-family:var(--mono); }
+  text.t-label{ font-size:11px; letter-spacing:1.6px; }
+  text.t-small{ font-size:8px; letter-spacing:1px; }
+  text.t-dim{ font-size:8.5px; letter-spacing:1px; fill:var(--ink-soft); }
+  text.t-faint{ fill:var(--ink-soft); }
+  text.t-serif{ font-family:var(--serif); font-style:italic; }
+  .s-h{ stroke:var(--ink); stroke-width:2.1; fill:none; }
+  .s-o{ stroke:var(--ink); stroke-width:1.05; fill:none; }
+  .s-t{ stroke:var(--ink-soft); stroke-width:.65; fill:none; }
+  .s-d{ stroke:var(--ink-soft); stroke-width:.8; fill:none; }
+  .s-f{ stroke:var(--ink-faint); stroke-width:.6; fill:none; }
+  .s-dash{ stroke-dasharray:5 4; }
+  .s-dash2{ stroke-dasharray:2 3; }
+  .poche line{ stroke:var(--ink); stroke-width:.55; transition:stroke .8s; }
+  .roomfill{ fill:rgba(255,220,120,0); pointer-events:all; cursor:pointer; transition:fill .18s; }
+  .room:hover .roomfill{ fill:rgba(255,220,120,.22); }
+  .room.pinned .roomfill{ fill:rgba(255,220,120,.22); }
+  marker path{ fill:var(--ink); transition:fill .8s; }
+
+  .tip{
+    position:absolute; z-index:9; pointer-events:none; display:none;
+    background:#f7f3e7; color:#17243c; border:1px solid rgba(0,0,0,.35);
+    padding:6px 10px; font-size:11px; transform:translate(-50%,calc(-100% - 12px));
+    box-shadow:0 4px 14px rgba(0,10,40,.45); white-space:nowrap;
+  }
+  .tip .nm{ font-family:var(--serif); font-size:13px; }
+  .tip .ar{ font-family:var(--mono); font-size:9px; letter-spacing:.1em; opacity:.75; display:block; margin-top:1px; }
+  body.print .tip{ background:#0b3d91; color:#f4f1e8; }
+
+  /* ---------- legend + title block ---------- */
+  .legend{
+    display:flex; gap:26px; flex-wrap:wrap; align-items:center; margin-top:10px;
+    border-top:1px solid var(--ink-faint); padding-top:9px;
+    font-size:8.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-soft);
+    transition:color .8s, border-color .8s;
+  }
+  .legend .li{ display:flex; align-items:center; gap:8px; }
+  .legend svg{ display:block; }
+  .tblock{
+    margin-top:10px; border:1px solid var(--ink-soft); transition:border-color .8s;
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(112px,1fr));
+  }
+  .tb{ border-left:1px solid var(--ink-faint); padding:7px 11px 8px; transition:border-color .8s; }
+  .tb:first-child{ border-left:0; }
+  .tb .k{ font-size:7.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-soft); transition:color .8s; }
+  .tb .v{ font-size:11px; letter-spacing:.06em; margin-top:3px; color:var(--ink); transition:color .8s; }
+  .tb.sheetnum{ display:flex; align-items:center; justify-content:center; }
+  .tb.sheetnum .v{ font-size:24px; letter-spacing:.12em; }
+  @media (max-width:640px){
+    .frame{ margin:8px; } .frame-inner{ padding:12px 12px 14px; }
+    .tblock{ grid-template-columns:repeat(3,1fr); }
+    .tb{ border-top:1px solid var(--ink-faint); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .dot{ animation:none; }
+    .fp{ transition:none; }
+    *{ scroll-behavior:auto; }
+  }
+</style>
+</head>
+<body>
+  <div class="grid-layer grid-blue" aria-hidden="true"></div>
+  <div class="grid-layer grid-paper" aria-hidden="true"></div>
+  <svg class="noise" aria-hidden="true">
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+    <rect width="100%" height="100%" filter="url(#grain)" opacity="0.10"/>
+  </svg>
+
+  <div class="frame"><div class="frame-inner">
+    <header>
+      <div>
+        <div class="practice">Halden Studio &middot; Architecture</div>
+        <h1>Pavilion 07 — Reading Room in the Birch Grove</h1>
+      </div>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Sheet selector">
+          <button data-sheet="0" aria-pressed="true">A-101 Plan</button>
+          <button data-sheet="1" aria-pressed="false">A-201 Elevations</button>
+          <button data-sheet="2" aria-pressed="false">A-301 Section</button>
+        </div>
+        <button class="printbtn" id="printBtn" aria-pressed="false">Print mode</button>
+        <span class="status"><i class="dot" id="statDot"></i><span id="statTxt">Drafting</span></span>
+      </div>
+    </header>
+
+    <div class="stage" id="stage">
+      <svg class="sheet-svg" viewBox="0 0 800 500" role="img" aria-label="Architectural drawing stage">
+        <defs>
+          <pattern id="poche" class="poche" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="6"/>
+          </pattern>
+          <pattern id="ground" class="poche" patternUnits="userSpaceOnUse" width="8" height="8">
+            <path d="M0 8 L8 0 M-2 2 L2 -2 M6 10 L10 6" stroke-width=".5" fill="none" stroke="rgba(255,255,255,.55)"/>
+          </pattern>
+          <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" stroke="none"/>
+          </marker>
+          <marker id="tick" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+            <path d="M2 2 L8 8 M8 2 L2 8" stroke="var(--ink)" stroke-width="1.4" fill="none"/>
+          </marker>
+        </defs>
+
+        <!-- ================= A-101 GROUND FLOOR PLAN ================= -->
+        <g class="sheet live" id="sheet101">
+          <!-- poché fills (fade in, not drawn) -->
+          <path class="fp" fill-rule="evenodd" fill="url(#poche)" stroke="none"
+                d="M90 80 H430 V325 H90 Z M97 87 V318 H423 V87 Z"/>
+          <rect class="fp" x="105" y="233" width="100" height="3" fill="url(#poche)" stroke="none"/>
+          <rect class="fp" x="105" y="256" width="100" height="3" fill="url(#poche)" stroke="none"/>
+          <rect class="fp" x="105" y="279" width="100" height="3" fill="url(#poche)" stroke="none"/>
+
+          <!-- heavy cut walls -->
+          <rect class="dw s-h" data-p="0" x="90" y="80" width="340" height="245"/>
+          <rect class="dw s-h" data-p="0" x="97" y="87" width="326" height="231"/>
+          <!-- partitions (with door openings) -->
+          <path class="dw s-h" data-p="0" d="M97 218 H240 M268 218 H423"/>
+          <path class="dw s-h" data-p="0" d="M215 222 V318 M310 222 V288 M310 240 V222"/>
+          <!-- terrace deck edge -->
+          <path class="dw s-o" data-p="1" d="M430 190 H600 V325 H430"/>
+          <!-- terrace slats -->
+          <path class="dw s-t" data-p="2" d="M437 190 V325 M445 190 V325 M453 190 V325 M461 190 V325 M469 190 V325 M477 190 V325 M485 190 V325 M493 190 V325 M501 190 V325 M509 190 V325 M517 190 V325 M525 190 V325 M533 190 V325 M541 190 V325 M549 190 V325 M557 190 V325 M565 190 V325 M573 190 V325 M581 190 V325 M589 190 V325 M597 190 V325"/>
+
+          <!-- entrance door, swing -->
+          <path class="dw s-o" data-p="1" d="M245 325 H267"/>
+          <line class="dw s-t" data-p="2" x1="245" y1="318" x2="245" y2="292"/>
+          <path class="dw s-f" data-p="2" d="M245 292 A26 26 0 0 1 271 318" fill="none"/>
+          <!-- vestibule → reading room door -->
+          <line class="dw s-t" data-p="2" x1="268" y1="218" x2="268" y2="194"/>
+          <path class="dw s-f" data-p="2" d="M268 194 A24 24 0 0 0 244 218" fill="none"/>
+          <!-- sliding glazing, south of reading room -->
+          <path class="dw s-t" data-p="2" d="M118 321 H214 M118 323.6 H214"/>
+          <rect class="dw s-o" data-p="1" x="118" y="315" width="52" height="4.5"/>
+          <rect class="dw s-o" data-p="1" x="164" y="322.5" width="52" height="4.5"/>
+          <!-- shelving (drawn) -->
+          <path class="dw s-o" data-p="1" d="M105 233 H205 M105 236 H205 M105 256 H205 M105 259 H205 M105 279 H205 M105 282 H205"/>
+          <!-- soapstone hearth -->
+          <rect class="dw s-o" data-p="1" x="344" y="250" width="26" height="26"/>
+          <rect class="dw s-t" data-p="2" x="349" y="255" width="16" height="16"/>
+          <path class="dw s-t" data-p="2" d="M349 255 L365 271 M365 255 L349 271"/>
+          <line class="dw s-t" data-p="2" x1="357" y1="250" x2="357" y2="240"/>
+          <!-- birch trees, dashed canopies -->
+          <circle class="dw s-t s-dash2" data-p="2" cx="640" cy="118" r="34"/>
+          <circle class="dw s-t s-dash2" data-p="2" cx="596" cy="62" r="24"/>
+          <circle class="dw s-t s-dash2" data-p="2" cx="668" cy="198" r="28"/>
+          <circle class="dw s-t s-dash2" data-p="2" cx="505" cy="118" r="26"/>
+          <circle class="dw s-t s-dash2" data-p="2" cx="52" cy="150" r="30"/>
+          <path class="dw s-t" data-p="2" d="M638 116 h4 M640 114 v4 M594 60 h4 M596 58 v4 M666 196 h4 M668 194 v4 M503 116 h4 M505 114 v4 M50 148 h4 M52 146 v4"/>
+          <!-- section mark A–A' -->
+          <line class="dw s-d s-dash" data-p="3" x1="262" y1="70" x2="262" y2="336" marker-start="url(#arw)" marker-end="url(#arw)"/>
+          <text class="t-label" x="252" y="63">A</text>
+          <text class="t-label" x="252" y="348">A&#8242;</text>
+
+          <!-- dimension lines -->
+          <path class="dw s-f" data-p="3" d="M90 330 V356 M430 330 V356 M600 330 V356 M84 80 H70 M84 325 H70"/>
+          <line class="dw s-d" data-p="3" x1="90" y1="352" x2="430" y2="352" marker-start="url(#arw)" marker-end="url(#arw)"/>
+          <line class="dw s-d" data-p="3" x1="430" y1="352" x2="600" y2="352" marker-start="url(#arw)" marker-end="url(#arw)"/>
+          <line class="dw s-d" data-p="3" x1="74" y1="80" x2="74" y2="325" marker-start="url(#arw)" marker-end="url(#arw)"/>
+          <text class="t-dim" x="228" y="347">14 400</text>
+          <text class="t-dim" x="490" y="347">7 200</text>
+          <text class="t-dim" x="66" y="207" transform="rotate(-90 66 207)">10 400</text>
+
+          <!-- room labels + hover zones -->
+          <g class="room" data-name="Reading Room" data-area="35.4">
+            <rect class="roomfill" x="97" y="87" width="326" height="131"/>
+            <text class="t-label t-faint" x="180" y="150">READING ROOM</text>
+          </g>
+          <g class="room" data-name="Stacks" data-area="14.6">
+            <rect class="roomfill" x="97" y="218" width="118" height="100"/>
+            <text class="t-small t-faint" x="126" y="228">STACKS</text>
+          </g>
+          <g class="room" data-name="Vestibule" data-area="9.8">
+            <rect class="roomfill" x="215" y="218" width="95" height="100"/>
+            <text class="t-small t-faint" x="238" y="232">VESTIBULE</text>
+          </g>
+          <g class="room" data-name="Hearth Alcove" data-area="11.2">
+            <rect class="roomfill" x="310" y="218" width="113" height="100"/>
+            <text class="t-small t-faint" x="326" y="232">HEARTH ALCOVE</text>
+          </g>
+          <g class="room" data-name="Birch Terrace" data-area="16.2">
+            <rect class="roomfill" x="430" y="190" width="170" height="135"/>
+            <text class="t-small t-faint" x="478" y="206">BIRCH TERRACE</text>
+          </g>
+
+          <!-- leader callouts -->
+          <path class="dw s-d" data-p="3" d="M166 317 L120 402 H84" marker-end="url(#arw)"/>
+          <text class="t-small t-faint" x="84" y="412">SLIDING GLAZING &middot; U 0.9 &middot; LARICH</text>
+          <path class="dw s-d" data-p="3" d="M150 84 L122 52 H96" marker-end="url(#arw)"/>
+          <text class="t-small t-faint" x="96" y="46">CLT FRAME &middot; 200 MINERAL WOOL</text>
+          <path class="dw s-d" data-p="3" d="M560 250 L640 300 H678" marker-end="url(#arw)"/>
+          <text class="t-small t-faint" x="606" y="310">38 SLATS ON STEEL STRINGERS</text>
+
+          <!-- north compass -->
+          <circle class="dw s-o" data-p="1" cx="742" cy="66" r="21"/>
+          <path class="dw s-o" data-p="1" d="M742 44 L736 70 L742 64 L748 70 Z"/>
+          <text class="t-label" x="738" y="101">N</text>
+
+          <!-- scale bar 0-2-4 m -->
+          <rect class="dw s-o" data-p="1" x="100" y="458" width="47" height="5"/>
+          <rect class="dw s-o" data-p="1" x="147" y="458" width="47" height="5"/>
+          <line class="dw s-o" data-p="1" x1="194" y1="458" x2="194" y2="463"/>
+          <rect class="fp" x="100" y="458" width="47" height="5" fill="var(--ink)" stroke="none"/>
+          <text class="t-small t-faint" x="98" y="453">0</text>
+          <text class="t-small t-faint" x="143" y="453">2</text>
+          <text class="t-small t-faint" x="185" y="453">4 M</text>
+          <text class="t-small t-faint" x="100" y="476">SCALE 1:50 &middot; MILLIMETRES</text>
+
+          <!-- exploded axonometric detail -->
+          <text class="t-small t-faint" x="618" y="352">DETAIL 1 &middot; WALL &amp; ROOF</text>
+          <g transform="translate(646 380)">
+            <path class="dw s-o" data-p="1" d="M0 0 L44 -12 L92 -4 L48 8 Z"/>
+            <path class="dw s-t" data-p="2" d="M0 6 L44 -6 L92 2 L48 14 Z"/>
+            <path class="dw s-o" data-p="1" d="M4 40 L48 28 L96 36 L52 48 Z"/>
+            <path class="dw s-t" data-p="2" d="M24 43 V52 M52 48 V57 M76 40 V49"/>
+            <path class="dw s-o" data-p="1" d="M0 76 L44 64 L92 72 L48 84 Z"/>
+            <path class="dw s-f s-dash2" data-p="2" d="M0 6 V40 M48 84 V96 M92 2 V36 M44 -12 V-24"/>
+          </g>
+          <text class="t-small t-faint" x="742" y="364">ZINC / CLT</text>
+          <text class="t-small t-faint" x="742" y="410">STUD WALL</text>
+          <text class="t-small t-faint" x="742" y="456">SLAB</text>
+        </g>
+
+        <!-- ================= A-201 ELEVATIONS ================= -->
+        <g class="sheet" id="sheet201">
+          <!-- NORTH (top-left) -->
+          <line class="dw s-h" data-p="0" x1="52" y1="178" x2="356" y2="178"/>
+          <path class="dw s-f" data-p="2" d="M56 178 l-8 8 M72 178 l-8 8 M88 178 l-8 8 M104 178 l-8 8 M120 178 l-8 8 M136 178 l-8 8 M152 178 l-8 8 M168 178 l-8 8 M184 178 l-8 8 M200 178 l-8 8 M216 178 l-8 8 M232 178 l-8 8 M248 178 l-8 8 M264 178 l-8 8 M280 178 l-8 8 M296 178 l-8 8 M312 178 l-8 8 M328 178 l-8 8 M344 178 l-8 8"/>
+          <rect class="dw s-o" data-p="1" x="92" y="96" width="206" height="82"/>
+          <line class="dw s-o" data-p="1" x1="86" y1="92" x2="304" y2="92"/>
+          <path class="dw s-t" data-p="2" d="M92 96 V178 M106 92 V178 M120 96 V178 M134 92 V178 M148 96 V178 M162 92 V178 M176 96 V178 M190 92 V178 M204 96 V178 M218 92 V178 M232 96 V178 M246 92 V178 M260 96 V178 M274 92 V178 M288 96 V178"/>
+          <rect class="dw s-o" data-p="1" x="128" y="120" width="30" height="24"/>
+          <rect class="dw s-o" data-p="1" x="228" y="120" width="30" height="24"/>
+          <line class="dw s-t" data-p="2" x1="128" y1="132" x2="158" y2="132"/>
+          <line class="dw s-t" data-p="2" x1="228" y1="132" x2="258" y2="132"/>
+          <path class="dw s-t" data-p="2" d="M330 178 V152 M330 152 a10 12 0 1 0 -0.1 0 M330 152 l-8 -10 M330 152 l8 -10"/>
+          <text class="t-label t-faint" x="140" y="196">NORTH &middot; 1:100</text>
+          <text class="t-small t-faint" x="52" y="206">&plusmn;0.00 FFL</text>
+          <text class="t-small t-faint" x="52" y="90">+4.20 ROOF</text>
+
+          <!-- EAST (top-right) -->
+          <line class="dw s-h" data-p="0" x1="424" y1="178" x2="728" y2="178"/>
+          <path class="dw s-f" data-p="2" d="M428 178 l-8 8 M444 178 l-8 8 M460 178 l-8 8 M476 178 l-8 8 M492 178 l-8 8 M508 178 l-8 8 M524 178 l-8 8 M540 178 l-8 8 M556 178 l-8 8 M572 178 l-8 8 M588 178 l-8 8 M604 178 l-8 8 M620 178 l-8 8 M636 178 l-8 8 M652 178 l-8 8 M668 178 l-8 8 M684 178 l-8 8 M700 178 l-8 8 M716 178 l-8 8"/>
+          <rect class="dw s-o" data-p="1" x="470" y="96" width="150" height="82"/>
+          <line class="dw s-o" data-p="1" x1="464" y1="92" x2="626" y2="92"/>
+          <path class="dw s-t" data-p="2" d="M470 96 V178 M484 92 V178 M498 96 V178 M512 92 V178 M526 96 V178 M540 92 V178 M554 96 V178 M568 92 V178 M582 96 V178 M596 92 V178 M610 96 V178"/>
+          <rect class="dw s-o" data-p="1" x="520" y="108" width="48" height="18"/>
+          <line class="dw s-t" data-p="2" x1="544" y1="108" x2="544" y2="126"/>
+          <rect class="dw s-o" data-p="1" x="556" y="140" width="26" height="38"/>
+          <circle class="dw s-t" data-p="2" cx="579" cy="160" r="1.4"/>
+          <path class="dw s-t" data-p="2" d="M660 178 V154 M660 154 a9 11 0 1 0 -0.1 0"/>
+          <text class="t-label t-faint" x="500" y="196">EAST &middot; 1:100</text>
+          <text class="t-small t-faint" x="424" y="206">&plusmn;0.00 GL</text>
+
+          <!-- SOUTH (bottom-left) -->
+          <line class="dw s-h" data-p="0" x1="52" y1="418" x2="356" y2="418"/>
+          <path class="dw s-f" data-p="2" d="M56 418 l-8 8 M72 418 l-8 8 M88 418 l-8 8 M104 418 l-8 8 M120 418 l-8 8 M136 418 l-8 8 M152 418 l-8 8 M168 418 l-8 8 M184 418 l-8 8 M200 418 l-8 8 M216 418 l-8 8 M232 418 l-8 8 M248 418 l-8 8 M264 418 l-8 8 M280 418 l-8 8 M296 418 l-8 8 M312 418 l-8 8 M328 418 l-8 8 M344 418 l-8 8"/>
+          <rect class="dw s-o" data-p="1" x="92" y="330" width="206" height="88"/>
+          <path class="dw s-t" data-p="2" d="M92 330 V418 M106 336 V418 M120 330 V418 M262 336 V418 M276 330 V418 M290 336 V418"/>
+          <rect class="dw s-o" data-p="1" x="136" y="350" width="110" height="68"/>
+          <path class="dw s-t" data-p="2" d="M163 350 V418 M190 350 V418 M217 350 V418"/>
+          <line class="dw s-t" data-p="2" x1="136" y1="362" x2="246" y2="362"/>
+          <rect class="dw s-o" data-p="1" x="252" y="356" width="26" height="62"/>
+          <line class="dw s-o" data-p="1" x1="86" y1="326" x2="304" y2="326"/>
+          <path class="dw s-t" data-p="2" d="M330 418 V392 M330 392 a10 12 0 1 0 -0.1 0 M330 392 l-7 -9 M330 392 l7 -9"/>
+          <text class="t-label t-faint" x="132" y="436">SOUTH &middot; 1:100</text>
+          <text class="t-small t-faint" x="52" y="446">&plusmn;0.00 TERRACE</text>
+          <text class="t-small t-faint" x="52" y="324">+3.60 EAVE</text>
+
+          <!-- WEST (bottom-right) -->
+          <line class="dw s-h" data-p="0" x1="424" y1="418" x2="728" y2="418"/>
+          <path class="dw s-f" data-p="2" d="M428 418 l-8 8 M444 418 l-8 8 M460 418 l-8 8 M476 418 l-8 8 M492 418 l-8 8 M508 418 l-8 8 M524 418 l-8 8 M540 418 l-8 8 M556 418 l-8 8 M572 418 l-8 8 M588 418 l-8 8 M604 418 l-8 8 M620 418 l-8 8 M636 418 l-8 8 M652 418 l-8 8 M668 418 l-8 8 M684 418 l-8 8 M700 418 l-8 8 M716 418 l-8 8"/>
+          <rect class="dw s-o" data-p="1" x="470" y="330" width="150" height="88"/>
+          <path class="dw s-t" data-p="2" d="M470 330 V418 M484 336 V418 M498 330 V418 M512 336 V418 M526 330 V418 M540 336 V418 M554 330 V418 M568 336 V418 M582 330 V418 M596 336 V418 M610 330 V418"/>
+          <rect class="dw s-o" data-p="1" x="560" y="352" width="40" height="26"/>
+          <line class="dw s-t" data-p="2" x1="580" y1="352" x2="580" y2="378"/>
+          <path class="dw s-o" data-p="1" d="M496 330 V308 H514 V330"/>
+          <line class="dw s-o" data-p="1" x1="464" y1="326" x2="626" y2="326"/>
+          <path class="dw s-t" data-p="2" d="M660 418 V396 M660 396 a9 11 0 1 0 -0.1 0"/>
+          <text class="t-label t-faint" x="498" y="436">WEST &middot; 1:100</text>
+          <text class="t-small t-faint" x="424" y="446">&plusmn;0.00</text>
+          <text class="t-small t-faint" x="424" y="306">+4.90 FLUE</text>
+          <text class="t-label" x="52" y="46">A-201 &middot; ELEVATIONS &middot; N/S/E/W</text>
+        </g>
+
+        <!-- ================= A-301 SECTION ================= -->
+        <g class="sheet" id="sheet301">
+          <!-- ground + hatch -->
+          <line class="dw s-h" data-p="0" x1="40" y1="400" x2="760" y2="400"/>
+          <path class="dw s-f" data-p="2" d="M48 400 l-8 8 M66 400 l-8 8 M84 400 l-8 8 M102 400 l-8 8 M120 400 l-8 8 M138 400 l-8 8 M156 400 l-8 8 M174 400 l-8 8 M192 400 l-8 8 M210 400 l-8 8 M228 400 l-8 8 M246 400 l-8 8 M264 400 l-8 8 M282 400 l-8 8 M300 400 l-8 8 M318 400 l-8 8 M336 400 l-8 8 M354 400 l-8 8 M372 400 l-8 8 M390 400 l-8 8 M408 400 l-8 8 M426 400 l-8 8 M444 400 l-8 8 M462 400 l-8 8 M480 400 l-8 8 M498 400 l-8 8 M516 400 l-8 8 M534 400 l-8 8 M552 400 l-8 8 M570 400 l-8 8 M588 400 l-8 8 M606 400 l-8 8 M624 400 l-8 8 M642 400 l-8 8 M660 400 l-8 8 M678 400 l-8 8 M696 400 l-8 8 M714 400 l-8 8 M732 400 l-8 8 M750 400 l-8 8"/>
+          <!-- poché fills -->
+          <rect class="fp" x="150" y="296" width="9" height="104" fill="url(#poche)" stroke="none"/>
+          <rect class="fp" x="600" y="272" width="9" height="128" fill="url(#poche)" stroke="none"/>
+          <rect class="fp" x="150" y="392" width="459" height="8" fill="url(#poche)" stroke="none"/>
+          <polygon class="fp" points="142,296 400,254 400,262 150,303" fill="url(#poche)" stroke="none"/>
+          <polygon class="fp" points="418,238 618,272 616,279 418,246" fill="url(#poche)" stroke="none"/>
+          <rect class="fp" x="143" y="400" width="23" height="24" fill="url(#poche)" stroke="none"/>
+          <rect class="fp" x="593" y="400" width="23" height="24" fill="url(#poche)" stroke="none"/>
+
+          <!-- cut walls / slab / foundations -->
+          <path class="dw s-h" data-p="0" d="M150 296 V400 M159 303 V400"/>
+          <path class="dw s-h" data-p="0" d="M600 272 V400 M609 279 V400"/>
+          <path class="dw s-h" data-p="0" d="M150 392 H609 M150 400 H609"/>
+          <path class="dw s-h" data-p="0" d="M143 400 V424 H166 V400 M593 400 V424 H616 V400"/>
+          <!-- cut roofs -->
+          <path class="dw s-h" data-p="0" d="M142 296 L400 254 M150 303 L400 262"/>
+          <path class="dw s-h" data-p="0" d="M418 238 L618 272 M418 246 L616 279"/>
+          <!-- clerestory glazing -->
+          <path class="dw s-o" data-p="1" d="M400 254 V296 H418 V238"/>
+          <line class="dw s-t" data-p="2" x1="406" y1="250" x2="406" y2="296"/>
+          <line class="dw s-t" data-p="2" x1="412" y1="244" x2="412" y2="296"/>
+          <!-- dashed sun rays through the clerestory -->
+          <path class="dw s-d s-dash" data-p="2" d="M416 246 L322 396 M426 252 L342 396 M436 258 L362 396"/>
+          <!-- soapstone stove -->
+          <rect class="dw s-o" data-p="1" x="216" y="336" width="30" height="56"/>
+          <rect class="dw s-t" data-p="2" x="222" y="344" width="18" height="14"/>
+          <line class="dw s-o" data-p="1" x1="231" y1="336" x2="231" y2="304"/>
+          <!-- bookshelf -->
+          <path class="dw s-o" data-p="1" d="M560 392 V310 M592 392 V310 M560 310 H592"/>
+          <path class="dw s-t" data-p="2" d="M560 330 H592 M560 350 H592 M560 370 H592"/>
+          <path class="dw s-t" data-p="2" d="M564 392 V314 M570 392 V334 M576 392 V354 M582 392 V374"/>
+          <!-- table + two chairs -->
+          <path class="dw s-o" data-p="1" d="M320 352 H420 M326 352 V388 M414 352 V388"/>
+          <path class="dw s-o" data-p="1" d="M288 388 V366 H302 M288 366 V352 M296 388 V372"/>
+          <path class="dw s-o" data-p="1" d="M452 388 V366 H438 M452 366 V352 M444 388 V372"/>
+          <!-- stick-figure scale person -->
+          <circle class="dw s-o" data-p="1" cx="492" cy="318" r="6.5"/>
+          <path class="dw s-o" data-p="1" d="M492 324.5 V362 M492 332 L480 348 M492 332 L504 346 M492 362 L482 392 M492 362 L502 392"/>
+          <!-- level markers -->
+          <path class="dw s-d" data-p="3" d="M648 392 H690 M654 296 H690 M654 254 H690"/>
+          <polygon class="dw s-d" data-p="3" points="648,392 654,384 660,392" fill="none"/>
+          <polygon class="dw s-d" data-p="3" points="654,296 660,288 666,296" fill="none"/>
+          <polygon class="dw s-d" data-p="3" points="654,254 660,246 666,254" fill="none"/>
+          <text class="t-small" x="668" y="388">&plusmn;0.00</text>
+          <text class="t-small" x="668" y="292">+3.60</text>
+          <text class="t-small" x="668" y="250">+4.20</text>
+          <!-- material callouts -->
+          <path class="dw s-d" data-p="3" d="M300 268 L258 226 H210" marker-end="url(#arw)"/>
+          <text class="t-small t-faint" x="160" y="222">40 MM CLT, EXPOSED</text>
+          <path class="dw s-d" data-p="3" d="M60 260 L148 274" marker-end="url(#arw)"/>
+          <text class="t-small t-faint" x="40" y="254">200 MINERAL WOOL</text>
+          <path class="dw s-d" data-p="3" d="M300 448 L244 412" marker-end="url(#arw)"/>
+          <text class="t-small t-faint" x="240" y="458">SLAB ON 120 EPS</text>
+          <path class="dw s-d" data-p="3" d="M120 448 L156 424" marker-end="url(#arw)"/>
+          <text class="t-small t-faint" x="60" y="458">STRIP FOUNDATION</text>
+          <path class="dw s-d" data-p="3" d="M452 448 L412 360" marker-end="url(#arw)"/>
+          <text class="t-small t-faint" x="398" y="458">TERRACE DECK +4.90 EXG</text>
+          <!-- labels -->
+          <text class="t-label" x="40" y="46">A-301 &middot; SECTION A&ndash;A &middot; 1:50</text>
+          <text class="t-label t-faint" x="300" y="330">READING ROOM</text>
+        </g>
+      </svg>
+      <div class="tip" id="tip"></div>
+    </div>
+
+    <div class="legend" aria-label="Line weight legend">
+      <span class="li"><svg width="42" height="8"><line x1="1" y1="4" x2="41" y2="4" stroke="var(--ink)" stroke-width="2.6"/></svg>Heavy 0.35 — cut lines</span>
+      <span class="li"><svg width="42" height="8"><line x1="1" y1="4" x2="41" y2="4" stroke="var(--ink)" stroke-width="1.2"/></svg>Medium 0.25 — object lines</span>
+      <span class="li"><svg width="42" height="8"><line x1="1" y1="4" x2="41" y2="4" stroke="var(--ink-soft)" stroke-width=".7"/></svg>Thin 0.18 — detail</span>
+      <span class="li"><svg width="42" height="8"><line x1="1" y1="4" x2="41" y2="4" stroke="var(--ink-soft)" stroke-width=".9" stroke-dasharray="5 4"/></svg>Dashed — dimension / hidden</span>
+    </div>
+
+    <div class="tblock" aria-label="Title block">
+      <div class="tb"><div class="k">Project</div><div class="v">Pavilion 07</div></div>
+      <div class="tb"><div class="k">Client</div><div class="v">Birch Grove Trust</div></div>
+      <div class="tb"><div class="k">Drawn by</div><div class="v">E. Halden</div></div>
+      <div class="tb"><div class="k">Checked</div><div class="v">R. Vetri</div></div>
+      <div class="tb"><div class="k">Date</div><div class="v">2026-09-04</div></div>
+      <div class="tb"><div class="k">Revision</div><div class="v">C</div></div>
+      <div class="tb"><div class="k">Scale</div><div class="v" id="tbScale">1:50</div></div>
+      <div class="tb sheetnum"><div class="v" id="tbSheet">A-101</div></div>
+    </div>
+  </div></div>
+
+<script>
+(function(){
+"use strict";
+var reduced = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+var sheets=[document.getElementById("sheet101"),
+            document.getElementById("sheet201"),
+            document.getElementById("sheet301")];
+var META=[{num:"A-101",scale:"1:50"},{num:"A-201",scale:"1:100"},{num:"A-301",scale:"1:50"}];
+var statDot=document.getElementById("statDot"), statTxt=document.getElementById("statTxt");
+var tbSheet=document.getElementById("tbSheet"), tbScale=document.getElementById("tbScale");
+var segBtns=[].slice.call(document.querySelectorAll(".seg button"));
+
+/* remember text originals once */
+sheets.forEach(function(g){
+  [].slice.call(g.querySelectorAll("text")).forEach(function(tx){
+    tx.dataset.full = tx.textContent;
+  });
+});
+
+function estLen(el){
+  try{
+    if(typeof el.getTotalLength==="function"){
+      var L=el.getTotalLength();
+      if(L>0) return L;
+    }
+  }catch(e){}
+  var tag=el.tagName.toLowerCase();
+  try{
+    if(tag==="rect"){ var w=+el.getAttribute("width"), h=+el.getAttribute("height"); return 2*(w+h); }
+    if(tag==="circle"){ return 2*Math.PI*(+el.getAttribute("r")); }
+    if(tag==="ellipse"){ var rx=+el.getAttribute("rx"), ry=+el.getAttribute("ry"); return 2*Math.PI*Math.sqrt((rx*rx+ry*ry)/2); }
+    if(tag==="line"){ return Math.hypot(+el.getAttribute("x2")-+el.getAttribute("x1"), +el.getAttribute("y2")-+el.getAttribute("y1")); }
+    if(tag==="polyline"||tag==="polygon"){
+      var pts=(el.getAttribute("points")||"").trim().split(/[\s,]+/).map(Number), s=0;
+      for(var i=2;i<pts.length;i+=2) s+=Math.hypot(pts[i]-pts[i-2], pts[i+1]-pts[i-1]);
+      if(tag==="polygon"&&pts.length>3) s+=Math.hypot(pts[0]-pts[pts.length-2], pts[1]-pts[pts.length-1]);
+      return s;
+    }
+  }catch(e){}
+  return 100;
+}
+
+var typeToken=0;
+function play(g){
+  typeToken++;
+  var token=typeToken;
+  g.classList.remove("drawn");
+  /* geometry only (rooms' tint rects & fills excluded) */
+  var geos=[].slice.call(g.querySelectorAll(".dw"));
+  geos.sort(function(a,b){ return (+a.dataset.p||0)-(+b.dataset.p||0); });
+  var cursor=0;
+  geos.forEach(function(el){
+    var len=estLen(el);
+    var dur=Math.min(950, Math.max(160, 90+len*0.85));
+    var isDash = el.classList.contains("s-dash") || el.classList.contains("s-dash2");
+    if(isDash){
+      /* keep the authored dash pattern; reveal with a fade instead of a pen stroke */
+      if(reduced) return;
+      el.animate([{opacity:0},{opacity:1}], {duration:420, delay:cursor, easing:"linear", fill:"both"});
+    }else{
+      el.style.strokeDasharray=len;
+      if(reduced){
+        el.style.strokeDashoffset="0";
+        return;
+      }
+      /* fade in over the first few % so arrowhead markers do not float before their line */
+      el.animate(
+        [{strokeDashoffset:len, opacity:0},
+         {strokeDashoffset:len, opacity:1, offset:.06},
+         {strokeDashoffset:0,  opacity:1}],
+        {duration:dur, delay:cursor, easing:"cubic-bezier(.5,.02,.28,1)", fill:"both"}
+      );
+    }
+    cursor += dur*0.42;            /* slight overlap — the pen never pauses */
+  });
+  /* text types after linework */
+  var texts=[].slice.call(g.querySelectorAll("text"));
+  texts.forEach(function(t){ t.textContent=""; });
+  statDot.classList.remove("done");
+  statTxt.textContent="Drafting";
+  var lineEnd = reduced ? 0 : cursor+420;
+  setTimeout(function(){
+    var i=0, ci=0;
+    var iv=setInterval(function(){
+      if(token!==typeToken){ clearInterval(iv); return; }
+      var allDone=true;
+      for(i=0;i<texts.length;i++){
+        var t=texts[i], full=t.dataset.full;
+        var shown=t.textContent.length;
+        if(shown<full.length){
+          t.textContent=full.slice(0, Math.min(full.length, shown+2));
+          if(t.textContent.length<full.length) allDone=false;
+        }
+      }
+      if(allDone){
+        clearInterval(iv);
+        g.classList.add("drawn");
+        statDot.classList.add("done");
+        statTxt.textContent="Sheet complete";
+      }
+    }, reduced?1:26);
+    if(reduced){
+      clearInterval(iv);
+      texts.forEach(function(t){ t.textContent=t.dataset.full; });
+      g.classList.add("drawn");
+      statDot.classList.add("done");
+      statTxt.textContent="Sheet complete";
+    }
+  }, lineEnd);
+}
+
+function show(i){
+  sheets.forEach(function(s,k){ s.classList.toggle("live", k===i); });
+  segBtns.forEach(function(b,k){ b.setAttribute("aria-pressed", k===i?"true":"false"); });
+  tbSheet.textContent=META[i].num;
+  tbScale.textContent=META[i].scale;
+  hideTip(); unpin();
+  play(sheets[i]);
+}
+segBtns.forEach(function(b,i){ b.addEventListener("click", function(){ show(i); }); });
+
+/* ---------- rooms: hover tint + tooltip + pin ---------- */
+var stage=document.getElementById("stage"), tip=document.getElementById("tip");
+var pinned=null;
+function hideTip(){ tip.style.display="none"; }
+function unpin(){ if(pinned){ pinned.classList.remove("pinned"); pinned=null; } }
+[].slice.call(document.querySelectorAll("#sheet101 .room")).forEach(function(room){
+  var hit=room.querySelector(".roomfill");
+  hit.addEventListener("pointermove", function(e){
+    var r=stage.getBoundingClientRect();
+    tip.innerHTML='<span class="nm">'+room.dataset.name+'</span><span class="ar">'+room.dataset.area+' m²</span>';
+    tip.style.display="block";
+    tip.style.left=Math.max(60, Math.min(r.width-60, e.clientX-r.left))+"px";
+    tip.style.top=(e.clientY-r.top)+"px";
+  });
+  hit.addEventListener("pointerleave", hideTip);
+  hit.addEventListener("click", function(e){
+    if(pinned===room){ unpin(); return; }
+    unpin(); pinned=room; room.classList.add("pinned");
+    e.stopPropagation();
+  });
+});
+
+/* ---------- print mode + shortcuts ---------- */
+var printBtn=document.getElementById("printBtn");
+function togglePrint(){
+  var on=document.body.classList.toggle("print");
+  printBtn.setAttribute("aria-pressed", on?"true":"false");
+}
+printBtn.addEventListener("click", togglePrint);
+document.addEventListener("keydown", function(e){
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
+  if(e.key==="1") show(0);
+  else if(e.key==="2") show(1);
+  else if(e.key==="3") show(2);
+  else if(e.key==="p"||e.key==="P") togglePrint();
+});
+
+/* first draw */
+show(0);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stardust — cosmic cursor trail</title>
+<style>
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%; background:#000; overflow:hidden;}
+  body{ touch-action:none; font-family:"Segoe UI", system-ui, -apple-system, sans-serif; }
+  body.hide-cursor{ cursor:none; }
+  canvas#art{position:fixed; inset:0; display:block;}
+
+  #ring{
+    position:fixed; z-index:30; left:0; top:0; width:14px; height:14px;
+    margin:-7px 0 0 -7px; border-radius:50%;
+    border:1.5px solid #fff; mix-blend-mode:difference;
+    pointer-events:none; opacity:0; transition:opacity .4s;
+    will-change:transform;
+  }
+  #ring.live{opacity:1;}
+  #ring.holding{
+    width:34px; height:34px; margin:-17px 0 0 -17px;
+    border-style:dashed;
+    animation:spin 1.6s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg);} }
+  @media (prefers-reduced-motion: reduce){ #ring.holding{animation:none;} }
+
+  .title{position:fixed; top:22px; left:26px; z-index:20; pointer-events:none;}
+  .title h1{font-family:Georgia,"Iowan Old Style",Palatino,serif; font-weight:400;
+    font-size:22px; color:rgba(255,255,255,.88); letter-spacing:.02em;}
+  .title p{font-size:9px; text-transform:uppercase; letter-spacing:.34em;
+    color:rgba(255,255,255,.42); margin-top:5px;}
+  .hint{position:fixed; top:24px; right:26px; z-index:20; text-align:right; max-width:260px;
+    font-size:11px; line-height:1.8; letter-spacing:.08em; color:rgba(255,255,255,.55);
+    pointer-events:none; transition:opacity 1.4s ease;}
+  .hint b{color:rgba(255,255,255,.85); font-weight:600;}
+  .hint.gone{opacity:0;}
+
+  .pill{
+    position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:25;
+    display:flex; align-items:stretch; gap:4px; flex-wrap:wrap; justify-content:center;
+    background:rgba(14,14,22,.72);
+    -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:999px; padding:7px 9px;
+    box-shadow:0 14px 40px rgba(0,0,0,.6);
+  }
+  .group{display:flex; align-items:center; gap:4px;}
+  .group + .group{border-left:1px solid rgba(255,255,255,.12); margin-left:5px; padding-left:9px;}
+  .pill button{
+    appearance:none; cursor:pointer; border:1px solid rgba(255,255,255,.16);
+    background:rgba(255,255,255,.04); color:rgba(255,255,255,.78);
+    font-size:11px; text-transform:uppercase; letter-spacing:.12em; font-weight:600;
+    border-radius:999px; padding:7px 11px; display:inline-flex; align-items:center; gap:6px;
+    transition:background .2s, color .2s, border-color .2s;
+  }
+  .pill button:hover{border-color:rgba(255,255,255,.4); color:#fff;}
+  .pill button.on{background:#f2f3f7; color:#0c0c14; border-color:#f2f3f7;}
+  .pill button.on .sw{box-shadow:0 0 0 1.5px rgba(12,12,20,.35);}
+  .sw{width:9px; height:9px; border-radius:50%; flex:none;}
+  .pill svg{width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round;}
+  .kbd{font-size:8.5px; opacity:.55; border:1px solid currentColor; border-radius:3px; padding:0 3px; line-height:1.4;}
+  @media (max-width:640px){
+    #ring{display:none;}
+    .pill button{padding:9px 11px;}
+    .pill .lbl,.pill .kbd{display:none;}
+    .hint{display:none;}
+  }
+</style>
+</head>
+<body class="hide-cursor">
+<canvas id="art"></canvas>
+<div id="ring"></div>
+
+<div class="title">
+  <h1>Stardust</h1>
+  <p>cosmic cursor trail · keys 1–4 · hold to gather</p>
+</div>
+<div class="hint" id="hint">
+  <b>move</b> to paint · <b>hold</b> to gather a vortex, <b>release</b> to burst<br>
+  <b>1–4</b> brushes · <b>C</b> clear · <b>S</b> save png
+</div>
+
+<div class="pill">
+  <div class="group" id="brushGroup">
+    <button data-brush="dust" class="on"><span class="sw" style="background:#9fd8ff"></span><span class="lbl">Dust</span><span class="kbd">1</span></button>
+    <button data-brush="ribbons"><span class="sw" style="background:#ff9fe5"></span><span class="lbl">Ribbons</span><span class="kbd">2</span></button>
+    <button data-brush="embers"><span class="sw" style="background:#ffb060"></span><span class="lbl">Embers</span><span class="kbd">3</span></button>
+    <button data-brush="ink"><span class="sw" style="background:#e8e8f0"></span><span class="lbl">Ink</span><span class="kbd">4</span></button>
+  </div>
+  <div class="group" id="fadeGroup">
+    <button data-fade="0.012" title="slow fade"><svg viewBox="0 0 24 24"><path d="M4 18 C 9 18 15 18 20 8"/></svg></button>
+    <button data-fade="0.045" class="on" title="mid fade"><svg viewBox="0 0 24 24"><path d="M4 18 C 9 18 14 14 20 6"/></svg></button>
+    <button data-fade="0.14" title="fast fade"><svg viewBox="0 0 24 24"><path d="M4 18 C 8 16 10 10 12 4"/></svg></button>
+  </div>
+  <div class="group">
+    <button id="clearBtn" title="Clear (C)"><svg viewBox="0 0 24 24"><path d="M5 8 h14 M9 8 V5 h6 V8 M7 8 l1 12 h8 l1-12 M10.5 11 v6 M13.5 11 v6"/></svg><span class="lbl">Clear</span></button>
+    <button id="saveBtn" title="Save PNG (S)"><svg viewBox="0 0 24 24"><path d="M12 4 v11 M7 11 l5 5 5-5 M5 20 h14"/></svg><span class="lbl">Save</span></button>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =========================================================
+   Stardust — a pointer that paints with light.
+   DPR-aware canvas, additive particles, spring comet head,
+   vortex press-and-hold, Lissajous ghost autopilot.
+   ========================================================= */
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const canvas = document.getElementById('art');
+const ctx = canvas.getContext('2d', { alpha:false });
+const ring = document.getElementById('ring');
+const hint = document.getElementById('hint');
+
+/* ---------- viewport & painting persistence ---------- */
+let W = 0, H = 0, DPR = 1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const nw = innerWidth, nh = innerHeight;
+  if (!canvas.width) { paintSize(nw, nh); return; }
+  const tmp = document.createElement('canvas');
+  tmp.width = canvas.width; tmp.height = canvas.height;
+  tmp.getContext('2d').drawImage(canvas, 0, 0);
+  paintSize(nw, nh);
+  ctx.drawImage(tmp, 0, 0, tmp.width, tmp.height, 0, 0, nw, nh);
+}
+function paintSize(nw, nh){
+  W = nw; H = nh;
+  canvas.width = Math.round(nw * DPR); canvas.height = Math.round(nh * DPR);
+  canvas.style.width = nw + 'px'; canvas.style.height = nh + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+}
+resize();
+addEventListener('resize', resize);
+
+/* ---------- state ---------- */
+let brush = 'dust';
+let fade = 0.045;
+if (REDUCE) fade = Math.max(fade, 0.08);
+let hueClock = 0;
+const MAX_P = 6000;
+const parts = [];
+const shocks = [];
+const px = innerWidth / 2, py = innerHeight / 2;
+const ptr = { x:innerWidth/2, y:innerHeight/2, vx:0, vy:0, lastMove:0, down:false, downT:0, seen:false };
+const comet = { x:ptr.x, y:ptr.y, vx:0, vy:0, trail:[] };
+let ghost = { on:false, t:0 };
+
+/* ---------- spawning ---------- */
+function spawn(x, y, inheritVx = 0, inheritVy = 0){
+  const hue = hueClock;
+  let p;
+  switch (brush) {
+    case 'dust':
+      p = { b:'dust', x, y, px:x, py:y,
+            vx: inheritVx*0.35 + (Math.random()-0.5)*46, vy: inheritVy*0.35 + (Math.random()-0.5)*46,
+            r: 0.6 + Math.random()*1.6, hue: hue + (Math.random()*36-18),
+            life: 1, decay: 0.35 + Math.random()*0.5, drag: 0.94,
+            wander: 1 + Math.random()*2.5, wphase: Math.random()*Math.PI*2 };
+      break;
+    case 'ribbons':
+      p = { b:'ribbons', x, y, px:x, py:y,
+            vx: inheritVx*0.5 + (Math.random()-0.5)*14, vy: inheritVy*0.5 + (Math.random()-0.5)*14,
+            r: 0.5 + Math.random()*0.9, hue: hue + (Math.random()*36-18),
+            life: 1, decay: 0.13 + Math.random()*0.1, drag: 0.975 };
+      break;
+    case 'embers':
+      p = { b:'embers', x, y, px:x, py:y,
+            vx: inheritVx*0.25 + (Math.random()-0.5)*36, vy: inheritVy*0.25 - 10 - Math.random()*30,
+            r: 0.8 + Math.random()*1.8, hue: 8 + Math.random()*34,
+            life: 1, decay: 0.8 + Math.random()*0.9, drag: 0.96,
+            flick: 3 + Math.random()*9 };
+      break;
+    case 'ink':
+      p = { b:'ink', x, y, px:x, py:y,
+            vx: inheritVx*0.08 + (Math.random()-0.5)*6, vy: inheritVy*0.08 + (Math.random()-0.5)*6,
+            r: 6 + Math.random()*16, hue: 240 + Math.random()*30,
+            life: 1, decay: 0.06 + Math.random()*0.06, drag: 0.99 };
+      break;
+  }
+  if (parts.length < MAX_P) parts.push(p);
+}
+function paintAlong(x0, y0, x1, y1, vx, vy){
+  const dx = x1-x0, dy = y1-y0, dist = Math.hypot(dx, dy);
+  const steps = Math.min(40, Math.max(1, Math.round(dist/3)));
+  for (let s = 0; s <= steps; s++){
+    const t = steps ? s/steps : 0;
+    spawn(x0 + dx*t, y0 + dy*t, vx, vy);
+  }
+}
+
+/* ---------- pointer ---------- */
+const isTouch = () => matchMedia('(hover: none)').matches;
+addEventListener('pointermove', e => {
+  const nx = e.clientX, ny = e.clientY;
+  const vx = nx - ptr.x, vy = ny - ptr.y;
+  if (!ptr.seen && (Math.abs(vx) + Math.abs(vy)) > 2) { ptr.seen = true; hint.classList.add('gone'); }
+  ptr.vx = vx; ptr.vy = vy;
+  ptr.x = nx; ptr.y = ny; ptr.lastMove = performance.now();
+  if (ghost.on) { ghost.on = false; }
+  paintAlong(ptr.sx ?? nx, ptr.sy ?? ny, nx, ny, vx, vy);
+  ptr.sx = nx; ptr.sy = ny;
+  ring.classList.add('live');
+  ring.style.transform = `translate(${nx}px, ${ny}px)`;
+});
+ptr.sx = ptr.x; ptr.sy = ptr.y;
+addEventListener('pointerdown', e => {
+  ptr.down = true; ptr.downT = performance.now();
+  ring.classList.add('holding','live');
+});
+addEventListener('pointerup', burst);
+addEventListener('pointercancel', burst);
+function burst(e){
+  if (!ptr.down) return;
+  ptr.down = false;
+  ring.classList.remove('holding');
+  const held = Math.min(6, (performance.now() - ptr.downT) / 1000);
+  const R = 260;
+  const cx = ptr.x, cy = ptr.y;
+  for (const p of parts) {
+    const dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy);
+    if (d < R && d > 0.001) {
+      const k = (1 - d/R) * (240 + held * 420);
+      p.vx += dx/d * k; p.vy += dy/d * k;
+    }
+  }
+  const n = 160 + ((Math.random() * 261) | 0);
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 180 + Math.random() * 620;
+    if (parts.length < MAX_P)
+      parts.push({ b:'dust', x:cx, y:cy, px:cx, py:cy,
+        vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
+        r: 0.6 + Math.random()*2.2, hue: hueClock + (Math.random()*36-18),
+        life:1, decay: 0.5 + Math.random()*0.8, drag:0.94,
+        wander:1+Math.random()*2.5, wphase:Math.random()*6.28 });
+  }
+  shocks.push({ x:cx, y:cy, r:10, v:520 + held*140, a:0.85 });
+}
+addEventListener('touchmove', e => e.preventDefault(), { passive:false });
+
+/* ---------- keyboard ---------- */
+addEventListener('keydown', e => {
+  if (e.repeat || e.metaKey || e.ctrlKey) return;
+  const k = e.key.toLowerCase();
+  if (k >= '1' && k <= '4') setBrush(['dust','ribbons','embers','ink'][+k-1]);
+  else if (k === 'c') clearArt();
+  else if (k === 's') { e.preventDefault(); savePNG(); }
+});
+
+/* ---------- UI wiring ---------- */
+const brushGroup = document.getElementById('brushGroup');
+function setBrush(b){
+  brush = b;
+  brushGroup.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.brush === b));
+}
+brushGroup.addEventListener('click', e => { const t = e.target.closest('button'); if (t) setBrush(t.dataset.brush); });
+const fadeGroup = document.getElementById('fadeGroup');
+fadeGroup.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  fade = parseFloat(t.dataset.fade);
+  if (REDUCE) fade = Math.max(fade, 0.08);
+  fadeGroup.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === t));
+});
+function clearArt(){
+  parts.length = 0; shocks.length = 0;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+}
+function savePNG(){
+  const a = document.createElement('a');
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  a.download = `stardust-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.png`;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+document.getElementById('clearBtn').addEventListener('click', clearArt);
+document.getElementById('saveBtn').addEventListener('click', savePNG);
+document.querySelectorAll('.pill button').forEach(b => b.addEventListener('pointerdown', e => e.stopPropagation()));
+
+/* ---------- physics ---------- */
+function step(dt, now){
+  hueClock += 14 * dt;
+  const cx = ptr.x, cy = ptr.y;
+
+  /* vortex while held */
+  if (ptr.down) {
+    const grow = Math.min(1, (now - ptr.downT) / 1200);
+    const pull = 60 + 340 * grow, swirl = 140 + 900 * grow;
+    for (const p of parts) {
+      const dx = cx - p.x, dy = cy - p.y, d = Math.hypot(dx, dy);
+      if (d < 260 && d > 0.001) {
+        const f = (1 - d/260) * dt;
+        p.vx += (dx/d) * pull * f + (-dy/d) * swirl * f;
+        p.vy += (dy/d) * pull * f + ( dx/d) * swirl * f;
+      }
+    }
+    for (let i = 0; i < 2 + grow * 5; i++)
+      spawn(cx + (Math.random()-0.5)*30, cy + (Math.random()-0.5)*30, (Math.random()-0.5)*60, (Math.random()-0.5)*60);
+  }
+
+  /* particles */
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.px = p.x; p.py = p.y;
+    if (p.b === 'dust') {
+      p.vx += Math.sin(now/420 + p.wphase) * p.wander;
+      p.vy += Math.cos(now/377 + p.wphase*1.3) * p.wander * 0.6;
+    } else if (p.b === 'embers') {
+      p.vy -= 130 * dt;
+    }
+    p.vx *= Math.pow(p.drag, dt*60); p.vy *= Math.pow(p.drag, dt*60);
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.life -= p.decay * dt;
+    if (p.life <= 0) { parts.splice(i, 1); }
+  }
+
+  /* comet spring: stiffness 120, damping 0.82/frame */
+  const stiff = 120, dampF = 0.82;
+  comet.vx += (cx - comet.x) * stiff * dt;
+  comet.vy += (cy - comet.y) * stiff * dt;
+  const damp = Math.pow(dampF, dt * 60);
+  comet.vx *= damp; comet.vy *= damp;
+  comet.x += comet.vx * dt; comet.y += comet.vy * dt;
+  comet.trail.push({ x: comet.x, y: comet.y });
+  if (comet.trail.length > 28) comet.trail.shift();
+
+  /* shockwaves */
+  for (let i = shocks.length - 1; i >= 0; i--) {
+    const s = shocks[i];
+    s.r += s.v * dt; s.v *= Math.pow(0.94, dt*60); s.a -= 0.9 * dt;
+    if (s.a <= 0) shocks.splice(i, 1);
+  }
+}
+
+/* ---------- ghost autopilot ---------- */
+const IDLE_MS = 2600;
+function stepGhost(now, dt){
+  if (!ghost.on && !ptr.down && now - ptr.lastMove > IDLE_MS) {
+    ghost.on = true; ghost.t = 0;
+  }
+  if (ghost.on && !ptr.down) {
+    ghost.t += dt;
+    const t = ghost.t * 0.55;
+    const A = W * 0.32, B = H * 0.32;
+    const nx = W/2 + A * Math.sin(3*t + Math.PI/2) + W*0.03*Math.sin(2.3*t) + H*0.012*Math.sin(1.7*t);
+    const ny = H/2 + B * Math.sin(2*t) + H*0.028*Math.sin(1.31*t) + W*0.012*Math.cos(2.9*t);
+    paintAlong(ptr.x, ptr.y, nx, ny, nx - ptr.x, ny - ptr.y);
+    ptr.x = nx; ptr.y = ny;
+    ring.classList.add('live');
+    ring.style.transform = `translate(${nx}px, ${ny}px)`;
+  }
+}
+
+/* ---------- drawing ---------- */
+function draw(){
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = `rgba(0,0,0,${fade})`;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.globalCompositeOperation = 'lighter';
+  for (const p of parts) {
+    const a = Math.max(0, p.life);
+    if (p.b === 'ink') {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = `hsla(${p.hue},8%,88%,${0.02 * a})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.2832); ctx.fill();
+      ctx.globalCompositeOperation = 'lighter';
+      continue;
+    }
+    if (p.b === 'dust') {
+      ctx.fillStyle = `hsla(${p.hue},95%,68%,${a})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = `hsla(${p.hue},95%,68%,${a*0.30})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r*2.4, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = `hsla(${p.hue},95%,68%,${a*0.10})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r*4.6, 0, 6.2832); ctx.fill();
+    } else if (p.b === 'ribbons') {
+      ctx.strokeStyle = `hsla(${p.hue},95%,68%,${a*0.9})`;
+      ctx.lineWidth = p.r;
+      ctx.beginPath(); ctx.moveTo(p.px, p.py); ctx.lineTo(p.x, p.y); ctx.stroke();
+    } else if (p.b === 'embers') {
+      const flick = 0.55 + 0.45 * Math.sin(performance.now()/1000 * p.flick * 6.28);
+      ctx.fillStyle = `hsla(${p.hue},100%,${55+18*p.life}%,${a*flick})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.2832); ctx.fill();
+    }
+  }
+
+  /* comet tail: tapering brightening line, complementary hue */
+  const ch = hueClock + 180;
+  const tr = comet.trail;
+  for (let i = 1; i < tr.length; i++) {
+    const t = i / tr.length;
+    ctx.strokeStyle = `hsla(${ch},90%,${60+25*t}%,${0.22+0.6*t})`;
+    ctx.lineWidth = 0.4 + 3.4*t*t;
+    ctx.beginPath(); ctx.moveTo(tr[i-1].x, tr[i-1].y); ctx.lineTo(tr[i].x, tr[i].y); ctx.stroke();
+  }
+  /* white-hot head */
+  const g = ctx.createRadialGradient(comet.x, comet.y, 0, comet.x, comet.y, 18);
+  g.addColorStop(0, 'rgba(255,255,255,0.95)');
+  g.addColorStop(0.25, `hsla(${ch},90%,80%,0.55)`);
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(comet.x, comet.y, 18, 0, 6.2832); ctx.fill();
+
+  /* shockwave rings */
+  for (const s of shocks) {
+    ctx.strokeStyle = `hsla(${hueClock+40},90%,75%,${Math.max(0,s.a)})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.2832); ctx.stroke();
+  }
+}
+
+/* ---------- main loop ---------- */
+let last = performance.now();
+ptr.lastMove = last;
+function loop(now){
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  stepGhost(now, dt);
+  step(dt, now);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* hide the custom ring on touch-first devices */
+if (matchMedia('(hover: none)').matches) { ring.style.display = 'none'; document.body.classList.remove('hide-cursor'); }
+</script>
+</body>
+</html>

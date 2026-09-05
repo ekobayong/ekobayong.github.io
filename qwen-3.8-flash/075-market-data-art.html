@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aurum Exchange — Market Data as Abstract Art</title>
+<style>
+  :root{
+    --obsidian:#07080a; --footer:#0c0e12;
+    --mint:#2ee59d; --rose:#ff5c7a; --gold:#d4af37;
+    --text:#e8e6df;
+    --sans: ui-sans-serif, system-ui, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Courier New', monospace;
+  }
+  *{ box-sizing:border-box; }
+  html{ height:100%; }
+  body{
+    margin:0; min-height:100%; background:var(--obsidian); color:var(--text);
+    font-family:var(--sans); font-weight:400;
+    display:flex; flex-direction:column;
+  }
+  .num{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
+
+  #sonar{ position:fixed; inset:0; z-index:0; pointer-events:none; }
+  .grain{
+    position:fixed; inset:0; z-index:1; pointer-events:none; opacity:.35;
+    background-image:radial-gradient(rgba(232,230,223,.05) 1px, transparent 1.4px);
+    background-size:26px 26px;
+  }
+
+  header{
+    position:relative; z-index:3;
+    display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+    padding:13px 22px; border-bottom:1px solid rgba(212,175,55,.18);
+    background:rgba(7,8,10,.6); backdrop-filter:blur(6px);
+  }
+  .wordmark{ font-size:14px; font-weight:200; letter-spacing:.42em; text-transform:uppercase; white-space:nowrap; }
+  .wordmark b{ font-weight:400; color:var(--gold); }
+  .meta{ font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:rgba(232,230,223,.38); }
+  .tfs{ display:flex; gap:6px; margin-left:auto; }
+  .tf{
+    font-family:var(--mono); font-size:11px; letter-spacing:.08em;
+    background:transparent; color:rgba(232,230,223,.55);
+    border:1px solid rgba(212,175,55,.25); border-radius:999px;
+    padding:4px 13px; cursor:pointer; transition:color .2s, background .2s;
+  }
+  .tf:hover{ color:var(--text); }
+  .tf.active{ background:var(--gold); color:#141207; border-color:var(--gold); }
+  .live{ display:flex; align-items:center; gap:8px; font-size:11px; color:rgba(232,230,223,.65); }
+  .dot{
+    width:7px; height:7px; border-radius:50%; background:var(--mint);
+    box-shadow:0 0 8px var(--mint); animation:blink 1.6s ease-in-out infinite;
+  }
+  @keyframes blink{ 50%{ opacity:.25; } }
+  body.reduced .dot{ animation:none; }
+
+  main{
+    position:relative; z-index:2; flex:1;
+    display:grid; grid-template-columns:2fr 1fr; gap:14px;
+    padding:14px 22px 60px; max-width:1560px; width:100%; margin:0 auto;
+  }
+  .panel{
+    position:relative; overflow:hidden;
+    background:rgba(12,14,18,.62); border:1px solid rgba(212,175,55,.22);
+    border-radius:12px; padding:14px 16px;
+    backdrop-filter:blur(4px);
+  }
+  .panel::before{
+    content:""; position:absolute; top:0; left:8%; right:8%; height:1px;
+    background:linear-gradient(90deg, transparent, rgba(212,175,55,.75), transparent);
+  }
+  .panel h2{
+    margin:0 0 10px; font-size:10px; font-weight:500; letter-spacing:.26em;
+    text-transform:uppercase; color:rgba(232,230,223,.38);
+  }
+  .rcol{ display:flex; flex-direction:column; gap:14px; }
+  .rcol .panel{ flex:1; display:flex; flex-direction:column; }
+  #pricePanel{ display:flex; flex-direction:column; }
+  #chartWrap{ flex:1; min-height:340px; position:relative; }
+  #chart{ position:absolute; inset:0; width:100%; height:100%; }
+  #depth{ width:100%; height:230px; display:block; }
+
+  .stats{ display:flex; gap:26px; flex-wrap:wrap; align-items:baseline; margin-bottom:8px; }
+  .stat .k{ font-size:9px; letter-spacing:.22em; text-transform:uppercase; color:rgba(232,230,223,.38); display:block; margin-bottom:3px; }
+  .stat .v{ font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:14px; color:rgba(232,230,223,.85); }
+  .stat.big .v{ font-size:34px; font-weight:300; color:var(--text); text-shadow:0 0 18px rgba(212,175,55,.28); }
+  .up{ color:var(--mint) !important; } .down{ color:var(--rose) !important; }
+
+  .treemap{ position:relative; flex:1; min-height:230px; }
+  .cell{
+    position:absolute; border-radius:6px; overflow:hidden;
+    display:flex; flex-direction:column; justify-content:center; padding:6px 8px;
+    border:1px solid rgba(7,8,10,.6);
+    transition:background-color 1.2s ease, color 1.2s ease;
+    cursor:default;
+  }
+  .cell:hover{ transform:scale(1.035); outline:1px solid var(--gold); z-index:5; }
+  .cell .s{ font-size:10.5px; font-weight:500; letter-spacing:.06em; white-space:nowrap; }
+  .cell .p{ font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:10px; opacity:.8; }
+
+  footer{
+    position:fixed; left:0; right:0; bottom:0; height:38px; z-index:4;
+    background:var(--footer); border-top:1px solid rgba(212,175,55,.16);
+    overflow:hidden; display:flex; align-items:center;
+    -webkit-mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+            mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  }
+  .marquee{ display:flex; width:max-content; animation:mq 48s linear infinite; }
+  footer:hover .marquee{ animation-play-state:paused; }
+  body.reduced .marquee{ animation-duration:150s; }
+  @keyframes mq{ to{ transform:translateX(-50%); } }
+  .ti{
+    display:flex; align-items:center; gap:7px; padding:0 22px;
+    font-size:11px; white-space:nowrap; color:rgba(232,230,223,.55);
+  }
+  .ti b{ font-weight:500; letter-spacing:.1em; color:rgba(232,230,223,.9); }
+  .ti .px{ font-family:var(--mono); font-variant-numeric:tabular-nums; color:rgba(232,230,223,.75); }
+  .ti .ch{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  .ti .ch.up{ color:var(--mint); } .ti .ch.down{ color:var(--rose); }
+
+  @media (max-width:900px){
+    main{ grid-template-columns:1fr; }
+    body{ overflow:auto; }
+  }
+</style>
+</head>
+<body>
+<canvas id="sonar" aria-hidden="true"></canvas>
+<div class="grain" aria-hidden="true"></div>
+
+<header>
+  <div class="wordmark"><b>AURUM</b> Exchange</div>
+  <div class="meta">Synthetic feed · AUR/USD</div>
+  <div class="tfs" role="group" aria-label="timeframe">
+    <button class="tf" data-b="60">1m</button>
+    <button class="tf" data-b="300">5m</button>
+    <button class="tf active" data-b="3600">1h</button>
+  </div>
+  <div class="live"><span class="dot"></span><span class="num" id="clock">--:--:--</span></div>
+</header>
+
+<main>
+  <section class="panel" id="pricePanel">
+    <h2>Price · Aurum Spot</h2>
+    <div class="stats">
+      <div class="stat big"><span class="k">Last</span><span class="v" id="stLast">—</span></div>
+      <div class="stat"><span class="k">Change</span><span class="v" id="stChg">—</span></div>
+      <div class="stat"><span class="k">High</span><span class="v" id="stHi">—</span></div>
+      <div class="stat"><span class="k">Low</span><span class="v" id="stLo">—</span></div>
+      <div class="stat"><span class="k">Volatility · 1h</span><span class="v" id="stVol">—</span></div>
+    </div>
+    <div id="chartWrap"><canvas id="chart"></canvas></div>
+  </section>
+
+  <div class="rcol">
+    <section class="panel">
+      <h2>Depth of Market</h2>
+      <canvas id="depth"></canvas>
+    </section>
+    <section class="panel">
+      <h2>Sector Heat</h2>
+      <div class="treemap" id="treemap"></div>
+    </section>
+  </div>
+</main>
+
+<footer aria-label="ticker tape"><div class="marquee" id="marquee"></div></footer>
+
+<script>
+(function(){
+'use strict';
+var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (reduce) document.body.classList.add('reduced');
+
+/* ---------------- simulation ---------------- */
+var TICK_MS = reduce ? 360 : 130;
+var SIM_DT = 7.5, PRE = 32000;
+var OMEGA = 3.2e-9, ALPHA = 0.08, BETA = 0.90, KAPPA = 0.0006, MU = 1240;
+
+var gaussSpare = null;
+function gauss(){
+  if (gaussSpare !== null){ var g = gaussSpare; gaussSpare = null; return g; }
+  var u = 0, v = 0, s = 0;
+  do { u = Math.random()*2-1; v = Math.random()*2-1; s = u*u + v*v; } while (s >= 1 || s === 0);
+  var m = Math.sqrt(-2 * Math.log(s) / s);
+  gaussSpare = v * m; return u * m;
+}
+
+var price = new Float64Array(PRE + 1), rets = new Float64Array(PRE);
+var liveP = [0], liveR = [0];
+var sigma2 = 1.6e-7;
+(function pregen(){
+  var p = 1240 + Math.random()*14 - 7;
+  price[0] = p;
+  for (var i = 0; i < PRE; i++){
+    sigma2 = OMEGA + ALPHA * (rets[i-1] || 0) * (rets[i-1] || 0) + BETA * sigma2;
+    var r = Math.sqrt(sigma2) * gauss() + KAPPA * Math.log(MU / p);
+    if (Math.random() < 0.0004) r += (Math.random() < 0.5 ? -1 : 1) * (0.004 + Math.random()*0.006);
+    rets[i] = r;
+    p *= Math.exp(r);
+    price[i+1] = p;
+  }
+  liveP[0] = p;
+})();
+var priceAt = function(idx){ /* index over combined history: 0..PRE = pregen, then live */
+  var n = PRE + liveP.length - 1;
+  var k = idx - PRE; return k < 0 ? price[idx] : liveP[k];
+};
+var totalTicks = function(){ return PRE + liveP.length; };
+var last = function(){ return liveP[liveP.length - 1]; };
+var lastRet = function(){ return liveR[liveR.length - 1]; };
+var simTimeAt = function(idx){ return idx * SIM_DT; };
+
+var sessionOpenIdx = PRE - 1920; /* four simulated hours back */
+var sessionOpen = priceAt(sessionOpenIdx);
+
+/* ---------------- state ---------------- */
+var bucket = 3600;
+var dirty = true;
+var candleCache = null, candleKey = '';
+
+function candles(n){
+  var key = bucket + ':' + n;
+  if (candleCache && key === candleKey && !dirty) return candleCache;
+  var per = Math.round(bucket / SIM_DT);
+  var total = totalTicks() - 1; /* number of returns */
+  var out = [];
+  var startIdx = Math.max(1, total - n * per + 1);
+  var i, j, c, o, h, l, v;
+  for (i = startIdx; i <= total; i += per){
+    o = priceAt(i - 1); h = o; l = o; c = o; v = 0;
+    var end = Math.min(total, i + per - 1);
+    for (j = i; j <= end; j++){
+      c = priceAt(j); v += Math.abs(ret(j));
+      if (c > h) h = c; if (c < l) l = c;
+    }
+    out.push({ t: simTimeAt(i), o: o, h: h, l: l, c: c, v: v });
+  }
+  candleCache = out; candleKey = key; dirty = false;
+  return out;
+}
+function ret(i){ var k = i - PRE; return k < 0 ? rets[i] : liveR[k]; }
+
+/* ---------------- sectors ---------------- */
+var SECTORS = [
+  ['Photonics',9.2],['Orbital Freight',8.4],['Synthetic Biology',8.0],['Desalination',7.4],
+  ['Fusion Utilities',7.0],['Quantum Fabs',6.6],['Vertical Farms',6.0],['Cartography',5.4],
+  ['Cold Storage',5.0],['Lunar Leisure',4.6],['Textiles',4.0],['Timber',3.4]
+];
+var sectors = SECTORS.map(function(s){
+  return { name: s[0], w: s[1], pct: (Math.random()*2 - 1) * 1.4 };
+});
+var treemap = document.getElementById('treemap');
+function layoutTreemap(){
+  treemap.innerHTML = '';
+  var totalW = sectors.reduce(function(a, s){ return a + s.w; }, 0);
+  var order = sectors.slice().sort(function(a, b){ return b.w - a.w; });
+  var strips = [[], [], []], target = totalW / 3, acc = 0, si = 0;
+  order.forEach(function(s){
+    strips[si].push(s); acc += s.w;
+    if (acc > target * (si + 1) && si < 2) si++;
+  });
+  var y = 0;
+  strips.forEach(function(strip){
+    var stripW = strip.reduce(function(a, s){ return a + s.w; }, 0);
+    var x = 0;
+    strip.forEach(function(s){
+      var el = document.createElement('div');
+      el.className = 'cell'; el.dataset.name = s.name;
+      el.style.left = (x / totalW * 100).toFixed(3) + '%';
+      el.style.width = (s.w / totalW * 100 - 0.3).toFixed(3) + '%';
+      el.style.top = y + '%';
+      el.style.height = (stripW / totalW * 100 - 0.8).toFixed(3) + '%';
+      el.innerHTML = '<span class="s">' + s.name + '</span><span class="p"></span>';
+      treemap.appendChild(el);
+      s.el = el;
+      x += s.w;
+    });
+    y += stripW / totalW * 100;
+  });
+}
+layoutTreemap();
+function paintSectors(){
+  sectors.forEach(function(s){
+    if (!s.el) return;
+    var up = s.pct >= 0, a = Math.min(0.92, 0.06 + Math.abs(s.pct) / 2.6);
+    s.el.style.backgroundColor = up ? 'rgba(46,229,157,' + a.toFixed(3) + ')' : 'rgba(255,92,122,' + a.toFixed(3) + ')';
+    var dark = a > 0.55;
+    s.el.style.color = dark ? '#07080a' : 'rgba(232,230,223,.85)';
+    s.el.querySelector('.p').textContent = (up ? '+' : '') + s.pct.toFixed(2) + '%';
+  });
+}
+
+/* ---------------- tickers ---------------- */
+var TICKS = [
+  ['AUR',1240.20],['PHTN',86.42],['ORBF',214.75],['SYNB',43.18],['DSAL',9.84],['FUSN',301.60],
+  ['QFAB',57.93],['VFRM',12.45],['CART',78.30],['COLD',26.71],['LUNA',151.08],['TXTL',4.96],
+  ['TMBR',33.27],['HELX',67.44],['MIRA',19.02],['ZEPH',95.61]
+];
+var tapeRows = [];
+(function buildTape(){
+  var mq = document.getElementById('marquee');
+  for (var copy = 0; copy < 2; copy++){
+    var frag = document.createElement('div');
+    frag.style.display = 'flex';
+    TICKS.forEach(function(t, i){
+      var el = document.createElement('span');
+      el.className = 'ti';
+      el.innerHTML = '<b>' + t[0] + '</b><span class="px"></span><span class="ch"></span>';
+      frag.appendChild(el);
+      (tapeRows[i] = tapeRows[i] || []).push({
+        px: el.querySelector('.px'), ch: el.querySelector('.ch')
+      });
+    });
+    mq.appendChild(frag);
+  }
+})();
+var tickers = TICKS.map(function(t){
+  return { sym: t[0], base: t[1], price: t[1] * (1 + (Math.random()*4 - 2)/100), pct: (Math.random()*2 - 1) * 1.2 };
+});
+tickers[0].price = 1240; /* AUR tracks the index */
+function paintTape(){
+  tickers.forEach(function(t, i){
+    var dec = t.base > 500 ? 2 : 2;
+    tapeRows[i].forEach(function(r){
+      r.px.textContent = t.price.toFixed(dec);
+      var up = t.pct >= 0;
+      r.ch.textContent = (up ? '▲' : '▼') + Math.abs(t.pct).toFixed(2) + '%';
+      r.ch.className = 'ch ' + (up ? 'up' : 'down');
+    });
+  });
+}
+
+/* ---------------- sonar ---------------- */
+var sonar = document.getElementById('sonar'), sc = sonar.getContext('2d');
+var rings = [];
+function sizeCanvas(cv){
+  var dpr = Math.min(2, window.devicePixelRatio || 1);
+  var w = cv.clientWidth || innerWidth, h = cv.clientHeight || innerHeight;
+  cv.width = Math.max(1, Math.round(w * dpr)); cv.height = Math.max(1, Math.round(h * dpr));
+  cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { w: w, h: h };
+}
+var sonarDim = sizeCanvas(sonar);
+addEventListener('resize', function(){
+  sonarDim = sizeCanvas(sonar);
+  chartDim = null; depthDim = null;
+  layoutTreemap(); paintSectors();
+});
+function spawnRing(magnitude, up){
+  rings.push({
+    x: Math.random() * sonarDim.w, y: Math.random() * sonarDim.h,
+    maxR: 26 + Math.min(240, magnitude * 60000),
+    age: 0, life: 3.6 + Math.random()*1.6,
+    up: up
+  });
+  if (rings.length > 260) rings.shift();
+}
+var lastTs = performance.now();
+function sonarFrame(now){
+  requestAnimationFrame(sonarFrame);
+  var dt = Math.min(0.05, (now - lastTs) / 1000); lastTs = now;
+  sc.clearRect(0, 0, sonarDim.w, sonarDim.h);
+  for (var i = rings.length - 1; i >= 0; i--){
+    var r = rings[i];
+    r.age += dt;
+    if (r.age >= r.life){ rings.splice(i, 1); continue; }
+    var t = r.age / r.life;
+    var ease = 1 - Math.pow(1 - t, 3);
+    var alpha = 0.16 * (1 - t);
+    sc.lineWidth = 1.4;
+    sc.strokeStyle = (r.up ? 'rgba(46,229,157,' : 'rgba(255,92,122,') + alpha.toFixed(3) + ')';
+    sc.beginPath(); sc.arc(r.x, r.y, r.maxR * ease, 0, 6.2832); sc.stroke();
+    sc.strokeStyle = (r.up ? 'rgba(46,229,157,' : 'rgba(255,92,122,') + (alpha * 0.55).toFixed(3) + ')';
+    sc.beginPath(); sc.arc(r.x, r.y, r.maxR * ease * 0.55, 0, 6.2832); sc.stroke();
+  }
+}
+requestAnimationFrame(sonarFrame);
+
+/* ---------------- chart ---------------- */
+var chart = document.getElementById('chart'), cc = chart.getContext('2d');
+var chartDim = null;
+var N = 90;
+function niceStep(range){
+  var steps = [0.1,0.2,0.25,0.5,1,2,2.5,5,10,20,25,50,100,200];
+  for (var i = 0; i < steps.length; i++) if (range / steps[i] <= 6.5) return steps[i];
+  return 500;
+}
+function drawChart(now){
+  if (!chartDim) chartDim = sizeCanvas(chart);
+  var w = chartDim.w, h = chartDim.h;
+  var padR = 62, padB = 20, padT = 6;
+  var w2 = w - padR - 4, h2 = h - padB - padT;
+  N = Math.max(24, Math.floor(w2 / 9));
+  var cs = candles(N);
+  if (!cs.length) return;
+  var lo = Infinity, hi = -Infinity, vmax = 0;
+  cs.forEach(function(c){ if (c.l < lo) lo = c.l; if (c.h > hi) hi = c.h; if (c.v > vmax) vmax = c.v; });
+  var pad = (hi - lo) * 0.08 + 0.02;
+  lo -= pad; hi += pad;
+  var py = function(p){ return padT + (hi - p) / (hi - lo) * h2; };
+  cc.clearRect(0, 0, w, h);
+  var slot = w2 / cs.length;
+
+  /* gold hairlines + right labels */
+  var step = niceStep(hi - lo);
+  cc.font = '9.5px ui-monospace, Menlo, Consolas, monospace';
+  cc.textAlign = 'left';
+  for (var gp = Math.ceil(lo / step) * step; gp < hi; gp += step){
+    var gy = py(gp);
+    cc.strokeStyle = 'rgba(212,175,55,.13)'; cc.lineWidth = 1;
+    cc.beginPath(); cc.moveTo(0, gy + .5); cc.lineTo(w2, gy + .5); cc.stroke();
+    cc.fillStyle = 'rgba(232,230,223,.38)';
+    cc.fillText(gp.toFixed(step < 1 ? 2 : (step < 10 ? 1 : 0)), w2 + 8, gy + 3);
+  }
+  /* volume */
+  var volH = h2 * 0.16;
+  cs.forEach(function(c, i){
+    var vh = vmax > 0 ? (c.v / vmax) * volH : 0;
+    cc.fillStyle = c.c >= c.o ? 'rgba(46,229,157,.07)' : 'rgba(255,92,122,.07)';
+    cc.fillRect(i * slot + slot * 0.22, padT + h2 - vh, slot * 0.56, vh);
+  });
+  /* candles */
+  var tNow = simTimeAt(totalTicks() - 1);
+  cs.forEach(function(c, i){
+    var x = i * slot + slot / 2;
+    var up = c.c >= c.o, col = up ? '46,229,157' : '255,92,122';
+    var isLast = i === cs.length - 1;
+    if (isLast && !reduce){ cc.shadowColor = 'rgba(' + col + ',.9)'; cc.shadowBlur = 18; }
+    cc.strokeStyle = 'rgba(' + col + ',.9)'; cc.lineWidth = 1;
+    cc.beginPath(); cc.moveTo(Math.round(x) + .5, py(c.h)); cc.lineTo(Math.round(x) + .5, py(c.l)); cc.stroke();
+    var bw = Math.max(2, slot * 0.55);
+    var by = py(Math.max(c.o, c.c)), bh = Math.max(1.4, Math.abs(py(c.o) - py(c.c)));
+    if (up){
+      cc.fillStyle = 'rgba(7,8,10,.55)'; cc.fillRect(x - bw/2, by, bw, bh);
+      cc.strokeRect(Math.round(x - bw/2) + .5, Math.round(by) + .5, Math.round(bw), Math.round(bh));
+    } else {
+      cc.fillStyle = 'rgba(' + col + ',.9)';
+      cc.fillRect(x - bw/2, by, bw, bh);
+    }
+    cc.shadowBlur = 0;
+    if (isLast){
+      var pr = reduce ? 2.6 : 2.6 + Math.sin(now / 320) * 1.3;
+      cc.fillStyle = up ? '#2ee59d' : '#ff5c7a';
+      cc.beginPath(); cc.arc(x, py(c.c), pr, 0, 6.2832); cc.fill();
+    }
+    /* time marks */
+    if (i % Math.max(1, Math.round(cs.length / 7)) === 0 || isLast){
+      cc.fillStyle = 'rgba(232,230,223,.3)';
+      cc.textAlign = isLast ? 'right' : 'center';
+      var ago = (tNow - c.t) / 60;
+      cc.fillText(isLast ? 'now' : '-' + Math.round(ago / 10) * 10 + 'm', x, h - 6);
+    }
+  });
+  /* dashed gold price line + tag */
+  var lp = last(), ly = py(lp);
+  cc.setLineDash([5, 5]);
+  cc.strokeStyle = 'rgba(212,175,55,.65)'; cc.lineWidth = 1;
+  cc.beginPath(); cc.moveTo(0, ly + .5); cc.lineTo(w2, ly + .5); cc.stroke();
+  cc.setLineDash([]);
+  var up = lp >= sessionOpen;
+  cc.fillStyle = up ? '#2ee59d' : '#ff5c7a';
+  var tag = lp.toFixed(2);
+  cc.font = '10.5px ui-monospace, Menlo, Consolas, monospace';
+  var tw = cc.measureText(tag).width + 12;
+  cc.beginPath();
+  var ty = Math.min(h - padB - 16, Math.max(padT, ly - 8));
+  if (cc.roundRect) cc.roundRect(w2 + 2, ty, tw, 16, 3); else cc.rect(w2 + 2, ty, tw, 16);
+  cc.fill();
+  cc.fillStyle = '#07080a'; cc.textAlign = 'left';
+  cc.fillText(tag, w2 + 8, ty + 11.5);
+}
+
+/* ---------------- depth ---------------- */
+var depth = document.getElementById('depth'), dc = depth.getContext('2d');
+var depthDim = null;
+var bids = new Array(22), asks = new Array(22);
+for (var i = 0; i < 22; i++){ bids[i] = 40 + Math.random()*60; asks[i] = 40 + Math.random()*60; }
+var breathT = 0;
+function drawDepth(dt){
+  if (!depthDim) depthDim = sizeCanvas(depth);
+  var w = depthDim.w, h = depthDim.h;
+  breathT += dt;
+  var cx = w / 2, half = w / 2 - 46;
+  var step = 0.45, lp = last();
+  var qmax = 0, j;
+  for (j = 0; j < 22; j++){
+    bids[j] = Math.max(12, Math.min(100, bids[j] + (Math.random()*2-1) * 2.4));
+    asks[j] = Math.max(12, Math.min(100, asks[j] + (Math.random()*2-1) * 2.4));
+    if (bids[j] > qmax) qmax = bids[j];
+    if (asks[j] > qmax) qmax = asks[j];
+  }
+  var breath = 1 + 0.14 * Math.sin(breathT / 2600);
+  dc.clearRect(0, 0, w, h);
+  var rowH = (h - 8) / 22;
+  dc.font = '9px ui-monospace, Menlo, Consolas, monospace';
+  for (j = 0; j < 22; j++){
+    var y = 4 + j * rowH;
+    var bw = bids[j] / qmax * half * breath * (0.55 + 0.45 * (1 - j/22));
+    var aw = asks[j] / qmax * half * breath * (0.55 + 0.45 * (1 - j/22));
+    var g1 = dc.createLinearGradient(cx - bw, 0, cx, 0);
+    g1.addColorStop(0, 'rgba(46,229,157,.06)'); g1.addColorStop(1, 'rgba(46,229,157,.55)');
+    dc.fillStyle = g1;
+    dc.fillRect(cx - bw, y, bw - 1.5, rowH - 2.5);
+    var g2 = dc.createLinearGradient(cx, 0, cx + aw, 0);
+    g2.addColorStop(0, 'rgba(255,92,122,.55)'); g2.addColorStop(1, 'rgba(255,92,122,.06)');
+    dc.fillStyle = g2;
+    dc.fillRect(cx + 1.5, y, aw - 1.5, rowH - 2.5);
+    if (j % 4 === 0){
+      dc.fillStyle = 'rgba(232,230,223,.4)';
+      dc.textAlign = 'left';
+      dc.fillText((lp - (j + 1) * step).toFixed(2), 4, y + rowH / 2 + 3);
+      dc.fillText((lp + (j + 1) * step).toFixed(2), cx + half + 8, y + rowH / 2 + 3);
+    }
+  }
+  dc.strokeStyle = 'rgba(212,175,55,.7)'; dc.lineWidth = 1;
+  dc.beginPath(); dc.moveTo(cx + .5, 0); dc.lineTo(cx + .5, h); dc.stroke();
+}
+
+/* ---------------- stats + timeframe ---------------- */
+var stLast = document.getElementById('stLast'), stChg = document.getElementById('stChg'),
+    stHi = document.getElementById('stHi'), stLo = document.getElementById('stLo'),
+    stVol = document.getElementById('stVol');
+function updateStats(cs){
+  var lp = last();
+  stLast.textContent = lp.toFixed(2);
+  var chg = (lp / sessionOpen - 1) * 100;
+  stChg.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+  stChg.className = 'v ' + (chg >= 0 ? 'up' : 'down');
+  var hi = -Infinity, lo = Infinity;
+  for (var i = 0; i < cs.length; i++){ if (cs[i].h > hi) hi = cs[i].h; if (cs[i].l < lo) lo = cs[i].l; }
+  stHi.textContent = hi.toFixed(2); stLo.textContent = lo.toFixed(2);
+  var sigma = Math.sqrt(sigma2);
+  stVol.textContent = (sigma * Math.sqrt(480) * 100).toFixed(2) + '%';
+}
+Array.prototype.forEach.call(document.querySelectorAll('.tf'), function(b){
+  b.addEventListener('click', function(){
+    Array.prototype.forEach.call(document.querySelectorAll('.tf'), function(x){ x.classList.remove('active'); });
+    b.classList.add('active');
+    bucket = +b.dataset.b; dirty = true;
+  });
+});
+
+/* ---------------- clock ---------------- */
+function clock(){
+  var d = new Date();
+  document.getElementById('clock').textContent =
+    String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+}
+clock(); setInterval(clock, 1000);
+
+/* ---------------- tick engine ---------------- */
+var chartClock = 0;
+function onTick(){
+  var p = last();
+  sigma2 = OMEGA + ALPHA * lastRet() * lastRet() + BETA * sigma2;
+  var r = Math.sqrt(sigma2) * gauss() + KAPPA * Math.log(MU / p);
+  if (Math.random() < 0.002) r += (Math.random() < 0.5 ? -1 : 1) * 0.004;
+  var np = p * Math.exp(r);
+  liveP.push(np); liveR.push(r);
+  if (liveP.length > 60000){ /* trim head, rebase index mapping */
+    var cut = 20000;
+    liveP = liveP.slice(cut); liveR = liveR.slice(cut);
+    PRE -= cut;
+  }
+  dirty = true;
+  spawnRing(Math.abs(r), r >= 0);
+  /* sympathy nudges */
+  var s = sectors[Math.floor(Math.random() * sectors.length)];
+  s.pct += r * 55 + (Math.random() - 0.5) * 0.03;
+  var t = tickers[Math.floor(Math.random() * tickers.length)];
+  t.price *= (1 + r * (0.5 + Math.random() * 0.7));
+  t.pct += r * 60;
+  tickers[0].price = np;
+  tickers[0].pct = (np / sessionOpen - 1) * 100;
+  paintSectors(); paintTape();
+  /* keep GARCH sigma alive for volatility stat */
+}
+var sigma = Math.sqrt(sigma2);
+setInterval(onTick, TICK_MS);
+
+function frame(now){
+  requestAnimationFrame(frame);
+  var dt = now - (frame.last || now); frame.last = now;
+  sigma = Math.sqrt(sigma2);
+  chartClock += dt;
+  if (chartClock >= 120){
+    chartClock = 0;
+    drawChart(now);
+    updateStats(candles(N));
+  }
+  drawDepth(dt);
+}
+requestAnimationFrame(frame);
+
+/* first paint */
+paintSectors(); paintTape(); dirty = true;
+})();
+</script>
+</body>
+</html>

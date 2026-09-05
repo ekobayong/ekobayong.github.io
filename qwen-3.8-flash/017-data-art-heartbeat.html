@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulse — A Portrait of One Heartbeat</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    --accent: #7df9c2;
+    font-family: ui-sans-serif, system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 200;
+    background:
+      radial-gradient(900px 600px at 12% -5%, rgba(125,249,194,0.045), transparent 60%),
+      radial-gradient(1100px 700px at 88% 105%, rgba(255,138,122,0.04), transparent 60%),
+      linear-gradient(180deg, #050914 0%, #0a1226 55%, #060b18 100%);
+    background-attachment: fixed;
+    color: rgba(233,240,255,0.88);
+    min-height: 100vh;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+  body[data-mode="active"] { --accent: #ff8a7a; }
+  body[data-mode="sleep"]  { --accent: #9db4ff; }
+
+  .wrap { max-width: 1440px; margin: 0 auto; padding: clamp(20px, 3.2vw, 44px) clamp(16px, 3vw, 40px) 40px; }
+
+  .label {
+    font-size: 10px; font-weight: 300; text-transform: uppercase;
+    letter-spacing: 0.3em; color: rgba(233,240,255,0.32);
+  }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 28px; flex-wrap: wrap; margin-bottom: 26px;
+  }
+  h1 {
+    font-size: clamp(26px, 3.6vw, 46px); font-weight: 100;
+    letter-spacing: -0.015em; line-height: 1.06; margin: 10px 0 8px;
+    color: rgba(233,240,255,0.95);
+  }
+  h1 .hl { color: var(--accent); font-weight: 200; transition: color 0.8s ease; }
+  .eyebrow { display: flex; align-items: center; gap: 10px; }
+  .eyebrow .led {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 8px var(--accent); animation: blink 2.2s ease-in-out infinite;
+    transition: background 0.8s, box-shadow 0.8s;
+  }
+  @keyframes blink { 0%,100% { opacity: 1 } 50% { opacity: 0.25 } }
+  .sub { font-size: 13px; font-weight: 200; color: rgba(233,240,255,0.42); letter-spacing: 0.02em; max-width: 46ch; }
+
+  .seg {
+    position: relative; display: inline-flex; padding: 5px;
+    border: 1px solid rgba(255,255,255,0.09); border-radius: 999px;
+    background: rgba(255,255,255,0.03);
+  }
+  .seg button {
+    position: relative; z-index: 1; appearance: none; border: 0; cursor: pointer;
+    background: transparent; color: rgba(233,240,255,0.5);
+    font: inherit; font-size: 12px; font-weight: 300;
+    text-transform: uppercase; letter-spacing: 0.24em;
+    padding: 10px 22px 9px 24px; border-radius: 999px;
+    transition: color 0.35s;
+  }
+  .seg button[aria-pressed="true"] { color: #04101a; font-weight: 400; }
+  .seg .pill {
+    position: absolute; top: 5px; bottom: 5px; left: 5px; width: 90px;
+    border-radius: 999px; background: var(--accent);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent),
+                0 0 46px color-mix(in srgb, var(--accent) 22%, transparent);
+    transition: left 0.5s cubic-bezier(0.22,1,0.36,1), width 0.5s cubic-bezier(0.22,1,0.36,1),
+                background 0.8s, box-shadow 0.8s;
+  }
+
+  /* ---------- grid & cards ---------- */
+  .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 18px; }
+  .card {
+    position: relative; border: 1px solid rgba(255,255,255,0.07); border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
+    padding: 22px 24px;
+    animation: fadeUp 0.9s cubic-bezier(0.22,1,0.36,1) both;
+    animation-delay: calc(var(--i) * 110ms);
+    overflow: hidden;
+  }
+  .card::before {
+    content: ""; position: absolute; inset: 0 0 auto; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.28), transparent);
+    opacity: 0.7;
+  }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+
+  .c-ecg   { grid-column: span 12; }
+  .c-spo2  { grid-column: span 3; }
+  .c-resp  { grid-column: span 3; }
+  .c-vitals{ grid-column: span 6; }
+  .c-day   { grid-column: span 12; }
+
+  /* ---------- card 1: ECG ---------- */
+  .ecg-top { display: flex; align-items: flex-end; gap: 34px; flex-wrap: wrap; }
+  .bpm-block { display: flex; align-items: flex-start; gap: 14px; }
+  .bpm { font-size: clamp(56px, 8.4vw, 112px); font-weight: 100; line-height: 0.9; letter-spacing: -0.04em; color: rgba(233,240,255,0.96); }
+  .bpm-side { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
+  .heart { width: 26px; height: 26px; fill: var(--accent); filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 60%, transparent)); transition: fill 0.8s; }
+  .heart.beating { animation: thump 0.83s ease-in-out infinite; transform-origin: 50% 55%; }
+  @keyframes thump {
+    0% { transform: scale(1) } 7% { transform: scale(1.28) } 15% { transform: scale(1) }
+    23% { transform: scale(1.16) } 33% { transform: scale(1) } 100% { transform: scale(1) }
+  }
+  .ecg-meta { display: flex; gap: 30px; flex-wrap: wrap; margin-left: auto; padding-bottom: 6px; }
+  .meta-item .v { font-size: 15px; font-weight: 200; color: rgba(233,240,255,0.78); margin-top: 5px; white-space: nowrap; }
+  .meta-item .v small { font-size: 10px; letter-spacing: 0.18em; color: rgba(233,240,255,0.35); margin-left: 3px; }
+  #ecgCanvas { display: block; width: 100%; height: clamp(170px, 25vh, 250px); margin-top: 18px; border-radius: 10px; }
+
+  /* ---------- card 2: SpO2 ---------- */
+  .gauge-wrap { position: relative; display: flex; justify-content: center; }
+  .gauge { width: 100%; max-width: 240px; height: auto; }
+  .gauge .track { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 9; stroke-linecap: round; }
+  .gauge .arc { fill: none; stroke: var(--accent); stroke-width: 9; stroke-linecap: round;
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 55%, transparent));
+    transition: stroke-dashoffset 0.9s cubic-bezier(0.22,1,0.36,1), stroke 0.8s, filter 0.8s; }
+  .gauge .tick { stroke: rgba(233,240,255,0.28); stroke-width: 1; }
+  .gauge .tick.major { stroke: rgba(233,240,255,0.55); stroke-width: 1.6; }
+  .gauge-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding-bottom: 8%; }
+  .gauge-num { font-size: 48px; font-weight: 100; letter-spacing: -0.03em; color: rgba(233,240,255,0.96); }
+  .pi { margin-top: 12px; text-align: center; }
+  .pi .v { color: rgba(233,240,255,0.6); font-weight: 300; font-size: 12px; letter-spacing: 0.06em; margin-top: 4px; }
+
+  /* ---------- card 3: respiration ---------- */
+  .breath-wrap { position: relative; height: 216px; display: flex; align-items: center; justify-content: center; }
+  .ring { position: absolute; border-radius: 50%; border: 1px solid rgba(255,255,255,0.12); }
+  .ring.r1 { width: 150px; height: 150px; }
+  .ring.r2 { width: 200px; height: 200px; border-color: rgba(255,255,255,0.06); }
+  .orb {
+    width: 92px; height: 92px; border-radius: 50%;
+    background: radial-gradient(circle at 38% 34%,
+      color-mix(in srgb, var(--accent) 95%, white) 0%,
+      var(--accent) 42%,
+      color-mix(in srgb, var(--accent) 30%, transparent) 78%,
+      transparent 100%);
+    box-shadow: 0 0 34px color-mix(in srgb, var(--accent) 45%, transparent),
+                0 0 90px color-mix(in srgb, var(--accent) 18%, transparent);
+    transform: scale(0.9); will-change: transform;
+    transition: background 0.8s, box-shadow 0.8s;
+  }
+  .breath-read { text-align: center; margin-top: 6px; }
+  .breath-phase { font-size: 22px; font-weight: 100; color: rgba(233,240,255,0.9); margin-top: 6px; letter-spacing: 0.04em; }
+  .breath-rate { font-size: 12px; color: rgba(233,240,255,0.5); margin-top: 6px; letter-spacing: 0.05em; }
+
+  /* ---------- card 4: vitals ---------- */
+  .vitals-rows { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 30px; }
+  .vital .v { font-size: 30px; font-weight: 100; letter-spacing: -0.02em; color: rgba(233,240,255,0.95); margin-top: 8px; }
+  .vital .v small { font-size: 13px; color: rgba(233,240,255,0.4); letter-spacing: 0.04em; margin-left: 4px; }
+  .vital .trend { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; margin-top: 4px; color: var(--accent); font-weight: 300; transition: color 0.8s; }
+  .vital .trend.down { color: rgba(233,240,255,0.4); }
+  .bar { height: 2px; background: rgba(255,255,255,0.09); border-radius: 2px; margin-top: 14px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 50%; background: var(--accent); border-radius: 2px;
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent);
+    transition: width 1.2s cubic-bezier(0.22,1,0.36,1), background 0.8s; }
+
+  /* ---------- card 5: 24h chart ---------- */
+  .chart-box { position: relative; }
+  .chart-svg { display: block; width: 100%; height: clamp(170px, 24vh, 240px); }
+  .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round;
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 50%, transparent));
+    transition: stroke 0.8s, filter 0.8s; }
+  .chart-area { opacity: 0.9; }
+  .chartstop1 { stop-color: var(--accent); stop-opacity: 0.3; transition: stop-color 0.8s; }
+  .chartstop2 { stop-color: var(--accent); stop-opacity: 0; transition: stop-color 0.8s; }
+  .gridline { stroke: rgba(233,240,255,0.09); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .gridline.major { stroke: rgba(233,240,255,0.16); }
+  .sleepwin { fill: rgba(157,180,255,0.05); }
+  .chart-lab { position: absolute; font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(233,240,255,0.3); pointer-events: none; white-space: nowrap; }
+  .crosshair { position: absolute; top: 0; bottom: 20px; width: 1px; background: color-mix(in srgb, var(--accent) 60%, transparent); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+  .cdot { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 10px var(--accent); transform: translate(-50%, -50%); opacity: 0; transition: opacity 0.2s, background 0.8s; pointer-events: none; }
+  .ctip { position: absolute; transform: translate(-50%, -138%); padding: 6px 10px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.12); background: rgba(8,13,28,0.92);
+    font-size: 12px; font-weight: 300; letter-spacing: 0.05em; color: rgba(233,240,255,0.9);
+    opacity: 0; transition: opacity 0.2s; pointer-events: none; white-space: nowrap; }
+  .ctip b { color: var(--accent); font-weight: 400; transition: color 0.8s; }
+  .chart-box:hover .crosshair, .chart-box:hover .cdot, .chart-box:hover .ctip { opacity: 1; }
+  .legend { display: flex; gap: 22px; margin-top: 14px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.24em; color: rgba(233,240,255,0.32); }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  /* ---------- footer ---------- */
+  footer { display: flex; justify-content: space-between; align-items: center; gap: 18px; flex-wrap: wrap;
+    margin-top: 26px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.06); }
+  footer .disc { font-size: 11px; font-weight: 300; letter-spacing: 0.06em; color: rgba(233,240,255,0.32); max-width: 60ch; }
+  footer .clock { font-size: 14px; font-weight: 200; letter-spacing: 0.16em; color: rgba(233,240,255,0.6); }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1120px) {
+    .c-spo2, .c-resp { grid-column: span 6; }
+    .c-vitals { grid-column: span 12; }
+  }
+  @media (max-width: 720px) {
+    .card { grid-column: span 12 !important; padding: 18px; }
+    .vitals-rows { grid-template-columns: 1fr; gap: 22px; }
+    .ecg-meta { margin-left: 0; gap: 18px; }
+    .seg button { padding: 9px 14px 8px 16px; letter-spacing: 0.16em; }
+    header { align-items: flex-start; }
+  }
+  @media (max-width: 400px) {
+    .seg { width: 100%; justify-content: center; }
+    .bpm { font-size: 64px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card { animation: none; }
+    .heart.beating { animation: none; }
+    .eyebrow .led { animation: none; }
+    * { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body data-mode="resting">
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="eyebrow">
+        <span class="led" aria-hidden="true"></span>
+        <span class="label">Subject 07 · Continuous capture · Day 214</span>
+      </div>
+      <h1>A portrait of <span class="hl">one heartbeat</span></h1>
+      <p class="sub">Eleven seconds of a living rhythm, redrawn frame by frame. Change the state of the body and the portrait changes with it.</p>
+    </div>
+    <div class="seg" role="group" aria-label="Subject state">
+      <span class="pill" id="segPill" aria-hidden="true"></span>
+      <button type="button" data-mode="resting" aria-pressed="true">Resting</button>
+      <button type="button" data-mode="active"  aria-pressed="false">Active</button>
+      <button type="button" data-mode="sleep"   aria-pressed="false">Sleep</button>
+    </div>
+  </header>
+
+  <main class="grid">
+
+    <!-- Card 1 · ECG -->
+    <section class="card c-ecg" style="--i:0" aria-label="Lead II electrocardiogram">
+      <div class="card-head">
+        <span class="label">Lead II · Electrocardiogram</span>
+        <span class="label" style="letter-spacing:0.24em">Sinus rhythm</span>
+      </div>
+      <div class="ecg-top">
+        <div class="bpm-block">
+          <span class="bpm" id="bpmNum">72</span>
+          <span class="bpm-side">
+            <svg class="heart beating" id="heartIcon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 21.35 10.55 20C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+            <span class="label" style="font-size:9px">bpm</span>
+          </span>
+        </div>
+        <div class="ecg-meta">
+          <div class="meta-item"><div class="label">R–R interval</div><div class="v"><span id="rrVal">833</span><small>ms</small></div></div>
+          <div class="meta-item"><div class="label">HRV · RMSSD</div><div class="v"><span id="hrvVal">46</span><small>ms</small></div></div>
+          <div class="meta-item"><div class="label">QT · Bazett</div><div class="v"><span id="qtVal">385</span><small>ms</small></div></div>
+          <div class="meta-item"><div class="label">Sweep speed</div><div class="v">25<small>mm/s</small> · 10<small>mm/mV</small></div></div>
+        </div>
+      </div>
+      <canvas id="ecgCanvas"></canvas>
+    </section>
+
+    <!-- Card 2 · SpO2 -->
+    <section class="card c-spo2" style="--i:1" aria-label="Blood oxygen saturation">
+      <div class="card-head"><span class="label">Blood oxygen</span></div>
+      <div class="gauge-wrap">
+        <svg class="gauge" viewBox="0 0 200 200" aria-hidden="true">
+          <g id="gaugeTicks"></g>
+          <circle class="track" cx="100" cy="100" r="78" pathLength="100"
+                  stroke-dasharray="75 25" transform="rotate(135 100 100)"></circle>
+          <circle class="arc" id="spo2Arc" cx="100" cy="100" r="78" pathLength="100"
+                  stroke-dasharray="75 100" stroke-dashoffset="75" transform="rotate(135 100 100)"></circle>
+        </svg>
+        <div class="gauge-center">
+          <div class="gauge-num" id="spo2Num">98</div>
+          <div class="label">% SpO₂</div>
+        </div>
+      </div>
+      <div class="pi">
+        <span class="label" style="font-size:9px;letter-spacing:0.26em">Perfusion index</span>
+        <div class="v" id="piVal">PI 1.2 %</div>
+      </div>
+    </section>
+
+    <!-- Card 3 · Respiration -->
+    <section class="card c-resp" style="--i:2" aria-label="Respiration">
+      <div class="card-head"><span class="label">Respiration</span></div>
+      <div class="breath-wrap">
+        <div class="ring r2" aria-hidden="true"></div>
+        <div class="ring r1" aria-hidden="true"></div>
+        <div class="orb" id="breathOrb" aria-hidden="true"></div>
+      </div>
+      <div class="breath-read">
+        <div class="breath-phase" id="breathPhase">Inhale</div>
+        <div class="breath-rate"><span id="breathRate">14</span> / min · TV <span id="tvVal">0.52</span> L</div>
+      </div>
+    </section>
+
+    <!-- Card 4 · other vitals -->
+    <section class="card c-vitals" style="--i:3" aria-label="Additional vitals">
+      <div class="card-head">
+        <span class="label">Additional vitals</span>
+        <span class="label" style="letter-spacing:0.24em;color:rgba(233,240,255,0.22)">Sampled 4 Hz</span>
+      </div>
+      <div class="vitals-rows">
+        <div class="vital">
+          <div class="label">Blood pressure</div>
+          <div class="v"><span id="bpVal">118/76</span><small>mmHg</small></div>
+          <div class="trend" id="bpTrend">Stable</div>
+          <div class="bar"><i id="bpBar" style="width:56%"></i></div>
+        </div>
+        <div class="vital">
+          <div class="label">Core temperature</div>
+          <div class="v"><span id="tempVal">36.8</span><small>°C</small></div>
+          <div class="trend" id="tempTrend">Steady</div>
+          <div class="bar"><i id="tempBar" style="width:62%"></i></div>
+        </div>
+        <div class="vital">
+          <div class="label">Skin conductance</div>
+          <div class="v"><span id="scVal">3.1</span><small>µS</small></div>
+          <div class="trend" id="scTrend">Settled</div>
+          <div class="bar"><i id="scBar" style="width:24%"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Card 5 · 24h chart -->
+    <section class="card c-day" style="--i:4" aria-label="Twenty-four hour heart rate">
+      <div class="card-head">
+        <span class="label">Heart rate · last 24 hours · 288 × 5-min samples</span>
+        <span class="label" style="letter-spacing:0.24em;color:rgba(233,240,255,0.22)">Circadian</span>
+      </div>
+      <div class="chart-box" id="chartBox">
+        <svg class="chart-svg" id="chartSvg" viewBox="0 0 1000 240" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="crosshair" id="crosshair"></div>
+        <div class="cdot" id="cdot"></div>
+        <div class="ctip" id="ctip"></div>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--accent);transition:background .8s"></i> Heart rate</span>
+        <span><i style="background:rgba(157,180,255,0.22)"></i> Sleep window</span>
+        <span>Min <b id="dayMin">—</b> · Max <b id="dayMax">—</b> · Mean <b id="dayAvg">—</b></span>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p class="disc">Synthetic telemetry. “Subject 07” is a fictional portrait generated in-browser from a physiological model — not medical data, not a medical device, and never a diagnosis.</p>
+    <p class="clock" id="clock" aria-label="Local time">--:--:--</p>
+  </footer>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = id => document.getElementById(id);
+
+  /* ---------------- mode model ---------------- */
+  const MODES = {
+    resting: { bpm: 72,  breath: 14, spo2: 98, pi: 1.2, sys: 118, dia: 76, temp: 36.8, sc: 3.1, tv: 0.52, qtBase: 420, rsa: 3.5, hex: '#7df9c2', rgb: [125,249,194] },
+    active:  { bpm: 138, breath: 28, spo2: 96, pi: 2.6, sys: 148, dia: 82, temp: 37.4, sc: 8.4, tv: 1.75, qtBase: 405, rsa: 1.5, hex: '#ff8a7a', rgb: [255,138,122] },
+    sleep:   { bpm: 54,  breath: 11, spo2: 97, pi: 0.9, sys: 102, dia: 62, temp: 36.4, sc: 1.4, tv: 0.44, qtBase: 432, rsa: 5.5, hex: '#9db4ff', rgb: [157,180,255] },
+  };
+  let mode = 'resting';
+  const M = () => MODES[mode];
+
+  /* ---------------- segmented control ---------------- */
+  const segBtns = [...document.querySelectorAll('.seg button')];
+  const pill = $('segPill');
+  function movePill(btn) {
+    pill.style.left = btn.offsetLeft + 'px';
+    pill.style.width = btn.offsetWidth + 'px';
+  }
+  segBtns.forEach(btn => btn.addEventListener('click', () => {
+    mode = btn.dataset.mode;
+    document.body.dataset.mode = mode;
+    segBtns.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+    movePill(btn);
+    accentFade.to(MODES[mode].rgb.slice(), 800);
+    updateReadouts();
+  }));
+  addEventListener('resize', () => {
+    const active = segBtns.find(b => b.getAttribute('aria-pressed') === 'true');
+    if (active) { pill.style.transition = 'none'; movePill(active); requestAnimationFrame(() => pill.style.transition = ''); }
+  });
+  requestAnimationFrame(() => movePill(segBtns[0]));
+
+  /* ---------------- accent cross-fade for canvas ---------------- */
+  const accentFade = {
+    cur: MODES[mode].rgb.slice(), from: MODES[mode].rgb.slice(), to_ : MODES[mode].rgb.slice(), t0: 0, dur: 800,
+    to(rgb, dur) { this.from = this.cur.slice(); this.to_ = rgb; this.t0 = performance.now(); this.dur = dur; },
+    tick(now) {
+      const p = Math.min(1, (now - this.t0) / this.dur);
+      const e = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2, 2)/2;
+      this.cur = this.from.map((c, i) => Math.round(c + (this.to_[i] - c) * e));
+      return this.cur;
+    },
+    rgb(a = 1) { const c = this.tick(performance.now()); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
+  };
+
+  /* ---------------- ECG waveform ---------------- */
+  // Gaussian bumps of a PQRST complex, phase in [0,1)
+  const BUMPS = [
+    { c: 0.160, a:  0.13, w: 0.021 }, // P
+    { c: 0.248, a: -0.10, w: 0.010 }, // Q
+    { c: 0.275, a:  1.00, w: 0.0115 },// R
+    { c: 0.305, a: -0.24, w: 0.016 }, // S
+    { c: 0.520, a:  0.28, w: 0.036 }, // T
+    { c: 0.625, a:  0.045, w: 0.024 },// U
+  ];
+  function wave(p) {
+    let v = 0;
+    for (const b of BUMPS) { const d = p - b.c; v += b.a * Math.exp(-(d*d) / (2*b.w*b.w)); }
+    return v;
+  }
+
+  /* ---------------- canvas setup ---------------- */
+  const canvas = $('ecgCanvas');
+  const dctx = canvas.getContext('2d');
+  let trace = document.createElement('canvas');
+  let tctx = trace.getContext('2d');
+  let W = 0, H = 0, DPR = 1;
+  const SWEEP = 135;          // px / s writing speed
+  const CLEAR_AHEAD = 14;     // px erased ahead of the pen
+
+  function sizeCanvas() {
+    DPR = Math.min(devicePixelRatio || 1, 2);
+    W = Math.max(100, canvas.clientWidth);
+    H = Math.max(80, canvas.clientHeight);
+    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+    trace.width = canvas.width; trace.height = canvas.height;
+    dctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    tctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    tctx.clearRect(0, 0, W, H);
+    headX = 0; prevHeadX = 0;
+    penTime = 0; phase = 0.34; // start just before an R peak so the page opens with a beat
+  }
+  addEventListener('resize', sizeCanvas);
+
+  /* ---------------- heart-rate dynamics ---------------- */
+  let hrBase = MODES[mode].bpm;         // slow wandering component
+  let hrNow = hrBase;
+  let phase = 0;                        // 0..1 within current beat
+  let penTime = 0;
+  let headX = 0, prevHeadX = 0;
+  let lastBeatT = null;
+  const rrHistory = [];                 // last R-R intervals (ms)
+  let slowSeed = Math.random() * 1000;
+
+  function updateHR(t, dt) {
+    const target = MODES[mode].bpm;
+    hrBase += (target - hrBase) * Math.min(1, dt * (mode === 'active' ? 0.55 : 0.14));
+    const drift = Math.sin(t * 0.045 + slowSeed) * 2.4 + Math.sin(t * 0.011 + slowSeed * 2) * 1.6;
+    const rsa = Math.sin(t * 2 * Math.PI * (MODES[mode].breath / 60)) * MODES[mode].rsa;
+    hrNow = Math.max(32, hrBase + drift + rsa);
+  }
+
+  function ecgYAt(p, mid, amp) { return mid - wave(p) * amp; }
+
+  /* ---------------- main ECG loop ---------------- */
+  function drawGrid() {
+    const g = dctx;
+    g.clearRect(0, 0, W, H);
+    const minor = accentFade.rgb(0.05), major = accentFade.rgb(0.13);
+    g.lineWidth = 1;
+    g.strokeStyle = minor;
+    g.beginPath();
+    for (let x = 8; x < W; x += 8) { g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, H); }
+    for (let y = 8; y < H; y += 8) { g.moveTo(0, y + 0.5); g.lineTo(W, y + 0.5); }
+    g.stroke();
+    g.strokeStyle = major;
+    g.beginPath();
+    for (let x = 40; x < W; x += 40) { g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, H); }
+    for (let y = 40; y < H; y += 40) { g.moveTo(0, y + 0.5); g.lineTo(W, y + 0.5); }
+    g.stroke();
+  }
+
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000);
+    lastT = now;
+    accentFade.tick(now);
+    penTime += dt;
+    updateHR(penTime, dt);
+
+    const mid = H * 0.56, amp = H * 0.36;
+    const stepX = SWEEP * dt;
+    let x = prevHeadX;
+    const endX = prevHeadX + stepX;
+
+    // advance pen: draw in CSS px onto the persistent trace
+    tctx.save();
+    tctx.lineCap = 'round'; tctx.lineJoin = 'round';
+    tctx.strokeStyle = accentFade.rgb(0.95);
+    tctx.lineWidth = 2;
+    tctx.shadowBlur = 10;
+    tctx.shadowColor = accentFade.rgb(0.85);
+    let p = phase;
+    const phasePerPx = (hrNow / 60) / SWEEP;
+    tctx.beginPath();
+    const yPrev = ecgYAt(p - phasePerPx, mid, amp);
+    tctx.moveTo(Math.max(0, x - 1), yPrev);
+    while (x < endX) {
+      const px = Math.min(W, x);
+      const y = ecgYAt(p, mid, amp);
+      tctx.lineTo(px, y);
+      p += phasePerPx;
+      if (p >= 1) {
+        p -= 1;
+        const rrMs = (60000 / hrNow);
+        if (lastBeatT !== null) { rrHistory.push(rrMs); if (rrHistory.length > 24) rrHistory.shift(); }
+        lastBeatT = penTime;
+      }
+      x += 1;
+    }
+    tctx.stroke();
+    tctx.restore();
+    phase = p;
+    headX = endX >= W ? endX - W : endX;
+    prevHeadX = endX >= W ? 0 : endX;
+    if (endX >= W) { // wrapped: start fresh at left edge
+      prevHeadX = 0; headX = endX - W;
+      tctx.save(); tctx.setTransform(1,0,0,1,0,0);
+      // keep old trace scrolling off naturally via the clear strip; nothing else to do
+      tctx.restore();
+    }
+
+    // clear a 14px strip just ahead of the writing head so the trace vanishes as the pen returns
+    tctx.save(); tctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const cx0 = (endX >= W) ? (endX - W) : endX;
+    tctx.clearRect(cx0, 0, CLEAR_AHEAD, H);
+    if (cx0 + CLEAR_AHEAD > W) tctx.clearRect(0, 0, cx0 + CLEAR_AHEAD - W, H);
+    tctx.restore();
+
+    // compose visible canvas
+    drawGrid();
+    dctx.drawImage(trace, 0, 0, W, H);
+    const yNow = ecgYAt(phase - phasePerPx, mid, amp);
+    const grad = dctx.createRadialGradient(cx0, yNow, 0, cx0, yNow, 16);
+    grad.addColorStop(0, accentFade.rgb(0.9));
+    grad.addColorStop(0.35, accentFade.rgb(0.35));
+    grad.addColorStop(1, accentFade.rgb(0));
+    dctx.fillStyle = grad;
+    dctx.beginPath(); dctx.arc(cx0, yNow, 16, 0, Math.PI * 2); dctx.fill();
+    dctx.fillStyle = '#ffffff';
+    dctx.beginPath(); dctx.arc(cx0, yNow, 1.6, 0, Math.PI * 2); dctx.fill();
+
+    // respiration orb
+    breathPhase += dt * (MODES[mode].breath / 60);
+    const s = 0.925 - 0.375 * Math.cos(breathPhase * 2 * Math.PI);
+    orb.style.transform = `scale(${s.toFixed(3)})`;
+    const rising = Math.sin(breathPhase * 2 * Math.PI) > 0;
+    if (rising !== lastRising) { lastRising = rising; $('breathPhase').textContent = rising ? 'Inhale' : 'Exhale'; }
+
+    requestAnimationFrame(frame);
+  }
+  let breathPhase = 0.2, orb = null, lastRising = true;
+
+  /* ---------------- 4 Hz readouts ---------------- */
+  function jitter(v, a) { return v + (Math.random() * 2 - 1) * a; }
+  function rmssd() {
+    if (rrHistory.length < 3) return Math.round(jitter(M().qtBase / 10, 2));
+    let s = 0, n = 0;
+    for (let i = 1; i < rrHistory.length; i++) { const d = rrHistory[i] - rrHistory[i-1]; s += d*d; n++; }
+    return Math.max(4, Math.round(Math.sqrt(s / n)));
+  }
+  let spo2Shown = MODES[mode].spo2;
+  function updateReadouts() {
+    const m = M();
+    $('bpmNum').textContent = Math.round(hrNow);
+    const rr = 60000 / hrNow;
+    $('rrVal').textContent = Math.round(rr);
+    $('hrvVal').textContent = rmssd();
+    $('qtVal').textContent = Math.round(m.qtBase * Math.sqrt(rr / 1000));
+    const heart = $('heartIcon');
+    heart.style.animationDuration = (60 / Math.max(30, hrNow)).toFixed(3) + 's';
+
+    // SpO2 ring: map 88–100% to 0–75 pathLength units
+    const spo2 = Math.min(99, Math.max(93, Math.round(jitter(m.spo2, 0.5))));
+    const frac = Math.max(0, Math.min(1, (spo2 - 88) / 12));
+    $('spo2Arc').setAttribute('stroke-dashoffset', (75 - 75 * frac).toFixed(2));
+    $('spo2Num').textContent = spo2;
+    $('piVal').textContent = 'PI ' + jitter(m.pi, 0.2).toFixed(1) + ' %';
+
+    $('breathRate').textContent = m.breath;
+    $('tvVal').textContent = jitter(m.tv, 0.05).toFixed(2);
+
+    // vitals with drift and one-word trends
+    const sys = Math.round(jitter(m.sys, 2.4)), dia = Math.round(jitter(m.dia, 1.8));
+    $('bpVal').textContent = sys + '/' + dia;
+    setBar('bpBar', (sys - 90) / (170 - 90));
+    setTrend('bpTrend', mode === 'active' ? 'Rising' : (mode === 'sleep' ? 'Low' : 'Stable'), mode !== 'active');
+
+    const temp = jitter(m.temp, 0.07).toFixed(1);
+    $('tempVal').textContent = temp;
+    setBar('tempBar', (parseFloat(temp) - 35.5) / (38.5 - 35.5));
+    setTrend('tempTrend', mode === 'active' ? 'Climbing' : 'Steady', mode !== 'active');
+
+    const sc = jitter(m.sc, 0.35).toFixed(1);
+    $('scVal').textContent = sc;
+    setBar('scBar', Math.min(1, parseFloat(sc) / 12));
+    setTrend('scTrend', mode === 'active' ? 'Aroused' : (mode === 'sleep' ? 'Settled' : 'Calm'), mode === 'sleep');
+  }
+  function setBar(id, frac) { $(id).style.width = (Math.max(0.03, Math.min(1, frac)) * 100).toFixed(1) + '%'; }
+  function setTrend(id, word, dim) { const el = $(id); el.textContent = word; el.classList.toggle('down', !!dim && word !== 'Stable' && word !== 'Calm' && word !== 'Steady'); }
+  setInterval(updateReadouts, 250);
+
+  /* ---------------- 24-hour chart ---------------- */
+  // seeded LCG
+  let lcgState = 20250907 >>> 0;
+  const lcg = () => { lcgState = (lcgState * 1664525 + 1013904223) >>> 0; return lcgState / 4294967296; };
+  const N = 288;
+  const dayData = [];
+  (function genDay() {
+    const gauss = (h, c, w) => Math.exp(-((h - c) * (h - c)) / (2 * w * w));
+    for (let i = 0; i < N; i++) {
+      const h = i / 12; // 5-min samples → 12 per hour
+      const asleep = (h < 6.4) || (h >= 22.75);
+      let v;
+      if (asleep) {
+        v = 51 + 4.5 * Math.sin((h / 24) * Math.PI * 2 + 1.2) + gauss(h, 24, 1.1) * 4;
+      } else {
+        v = 70 + 12 * Math.sin(((h - 9) / 16) * Math.PI);      // daytime circadian hump
+      }
+      v += 84 * gauss(h, 6.95, 0.28);   // morning run spike
+      v += 12 * gauss(h, 12.8, 0.35);   // lunch bump
+      v += 54 * gauss(h, 18.8, 0.42);   // evening gym spike
+      v += (lcg() - 0.5) * 5.2;
+      dayData.push(Math.max(42, Math.min(168, v)));
+    }
+  })();
+  const BPM_MIN = 40, BPM_MAX = 175, PLOT_TOP = 22, PLOT_BOT = 218, CW = 1000, CH = 240;
+  const cx = i => i / (N - 1) * CW;
+  const cy = v => PLOT_BOT - (v - BPM_MIN) / (BPM_MAX - BPM_MIN) * (PLOT_BOT - PLOT_TOP);
+  (function buildChart() {
+    const svg = $('chartSvg');
+    const pts = dayData.map((v, i) => `${cx(i).toFixed(1)},${cy(v).toFixed(1)}`).join(' ');
+    const area = `0,${CH} ${pts} ${CW},${CH}`;
+    let lines = '';
+    for (let hr = 0; hr <= 24; hr += 4) {
+      const x = (hr / 24 * CW).toFixed(1);
+      lines += `<line class="gridline${hr % 12 === 0 ? ' major' : ''}" x1="${x}" y1="${PLOT_TOP - 8}" x2="${x}" y2="${PLOT_BOT}" vector-effect="non-scaling-stroke"/>`;
+    }
+    let hlines = '';
+    [60, 100, 140].forEach(v => { hlines += `<line class="gridline" x1="0" y1="${cy(v).toFixed(1)}" x2="${CW}" y2="${cy(v).toFixed(1)}" vector-effect="non-scaling-stroke"/>`; });
+    const sleepRects = `<rect class="sleepwin" x="0" y="${PLOT_TOP - 8}" width="${(6.4 / 24 * CW).toFixed(1)}" height="${PLOT_BOT - PLOT_TOP + 8}"/>
+      <rect class="sleepwin" x="${(22.75 / 24 * CW).toFixed(1)}" y="${PLOT_TOP - 8}" width="${((24 - 22.75) / 24 * CW).toFixed(1)}" height="${PLOT_BOT - PLOT_TOP + 8}"/>`;
+    svg.innerHTML = `
+      <defs>
+        <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+          <stop class="chartstop1" offset="0"/><stop class="chartstop2" offset="1"/>
+        </linearGradient>
+      </defs>
+      ${sleepRects}${lines}${hlines}
+      <polygon class="chart-area" points="${area}" fill="url(#chartFill)"/>
+      <polyline class="chart-line" points="${pts}" vector-effect="non-scaling-stroke"/>`;
+    // HTML axis labels (SVG text would stretch under preserveAspectRatio=none)
+    const box = $('chartBox');
+    for (let hr = 0; hr <= 24; hr += 4) {
+      const lab = document.createElement('span');
+      lab.className = 'chart-lab'; lab.textContent = String(hr).padStart(2, '0');
+      lab.style.left = `calc(${hr / 24 * 100}% )`; lab.style.transform = 'translateX(-50%)';
+      lab.style.bottom = '2px'; box.appendChild(lab);
+    }
+    [60, 100, 140].forEach(v => {
+      const lab = document.createElement('span');
+      lab.className = 'chart-lab'; lab.textContent = v + ' bpm';
+      lab.style.left = '6px';
+      lab.style.top = `calc(${cy(v) / CH * 100}% - 12px)`;
+      box.appendChild(lab);
+    });
+    $('dayMin').textContent = Math.round(Math.min(...dayData));
+    $('dayMax').textContent = Math.round(Math.max(...dayData));
+    $('dayAvg').textContent = Math.round(dayData.reduce((a, b) => a + b) / N);
+  })();
+
+  // hover cursor
+  (function chartHover() {
+    const box = $('chartBox'), cross = $('crosshair'), dot = $('cdot'), tip = $('ctip');
+    function move(ev) {
+      const r = box.getBoundingClientRect();
+      const fx = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+      const i = Math.round(fx * (N - 1));
+      const v = dayData[i];
+      const px = i / (N - 1) * 100, py = cy(v) / CH * 100;
+      cross.style.left = px + '%';
+      dot.style.left = px + '%'; dot.style.top = py + '%';
+      tip.style.left = Math.min(94, Math.max(6, px)) + '%'; tip.style.top = py + '%';
+      const hh = Math.floor(i / 12), mm = (i % 12) * 5;
+      tip.innerHTML = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')} · <b>${Math.round(v)}</b> bpm`;
+    }
+    box.addEventListener('pointermove', move);
+    box.addEventListener('pointerdown', move);
+  })();
+
+  /* ---------------- gauge ticks ---------------- */
+  (function ticks() {
+    const g = $('gaugeTicks');
+    let html = '';
+    for (let i = 0; i < 55; i++) {
+      const major = i % 9 === 0;
+      const a = (-135 + i / 54 * 270) * Math.PI / 180;
+      const r1 = major ? 88 : 90, r2 = 94;
+      html += `<line class="tick${major ? ' major' : ''}" x1="${(100 + Math.sin(a) * r1).toFixed(2)}" y1="${(100 - Math.cos(a) * r1).toFixed(2)}" x2="${(100 + Math.sin(a) * r2).toFixed(2)}" y2="${(100 - Math.cos(a) * r2).toFixed(2)}"/>`;
+    }
+    g.innerHTML = html;
+  })();
+
+  /* ---------------- clock ---------------- */
+  function clock() {
+    const d = new Date();
+    $('clock').textContent = [d.getHours(), d.getMinutes(), d.getSeconds()]
+      .map(n => String(n).padStart(2, '0')).join(':');
+  }
+  clock(); setInterval(clock, 1000);
+
+  /* ---------------- boot ---------------- */
+  orb = $('breathOrb');
+  sizeCanvas();
+  updateReadouts();
+  if (reduceMotion) { $('heartIcon').classList.remove('beating'); }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

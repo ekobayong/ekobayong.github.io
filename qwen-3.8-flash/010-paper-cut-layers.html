@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Valley of Paper — A Cut-Paper Dusk</title>
+<style>
+  @property --mx { syntax: '<number>'; inherits: true; initial-value: 0; }
+  @property --my { syntax: '<number>'; inherits: true; initial-value: 0; }
+
+  :root {
+    /* dusk defaults; JS interpolates toward night as the slider moves */
+    --sky1: #3b2a5c; --sky2: #c9698a; --sky3: #f7b26a;
+    --sun: #ffd28a;  --moon: #f4ead2; --cloud: #f7d5c4;
+    --s1: #8b6a9c; --s2: #6a4f83; --s3: #4f3a6b; --s4: #3a2a54;
+    --s5: #2b1f44; --s6: #1c1533; --s7: #130f26;
+    --win: rgba(255,200,110,0.15);
+    --stars: 0;
+    --sun-y: 0px; --moon-y: 0px;
+    --night: 0;
+    --rounded: ui-rounded, 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', 'Arial Rounded MT Bold', 'Segoe UI', system-ui, sans-serif;
+    --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    background: linear-gradient(180deg, var(--sky1) 0%, var(--sky2) 50%, var(--sky3) 80%);
+    transition: background 0.6s linear;
+    font-family: var(--rounded);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- the scene ---------- */
+  #scene {
+    position: fixed;
+    top: -6%; left: -6%;
+    width: 112%; height: 112%;
+    display: block;
+    touch-action: pan-y;
+  }
+
+  .lyr {
+    transform: translate(
+      calc(var(--mx) * var(--p) * 1px),
+      calc(var(--my) * var(--p) * 0.6px));
+    transition: transform 0.9s ease-out;
+    will-change: transform;
+  }
+
+  .sheet   { transition: fill 0.6s linear; }
+  .far-m   { fill: var(--s1); }
+  .mid-m   { fill: var(--s2); }
+  .hills   { fill: var(--s3); }
+  .hills-pines { fill: var(--s4); }
+  .nhills  { fill: var(--s4); }
+  .nhill-pines { fill: var(--s5); }
+  .ridge   { fill: var(--s5); }
+  .ridge-wood  { fill: var(--s7); }
+  .ground  { fill: var(--s6); }
+  .cut     { fill: var(--s7); }        /* deer, cabin, big pines */
+  .win     { fill: var(--win); transition: fill 0.6s linear; }
+  .door    { fill: var(--s5); transition: fill 0.6s linear; }
+  .cloud   { fill: var(--cloud); transition: fill 0.6s linear; }
+  .sun-disc { fill: var(--sun); transition: fill 0.6s linear; }
+  .moon-disc { fill: var(--moon); transition: fill 0.6s linear; }
+  .antler  { stroke: var(--s7); fill: none; stroke-width: 3; stroke-linecap: round; transition: stroke .6s linear; }
+  .deer-leg { stroke: var(--s7); stroke-width: 5.5; stroke-linecap: round; transition: stroke .6s linear; }
+
+  .d-shadow  { filter: drop-shadow(0 10px 8px rgba(20,10,40,0.35)); }
+  .d-shadow-deep { filter: drop-shadow(0 18px 14px rgba(20,10,40,0.45)); }
+
+  #starsG { opacity: var(--stars); }
+  .star { fill: #fff; animation: twinkle var(--dur, 3s) ease-in-out var(--dl, 0s) infinite alternate; }
+  @keyframes twinkle { from { opacity: var(--o1, 0.25); } to { opacity: var(--o2, 0.95); } }
+
+  .sun-motion  { transform: translateY(var(--sun-y)); transition: transform 0.6s linear; }
+  .moon-motion { transform: translateY(calc(-1 * var(--moon-y))); transition: transform 0.6s linear; }
+
+  .drift { animation: drift var(--ddur, 160s) linear var(--ddl, 0s) infinite; }
+  @keyframes drift {
+    from { transform: translateX(-540px); }
+    to   { transform: translateX(2140px); }
+  }
+
+  .sway {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: sway 6s ease-in-out var(--dl, 0s) infinite alternate;
+  }
+  @keyframes sway {
+    from { transform: rotate(-0.8deg); }
+    to   { transform: rotate(0.8deg); }
+  }
+
+  /* ---------- UI cards ---------- */
+  .card {
+    position: fixed;
+    z-index: 10;
+    background: color-mix(in srgb, #f6ead6, #2a2140 calc(var(--night) * 38%));
+    color: color-mix(in srgb, #3b2a2a, #e9e3f5 calc(var(--night) * 62%));
+    border-radius: 6px;
+    box-shadow: 0 18px 30px -12px rgba(20, 10, 40, 0.5), 0 30px 60px -20px rgba(20,10,40,0.35);
+    animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+    transition: background-color 0.6s linear, color 0.6s linear, transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(26px) rotate(var(--tilt, 0deg)) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) rotate(var(--tilt, 0deg)) scale(1); }
+  }
+
+  .label-card {
+    top: 22px; left: 22px;
+    padding: 16px 24px 14px;
+    transform: rotate(-1.2deg);
+    --tilt: -1.2deg;
+  }
+  .label-card:hover { transform: rotate(0deg) translateY(-2px); }
+  .label-card h1 {
+    font-size: clamp(1.5rem, 3.4vw, 2.4rem);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 1.05;
+  }
+  .label-card .sub {
+    margin-top: 5px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    opacity: 0.72;
+  }
+  .tape {
+    position: absolute;
+    top: -11px; left: 26%;
+    width: 96px; height: 22px;
+    background: rgba(246, 234, 214, 0.55);
+    border-left: 1px dashed rgba(59,42,42,0.18);
+    border-right: 1px dashed rgba(59,42,42,0.18);
+    transform: rotate(-2.4deg);
+    box-shadow: 0 2px 4px rgba(20,10,40,0.12);
+  }
+
+  .panel-card {
+    right: 24px; bottom: 26px;
+    width: 330px;
+    padding: 16px 18px 14px;
+    transform: rotate(0.8deg);
+    --tilt: 0.8deg;
+    animation-delay: 0.12s;
+  }
+  .panel-card:hover { transform: rotate(0deg) translateY(-2px); }
+  .panel-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .panel-top .lab { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.8; }
+  #clock { font-family: var(--mono); font-size: 1.05rem; font-weight: 700; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 26px;
+    background: transparent;
+    cursor: ew-resize;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 10px; border-radius: 6px;
+    background: linear-gradient(90deg, #f7b26a 0%, #c9698a 38%, #3b2a5c 72%, #050a1e 100%);
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.35);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px; height: 22px;
+    margin-top: -6px;
+    border-radius: 50%;
+    background: #f6ead6;
+    border: 3px solid #3b2a2a;
+    box-shadow: 0 2px 6px rgba(20,10,40,0.4);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  input[type="range"]:hover::-webkit-slider-thumb,
+  input[type="range"]:focus-visible::-webkit-slider-thumb { transform: scale(1.22); }
+  input[type="range"]::-moz-range-track {
+    height: 10px; border-radius: 6px;
+    background: linear-gradient(90deg, #f7b26a 0%, #c9698a 38%, #3b2a5c 72%, #050a1e 100%);
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.35);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #f6ead6;
+    border: 3px solid #3b2a2a;
+    box-shadow: 0 2px 6px rgba(20,10,40,0.4);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  input[type="range"]:hover::-moz-range-thumb { transform: scale(1.22); }
+  input[type="range"]:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: 8px; }
+
+  .ticks {
+    display: flex; justify-content: space-between;
+    font-size: 0.58rem; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    opacity: 0.65;
+    margin-top: 2px;
+  }
+  .hint { margin-top: 9px; font-size: 0.66rem; opacity: 0.6; letter-spacing: 0.02em; }
+
+  #tiltBtn {
+    position: fixed;
+    z-index: 11;
+    left: 50%; bottom: 26px;
+    transform: translateX(-50%);
+    display: none;
+    border: 0; cursor: pointer;
+    font-family: var(--rounded);
+    font-size: 0.74rem; font-weight: 800;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 11px 20px;
+    border-radius: 999px;
+    background: #f6ead6; color: #3b2a2a;
+    box-shadow: 0 12px 24px -10px rgba(20,10,40,0.55);
+  }
+  body.coarse #tiltBtn.shown { display: block; }
+
+  @media (max-width: 640px) {
+    .panel-card { left: 12px; right: 12px; width: auto; bottom: 84px; }
+    .label-card { top: 12px; left: 12px; padding: 12px 16px 10px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .drift, .sway, .star { animation: none !important; }
+    .card { animation: none; }
+    .lyr { transition: none; transform: none; }
+    .card, .label-card, .panel-card { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<svg id="scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice" aria-label="Layered paper-cut valley at dusk">
+  <defs>
+    <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"  stop-color="var(--sun)" stop-opacity="0.85"></stop>
+      <stop offset="38%" stop-color="var(--sun)" stop-opacity="0.32"></stop>
+      <stop offset="100%" stop-color="var(--sun)" stop-opacity="0"></stop>
+    </radialGradient>
+    <mask id="moonBite" maskUnits="userSpaceOnUse" x="-60" y="-60" width="120" height="120">
+      <circle cx="0" cy="0" r="34" fill="#fff"></circle>
+      <circle cx="15" cy="-11" r="30" fill="#000"></circle>
+    </mask>
+    <symbol id="pine" viewBox="0 0 100 160">
+      <path d="M50 0 L72 44 L61 44 L81 92 L68 92 L92 142 L8 142 L32 92 L19 92 L39 44 Z"></path>
+      <rect x="45" y="140" width="10" height="20" rx="2"></rect>
+    </symbol>
+  </defs>
+
+  <!-- 1 · stars (generated by JS) -->
+  <g id="starsG" class="lyr" style="--p:0.1"></g>
+
+  <!-- 2 · paper sun -->
+  <g class="lyr" style="--p:0.15">
+    <g class="sun-motion">
+      <circle class="sun-glow" cx="1160" cy="210" r="180" fill="url(#sunGlow)"></circle>
+      <circle class="sun-disc sheet" cx="1160" cy="210" r="35"></circle>
+    </g>
+  </g>
+
+  <!-- 3 · crescent paper moon -->
+  <g class="lyr" style="--p:0.2">
+    <g class="moon-motion">
+      <circle class="moon-disc sheet" cx="360" cy="770" r="34" mask="url(#moonBite)"></circle>
+    </g>
+  </g>
+
+  <!-- 4 · drifting paper clouds -->
+  <g class="lyr" style="--p:0.28">
+    <g class="drift" style="--ddur:150s; --ddl:-30s">
+      <path class="cloud" opacity="0.92" d="M560 176 C566 156 592 148 612 158 C622 138 654 134 670 152 C694 144 718 158 718 176 C736 180 742 200 726 210 L576 210 C556 206 550 188 560 176 Z"></path>
+    </g>
+    <g class="drift" style="--ddur:190s; --ddl:-120s">
+      <path class="cloud" opacity="0.85" d="M180 318 C188 296 218 290 236 302 C250 282 288 282 300 300 C328 296 348 312 342 330 C356 338 354 356 336 360 L196 360 C176 354 170 332 180 318 Z"></path>
+    </g>
+    <g class="drift" style="--ddur:170s; --ddl:-75s">
+      <path class="cloud" opacity="0.88" d="M1140 268 C1148 250 1172 244 1188 254 C1200 238 1228 238 1238 254 C1260 252 1274 268 1266 282 C1278 290 1272 306 1256 308 L1152 308 C1136 302 1132 282 1140 268 Z"></path>
+    </g>
+  </g>
+
+  <!-- 5 · far jagged mountains -->
+  <g class="lyr d-shadow" style="--p:0.35">
+    <path class="sheet far-m" d="M0 900 L0 520 L120 428 L205 512 L300 394 L390 506 L470 444 L560 540 L655 418 L745 520 L840 446 L930 544 L1030 428 L1120 526 L1215 468 L1310 554 L1405 452 L1500 530 L1600 468 L1600 900 Z"></path>
+  </g>
+
+  <!-- 6 · mid mountains -->
+  <g class="lyr d-shadow" style="--p:0.45">
+    <path class="sheet mid-m" d="M0 900 L0 640 L110 584 L230 646 L330 558 L455 638 L560 588 L680 654 L790 574 L910 650 L1015 598 L1140 662 L1250 588 L1370 654 L1470 614 L1600 668 L1600 900 Z"></path>
+  </g>
+
+  <!-- 7 · rolling hills + row of small pines -->
+  <g class="lyr d-shadow" style="--p:0.58">
+    <path class="sheet hills" d="M0 900 L0 706 C 160 636 320 646 470 686 C 620 726 760 668 900 662 C 1060 655 1220 706 1380 690 C 1470 681 1540 662 1600 668 L1600 900 Z"></path>
+    <g class="hills-pines sheet">
+      <use href="#pine" x="146" y="636" width="13" height="21"></use>
+      <use href="#pine" x="296" y="646" width="15" height="24"></use>
+      <use href="#pine" x="452" y="672" width="12" height="19"></use>
+      <use href="#pine" x="606" y="692" width="14" height="22"></use>
+      <use href="#pine" x="770" y="668" width="13" height="20"></use>
+      <use href="#pine" x="932" y="650" width="15" height="23"></use>
+      <use href="#pine" x="1088" y="658" width="12" height="19"></use>
+      <use href="#pine" x="1244" y="686" width="14" height="22"></use>
+      <use href="#pine" x="1408" y="684" width="13" height="20"></use>
+    </g>
+  </g>
+
+  <!-- 8 · nearer hills + swaying pines -->
+  <g class="lyr d-shadow" style="--p:0.72">
+    <path class="sheet nhills" d="M0 900 L0 782 C 150 722 310 726 460 768 C 610 810 724 748 864 738 C 1014 728 1128 792 1284 782 C 1434 772 1526 736 1600 748 L1600 900 Z"></path>
+    <g class="nhill-pines sheet">
+      <use href="#pine" class="sway" style="--dl:-0.4s" x="118" y="698" width="32" height="51"></use>
+      <use href="#pine" class="sway" style="--dl:-1.8s" x="268" y="716" width="28" height="45"></use>
+      <use href="#pine" class="sway" style="--dl:-3.1s" x="516" y="764" width="34" height="54"></use>
+      <use href="#pine" class="sway" style="--dl:-0.9s" x="702" y="758" width="27" height="43"></use>
+      <use href="#pine" class="sway" style="--dl:-2.6s" x="946" y="728" width="33" height="52"></use>
+      <use href="#pine" class="sway" style="--dl:-4.2s" x="1148" y="770" width="29" height="46"></use>
+      <use href="#pine" class="sway" style="--dl:-1.4s" x="1392" y="760" width="31" height="50"></use>
+    </g>
+  </g>
+
+  <!-- 9 · front ridge with cabin -->
+  <g class="lyr d-shadow-deep" style="--p:0.9">
+    <path class="sheet ridge" d="M0 900 L0 848 C 180 802 330 832 520 840 C 700 847 824 814 980 820 C 1120 825 1196 802 1330 808 C 1452 814 1540 840 1600 832 L1600 900 Z"></path>
+    <!-- paper cabin -->
+    <g>
+      <rect class="cut sheet" x="1150" y="742" width="88" height="62" rx="2"></rect>
+      <polygon class="cut sheet" points="1138,746 1194,700 1250,746"></polygon>
+      <rect class="cut sheet" x="1222" y="708" width="13" height="30"></rect>
+      <rect class="win" x="1158" y="758" width="17" height="17" rx="1.5"></rect>
+      <rect class="win" x="1213" y="758" width="17" height="17" rx="1.5"></rect>
+      <rect class="door" x="1186" y="770" width="18" height="34" rx="2"></rect>
+    </g>
+    <g class="ridge-wood sheet">
+      <use href="#pine" x="1062" y="752" width="40" height="64"></use>
+      <use href="#pine" x="1302" y="750" width="36" height="58"></use>
+    </g>
+  </g>
+
+  <!-- 10 · foreground ground strip, deer, edge pines -->
+  <g class="lyr d-shadow-deep" style="--p:1.15">
+    <path class="sheet ground" d="M0 900 L0 868 C 200 846 380 864 560 868 C 760 873 900 850 1100 856 C 1300 862 1450 850 1600 860 L1600 900 Z"></path>
+    <!-- paper deer, facing left -->
+    <g class="cut sheet">
+      <line class="deer-leg" x1="232" y1="836" x2="226" y2="866"></line>
+      <line class="deer-leg" x1="246" y1="838" x2="248" y2="866"></line>
+      <line class="deer-leg" x1="266" y1="838" x2="264" y2="866"></line>
+      <line class="deer-leg" x1="278" y1="834" x2="286" y2="864"></line>
+      <ellipse cx="254" cy="822" rx="38" ry="20"></ellipse>
+      <path d="M288 812 L302 800 L296 820 Z"></path>
+      <path d="M224 814 C 210 798 204 784 208 764 L 226 760 C 224 780 232 796 243 810 Z"></path>
+      <ellipse cx="205" cy="757" rx="14" ry="8.5" transform="rotate(-24 205 757)"></ellipse>
+      <ellipse cx="214" cy="744" rx="4" ry="8" transform="rotate(24 214 744)"></ellipse>
+      <ellipse cx="223" cy="747" rx="3.6" ry="7" transform="rotate(44 223 747)"></ellipse>
+    </g>
+    <polyline class="antler" points="206,747 200,726 190,714"></polyline>
+    <polyline class="antler" points="200,726 205,712"></polyline>
+    <polyline class="antler" points="215,744 214,724 224,712"></polyline>
+    <polyline class="antler" points="214,724 208,713"></polyline>
+    <g class="cut sheet">
+      <use href="#pine" x="34" y="726" width="88" height="140"></use>
+      <use href="#pine" x="1478" y="716" width="98" height="150"></use>
+    </g>
+  </g>
+</svg>
+
+<header class="card label-card">
+  <span class="tape" aria-hidden="true"></span>
+  <h1>Valley of Paper</h1>
+  <p class="sub">A cut-paper dusk · move to look around</p>
+</header>
+
+<section class="card panel-card" aria-label="Time of day control">
+  <div class="panel-top">
+    <span class="lab">Time of day</span>
+    <output id="clock" for="dusk">18:40</output>
+  </div>
+  <input id="dusk" type="range" min="0" max="1000" value="0" step="1" aria-label="Time of day">
+  <div class="ticks"><span>Golden dusk</span><span>Twilight</span><span>Blue night</span></div>
+  <p class="hint">Drag the slider to fold the sun away — the cabin lamps will find the dark.</p>
+</section>
+
+<button id="tiltBtn" type="button">Enable tilt parallax</button>
+
+<script>
+(() => {
+  'use strict';
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const root = document.documentElement;
+
+  /* ---------- seeded starfield ---------- */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const rnd = mulberry32(20261207);
+  const starG = document.getElementById('starsG');
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  for (let i = 0; i < 140; i++) {
+    const c = document.createElementNS(SVGNS, 'circle');
+    c.setAttribute('class', 'star');
+    c.setAttribute('cx', (30 + rnd() * 1540).toFixed(1));
+    c.setAttribute('cy', (20 + rnd() * 470).toFixed(1));
+    c.setAttribute('r', (0.7 + rnd() * 1.7).toFixed(2));
+    c.style.setProperty('--dur', (1.8 + rnd() * 3.4).toFixed(2) + 's');
+    c.style.setProperty('--dl', (-rnd() * 6).toFixed(2) + 's');
+    c.style.setProperty('--o1', (0.12 + rnd() * 0.3).toFixed(2));
+    c.style.setProperty('--o2', (0.7 + rnd() * 0.3).toFixed(2));
+    starG.appendChild(c);
+  }
+
+  /* ---------- palette interpolation ---------- */
+  const smoothstep = (t) => t * t * (3 - 2 * t);
+  const hx = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const lerp = (a, b, u) => a + (b - a) * u;
+  function mixHex(dusk, night, u) {
+    const a = hx(dusk), b = hx(night);
+    const k = smoothstep(u);
+    return '#' + [0, 1, 2].map((i) =>
+      Math.round(lerp(a[i], b[i], k)).toString(16).padStart(2, '0')).join('');
+  }
+  function mixWin(u) {
+    const k = smoothstep(u);
+    const r = Math.round(lerp(255, 255, k)), g = Math.round(lerp(200, 160, k)), b = Math.round(lerp(110, 70, k));
+    const al = lerp(0.15, 1.0, k).toFixed(3);
+    return `rgba(${r},${g},${b},${al})`;
+  }
+
+  const KEYS = [
+    ['--sky1',  '#3b2a5c', '#050a1e'],
+    ['--sky2',  '#c9698a', '#0f1c44'],
+    ['--sky3',  '#f7b26a', '#24356a'],
+    ['--sun',   '#ffd28a', '#ff9a5a'],
+    ['--moon',  '#f4ead2', '#cdd8f0'],
+    ['--cloud', '#f7d5c4', '#3a4a7a'],
+    ['--s1',    '#8b6a9c', '#2b3a6b'],
+    ['--s2',    '#6a4f83', '#1f2c55'],
+    ['--s3',    '#4f3a6b', '#182243'],
+    ['--s4',    '#3a2a54', '#111935'],
+    ['--s5',    '#2b1f44', '#0c122a'],
+    ['--s6',    '#1c1533', '#080c1f'],
+    ['--s7',    '#130f26', '#050815'],
+  ];
+
+  const slider = document.getElementById('dusk');
+  const clock = document.getElementById('clock');
+
+  function applyDusk(t) {
+    for (const [name, d, n] of KEYS) root.style.setProperty(name, mixHex(d, n, t));
+    root.style.setProperty('--win', mixWin(t));
+    /* stars fade in between 35% and 85% */
+    const s = Math.min(1, Math.max(0, (t - 0.35) / 0.5));
+    root.style.setProperty('--stars', smoothstep(s).toFixed(3));
+    root.style.setProperty('--sun-y', (t * 620).toFixed(1) + 'px');
+    root.style.setProperty('--moon-y', (t * 700).toFixed(1) + 'px');
+    root.style.setProperty('--night', t.toFixed(3));
+    /* clock 18:40 → 23:59 */
+    const mins = Math.round(lerp(18 * 60 + 40, 23 * 60 + 59, t));
+    clock.textContent = String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');
+  }
+  slider.addEventListener('input', () => applyDusk(slider.value / 1000));
+  applyDusk(0);
+
+  /* ---------- parallax ---------- */
+  let tx = 0, ty = 0, cx = 0, cy = 0;
+  const clamp40 = (v) => Math.max(-40, Math.min(40, v));
+
+  addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'touch') return;
+    tx = clamp40((e.clientX / innerWidth * 2 - 1) * 40);
+    ty = clamp40((e.clientY / innerHeight * 2 - 1) * 40);
+  });
+
+  function smoothLoop() {
+    cx += (tx - cx) * 0.06;
+    cy += (ty - cy) * 0.06;
+    root.style.setProperty('--mx', cx.toFixed(3));
+    root.style.setProperty('--my', cy.toFixed(3));
+    requestAnimationFrame(smoothLoop);
+  }
+  if (!reduced) requestAnimationFrame(smoothLoop);
+
+  /* ---------- touch / tilt on coarse devices ---------- */
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  let tiltSeen = false;
+  const tiltBtn = document.getElementById('tiltBtn');
+
+  if (coarse) {
+    document.body.classList.add('coarse');
+    tiltBtn.classList.add('shown');
+    tiltBtn.addEventListener('click', () => {
+      const attach = () => {
+        addEventListener('deviceorientation', (e) => {
+          if (e.gamma == null) return;
+          tiltSeen = true;
+          tx = clamp40(Math.max(-1, Math.min(1, e.gamma / 25)) * 40);
+          ty = clamp40(Math.max(-1, Math.min(1, (e.beta - 45) / 25)) * 40);
+        });
+        tiltBtn.classList.remove('shown');
+      };
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+          .then((res) => { if (res === 'granted') attach(); else tiltBtn.textContent = 'Tilt unavailable'; })
+          .catch(() => { tiltBtn.textContent = 'Tilt unavailable'; });
+      } else {
+        attach();
+      }
+    });
+
+    /* touch-drag pans the scene when no tilt data is present */
+    const scene = document.getElementById('scene');
+    let drag = null;
+    scene.addEventListener('touchstart', (e) => {
+      if (tiltSeen || e.touches.length !== 1) return;
+      const t0 = e.touches[0];
+      drag = { x: t0.clientX, y: t0.clientY, tx0: tx, ty0: ty };
+    }, { passive: true });
+    scene.addEventListener('touchmove', (e) => {
+      if (!drag || tiltSeen) return;
+      const t0 = e.touches[0];
+      tx = clamp40(drag.tx0 + (t0.clientX - drag.x) * 0.9);
+      ty = clamp40(drag.ty0 + (t0.clientY - drag.y) * 0.9);
+    }, { passive: true });
+    scene.addEventListener('touchend', () => { drag = null; });
+  }
+})();
+</script>
+</body>
+</html>

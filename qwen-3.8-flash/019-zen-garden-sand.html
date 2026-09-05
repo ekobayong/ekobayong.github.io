@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karesansui — A Garden of Raked Sand</title>
+<style>
+  :root {
+    --ink: rgba(43, 36, 28, 0.72);
+    --ink-faint: rgba(43, 36, 28, 0.55);
+    --vermilion: #b3402a;
+    --sand-ink: #2b241c;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --serif: "Iowan Old Style", Palatino, Georgia, ui-serif, serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: var(--serif);
+    background: #e4d4b8;
+    color: var(--ink);
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+  }
+  @media (pointer: fine) { body { cursor: none; } }
+  body.stone-drag #garden { cursor: none; }
+
+  #garden { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 3;
+    box-shadow: inset 0 0 170px rgba(96, 74, 46, 0.30), inset 0 0 46px rgba(96, 74, 46, 0.16);
+  }
+
+  /* ---------- chrome ---------- */
+  .chrome { opacity: 0; transform: translateY(14px); animation: rise 1.1s var(--ease) forwards; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  .chrome.d1 { animation-delay: 0.15s; }
+  .chrome.d2 { animation-delay: 0.35s; }
+  .chrome.d3 { animation-delay: 0.55s; }
+  .chrome.d4 { animation-delay: 0.75s; }
+
+  header.title { position: fixed; top: clamp(18px, 3.4vh, 34px); left: clamp(20px, 2.6vw, 40px); z-index: 4; pointer-events: none; }
+  header.title h1 {
+    font-size: clamp(22px, 2.6vw, 34px); font-weight: 500;
+    letter-spacing: 0.08em; color: var(--ink);
+  }
+  header.title p {
+    font-style: italic; font-size: clamp(12px, 1.3vw, 15px);
+    color: var(--ink-faint); margin-top: 6px; max-width: 30ch; line-height: 1.5;
+  }
+
+  .vlabel {
+    position: fixed; top: clamp(22px, 4vh, 40px); right: clamp(22px, 2.6vw, 40px); z-index: 4;
+    display: flex; gap: 12px; align-items: flex-start; pointer-events: none;
+  }
+  .vlabel .rule { width: 1px; height: min(52vh, 460px); background: linear-gradient(180deg, rgba(43,36,28,0.4), transparent); }
+  .vlabel .txt {
+    writing-mode: vertical-rl; font-size: clamp(11px, 1.15vw, 13px);
+    letter-spacing: 0.42em; color: var(--ink-faint);
+    height: min(52vh, 460px); overflow: hidden; white-space: nowrap;
+  }
+
+  .seal {
+    position: fixed; right: clamp(22px, 3vw, 42px); bottom: clamp(22px, 3.4vh, 40px); z-index: 4;
+    width: 46px; height: 46px; background: var(--vermilion); color: #f7ead6;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; transform: rotate(-3deg);
+    box-shadow: 0 3px 12px rgba(60, 40, 20, 0.35);
+  }
+
+  .toolbar { position: fixed; left: clamp(20px, 2.6vw, 40px); bottom: clamp(20px, 3.4vh, 36px); z-index: 4; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .pill-group {
+    display: flex; border: 1px solid rgba(43, 36, 28, 0.4); border-radius: 999px;
+    background: rgba(255, 250, 236, 0.5); backdrop-filter: blur(4px); overflow: hidden;
+  }
+  .tine-btn {
+    appearance: none; border: 0; background: transparent; cursor: pointer;
+    width: 48px; height: 40px; display: grid; place-items: center;
+    border-right: 1px solid rgba(43, 36, 28, 0.25);
+    transition: background 0.3s;
+  }
+  .tine-btn:last-child { border-right: 0; }
+  .tine-btn svg line { stroke: var(--sand-ink); stroke-width: 2; stroke-linecap: round; transition: stroke 0.3s; }
+  .tine-btn[aria-pressed="true"] { background: var(--sand-ink); }
+  .tine-btn[aria-pressed="true"] svg line { stroke: #e9dcc3; }
+  .tine-btn:hover:not([aria-pressed="true"]) { background: rgba(43, 36, 28, 0.08); }
+
+  .smooth-btn {
+    position: relative; overflow: hidden; cursor: pointer;
+    appearance: none; border: 1px solid rgba(43, 36, 28, 0.4); border-radius: 999px;
+    background: rgba(255, 250, 236, 0.5); color: var(--sand-ink);
+    font-family: var(--serif); font-style: italic; font-size: 14px;
+    padding: 9px 22px;
+  }
+  .smooth-btn::before {
+    content: ""; position: absolute; inset: 0; background: var(--sand-ink);
+    transform: scaleX(0); transform-origin: left center; z-index: 0;
+    transition: transform 0.5s var(--ease);
+  }
+  .smooth-btn:hover::before { transform: scaleX(1); }
+  .smooth-btn span { position: relative; z-index: 1; transition: color 0.35s; }
+  .smooth-btn:hover span { color: #e9dcc3; }
+
+  .hint {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 4;
+    font-style: italic; font-size: clamp(14px, 1.7vw, 18px); letter-spacing: 0.06em;
+    color: rgba(43, 36, 28, 0.5); pointer-events: none;
+    transition: opacity 1.2s ease;
+    animation: breathe 4.5s ease-in-out infinite;
+  }
+  @keyframes breathe { 0%,100% { opacity: 0.9 } 50% { opacity: 0.45 } }
+  .hint.gone { opacity: 0; animation: none; }
+
+  #cursor { position: fixed; left: 0; top: 0; z-index: 5; pointer-events: none; display: none; }
+  @media (pointer: fine) { #cursor { display: block; } }
+  #cursor svg { overflow: visible; }
+  #cursor circle { fill: none; stroke: rgba(43, 36, 28, 0.42); stroke-width: 1.4; transition: stroke 0.2s; }
+  #cursor line { stroke: rgba(43, 36, 28, 0.32); stroke-width: 1.6; stroke-linecap: round; transition: stroke 0.2s; }
+  body.ring-drag #cursor circle { stroke: var(--vermilion); stroke-width: 2; }
+
+  @media (max-width: 640px) {
+    header.title p { display: none; }
+    .hint { display: none; }
+    #cursor { display: none !important; }
+    body { cursor: auto; }
+    .vlabel { top: auto; right: auto; left: clamp(20px, 2.6vw, 40px); bottom: 86px; }
+    .vlabel .rule, .vlabel .txt { height: 26vh; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chrome { animation: none; opacity: 1; transform: none; }
+    .hint { animation: none; }
+    .smooth-btn::before, .tine-btn, .vignette { transition: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="garden" aria-label="Interactive raked-sand zen garden. Drag to rake, drag the stones to move them."></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<header class="title chrome d1">
+  <h1>Karesansui</h1>
+  <p>the dry landscape holds what the water would have said</p>
+</header>
+
+<div class="vlabel chrome d2" aria-hidden="true">
+  <div class="rule"></div>
+  <div class="txt">枯山水 raked sand · three stones · one afternoon</div>
+</div>
+
+<div class="seal chrome d3" aria-hidden="true">静</div>
+
+<div class="toolbar chrome d4">
+  <div class="pill-group" role="group" aria-label="Rake width">
+    <button class="tine-btn" data-tines="1" aria-pressed="false" title="single tine">
+      <svg width="26" height="20" viewBox="0 0 26 20"><line x1="13" y1="2" x2="13" y2="18"/></svg>
+    </button>
+    <button class="tine-btn" data-tines="3" aria-pressed="true" title="three tines">
+      <svg width="26" height="20" viewBox="0 0 26 20"><line x1="6" y1="2" x2="6" y2="18"/><line x1="13" y1="2" x2="13" y2="18"/><line x1="20" y1="2" x2="20" y2="18"/></svg>
+    </button>
+    <button class="tine-btn" data-tines="5" aria-pressed="false" title="five tines">
+      <svg width="26" height="20" viewBox="0 0 26 20"><line x1="3" y1="2" x2="3" y2="18"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="13" y1="2" x2="13" y2="18"/><line x1="18" y1="2" x2="18" y2="18"/><line x1="23" y1="2" x2="23" y2="18"/></svg>
+    </button>
+  </div>
+  <button class="smooth-btn" id="smoothBtn" type="button"><span>Smooth sand</span></button>
+</div>
+
+<p class="hint" id="hint">drag to rake · move the stones · let it be</p>
+<div id="cursor" aria-hidden="true"></div>
+
+<script>
+(() => {
+  'use strict';
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = id => document.getElementById(id);
+  const TAU = Math.PI * 2;
+
+  /* ---------------- seeded PRNG ---------------- */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ---------------- layers ---------------- */
+  const view = $('garden');
+  const vctx = view.getContext('2d');
+  let sand = document.createElement('canvas'), sctx = sand.getContext('2d');
+  let groove = document.createElement('canvas'), gctx = groove.getContext('2d');
+  let vw = 0, vh = 0, dpr = 1;
+
+  const STONE_ROT = [-0.35, 0.6, 0.1];
+  const STONE_BODY = [['#655c52', '#3a332b', '#12100c'], ['#5b544b', '#332d26', '#100e0b'], ['#4e463d', '#2b251f', '#0e0c0a']];
+  let stones = [];
+
+  function makeStones(firstTime) {
+    const u = Math.min(vw, vh);
+    const defs = [
+      { rx: u * 0.115, ry: u * 0.082, fx: 0.60, fy: 0.60 },
+      { rx: u * 0.078, ry: u * 0.060, fx: 0.30, fy: 0.36 },
+      { rx: u * 0.052, ry: u * 0.043, fx: 0.74, fy: 0.24 },
+    ];
+    stones = defs.map((d, i) => ({
+      x: firstTime ? vw * d.fx : Math.min(stones[i] ? stones[i].x : vw * d.fx, vw - d.rx),
+      y: firstTime ? vh * d.fy : Math.min(stones[i] ? stones[i].y : vh * d.fy, vh - d.ry),
+      rx: d.rx, ry: d.ry, rot: STONE_ROT[i], body: STONE_BODY[i],
+    }));
+  }
+
+  function insideStone(x, y, pad) {
+    for (const st of stones) {
+      const c = Math.cos(-st.rot), s = Math.sin(-st.rot);
+      const dx = x - st.x, dy = y - st.y;
+      const lx = dx * c - dy * s, ly = dx * s + dy * c;
+      const rx = st.rx + pad, ry = st.ry + pad;
+      if ((lx * lx) / (rx * rx) + (ly * ly) / (ry * ry) <= 1) return true;
+    }
+    return false;
+  }
+  const hitStone = (x, y) => [...stones].reverse().find(st => {
+    const c = Math.cos(-st.rot), s = Math.sin(-st.rot);
+    const dx = x - st.x, dy = y - st.y;
+    const lx = dx * c - dy * s, ly = dx * s + dy * c;
+    return (lx * lx) / (st.rx * st.rx) + (ly * ly) / (st.ry * st.ry) <= 1;
+  }) || null;
+
+  /* ---------------- sand bed ---------------- */
+  let grainTile = null;
+  function buildGrainTile() {
+    const t = document.createElement('canvas'); t.width = t.height = 256;
+    const tc = t.getContext('2d');
+    const img = tc.createImageData(256, 256);
+    const r = mulberry32(0x5EED17);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const u = Math.pow(r(), 2.4);              // faint most, crisp few
+      const light = r() < 0.5;
+      const a = u * 120;
+      if (light) { img.data[i] = 255; img.data[i + 1] = 248; img.data[i + 2] = 234; }
+      else { img.data[i] = 92; img.data[i + 1] = 72; img.data[i + 2] = 48; }
+      img.data[i + 3] = a;
+    }
+    tc.putImageData(img, 0, 0);
+    return t;
+  }
+
+  function buildSand() {
+    sand.width = Math.round(vw * dpr); sand.height = Math.round(vh * dpr);
+    sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const g = sctx.createLinearGradient(0, 0, vw, vh);   // diagonal bed
+    g.addColorStop(0, '#e9dcc3'); g.addColorStop(0.5, '#e4d4b8'); g.addColorStop(1, '#dccbab');
+    sctx.fillStyle = g; sctx.fillRect(0, 0, vw, vh);
+    // gentle undulation: six large soft washes, alternating light / shadow
+    const r = mulberry32(0x5A1D1);
+    for (let i = 0; i < 6; i++) {
+      const cx = (0.12 + 0.76 * r()) * vw, cy = (0.1 + 0.8 * r()) * vh;
+      const rad = (0.3 + 0.5 * r()) * Math.max(vw, vh);
+      const wg = sctx.createRadialGradient(cx, cy, rad * 0.08, cx, cy, rad);
+      if (i % 2 === 0) { wg.addColorStop(0, 'rgba(255,242,214,0.16)'); wg.addColorStop(1, 'rgba(255,242,214,0)'); }
+      else { wg.addColorStop(0, 'rgba(122,100,68,0.12)'); wg.addColorStop(1, 'rgba(122,100,68,0)'); }
+      sctx.fillStyle = wg; sctx.fillRect(0, 0, vw, vh);
+    }
+    // per-pixel grain, tiled
+    if (!grainTile) grainTile = buildGrainTile();
+    const pat = sctx.createPattern(grainTile, 'repeat');
+    sctx.save();
+    sctx.globalCompositeOperation = 'overlay';
+    sctx.globalAlpha = 0.55;
+    sctx.fillStyle = pat;
+    sctx.fillRect(0, 0, vw, vh);
+    sctx.restore();
+  }
+
+  /* ---------------- embossed groove strokes ---------------- */
+  function emboss(a, b) {
+    const P = () => { gctx.beginPath(); gctx.moveTo(a.x, a.y); gctx.lineTo(b.x, b.y); gctx.stroke(); };
+    gctx.save();
+    gctx.lineCap = 'round';
+    // groove floor
+    gctx.strokeStyle = 'rgba(120,96,62,0.28)'; gctx.lineWidth = 1.6; P();
+    // shadow, +1.1px toward bottom-right
+    gctx.translate(1.1, 1.1);
+    gctx.strokeStyle = 'rgba(96,74,46,0.30)'; gctx.lineWidth = 3.2; P();
+    gctx.translate(-2.4, -2.4);
+    // highlight ridge, -1.3px toward top-left
+    gctx.strokeStyle = 'rgba(255,250,236,0.55)'; gctx.lineWidth = 2.2; P();
+    gctx.restore();
+  }
+
+  let tines = 3;
+  function rakeMicro(x0, y0, x1, y1, tCount) {
+    const T = tCount || tines;
+    const dx = x1 - x0, dy = y1 - y0;
+    const len = Math.hypot(dx, dy);
+    if (len < 0.001) return;
+    const nx = -dy / len, ny = dx / len;
+    const center = (T - 1) / 2;
+    for (let i = 0; i < T; i++) {
+      const off = (i - center) * 9;
+      const a = { x: x0 + nx * off, y: y0 + ny * off };
+      const b = { x: x1 + nx * off, y: y1 + ny * off };
+      if (insideStone(a.x, a.y, 6) || insideStone(b.x, b.y, 6)) continue;   // rake stops at stones
+      emboss(a, b);
+    }
+  }
+
+  function rakePath(points, tCount) {
+    // walk the path in <=4px steps for continuity
+    for (let i = 1; i < points.length; i++) {
+      const p = points[i - 1], q = points[i];
+      const segLen = Math.hypot(q.x - p.x, q.y - p.y);
+      const steps = Math.max(1, Math.ceil(segLen / 4));
+      for (let s = 0; s < steps; s++) {
+        const t0 = s / steps, t1 = (s + 1) / steps;
+        rakeMicro(p.x + (q.x - p.x) * t0, p.y + (q.y - p.y) * t0,
+                  p.x + (q.x - p.x) * t1, p.y + (q.y - p.y) * t1, tCount);
+      }
+    }
+  }
+
+  /* ---------------- pre-raked scene ---------------- */
+  function rakeInitial() {
+    gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    gctx.clearRect(0, 0, vw, vh);
+    // three concentric ripple rings around each stone
+    for (const st of stones) {
+      for (let k = 1; k <= 3; k++) {
+        const rr = 1 + k * 0.32;
+        const pts = [];
+        for (let a = 0; a <= TAU + 0.05; a += TAU / 96) {
+          pts.push({ x: st.x + Math.cos(a + st.rot) * st.rx * rr, y: st.y + Math.sin(a + st.rot) * st.ry * rr });
+        }
+        rakePath(pts, 1);
+      }
+    }
+    // a slow three-tine sine wave across the upper fifth
+    const y0 = vh * 0.18;
+    const pts = [];
+    for (let x = -20; x <= vw + 20; x += 4) pts.push({ x, y: y0 + 17 * Math.sin(x / 150 + 1) });
+    rakePath(pts, 3);
+  }
+
+  /* ---------------- stones ---------------- */
+  function drawStone(ctx, st) {
+    // faint light sand ring at the base
+    ctx.save();
+    ctx.translate(st.x, st.y); ctx.rotate(st.rot);
+    ctx.beginPath(); ctx.ellipse(0, 0, st.rx + 4, st.ry + 4, 0, 0, TAU);
+    ctx.strokeStyle = 'rgba(255,249,232,0.35)'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.restore();
+
+    // blurred contact shadow
+    ctx.save();
+    ctx.translate(st.x + 6, st.y + 10); ctx.rotate(st.rot);
+    ctx.shadowColor = 'rgba(58,44,26,0.45)'; ctx.shadowBlur = 22;
+    ctx.fillStyle = 'rgba(58,44,26,0.35)';
+    ctx.beginPath(); ctx.ellipse(0, 0, st.rx * 0.96, st.ry * 0.94, 0, 0, TAU); ctx.fill();
+    ctx.restore();
+
+    // body
+    ctx.save();
+    ctx.translate(st.x, st.y); ctx.rotate(st.rot);
+    const b = ctx.createRadialGradient(-st.rx * 0.34, -st.ry * 0.4, st.rx * 0.12, 0, 0, Math.max(st.rx, st.ry) * 1.15);
+    b.addColorStop(0, st.body[0]); b.addColorStop(0.55, st.body[1]); b.addColorStop(1, st.body[2]);
+    ctx.fillStyle = b;
+    ctx.beginPath(); ctx.ellipse(0, 0, st.rx, st.ry, 0, 0, TAU); ctx.fill();
+    // specular sheen, upper-left
+    ctx.fillStyle = 'rgba(255,250,240,0.18)';
+    ctx.beginPath();
+    ctx.ellipse(-st.rx * 0.34, -st.ry * 0.42, st.rx * 0.36, st.ry * 0.2, -0.5, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /* ---------------- ambient branch shadow ---------------- */
+  const canFilter = 'filter' in CanvasRenderingContext2D.prototype;
+  function drawBranch(ctx, t) {
+    const s1 = 16 * Math.sin(t * TAU / 63) + 9 * Math.sin(t * TAU / 187 + 1.3);
+    const s2 = 12 * Math.sin(t * TAU / 83 + 2.1) + 7 * Math.sin(t * TAU / 241);
+    const s3 = 14 * Math.sin(t * TAU / 131 + 0.6) + 8 * Math.sin(t * TAU / 307 + 2);
+    ctx.save();
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = ctx.strokeStyle = '#3a2c1a';
+    if (canFilter) ctx.filter = 'blur(9px)';
+    else ctx.shadowColor = '#3a2c1a', ctx.shadowBlur = 14;
+
+    const x0 = vw + 40, y0 = -30;
+    const ex = vw * 0.66 + s1, ey = vh * 0.40;
+    const mx = vw * 0.86 + s2 * 0.6, my = vh * 0.12 + s3 * 0.3;
+
+    // main limb, 26px
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 26;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.bezierCurveTo(vw * 1.0, vh * 0.1 + s2, mx, my + 40, ex, ey);
+    ctx.stroke();
+
+    // two secondary limbs, 12px
+    ctx.lineWidth = 12;
+    ctx.beginPath(); ctx.moveTo(vw * 0.88 + s2 * 0.4, vh * 0.16);
+    ctx.quadraticCurveTo(vw * 0.68 + s2, vh * 0.1, vw * 0.56 + s2 * 1.4, vh * 0.24 + s3 * 0.5);
+    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(vw * 0.78, vh * 0.3 + s1 * 0.3);
+    ctx.quadraticCurveTo(vw * 0.72, vh * 0.52 + s2, vw * 0.8 + s3 * 0.6, vh * 0.66);
+    ctx.stroke();
+
+    // five leaf clusters
+    const leaves = [
+      [vw * 0.56 + s2 * 1.4, vh * 0.24 + s3 * 0.5, 34],
+      [vw * 0.5 + s2 * 1.8, vh * 0.34 - s1 * 0.6, 26],
+      [ex + 26, ey - 34, 44],
+      [ex - 60 + s3, ey + 66, 30],
+      [vw * 0.8 + s3 * 0.6, vh * 0.66, 38],
+    ];
+    for (const [lx, ly, lr] of leaves) {
+      ctx.beginPath();
+      ctx.ellipse(lx, ly, lr, lr * 0.62, 0.6 + Math.sin(t * TAU / 223) * 0.12, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /* ---------------- render loop ---------------- */
+  let smooth = null;    // {t0} while wiping the grooves away
+  function paint(t) {
+    vctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    vctx.clearRect(0, 0, vw, vh);
+    vctx.drawImage(sand, 0, 0, vw, vh);
+
+    if (smooth) {
+      const p = reduceMotion ? 1 : Math.min(1, (t - smooth.t0) / 1400);
+      const wipe = p < 1 ? (1 - Math.pow(1 - p, 3)) : 1;
+      // show only the un-smoothed remainder
+      gctx.save();
+      gctx.setTransform(1, 0, 0, 1, 0, 0);
+      gctx.globalCompositeOperation = 'destination-out';
+      const w = Math.round(vw * dpr * wipe) - (smooth.last || 0);
+      if (w > 0) { gctx.clearRect(smooth.last || 0, 0, w, groove.height); smooth.last = Math.round(vw * dpr * wipe); }
+      gctx.restore();
+      if (p >= 1) smooth = null;
+    }
+    vctx.drawImage(groove, 0, 0, vw, vh);
+    drawBranch(vctx, reduceMotion ? 12.7 : t);
+    stones.forEach(st => drawStone(vctx, st));
+  }
+  function loop(ms) {
+    paint(ms / 1000);
+    requestAnimationFrame(loop);
+  }
+
+  /* ---------------- pointer interaction ---------------- */
+  let raking = false, drag = null, lastPt = null;
+  let hinted = false;
+  const cursorEl = $('cursor');
+
+  function buildCursor() {
+    const r = ((tines - 1) / 2) * 9 + 9;
+    let lines = '';
+    const c = (tines - 1) / 2;
+    for (let i = 0; i < tines; i++) {
+      const x = (i - c) * 9;
+      const half = Math.sqrt(Math.max(0, r * r - x * x));
+      lines += `<line x1="${x}" y1="${-half}" x2="${x}" y2="${half}"/>`;
+    }
+    cursorEl.innerHTML = `<svg width="${2 * r + 4}" height="${2 * r + 4}" viewBox="${-r - 2} ${-r - 2} ${2 * r + 4} ${2 * r + 4}">
+      <circle cx="0" cy="0" r="${r}"/>${lines}</svg>`;
+  }
+  function moveCursor(x, y) {
+    const svg = cursorEl.firstElementChild;
+    if (!svg) return;
+    const r = ((tines - 1) / 2) * 9 + 9;
+    cursorEl.style.transform = `translate(${x - r - 2}px, ${y - r - 2}px)`;
+  }
+
+  function dismissHint() {
+    if (hinted) return;
+    hinted = true;
+    $('hint').classList.add('gone');
+  }
+
+  function pt(ev) {
+    const r = view.getBoundingClientRect();
+    return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+  }
+
+  addEventListener('pointerdown', (ev) => {
+    if (ev.target instanceof Element && ev.target.closest('.toolbar')) return;
+    const p = pt(ev);
+    dismissHint();
+    const st = hitStone(p.x, p.y);
+    if (st) {
+      drag = { st, ox: p.x - st.x, oy: p.y - st.y };
+      document.body.classList.add('ring-drag');
+    } else {
+      raking = true;
+      lastPt = p;
+    }
+  });
+  addEventListener('pointermove', (ev) => {
+    const p = pt(ev);
+    moveCursor(p.x, p.y);
+    if (drag) {
+      const u = Math.min(vw, vh);
+      drag.st.x = Math.max(u * 0.06, Math.min(vw - u * 0.06, p.x - drag.ox));
+      drag.st.y = Math.max(u * 0.06, Math.min(vh - u * 0.06, p.y - drag.oy));
+    } else if (raking) {
+      rakePath([lastPt, p]);       // subdivides internally
+      lastPt = p;
+    }
+  });
+  addEventListener('pointerup', () => {
+    raking = false; drag = null; lastPt = null;
+    document.body.classList.remove('ring-drag');
+  });
+  addEventListener('pointercancel', () => { raking = false; drag = null; document.body.classList.remove('ring-drag'); });
+
+  // toolbar
+  document.querySelectorAll('.tine-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      tines = parseInt(btn.dataset.tines, 10);
+      document.querySelectorAll('.tine-btn').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+      buildCursor();
+    });
+  });
+  $('smoothBtn').addEventListener('click', () => { dismissHint(); smooth = { t0: performance.now() / 1000, last: 0 }; });
+
+  /* ---------------- sizing ---------------- */
+  function build(firstTime) {
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    vw = innerWidth; vh = innerHeight;
+    view.width = Math.round(vw * dpr); view.height = Math.round(vh * dpr);
+    groove.width = view.width; groove.height = view.height;
+    makeStones(firstTime);
+    buildSand();
+    rakeInitial();
+  }
+  let resizeT = 0;
+  addEventListener('resize', () => {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(() => build(dpr !== Math.min(devicePixelRatio || 1, 2) || !stones.length), 160);
+  });
+
+  /* ---------------- boot ---------------- */
+  build(true);
+  buildCursor();
+  addEventListener('pointermove', ev => moveCursor(ev.clientX, ev.clientY), { once: true });
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

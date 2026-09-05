@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NGC 7741 Meridian — Spiral Galaxy Particle Observatory</title>
+<style>
+  :root{
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --dim: #6D7787;
+    --amber: #FFD9A0;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    background:#000000; overflow:hidden;
+    font-family:var(--serif); color:#cfd6e0;
+    -webkit-user-select:none; user-select:none;
+  }
+  #sky{ position:fixed; inset:0; display:block; touch-action:none; cursor:grab; }
+  #sky.dragging{ cursor:grabbing; }
+  #vignette{
+    position:fixed; inset:0; pointer-events:none; z-index:2;
+    background: radial-gradient(ellipse 72% 62% at 50% 50%, rgba(0,0,0,0) 42%, rgba(0,0,0,0.42) 74%, rgba(0,0,0,0.82) 100%);
+  }
+  /* ---------- HUD ---------- */
+  .hud{
+    position:fixed; z-index:3; pointer-events:none;
+    opacity:0; transition:opacity 2.4s ease;
+  }
+  body.ready .hud{ opacity:1; }
+  #hud-title{ top:42px; left:48px; max-width:min(560px, 68vw); }
+  #designation{
+    font-family:var(--mono); font-size:10px; letter-spacing:0.32em;
+    text-transform:uppercase; color:var(--dim); margin-bottom:14px;
+  }
+  #galaxy-name{
+    font-family:var(--serif); font-weight:400;
+    font-size:clamp(30px, 5.2vw, 62px); line-height:1.02; color:#F2E6CF;
+    letter-spacing:0.01em;
+  }
+  #galaxy-name em{
+    font-style:italic; color:var(--amber);
+    text-shadow:0 0 26px rgba(255,190,110,0.45), 0 0 60px rgba(255,170,80,0.22);
+  }
+  #classification{
+    margin-top:16px; font-style:italic; font-size:13.5px; line-height:1.62;
+    color:#8c96a6; max-width:44ch;
+  }
+  #stats{
+    left:48px; bottom:40px;
+    font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums;
+    display:grid; grid-template-columns:auto auto; gap:5px 26px;
+  }
+  #stats .k{ color:var(--dim); letter-spacing:0.22em; text-transform:uppercase; font-size:9px; align-self:center; }
+  #stats .v{ color:#B8C2CF; text-align:right; }
+  #stats .v b{ font-weight:400; color:#E9E2D2; }
+  #stats .v i{ font-style:normal; color:var(--dim); font-size:9.5px; margin-left:4px; letter-spacing:0.1em; }
+  /* ---------- compass ---------- */
+  #compass{ top:36px; right:40px; width:86px; }
+  #compass svg{ display:block; width:86px; height:86px; opacity:0.85; }
+  #compass text{ font-family:var(--mono); font-size:7px; letter-spacing:0.2em; fill:var(--dim); }
+  /* ---------- controls ---------- */
+  #controls{
+    right:34px; top:50%; transform:translateY(-50%);
+    display:flex; flex-direction:column; gap:12px; pointer-events:auto;
+  }
+  .glass{
+    width:44px; height:44px; border-radius:50%;
+    border:1px solid rgba(160,175,200,0.28);
+    background:rgba(12,15,22,0.42);
+    -webkit-backdrop-filter:blur(9px); backdrop-filter:blur(9px);
+    color:#AEB8C6; display:grid; place-items:center;
+    cursor:pointer; padding:0;
+    transition:transform 0.18s ease, border-color 0.25s ease, box-shadow 0.25s ease, color 0.25s ease;
+  }
+  .glass svg{ width:17px; height:17px; stroke:currentColor; fill:none; stroke-width:1.6; stroke-linecap:round; }
+  .glass:hover{
+    transform:scale(1.12); color:var(--amber);
+    border-color:rgba(255,190,110,0.65);
+    box-shadow:0 0 14px rgba(255,175,85,0.28), inset 0 0 8px rgba(255,175,85,0.10);
+  }
+  .glass:active{ transform:scale(1.02); }
+  .glass:focus-visible{ outline:1px solid var(--amber); outline-offset:3px; }
+  #hint{
+    left:50%; bottom:26px; transform:translateX(-50%);
+    font-family:var(--mono); font-size:9.5px; letter-spacing:0.28em;
+    text-transform:uppercase; color:#4d5563;
+    transition:opacity 2.4s ease;
+  }
+  @media (max-width:760px){
+    #hud-title{ top:26px; left:22px; }
+    #stats{ left:22px; bottom:24px; }
+    #controls{ right:16px; }
+    #compass{ right:20px; top:22px; width:64px; }
+    #compass svg{ width:64px; height:64px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="sky"></canvas>
+<div id="vignette"></div>
+
+<header class="hud" id="hud-title">
+  <div id="designation">Deep-Field Meridian Programme · Obj. NGC 7741 · RA 23ʰ12ᵐ41ˢ · Dec +42°18′07″</div>
+  <h1 id="galaxy-name">NGC 7741 <em>Meridian</em></h1>
+  <p id="classification">A grand-design barred spiral of moderate pitch, its two logarithmic arms traced by young
+    blue supergiants and veiled in lanes of red-magenta dust. Observed here at the meridian crossing,
+    where atmospheric motion is least and the dome may rest.</p>
+</header>
+
+<section class="hud" id="stats" aria-label="instrument readings">
+  <span class="k">Particles</span><span class="v"><b id="st-particles">0</b></span>
+  <span class="k">Distance</span><span class="v"><b id="st-distance">0</b><i>Mly</i></span>
+  <span class="k">Diameter</span><span class="v"><b id="st-diameter">0</b><i>kly</i></span>
+  <span class="k">Tilt</span><span class="v"><b id="st-tilt">60°</b></span>
+  <span class="k">Zoom</span><span class="v"><b id="st-zoom">1.00</b><i>×</i></span>
+</section>
+
+<div class="hud" id="compass" aria-hidden="true">
+  <svg viewBox="0 0 100 100">
+    <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(109,119,135,0.35)" stroke-width="1"/>
+    <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(109,119,135,0.16)" stroke-width="1"/>
+    <g stroke="rgba(109,119,135,0.5)" stroke-width="1">
+      <line x1="50" y1="4"  x2="50" y2="12"/>
+      <line x1="50" y1="88" x2="50" y2="96"/>
+      <line x1="4"  y1="50" x2="12" y2="50"/>
+      <line x1="88" y1="50" x2="96" y2="50"/>
+    </g>
+    <g id="needle" transform="rotate(0 50 50)">
+      <polygon points="50,14 54,50 50,58 46,50" fill="rgba(255,217,160,0.9)"/>
+      <polygon points="50,86 54,50 50,58 46,50" fill="rgba(109,119,135,0.55)"/>
+    </g>
+    <circle cx="50" cy="50" r="3" fill="#0a0d12" stroke="rgba(255,217,160,0.7)" stroke-width="1"/>
+    <text x="50" y="30" text-anchor="middle" fill="#6D7787">N</text>
+  </svg>
+</div>
+
+<nav class="hud" id="controls" aria-label="view controls">
+  <button class="glass" id="btn-zin" title="Zoom in" aria-label="Zoom in">
+    <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.2" y1="15.2" x2="21" y2="21"/><line x1="10.5" y1="7.6" x2="10.5" y2="13.4"/><line x1="7.6" y1="10.5" x2="13.4" y2="10.5"/></svg>
+  </button>
+  <button class="glass" id="btn-zout" title="Zoom out" aria-label="Zoom out">
+    <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.2" y1="15.2" x2="21" y2="21"/><line x1="7.6" y1="10.5" x2="13.4" y2="10.5"/></svg>
+  </button>
+  <button class="glass" id="btn-pause" title="Pause rotation (Space)" aria-label="Pause rotation" aria-pressed="false">
+    <svg id="ic-pause" viewBox="0 0 24 24"><line x1="9" y1="5" x2="9" y2="19"/><line x1="15" y1="5" x2="15" y2="19"/></svg>
+    <svg id="ic-play" viewBox="0 0 24 24" style="display:none"><polygon points="8,5 19,12 8,19" fill="currentColor" stroke="none"/></svg>
+  </button>
+  <button class="glass" id="btn-reset" title="Reset view" aria-label="Reset view">
+    <svg viewBox="0 0 24 24"><path d="M5.5 12a6.5 6.5 0 1 0 2-4.6"/><polyline points="4.6 3.2 4.6 8.2 9.6 8.2"/></svg>
+  </button>
+</nav>
+
+<div class="hud" id="hint">Drag to orbit · wheel or pinch to zoom · space holds time</div>
+
+<script>
+(() => {
+"use strict";
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const canvas = document.getElementById("sky");
+const ctx = canvas.getContext("2d", { alpha:false });
+let DPR = Math.min(window.devicePixelRatio || 1, 2);
+let W = 0, H = 0;
+
+/* ---------------------------------------------------------------- galaxy model
+   ~42,000 points: 18% spherical bulge (Gaussian scatter), remainder along two
+   logarithmic arms  r = a·e^(bθ), b ≈ 0.28, exponential radial falloff
+   (mean 0.32 of disk radius), angular scatter widening with radius.        */
+const N_TOTAL   = REDUCED ? 14000 : 42000;
+const N_BULGE   = Math.round(N_TOTAL * 0.18);
+const N_ARMS    = N_TOTAL - N_BULGE;
+const A_LOG     = 0.045;              // a in r = a·e^(bθ)
+const B_LOG     = 0.28;               // b
+const EXP_MEAN  = 0.32;               // e-folding radius (fraction of disk radius)
+const DISK_TH   = 0.06;               // vertical thickness, scaled by radius
+const ROT       = 0.16;               // global pacing of the ω = 0.35/(0.25+r) law
+
+const pr  = new Float32Array(N_TOTAL);  // radius      (0..1 of disk)
+const pa  = new Float32Array(N_TOTAL);  // base angle
+const pz  = new Float32Array(N_TOTAL);  // vertical height
+const ps  = new Float32Array(N_TOTAL);  // size
+const pb  = new Float32Array(N_TOTAL);  // brightness
+const pc  = new Uint8Array(N_TOTAL);    // palette index (0..255, by radius)
+
+let gaussSpare = null;
+function gauss(){
+  if (gaussSpare !== null){ const v = gaussSpare; gaussSpare = null; return v; }
+  let u, v, s;
+  do { u = Math.random()*2-1; v = Math.random()*2-1; s = u*u+v*v; } while (s >= 1 || s === 0);
+  const m = Math.sqrt(-2*Math.log(s)/s);
+  gaussSpare = v*m; return u*m;
+}
+function lerp(a,b,t){ return a + (b-a)*t; }
+function hex(h){ const n = parseInt(h.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+/* radius → palette: warm core, blue-white arms, red-magenta rim dust */
+const CORE1=hex("#FFEBBE"), CORE2=hex("#FFCD82"), ARM1=hex("#CDD7FF"), ARM2=hex("#91C3FF"), DUST1=hex("#AA7882"), DUST2=hex("#D25058");
+function colorAt(t){                       // t = r normalised to disc radius
+  let c;
+  if (t < 0.16) c = [lerp(CORE1[0],CORE2[0],t/0.16), lerp(CORE1[1],CORE2[1],t/0.16), lerp(CORE1[2],CORE2[2],t/0.16)];
+  else if (t < 0.70) { const u=(t-0.16)/0.54; c = [lerp(ARM1[0],ARM2[0],u), lerp(ARM1[1],ARM2[1],u), lerp(ARM1[2],ARM2[2],u)]; }
+  else { const u=Math.min(1,(t-0.70)/0.30); c = [lerp(DUST1[0],DUST2[0],u), lerp(DUST1[1],DUST2[1],u), lerp(DUST1[2],DUST2[2],u)]; }
+  return [c[0]|0, c[1]|0, c[2]|0];
+}
+const PALETTE = new Array(256);
+for (let i=0;i<256;i++) PALETTE[i] = colorAt(i/255);
+
+function buildGalaxy(){
+  for (let i=0;i<N_BULGE;i++){                       // spherical bulge
+    const x = gauss()*0.135, y = gauss()*0.135, z = gauss()*0.095;
+    const r = Math.min(1, Math.hypot(x,y));
+    pr[i]=r; pa[i]=Math.atan2(y,x); pz[i]=z;
+    ps[i]=0.55 + Math.random()*1.1;
+    pb[i]=0.30 + Math.pow(Math.random(),1.6)*0.5;
+    pc[i]=Math.min(255, (r*1.35*255)|0);
+  }
+  const cut  = 1 - Math.exp(-1/EXP_MEAN);
+  for (let i=N_BULGE;i<N_TOTAL;i++){                 // two logarithmic arms
+    let r = -EXP_MEAN * Math.log(1 - Math.random()*cut);
+    if (r > 1) r = 1;
+    if (r < 0.015) r = 0.015;
+    const arm = (i & 1) ? Math.PI : 0;
+    const th  = Math.log(r/A_LOG)/B_LOG + arm + gauss()*(0.16 + 1.10*r);
+    const hot = Math.random() < 0.06;                // oversized blue knots
+    pr[i]=r; pa[i]=th;
+    pz[i]=gauss()*DISK_TH*Math.max(r,0.12);
+    if (hot){
+      ps[i]=2.1 + Math.random()*1.9; pb[i]=1.0;
+      pc[i]=Math.min(255, (r*255)|0);
+    } else {
+      ps[i]=0.5 + Math.pow(Math.random(),2.2)*1.5;
+      pb[i]=0.30 + Math.random()*0.55;
+      pc[i]=Math.min(255, (r*255)|0);
+    }
+    hotFlag[i]=hot;
+  }
+}
+const hotFlag = new Uint8Array(N_TOTAL);
+buildGalaxy();
+/* hot knots: force luminous blue regardless of radial ramp */
+for (let i=N_BULGE;i<N_TOTAL;i++) if (hotFlag[i]) pc[i]= Math.max(0, ((1-0.55)*255)|0); // near ARM blue
+
+/* ---- sprite cache: 32px radial-gradient sprite per quantised colour ---- */
+const spriteCache = new Map();
+function spriteFor(colIdx){
+  let s = spriteCache.get(colIdx);
+  if (s) return s;
+  const [r,g,b] = colIdx===undefined ? [255,255,255] : PALETTE[colIdx];
+  s = document.createElement("canvas"); s.width = s.height = 32;
+  const c = s.getContext("2d");
+  const gr = c.createRadialGradient(16,16,0,16,16,16);
+  gr.addColorStop(0,    `rgba(255,255,255,0.95)`);
+  gr.addColorStop(0.18, `rgba(${r},${g},${b},0.95)`);
+  gr.addColorStop(0.45, `rgba(${r},${g},${b},0.32)`);
+  gr.addColorStop(1,    `rgba(${r},${g},${b},0)`);
+  c.fillStyle = gr; c.fillRect(0,0,32,32);
+  spriteCache.set(colIdx, s);
+  return s;
+}
+const SPRITES = new Array(256);
+for (let i=0;i<256;i++) SPRITES[i] = spriteFor(i);
+const HOT_SPRITE = (() => {          // dedicated blue-white knot sprite
+  const s=document.createElement("canvas"); s.width=s.height=32;
+  const c=s.getContext("2d");
+  const gr=c.createRadialGradient(16,16,0,16,16,16);
+  gr.addColorStop(0,"rgba(255,255,255,1)");
+  gr.addColorStop(0.2,"rgba(185,210,255,0.95)");
+  gr.addColorStop(0.5,"rgba(145,195,255,0.35)");
+  gr.addColorStop(1,"rgba(145,195,255,0)");
+  c.fillStyle=gr; c.fillRect(0,0,32,32); return s;
+})();
+
+/* ---- nebula dust: ~90 large soft ellipses following the arms ---- */
+const DUST_N = 90;
+const dust = [];
+for (let i=0;i<DUST_N;i++){
+  const arm = Math.random()<0.5 ? 0 : Math.PI;
+  const t = 0.05 + Math.random()*0.95;
+  dust.push({
+    t,                                   // radius fraction
+    th: Math.log(t/A_LOG)/B_LOG + arm + gauss()*(0.25 + 0.7*Math.random()*t),
+    s : 0.09 + Math.random()*0.16,       // size fraction of disc
+    squash: 0.38 + Math.random()*0.34,
+    rot: Math.random()*Math.PI,
+    a : 0.06 + Math.random()*0.03,       // 6–9 % alpha
+    hue: t < 0.34 ? [255,186,134] : (t < 0.72 ? [76,116,255] : [196,64,112])  // peach / cobalt / wine
+  });
+}
+
+/* ---- pre-rendered background: faint starfield + a dozen blurred galaxies ---- */
+let bg = document.createElement("canvas");
+function renderBackground(){
+  bg.width = Math.max(2, W*DPR); bg.height = Math.max(2, H*DPR);
+  const b = bg.getContext("2d");
+  b.setTransform(DPR,0,0,DPR,0,0);
+  b.fillStyle = "#000000"; b.fillRect(0,0,W,H);
+  const nStars = Math.round(W*H/2600);
+  for (let i=0;i<nStars;i++){
+    const x=Math.random()*W, y=Math.random()*H, r=Math.random();
+    b.globalAlpha = 0.035 + r*r*0.30;
+    b.fillStyle = r>0.86 ? "#cdd7ff" : (r>0.72 ? "#ffe9cc" : "#8f98a8");
+    b.beginPath(); b.arc(x,y,0.4+r*0.9,0,7); b.fill();
+  }
+  b.globalAlpha = 1;
+  const tints = [[120,140,220],[200,150,230],[230,190,150],[140,200,220]];
+  for (let g=0; g<12; g++){
+    const x = Math.random()*W, y = Math.random()*H;
+    const rad = 7 + Math.random()*24, squash = 0.28 + Math.random()*0.5;
+    const rot = Math.random()*Math.PI, t = tints[(Math.random()*tints.length)|0];
+    b.save(); b.translate(x,y); b.rotate(rot); b.scale(1,squash);
+    const gr = b.createRadialGradient(0,0,0,0,0,rad);
+    gr.addColorStop(0,   `rgba(${t[0]},${t[1]},${t[2]},0.16)`);
+    gr.addColorStop(0.5, `rgba(${t[0]},${t[1]},${t[2]},0.05)`);
+    gr.addColorStop(1,   `rgba(${t[0]},${t[1]},${t[2]},0)`);
+    b.fillStyle = gr; b.beginPath(); b.arc(0,0,rad,0,7); b.fill(); b.restore();
+  }
+  b.globalAlpha = 1;
+}
+
+/* ---------------------------------------------------------------- view state */
+const DEF = { yaw: -0.55, tilt: 1.047 };                 // default oblique view (60° tilt)
+let yaw = DEF.yaw, tilt = DEF.tilt;
+let zoom = 0.14, zoomTarget = 1;                          // eased approach from a wide open
+let simT = 0, rotating = true;
+let cx = 0, cy = 0, Rpx = 0;
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W*DPR); canvas.height = Math.round(H*DPR);
+  canvas.style.width = W+"px"; canvas.style.height = H+"px";
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  cx = W/2; cy = H*0.52;
+  Rpx = Math.min(W,H) * 0.44;
+  renderBackground();
+}
+window.addEventListener("resize", resize);
+resize();
+
+/* ---------------------------------------------------------------- interactions */
+const pointers = new Map();
+let pinchBase = null, pinchZoom0 = 1;
+
+canvas.addEventListener("pointerdown", e => {
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  canvas.classList.add("dragging");
+  if (pointers.size === 2){
+    const [p1,p2] = [...pointers.values()];
+    pinchBase = Math.hypot(p1.x-p2.x, p1.y-p2.y); pinchZoom0 = zoomTarget;
+  }
+});
+canvas.addEventListener("pointermove", e => {
+  const prev = pointers.get(e.pointerId);
+  if (!prev) return;
+  const cur = {x:e.clientX, y:e.clientY};
+  if (pointers.size === 1){
+    yaw  += (cur.x - prev.x) * 0.0052;
+    tilt =  Math.min(1.52, Math.max(0.06, tilt + (cur.y - prev.y) * 0.0042));
+  }
+  pointers.set(e.pointerId, cur);
+  if (pointers.size === 2 && pinchBase){
+    const [p1,p2] = [...pointers.values()];
+    const d = Math.hypot(p1.x-p2.x, p1.y-p2.y);
+    zoomTarget = clampZoom(pinchZoom0 * d / pinchBase);
+  }
+});
+function endPointer(e){
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinchBase = null;
+  if (pointers.size === 0) canvas.classList.remove("dragging");
+}
+canvas.addEventListener("pointerup", endPointer);
+canvas.addEventListener("pointercancel", endPointer);
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  const factor = e.ctrlKey ? 0.0125 : 0.0016;   // trackpad pinch sends ctrl+wheel
+  zoomTarget = clampZoom(zoomTarget * Math.exp(-e.deltaY * factor * 3.2));
+}, { passive:false });
+function clampZoom(z){ return Math.min(6, Math.max(0.35, z)); }
+
+function setRotating(on){
+  rotating = on;
+  document.getElementById("ic-pause").style.display = on ? "" : "none";
+  document.getElementById("ic-play").style.display  = on ? "none" : "";
+  const btn = document.getElementById("btn-pause");
+  btn.setAttribute("aria-pressed", String(!on));
+  btn.title = on ? "Pause rotation (Space)" : "Resume rotation (Space)";
+}
+window.addEventListener("keydown", e => {
+  if (e.code === "Space" && !(e.target instanceof HTMLButtonElement)){ e.preventDefault(); setRotating(!rotating); }
+});
+document.getElementById("btn-pause").addEventListener("click", () => setRotating(!rotating));
+document.getElementById("btn-zin").addEventListener("click",  () => zoomTarget = clampZoom(zoomTarget*1.45));
+document.getElementById("btn-zout").addEventListener("click", () => zoomTarget = clampZoom(zoomTarget/1.45));
+document.getElementById("btn-reset").addEventListener("click", () => {
+  yaw = DEF.yaw; tilt = DEF.tilt; zoomTarget = 1;
+});
+
+/* ---------------------------------------------------------------- HUD stats */
+const $p = document.getElementById("st-particles"),
+      $d = document.getElementById("st-distance"),
+      $m = document.getElementById("st-diameter"),
+      $t = document.getElementById("st-tilt"),
+      $z = document.getElementById("st-zoom"),
+      $needle = document.getElementById("needle");
+const COUNT_T = 3.2;
+const ease4 = x => 1 - Math.pow(1-x, 4);
+function fmt(n){ return n.toLocaleString("en-US"); }
+document.body.classList.add("ready");
+let countStart = null, counting = true;
+function updateCounts(now){
+  if (countStart === null) countStart = now;
+  const p = Math.min(1, (now - countStart) / (COUNT_T*1000));
+  const e = ease4(p);
+  $p.textContent = fmt(Math.round(N_TOTAL * e));
+  $d.textContent = fmt(Math.round(312 * e));
+  $m.textContent = fmt(Math.round(128 * e));
+  return p < 1;
+}
+
+/* ---------------------------------------------------------------- render loop */
+const cosCache = { yaw:NaN, tilt:NaN, cy:1, sy:0, ct:1, st:0 };
+function frame(now){
+  const dt = Math.min(0.05, (now - (frame.last ?? now)) / 1000);
+  frame.last = now;
+  if (rotating) simT += dt;
+  zoom += (zoomTarget - zoom) * (1 - Math.exp(-dt*6));
+
+  if (cosCache.yaw !== yaw || cosCache.tilt !== tilt){
+    cosCache.yaw = yaw; cosCache.tilt = tilt;
+    cosCache.cy = Math.cos(yaw); cosCache.sy = Math.sin(yaw);
+    cosCache.ct = Math.cos(tilt); cosCache.st = Math.sin(tilt);
+  }
+  const S = Rpx * zoom, cy2 = cosCache.cy, sy2 = cosCache.sy, ct = cosCache.ct, st = cosCache.st;
+
+  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = 1;
+  ctx.drawImage(bg, 0, 0, W, H);
+
+  /* warm radial core glow */
+  const coreR = Math.max(6, S*0.30);
+  const g0 = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+  g0.addColorStop(0,  "rgba(255,222,166,0.34)");
+  g0.addColorStop(0.35,"rgba(255,196,120,0.14)");
+  g0.addColorStop(1,  "rgba(255,180,100,0)");
+  ctx.globalCompositeOperation = "lighter";
+  ctx.fillStyle = g0;
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(1, Math.max(0.14, ct)); ctx.beginPath();
+  ctx.arc(0,0,coreR,0,7); ctx.fill(); ctx.restore();
+
+  /* particles — differential rotation ω = 0.35/(0.25+r), additive sprites */
+  const w0 = N_BULGE;
+  for (let i=0;i<N_TOTAL;i++){
+    const r = pr[i];
+    const ang = pa[i] + simT * (0.35/(0.25+r)) * ROT;
+    const x = r*Math.cos(ang), y = r*Math.sin(ang);
+    const x1 = x*cy2 - y*sy2;
+    const y1 = x*sy2 + y*cy2;
+    const z  = pz[i];
+    const y2 = y1*ct - z*st;
+    const depth = y1*st + z*ct;
+    const sx = cx + x1*S;
+    if (sx < -20 || sx > W+20) continue;
+    const sy = cy + y2*S;
+    if (sy < -20 || sy > H+20) continue;
+    const dep = 1 + depth*0.42;                       // depth slightly scales point size
+    const w = Math.max(1.1, ps[i]*5.2*dep*Math.min(1.9, 0.5+zoom*0.55));
+    ctx.globalAlpha = Math.min(1, pb[i]*dep*0.92);
+    ctx.drawImage(hotFlag[i] && i>=w0 ? HOT_SPRITE : SPRITES[pc[i]], sx-w/2, sy-w/2, w, w);
+  }
+
+  /* nebula dust layer above the disk */
+  for (let i=0;i<DUST_N;i++){
+    const d = dust[i];
+    const r = d.t;
+    const ang = d.th + simT * (0.35/(0.25+r)) * ROT;
+    const x = r*Math.cos(ang), y = r*Math.sin(ang);
+    const x1 = x*cy2 - y*sy2, y1 = x*sy2 + y*cy2;
+    const sx = cx + x1*S, sy = cy + y1*ct*S;
+    if (sx < -S || sx > W+S || sy < -S || sy > H+S) continue;
+    const rr = d.s*S;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(d.rot + yaw);
+    ctx.scale(1, d.squash);
+    const gr = ctx.createRadialGradient(0,0,0,0,0,rr);
+    const [hr,hg,hb] = d.hue;
+    gr.addColorStop(0, `rgba(${hr},${hg},${hb},${d.a})`);
+    gr.addColorStop(1, `rgba(${hr},${hg},${hb},0)`);
+    ctx.globalAlpha = 1; ctx.fillStyle = gr;
+    ctx.beginPath(); ctx.arc(0,0,rr,0,7); ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+
+  /* live readouts */
+
+  if (counting) counting = updateCounts(now);
+  $t.textContent = Math.round(tilt * 180/Math.PI) + "°";
+  $z.textContent = zoom.toFixed(2);
+  $needle.setAttribute("transform", `rotate(${(-yaw*180/Math.PI).toFixed(2)} 50 50)`);
+  requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

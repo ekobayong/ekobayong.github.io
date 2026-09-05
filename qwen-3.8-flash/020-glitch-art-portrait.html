@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signal Loss — Generative Glitch Portrait</title>
+<style>
+  :root {
+    --body: #07070a;
+    --panel: #0d0d12;
+    --acid: #c8ff3d;
+    --mag: #ff3d9a;
+    --cyan: #3de9ff;
+    --dim: rgba(228, 232, 240, 0.42);
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+    --serif: Georgia, "Iowan Old Style", Palatino, ui-serif, serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--body); color: #e4e8f0; font-family: var(--mono);
+    min-height: 100vh; display: flex; flex-direction: column;
+    font-variant-numeric: tabular-nums; overflow-x: hidden;
+  }
+  .scanlines {
+    position: fixed; inset: 0; z-index: 50; pointer-events: none;
+    background: repeating-linear-gradient(180deg, rgba(255,255,255,0.045) 0 1px, transparent 1px 3px);
+    mix-blend-mode: overlay;
+  }
+
+  .lbl {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--dim);
+  }
+
+  /* ---------- top bar ---------- */
+  header {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    padding: 14px clamp(16px, 3vw, 34px);
+    background: var(--panel); border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--acid);
+    box-shadow: 0 0 8px var(--acid); animation: blink 1.1s steps(2, jump-none) infinite;
+  }
+  .dot.frozen { background: var(--mag); box-shadow: 0 0 8px var(--mag); animation: none; }
+  @keyframes blink { 50% { opacity: 0.15 } }
+  header .sep { flex: 1; }
+  header b { color: #dfe5ee; font-weight: 400; letter-spacing: 0.04em; }
+
+  /* ---------- main ---------- */
+  main {
+    flex: 1; display: grid; grid-template-columns: minmax(300px, 6fr) minmax(320px, 4fr);
+    gap: clamp(24px, 4vw, 64px); align-items: center;
+    padding: clamp(22px, 4vh, 48px) clamp(16px, 3vw, 34px);
+    max-width: 1400px; margin: 0 auto; width: 100%;
+  }
+
+  .frame-cell { display: flex; justify-content: center; }
+  .matte {
+    position: relative; background: var(--panel); padding: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+    width: min(100%, 58vh);
+  }
+  .matte canvas { display: block; width: 100%; aspect-ratio: 3 / 4; background: #000; }
+  .corner { position: absolute; width: 16px; height: 16px; border: 1.5px solid var(--acid); z-index: 2; }
+  .corner.tl { top: 5px; left: 5px; border-right: 0; border-bottom: 0; }
+  .corner.tr { top: 5px; right: 5px; border-left: 0; border-bottom: 0; }
+  .corner.bl { bottom: 5px; left: 5px; border-right: 0; border-top: 0; }
+  .corner.br { bottom: 5px; right: 5px; border-left: 0; border-top: 0; }
+  .rectag {
+    position: absolute; top: 20px; left: 22px; z-index: 2;
+    font-size: 10px; letter-spacing: 0.18em; color: var(--acid);
+    text-shadow: 0 0 6px rgba(200,255,61,0.5);
+  }
+  .rectag.frozen { color: var(--mag); text-shadow: 0 0 6px rgba(255,61,154,0.5); }
+
+  /* ---------- plaque ---------- */
+  .plaque { max-width: 520px; }
+  .plaque h1 {
+    font-family: var(--serif); font-weight: 400; color: #f0f2f6;
+    font-size: clamp(30px, 3.4vw, 44px); line-height: 1.12; letter-spacing: -0.01em;
+  }
+  .plaque h1 em { display: block; font-size: 0.42em; font-style: italic; color: var(--dim); margin-top: 8px; letter-spacing: 0.02em; }
+  .meta {
+    display: grid; grid-template-columns: auto 1fr; gap: 7px 22px;
+    margin: 26px 0; padding: 18px 0;
+    border-top: 1px dashed rgba(255,255,255,0.14); border-bottom: 1px dashed rgba(255,255,255,0.14);
+    font-size: 12px;
+  }
+  .meta dt { text-transform: uppercase; letter-spacing: 0.16em; color: rgba(228,232,240,0.35); font-size: 10px; padding-top: 1px; }
+  .meta dd { color: #cfd5df; }
+  .statement { font-family: var(--serif); font-size: 14.5px; line-height: 1.7; color: rgba(228, 232, 240, 0.66); font-style: italic; margin-bottom: 30px; }
+
+  .controls { display: flex; flex-direction: column; gap: 18px; }
+  .slider-row { display: flex; align-items: center; gap: 14px; }
+  .slider-row output { font-size: 12px; color: var(--acid); min-width: 4ch; }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none; flex: 1; height: 18px; background: transparent; cursor: ew-resize;
+  }
+  input[type="range"]::-webkit-slider-runnable-track { height: 1px; background: linear-gradient(90deg, var(--acid), var(--mag)); }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 6px; height: 18px; margin-top: -8.5px;
+    background: #e8ecf4; border: 0; box-shadow: 0 0 6px rgba(255,255,255,0.35);
+  }
+  input[type="range"]::-moz-range-track { height: 1px; background: linear-gradient(90deg, var(--acid), var(--mag)); }
+  input[type="range"]::-moz-range-thumb { width: 6px; height: 18px; border-radius: 0; background: #e8ecf4; border: 0; }
+
+  .btnrow { display: flex; gap: 12px; flex-wrap: wrap; }
+  .gbtn {
+    appearance: none; cursor: pointer; background: transparent;
+    border: 1px solid rgba(228,232,240,0.35); color: #dfe3ea;
+    font: inherit; font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em;
+    padding: 12px 18px; display: inline-flex; align-items: center; gap: 10px;
+    transition: border-color 0.25s, color 0.25s;
+  }
+  .gbtn i { width: 7px; height: 7px; background: rgba(228,232,240,0.4); display: inline-block; transition: background 0.25s, box-shadow 0.25s; }
+  .gbtn:hover { border-color: var(--acid); color: #fff; }
+  .gbtn:hover i { background: var(--acid); box-shadow: 0 0 8px var(--acid); }
+  .gbtn[aria-pressed="true"] { border-color: var(--mag); color: var(--mag); }
+  .gbtn[aria-pressed="true"] i { background: var(--mag); box-shadow: 0 0 8px var(--mag); }
+
+  .readout {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    border: 1px dashed rgba(255,255,255,0.16);
+  }
+  .readout div {
+    padding: 10px 12px; display: flex; flex-direction: column; gap: 5px;
+    border-right: 1px dashed rgba(255,255,255,0.12); border-bottom: 1px dashed rgba(255,255,255,0.12);
+  }
+  .readout div:nth-child(3n) { border-right: 0; }
+  .readout div:nth-child(n+4) { border-bottom: 0; }
+  .readout b { font-size: 9px; letter-spacing: 0.18em; color: rgba(228,232,240,0.35); font-weight: 400; }
+  .readout span { font-size: 13px; color: var(--cyan); text-shadow: 0 0 5px rgba(61,233,255,0.35); }
+
+  footer {
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    padding: 12px clamp(16px, 3vw, 34px);
+    background: var(--panel); border-top: 1px solid rgba(255,255,255,0.06);
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(228,232,240,0.3);
+  }
+
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+    .plaque { max-width: 58vh; margin: 0 auto; }
+  }
+</style>
+</head>
+<body>
+<div class="scanlines" aria-hidden="true"></div>
+
+<header>
+  <span class="dot" id="statusDot" aria-hidden="true"></span>
+  <span class="lbl">Signal Loss · live corruption</span>
+  <span class="sep"></span>
+  <span class="lbl">subject <b id="subjHex">0x0000</b></span>
+  <span class="lbl">frame <b id="frameHex">0x000000</b></span>
+</header>
+
+<main>
+  <section class="frame-cell">
+    <div class="matte">
+      <span class="corner tl" aria-hidden="true"></span><span class="corner tr" aria-hidden="true"></span>
+      <span class="corner bl" aria-hidden="true"></span><span class="corner br" aria-hidden="true"></span>
+      <span class="rectag" id="rectag">REC ●</span>
+      <canvas id="view" aria-label="Generative glitch portrait, corrupted in real time"></canvas>
+    </div>
+  </section>
+
+  <aside class="plaque">
+    <h1 id="artTitle">Woman in Static<em id="artSub">(subject 0000)</em></h1>
+    <dl class="meta">
+      <dt>Medium</dt><dd>Procedural pigment on unstable signal</dd>
+      <dt>Year</dt><dd>2026</dd>
+      <dt>Dimensions</dt><dd>600 × 800 px, variable</dd>
+      <dt>Edition</dt><dd id="edition">1/1 · seed 0x00000000</dd>
+    </dl>
+    <p class="statement">The sitter agreed to one sitting; the transmission has never stopped.
+      Every frame is the same face arriving a few milliseconds late — channel by channel, band by band —
+      until recognition becomes rhythm. Look long enough and the corruption stops being damage and starts
+      being breath.</p>
+    <div class="controls">
+      <div class="slider-row">
+        <label class="lbl" for="kSlider">Corruption intensity</label>
+        <input type="range" id="kSlider" min="0" max="1" step="0.01" value="0.5">
+        <output id="kOut">0.50</output>
+      </div>
+      <div class="btnrow">
+        <button class="gbtn" id="freezeBtn" type="button" aria-pressed="false"><i aria-hidden="true"></i><span id="freezeLbl">Freeze frame</span></button>
+        <button class="gbtn" id="newBtn" type="button"><i aria-hidden="true"></i>New subject</button>
+      </div>
+      <div class="readout" aria-label="Signal diagnostics">
+        <div><b>Slice</b><span id="roSlice">0x00</span></div>
+        <div><b>Split</b><span id="roSplit">0x00</span></div>
+        <div><b>Blocks</b><span id="roBlocks">0x00</span></div>
+        <div><b>Smear</b><span id="roSmear">0x00</span></div>
+        <div><b>Palette</b><span id="roPal">#000000</span></div>
+        <div><b>Burst</b><span id="roBurst">0x00</span></div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <span>Rendered entirely in-browser · no images · no network</span>
+  <span>Museum of Unstable Media · Gallery 4</span>
+</footer>
+
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const hex = (n, w) => '0x' + Math.round(Math.max(0, n)).toString(16).toUpperCase().padStart(w, '0');
+
+  const PW = 600, PH = 800;   // portrait buffer size
+
+  /* ---------------- procedural face ---------------- */
+  const face = document.createElement('canvas'); face.width = PW; face.height = PH;
+  const chR = document.createElement('canvas'); chR.width = PW; chR.height = PH;
+  const chG = document.createElement('canvas'); chG.width = PW; chG.height = PH;
+  const chB = document.createElement('canvas'); chB.width = PW; chB.height = PH;
+
+  let pal = null;
+  const hsl = (h, s, l) => `hsl(${h}, ${s}%, ${l}%)`;
+
+  function paintFace(seed) {
+    const r = mulberry32(seed);
+    const hue = r() * 360;
+    pal = {
+      bg: hsl(hue, 25 + r() * 20, 6 + r() * 6),
+      bgDeep: '#040406',
+      skinH: 18 + r() * 22, skinS: 30 + r() * 20, skinL: 45 + r() * 30,
+      hairH: (hue + 180) % 360, hairL: 6 + r() * 14,
+      irisH: (hue + 120 + r() * 80) % 360,
+      accentH: (hue + 40) % 360,
+    };
+    pal.skin = hsl(pal.skinH, pal.skinS, pal.skinL);
+    pal.skinDark = hsl(pal.skinH, pal.skinS + 6, Math.max(12, pal.skinL - 22));
+    pal.skinLite = hsl(pal.skinH, Math.max(15, pal.skinS - 10), Math.min(92, pal.skinL + 18));
+    pal.lip = hsl(pal.skinH - 6, Math.max(12, pal.skinS - 12), Math.max(18, pal.skinL - 20));
+    pal.hair = hsl(pal.hairH, 30, pal.hairL);
+    pal.accent = hsl(pal.accentH, 90, 55);
+    pal.iris = hsl(pal.irisH, 55, 42);
+
+    const g = face.getContext('2d');
+    g.clearRect(0, 0, PW, PH);
+    g.save();
+
+    // background + radial accent rim
+    const bg = g.createLinearGradient(0, 0, 0, PH);
+    bg.addColorStop(0, pal.bg); bg.addColorStop(1, pal.bgDeep);
+    g.fillStyle = bg; g.fillRect(0, 0, PW, PH);
+    const rimX = r() < 0.5 ? -0.15 : 1.15;
+    const rim = g.createRadialGradient(PW * rimX, PH * 0.34, 20, PW * rimX, PH * 0.34, PW * 0.7);
+    rim.addColorStop(0, `hsla(${pal.accentH}, 90%, 55%, 0.35)`);
+    rim.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rim; g.fillRect(0, 0, PW, PH);
+
+    const cx = PW / 2 + (r() - 0.5) * 30;
+    const headY = PH * 0.4;
+    const hw = 150 + r() * 40;      // head width 150–190
+    const hh = 200 + r() * 40;      // head height 200–240
+    const tilt = (r() - 0.5) * 0.12;
+
+    // neck with vertical gradient
+    const neckW = hw * 0.36;
+    const ng = g.createLinearGradient(0, headY + hh * 0.5, 0, PH * 0.86);
+    ng.addColorStop(0, pal.skinDark); ng.addColorStop(1, pal.skin);
+    g.fillStyle = ng;
+    g.fillRect(cx - neckW / 2, headY + hh * 0.3, neckW, PH * 0.86 - (headY + hh * 0.3));
+
+    // torso half-ellipse, drawn over the lower neck
+    g.beginPath();
+    g.ellipse(cx, PH + 40, 190 + r() * 50, 320 + r() * 40, 0, Math.PI, 0);
+    g.fillStyle = hsl(pal.hairH, 12, Math.max(4, pal.hairL * 0.6));
+    g.fill();
+
+    // head
+    g.translate(cx, headY); g.rotate(tilt); g.translate(-cx, -headY);
+    const hg = g.createRadialGradient(cx - hw * 0.3, headY - hh * 0.28, hw * 0.15, cx, headY, hh * 0.78);
+    hg.addColorStop(0, pal.skinLite); hg.addColorStop(0.55, pal.skin); hg.addColorStop(1, pal.skinDark);
+    g.fillStyle = hg;
+    g.beginPath(); g.ellipse(cx, headY, hw / 2, hh / 2, 0, 0, Math.PI * 2); g.fill();
+
+    // jaw shadow
+    const jg = g.createLinearGradient(0, headY + hh * 0.18, 0, headY + hh / 2);
+    jg.addColorStop(0, 'rgba(0,0,0,0)');
+    jg.addColorStop(1, `hsla(${pal.skinH}, ${pal.skinS}%, ${Math.max(8, pal.skinL - 30)}%, 0.55)`);
+    g.save();
+    g.beginPath(); g.ellipse(cx, headY, hw / 2, hh / 2, 0, 0, Math.PI * 2); g.clip();
+    g.fillStyle = jg; g.fillRect(cx - hw / 2, headY, hw, hh / 2);
+    g.restore();
+
+    // eyes
+    const eyeY = headY - hh * 0.06;
+    const eyeDX = hw * 0.21;
+    const ew = hw * 0.14, eh = ew * 0.52;
+    for (const side of [-1, 1]) {
+      const ex = cx + side * eyeDX;
+      // brow — thick round-capped arc, sits on the skin
+      g.strokeStyle = pal.hair; g.lineWidth = 6 + r() * 3; g.lineCap = 'round';
+      g.beginPath();
+      g.arc(ex, eyeY + ew * 0.95, ew * 1.55, Math.PI * 1.14, Math.PI * 1.86);
+      g.stroke();
+      const almond = () => {
+        g.beginPath();
+        g.moveTo(ex - ew, eyeY);
+        g.quadraticCurveTo(ex, eyeY - eh * 1.9, ex + ew, eyeY);
+        g.quadraticCurveTo(ex, eyeY + eh * 1.6, ex - ew, eyeY);
+        g.closePath();
+      };
+      // everything inside the almond, clipped
+      g.save();
+      almond(); g.clip();
+      g.fillStyle = hsl(pal.skinH, 12, 92);
+      g.fillRect(ex - ew, eyeY - eh * 2.2, ew * 2, eh * 4.6);
+      const ig = g.createRadialGradient(ex - 2, eyeY - 2, 1, ex, eyeY, ew * 0.52);
+      ig.addColorStop(0, hsl(pal.irisH, 70, 62)); ig.addColorStop(0.7, pal.iris); ig.addColorStop(1, hsl(pal.irisH, 60, 14));
+      g.fillStyle = ig;
+      g.beginPath(); g.arc(ex, eyeY, ew * 0.5, 0, Math.PI * 2); g.fill();
+      const pg = g.createRadialGradient(ex, eyeY, 0.5, ex, eyeY, ew * 0.26);
+      pg.addColorStop(0, '#000'); pg.addColorStop(1, hsl(pal.irisH, 60, 6));
+      g.fillStyle = pg;
+      g.beginPath(); g.arc(ex, eyeY, ew * 0.24, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.9)';
+      g.beginPath(); g.arc(ex - ew * 0.2, eyeY - eh * 0.3, ew * 0.1, 0, Math.PI * 2); g.fill();
+      // upper-lid shadow inside the almond
+      g.fillStyle = 'rgba(0,0,0,0.22)';
+      g.beginPath(); g.ellipse(ex, eyeY - eh * 1.7, ew * 1.2, eh * 1.1, 0, 0, Math.PI * 2); g.fill();
+      g.restore();
+      // lid strokes around the almond
+      g.strokeStyle = pal.skinDark; g.lineWidth = 2.2;
+      almond(); g.stroke();
+    }
+
+    // nose: soft gradient plane
+    const noseTop = eyeY + eh * 0.8, noseBot = headY + hh * 0.16;
+    const ng2 = g.createLinearGradient(cx - hw * 0.09, 0, cx + hw * 0.12, 0);
+    ng2.addColorStop(0, 'rgba(0,0,0,0.16)'); ng2.addColorStop(0.5, 'rgba(255,255,255,0.10)'); ng2.addColorStop(1, 'rgba(0,0,0,0.2)');
+    g.fillStyle = ng2;
+    g.beginPath();
+    g.moveTo(cx - hw * 0.045, noseTop);
+    g.quadraticCurveTo(cx - hw * 0.12, noseBot, cx, noseBot + 6);
+    g.quadraticCurveTo(cx + hw * 0.12, noseBot, cx + hw * 0.045, noseTop);
+    g.closePath(); g.fill();
+
+    // lips: two curves + dark seam
+    const lipY = headY + hh * 0.26, lipW = hw * 0.3;
+    g.fillStyle = pal.lip;
+    g.beginPath();
+    g.moveTo(cx - lipW, lipY);
+    g.bezierCurveTo(cx - lipW * 0.5, lipY - 12, cx - lipW * 0.2, lipY - 14, cx, lipY - 8);
+    g.bezierCurveTo(cx + lipW * 0.2, lipY - 14, cx + lipW * 0.5, lipY - 12, cx + lipW, lipY);
+    g.bezierCurveTo(cx + lipW * 0.55, lipY + 13, cx - lipW * 0.55, lipY + 13, cx - lipW, lipY);
+    g.closePath(); g.fill();
+  g.strokeStyle = `hsla(${pal.skinH}, ${pal.skinS}%, ${Math.max(6, pal.skinL - 34)}%, 0.9)`;
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(cx - lipW * 0.94, lipY);
+    g.quadraticCurveTo(cx, lipY + 4, cx + lipW * 0.94, lipY);
+    g.stroke();
+
+    // warm radial cheek glows
+    for (const side of [-1, 1]) {
+      const cg = g.createRadialGradient(cx + side * hw * 0.3, headY + hh * 0.1, 2, cx + side * hw * 0.3, headY + hh * 0.1, hw * 0.2);
+      cg.addColorStop(0, `hsla(${Math.max(0, pal.skinH - 8)}, 70%, 55%, 0.18)`);
+      cg.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = cg;
+      g.beginPath(); g.arc(cx + side * hw * 0.3, headY + hh * 0.1, hw * 0.2, 0, Math.PI * 2); g.fill();
+    }
+
+    // hair silhouette: bob / long / cropped
+    const kind = Math.floor(r() * 3);
+    g.fillStyle = pal.hair;
+    g.beginPath();
+    if (kind === 0) {                    // bob
+      g.ellipse(cx, headY - hh * 0.1, hw * 0.62, hh * 0.56, 0, Math.PI, 0);
+      g.rect(cx - hw * 0.62, headY - hh * 0.1, hw * 0.2, hh * 0.52);
+      g.rect(cx + hw * 0.42, headY - hh * 0.1, hw * 0.2, hh * 0.52);
+    } else if (kind === 1) {             // long
+      g.ellipse(cx, headY - hh * 0.06, hw * 0.6, hh * 0.58, 0, Math.PI, 0);
+      g.rect(cx - hw * 0.6, headY - hh * 0.06, hw * 0.18, hh * 1.15);
+      g.rect(cx + hw * 0.42, headY - hh * 0.06, hw * 0.18, hh * 1.15);
+    } else {                             // cropped
+      g.ellipse(cx, headY - hh * 0.18, hw * 0.58, hh * 0.4, 0, Math.PI, 0);
+    }
+    g.fill();
+    // arced accent sheen strokes
+    g.strokeStyle = pal.accent; g.lineWidth = 2; g.globalAlpha = 0.35; g.lineCap = 'round';
+    for (let i = 0; i < 4; i++) {
+      g.beginPath();
+      g.arc(cx, headY - hh * 0.06, hw * (0.42 + i * 0.05), Math.PI * (1.1 + r() * 0.12), Math.PI * (1.45 + r() * 0.1));
+      g.stroke();
+    }
+    g.globalAlpha = 1;
+
+    // rim light along one cheek
+    g.strokeStyle = pal.accent; g.lineWidth = 3; g.globalAlpha = 0.5;
+    g.beginPath();
+    g.ellipse(cx, headY, hw / 2 - 1, hh / 2 - 1, 0, (cx < PW / 2 ? 0.2 : Math.PI - 0.9), (cx < PW / 2 ? 1.2 : Math.PI + 0.6));
+    g.stroke();
+    g.globalAlpha = 1;
+    g.restore();
+
+    // film grain ±11
+    const im = g.getImageData(0, 0, PW, PH);
+    const d = im.data;
+    const gr = mulberry32(seed ^ 0x9E3779B9);
+    for (let i = 0; i < d.length; i += 4) {
+      const n = Math.round((gr() * 2 - 1) * 11);
+      d[i] += n; d[i + 1] += n; d[i + 2] += n;
+    }
+    g.putImageData(im, 0, 0);
+
+    // channel-isolated copies
+    for (const [cv, color] of [[chR, '#ff0000'], [chG, '#00ff00'], [chB, '#0000ff']]) {
+      const cc = cv.getContext('2d');
+      cc.globalCompositeOperation = 'source-over';
+      cc.clearRect(0, 0, PW, PH);
+      cc.drawImage(face, 0, 0);
+      cc.globalCompositeOperation = 'multiply';
+      cc.fillStyle = color;
+      cc.fillRect(0, 0, PW, PH);
+      cc.globalCompositeOperation = 'source-over';
+    }
+  }
+
+  /* ---------------- glitch pipeline ---------------- */
+  const work = document.createElement('canvas'); work.width = PW; work.height = PH;
+  const wctx = work.getContext('2d');
+  const prev = document.createElement('canvas'); prev.width = PW; prev.height = PH;
+  const pctx = prev.getContext('2d');
+  const staticTile = document.createElement('canvas'); staticTile.width = 200; staticTile.height = 64;
+  (function buildStatic() {
+    const sc = staticTile.getContext('2d');
+    const img = sc.createImageData(200, 64);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = Math.random() * 255;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      img.data[i + 3] = 140;
+    }
+    sc.putImageData(img, 0, 0);
+  })();
+
+  const view = $('view');
+  const vctx = view.getContext('2d');
+  function sizeView() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const w = view.clientWidth, h = view.clientHeight;
+    if (!w || !h) return;
+    view.width = Math.round(w * dpr); view.height = Math.round(h * dpr);
+    vctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  addEventListener('resize', sizeView);
+
+  let seed = (Math.random() * 0xFFFFFFFF) >>> 0;
+  let frozen = false;
+  let frameNo = 0;
+  let burst = 0.2, nextBurstAt = 1.2;
+  let lastTs = performance.now() / 1000;
+  const counts = { slice: 0, split: 0, blocks: 0, smear: 0 };
+  let titleIdx = 0;
+  const TITLES = ['Woman in Static', 'The Last Keyframe', 'Portrait of a Dropped Packet',
+                  'Self-Portrait, Buffering', 'The Compression of Light', 'Girl with Interlace',
+                  'Study in Signal Loss', 'Anonymous in Noise'];
+
+  function newSubject() {
+    seed = (Math.random() * 0xFFFFFFFF) >>> 0;
+    titleIdx = seed % TITLES.length;
+    paintFace(seed);
+    pctx.fillStyle = '#000'; pctx.fillRect(0, 0, PW, PH);
+    const subj = (seed >>> 16) & 0xFFFF;
+    $('subjHex').textContent = hex(subj, 4);
+    $('artTitle').firstChild.textContent = TITLES[titleIdx];
+    $('artSub').textContent = `(subject ${hex(subj, 4).slice(2)})`;
+    $('edition').textContent = `1/1 · seed ${hex(seed, 8)}`;
+    $('roPal').textContent = hslToHex();
+    frameNo = 0;
+  }
+  function hslToHex() {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 1;
+    const c = cv.getContext('2d');
+    c.fillStyle = pal.skin; c.fillRect(0, 0, 1, 1);
+    const d = c.getImageData(0, 0, 1, 1).data;
+    return '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+  }
+
+  const rnd = Math.random;
+  function pipeline(t) {
+    const dt = Math.max(0.001, t - lastTs);
+    lastTs = t;
+    frameNo = (frameNo + 1) & 0xFFFFFF;
+
+    // burst envelope: quick attacks every 0.4–3 s, 0.9/s decay
+    if (t >= nextBurstAt) { burst = 0.55 + rnd() * 0.65; nextBurstAt = t + 0.4 + rnd() * 2.6; }
+    burst *= Math.pow(0.9, dt);
+    const intensity = parseFloat($('kSlider').value);
+    let k = intensity * (0.35 + burst);
+    if (reduceMotion) k *= 0.35;
+
+    const g = wctx;
+    // (1) RGB channel split
+    g.globalCompositeOperation = 'source-over';
+    g.globalAlpha = 1;
+    g.fillStyle = '#000'; g.fillRect(0, 0, PW, PH);
+    g.globalCompositeOperation = 'lighter';
+    const dbl = rnd() < 0.12 ? 2 : 1;
+    const dR = (rnd() * 2 - 1) * 18 * k * dbl;
+    const dG = (rnd() * 2 - 1) * 6 * k;
+    const dB = -(rnd() * 2 - 1) * 18 * k * dbl;
+    const jy = (rnd() * 2 - 1) * 3 * k;
+    g.drawImage(chR, dR, jy);
+    g.drawImage(chG, dG, -jy * 0.6);
+    g.drawImage(chB, dB, -jy);
+    counts.split = Math.round((Math.abs(dR) + Math.abs(dB)) / 2);
+    g.globalCompositeOperation = 'source-over';
+
+    // (2) datamosh smear from previous frame's buffer
+    const nSmear = rnd() < 0.85 ? 1 + Math.floor(rnd() * 7 * Math.max(0.15, k)) : 0;
+    for (let i = 0; i < nSmear; i++) {
+      const y = rnd() * PH, h = 10 + rnd() * 60, off = (rnd() * 2 - 1) * 30 * k;
+      g.globalAlpha = 0.55 + rnd() * 0.4;
+      g.drawImage(prev, 0, y, PW, h, off, y + (rnd() * 2 - 1) * 14 * k, PW, h);
+    }
+    g.globalAlpha = 1;
+    counts.smear = nSmear;
+
+    // (3) horizontal slice displacement
+    const nSlice = rnd() < 0.9 ? Math.floor(rnd() * 14 * Math.max(0.2, k)) : 0;
+    for (let i = 0; i < nSlice; i++) {
+      const y = rnd() * PH, h = 2 + rnd() * 58, dx = (rnd() * 2 - 1) * 220 * k;
+      g.drawImage(work, 0, y, PW, h, dx, y, PW, h);
+      if (rnd() < 0.5) {
+        g.fillStyle = rnd() < 0.5 ? '#3de9ff' : '#ff3d9a';
+        g.globalAlpha = 0.85;
+        g.fillRect(0, y + h, PW, 1.5);
+        g.globalAlpha = 1;
+      }
+    }
+    counts.slice = nSlice;
+
+    // (4) macroblock corruption — 16px grid
+    const nBlocks = Math.floor(rnd() * 26 * Math.max(0.1, k));
+    for (let i = 0; i < nBlocks; i++) {
+      const sx = Math.floor(rnd() * (PW / 16)) * 16, sy = Math.floor(rnd() * (PH / 16)) * 16;
+      const bs = (1 + Math.floor(rnd() * 3)) * 16;
+      if (rnd() < 0.55) {
+        const tx = Math.floor(rnd() * (PW / 16)) * 16, ty = Math.floor(rnd() * (PH / 16)) * 16;
+        g.drawImage(work, sx, sy, bs, bs, tx, ty, bs, bs);
+      } else {
+        g.fillStyle = rnd() < 0.4 ? '#c8ff3d' : (rnd() < 0.5 ? pal.skin : pal.hair);
+        g.globalAlpha = 0.85;
+        g.fillRect(sx, sy, bs, bs * (0.25 + rnd()));
+        g.globalAlpha = 1;
+      }
+    }
+    counts.blocks = nBlocks;
+
+    // (5) scanline noise + occasional static band
+    g.fillStyle = 'rgba(255,255,255,0.05)';
+    const nLines = Math.floor(8 + rnd() * 50 * k);
+    for (let i = 0; i < nLines; i++) {
+      const y = rnd() * PH, x = rnd() * PW * 0.5;
+      g.fillRect(x, y, PW - x * (0.3 + rnd()), 1);
+    }
+    if (rnd() < 0.14 * k) {
+      const y = rnd() * (PH - 48);
+      g.drawImage(staticTile, 0, 0, 200, 48, 0, y, PW, 48 + rnd() * 20);
+    }
+
+    // (6) occasional inversion (difference with white)
+    if (rnd() < 0.05 * k + 0.004) {
+      g.globalCompositeOperation = 'difference';
+      g.fillStyle = '#fff';
+      if (rnd() < 0.6) { const y = rnd() * PH, h = 8 + rnd() * 60; g.fillRect(0, y, PW, h); }
+      else g.fillRect(0, 0, PW, PH);
+      g.globalCompositeOperation = 'source-over';
+    }
+
+    // (7) radial vignette
+    const vg = g.createRadialGradient(PW / 2, PH / 2, PH * 0.28, PW / 2, PH / 2, PH * 0.75);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+    g.fillStyle = vg; g.fillRect(0, 0, PW, PH);
+
+    // present + store as previous buffer
+    const w = view.clientWidth, h2 = view.clientHeight;
+    vctx.fillStyle = '#000'; vctx.fillRect(0, 0, w, h2);
+    vctx.drawImage(work, 0, 0, w, h2);
+    pctx.drawImage(work, 0, 0);
+
+    // readouts
+    $('frameHex').textContent = '0x' + frameNo.toString(16).toUpperCase().padStart(6, '0');
+    $('roSlice').textContent = hex(counts.slice, 2);
+    $('roSplit').textContent = hex(counts.split, 2);
+    $('roBlocks').textContent = hex(counts.blocks, 2);
+    $('roSmear').textContent = hex(counts.smear, 2);
+    $('roBurst').textContent = hex(burst * 255, 2);
+  }
+
+  function loop() {
+    const t = performance.now() / 1000;
+    if (!frozen) pipeline(t);
+    requestAnimationFrame(loop);
+  }
+
+  /* ---------------- controls ---------------- */
+  $('kSlider').addEventListener('input', () => { $('kOut').textContent = parseFloat($('kSlider').value).toFixed(2); });
+  function setFrozen(v) {
+    frozen = v;
+    $('freezeBtn').setAttribute('aria-pressed', String(v));
+    $('freezeLbl').textContent = v ? 'Resume signal' : 'Freeze frame';
+    $('statusDot').classList.toggle('frozen', v);
+    $('rectag').classList.toggle('frozen', v);
+    $('rectag').textContent = v ? 'HOLD ■' : 'REC ●';
+  }
+  $('freezeBtn').addEventListener('click', () => setFrozen(!frozen));
+  $('newBtn').addEventListener('click', newSubject);
+  addEventListener('keydown', ev => {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (ev.target.tagName === 'INPUT') return;
+    if (ev.code === 'Space') { ev.preventDefault(); setFrozen(!frozen); }
+    else if (ev.key.toLowerCase() === 'n') { ev.preventDefault(); newSubject(); }
+  });
+
+  /* ---------------- boot ---------------- */
+  newSubject();
+  sizeView();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Elements arranged — an interactive periodic table</title>
+<style>
+:root{
+  --ink:#e6ebf4;
+  --muted:#8b95a8;
+  --serif:Georgia,"Iowan Old Style",Palatino,"Palatino Linotype",ui-serif,serif;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:radial-gradient(130% 100% at 50% -12%,#222a3b 0%,#1b2130 70%) fixed;
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:13px;
+  letter-spacing:.015em;
+  min-height:100vh;
+}
+.page{margin:0 auto;padding:30px 28px 42px;max-width:1340px}
+
+/* ---------- header ---------- */
+h1{
+  font-family:var(--serif);
+  font-weight:400;
+  font-size:clamp(26px,3.4vw,44px);
+  line-height:1.15;
+  margin:0 0 6px;
+}
+h1 em{font-style:italic;color:var(--muted)}
+.subtitle{margin:0;color:var(--muted);font-size:12px;letter-spacing:.09em}
+
+/* ---------- controls ---------- */
+.controls{margin:24px 0 4px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.search{position:relative}
+.search svg{
+  position:absolute;left:13px;top:50%;transform:translateY(-50%);
+  width:13px;height:13px;stroke:var(--muted);fill:none;stroke-width:2;pointer-events:none;
+}
+.search input{
+  appearance:none;-webkit-appearance:none;
+  background:rgba(30,37,52,.7);
+  border:1px solid rgba(139,149,168,.28);
+  border-radius:999px;color:var(--ink);
+  font-family:var(--sans);font-size:12.5px;letter-spacing:.04em;
+  padding:9px 16px 9px 34px;width:240px;outline:none;
+  transition:border-color .25s ease;
+}
+.search input:focus{border-color:rgba(139,149,168,.65)}
+.search input::placeholder{color:#5f6a7d}
+.segmented{
+  display:inline-flex;background:rgba(30,37,52,.7);
+  border:1px solid rgba(139,149,168,.28);border-radius:999px;padding:3px;gap:2px;
+}
+.segmented button{
+  appearance:none;border:0;background:transparent;color:var(--muted);
+  font-family:var(--sans);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  padding:6px 14px;border-radius:999px;cursor:pointer;
+  transition:background .22s ease,color .22s ease;
+}
+.segmented button[aria-pressed="true"]{background:rgba(139,149,168,.22);color:var(--ink)}
+.temp{display:flex;align-items:center;gap:10px}
+.temp label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.temp input[type=range]{width:160px;accent-color:#a38ec2;cursor:pointer}
+.temp output{font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums;min-width:64px}
+
+/* ---------- legend ---------- */
+.legend{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0 20px}
+.chip{
+  appearance:none;display:inline-flex;align-items:center;gap:7px;
+  background:rgba(30,37,52,.55);border:1px solid rgba(139,149,168,.2);
+  border-radius:999px;color:var(--muted);cursor:pointer;
+  font-family:var(--sans);font-size:11px;letter-spacing:.05em;padding:5px 11px;
+  transition:color .2s ease,border-color .2s ease,background .2s ease;
+}
+.chip i{
+  width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:var(--c);
+  box-shadow:0 0 6px color-mix(in srgb,var(--c) 70%,transparent);
+}
+.chip b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums;margin-left:2px}
+.chip:hover,.chip:focus-visible{color:var(--ink);border-color:var(--c)}
+.chip[aria-pressed="true"]{
+  color:var(--ink);border-color:var(--c);
+  background:color-mix(in srgb,var(--c) 14%,rgba(30,37,52,.55));
+}
+
+/* ---------- table ---------- */
+.scroll-wrap{overflow-x:auto;padding-bottom:8px}
+#table{
+  position:relative;
+  min-width:920px;
+  display:grid;
+  grid-template-columns:repeat(18,minmax(46px,1fr));
+  grid-template-rows:repeat(7,auto) 14px repeat(2,auto);
+  gap:7px;
+}
+.tile{min-height:66px}
+.tile{
+  appearance:none;
+  position:relative;
+  grid-row:var(--row);
+  grid-column:var(--col);
+  margin:0;border-radius:6px;cursor:pointer;text-align:left;
+  font-family:var(--sans);color:var(--ink);
+  background:color-mix(in srgb,var(--c) 16%,#252d40);
+  border:1px solid color-mix(in srgb,var(--c) 28%,transparent);
+  padding:6px 7px 5px;
+  display:flex;flex-direction:column;
+  transform-origin:50% 50%;
+  transition:transform .38s cubic-bezier(.22,1,.36,1),
+             box-shadow .38s cubic-bezier(.22,1,.36,1),
+             border-color .3s ease,
+             opacity .3s ease,
+             background .35s ease;
+  user-select:none;-webkit-tap-highlight-color:transparent;
+}
+.tile::before{
+  content:"";position:absolute;left:-1px;right:-1px;top:-1px;height:2px;
+  background:var(--c);border-radius:6px 6px 0 0;
+}
+.tile .num{font-size:8.5px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.tile .sym{
+  font-family:var(--serif);font-size:19px;line-height:1.15;margin-top:auto;
+  color:color-mix(in srgb,var(--c) 55%,var(--ink));
+}
+.tile .nm{
+  font-size:7.5px;letter-spacing:.03em;color:var(--muted);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tile:hover,.tile:focus-visible,.tile:active,.tile.selected{
+  transform:translateY(-5px) scale(1.07);
+  z-index:6;outline:none;
+  border-color:var(--c);
+  box-shadow:0 18px 36px -12px rgba(0,0,0,.65),0 0 0 1px var(--c);
+}
+.tile.dim{opacity:.12;pointer-events:none}
+.tile.faded{opacity:.3}
+.placeholder{
+  grid-row:var(--row);grid-column:var(--col);
+  border:1px dashed rgba(139,149,168,.45);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted);font-size:10.5px;letter-spacing:.08em;
+}
+
+/* ---------- detail card ---------- */
+#card{
+  grid-column:3 / 13;
+  grid-row:1 / 4;
+  z-index:5;
+  background:rgba(30,37,52,.92);
+  -webkit-backdrop-filter:blur(9px);
+  backdrop-filter:blur(9px);
+  border:1px solid rgba(139,149,168,.22);
+  border-radius:12px;
+  padding:14px 18px;
+  display:flex;gap:16px;align-items:stretch;
+  overflow:auto;
+  box-shadow:0 24px 48px -20px rgba(0,0,0,.6);
+  scrollbar-width:thin;
+  scrollbar-color:rgba(139,149,168,.35) transparent;
+}
+#card .bohr{flex:0 0 34%;align-self:center;min-width:120px}
+#card .bohr svg{display:block;width:100%;height:auto;overflow:visible}
+.shell{fill:none;stroke:rgba(139,149,168,.16);stroke-width:1}
+.shells{
+  transform-box:view-box;
+  transform-origin:100px 100px;
+  animation:orbit linear infinite;
+  animation-duration:var(--d);
+  animation-direction:var(--dir);
+}
+@keyframes orbit{to{transform:rotate(360deg)}}
+.e{fill:var(--c);filter:drop-shadow(0 0 3px var(--c))}
+#cardInfo{flex:1;min-width:0;display:flex;flex-direction:column}
+#cardTop{display:flex;align-items:flex-start;gap:12px}
+#cardSym{
+  font-family:var(--serif);font-size:clamp(34px,4vw,50px);line-height:1;color:var(--c);
+  text-shadow:0 0 20px color-mix(in srgb,var(--c) 45%,transparent);
+}
+#cardName{font-size:14px;margin:2px 0 0;font-weight:500}
+#cardNum{font-size:10px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:.06em}
+#cardCat{
+  margin-left:auto;margin-top:8px;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);border:1px solid rgba(139,149,168,.3);border-radius:999px;
+  padding:4px 9px;white-space:nowrap;
+}
+#card dl{display:grid;grid-template-columns:auto 1fr;column-gap:14px;row-gap:5px;margin:14px 0 0;font-size:10.5px}
+#card dt{color:var(--muted);letter-spacing:.05em;white-space:nowrap;padding-top:1px}
+#card dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink)}
+#stateLine{display:inline-flex;align-items:center;gap:7px}
+#stateDot{width:7px;height:7px;border-radius:50%;background:var(--sc);box-shadow:0 0 8px var(--sc)}
+
+footer{margin-top:22px;display:flex;gap:14px;justify-content:space-between;flex-wrap:wrap;color:var(--muted);font-size:11.5px;letter-spacing:.05em}
+
+/* ---------- responsive ---------- */
+@media (max-width:900px){
+  .tile .nm{display:none}
+  #table{grid-template-columns:repeat(18,minmax(46px,1fr))}
+  .page{padding:22px 16px 36px}
+  #card{
+    position:fixed;left:50%;top:auto;bottom:0;
+    grid-column:auto;grid-row:auto;z-index:60;
+    width:min(560px,calc(100vw - 28px));
+    aspect-ratio:3.15 / 1;max-height:64vh;
+    transform:translate(-50%,112%);
+    transition:transform .45s cubic-bezier(.22,1,.36,1);
+    border-radius:16px 16px 0 0;
+    box-shadow:0 -18px 44px rgba(0,0,0,.55);
+  }
+  #card.open{transform:translate(-50%,0)}
+  .scrim{
+    position:fixed;inset:0;background:rgba(14,18,26,.5);
+    opacity:0;pointer-events:none;transition:opacity .35s ease;z-index:50;
+  }
+  .scrim.show{opacity:1;pointer-events:auto}
+}
+@media (min-width:901px){.scrim{display:none}}
+@media (prefers-reduced-motion:reduce){
+  .tile{transition:opacity .2s ease,background .2s ease}
+  .tile:hover,.tile:focus-visible,.tile:active,.tile.selected{transform:none}
+  .shells{animation:none}
+  #card{transition:none}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>The Elements <em>arranged</em></h1>
+    <p class="subtitle">One hundred and eighteen · hydrogen to oganesson · hover, search, heat</p>
+  </header>
+
+  <div class="controls">
+    <div class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.5" y1="15.5" x2="21" y2="21" stroke-linecap="round"/></svg>
+      <input id="q" type="text" placeholder="Search name, symbol, or number" aria-label="Search elements">
+    </div>
+    <div class="segmented" role="group" aria-label="Colour mode">
+      <button id="modeCat" aria-pressed="true">Category</button>
+      <button id="modeState" aria-pressed="false">State</button>
+    </div>
+    <div class="temp">
+      <label for="temp">Temperature</label>
+      <input id="temp" type="range" min="0" max="6000" step="1" value="293" aria-label="Temperature in kelvin">
+      <output id="tempOut" for="temp">293 K</output>
+    </div>
+  </div>
+
+  <div class="legend" id="legend" role="group" aria-label="Category legend"></div>
+
+  <div class="scroll-wrap">
+    <div id="table">
+      <aside id="card" aria-live="polite">
+        <div class="bohr"><svg id="bohr" viewBox="0 0 200 200" aria-hidden="true"></svg></div>
+        <div id="cardInfo">
+          <div id="cardTop">
+            <span id="cardSym">H</span>
+            <span><p id="cardName">Hydrogen</p><p id="cardNum">atomic number 1</p></span>
+            <span id="cardCat">reactive nonmetal</span>
+          </div>
+          <dl>
+            <dt>Atomic mass</dt><dd id="dMass">—</dd>
+            <dt>Electrons</dt><dd id="dElectrons">—</dd>
+            <dt>Melting point</dt><dd id="dMelt">—</dd>
+            <dt>Boiling point</dt><dd id="dBoil">—</dd>
+            <dt>State at <span id="dTempT">293 K</span></dt>
+            <dd id="dState"><span id="stateLine"><span id="stateDot"></span><span id="stateName">—</span></span></dd>
+          </dl>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <footer>
+    <span id="count">Showing all 118 elements</span>
+    <span>Melting &amp; boiling points approximate · unknown data defaults to solid</span>
+  </footer>
+</div>
+<div class="scrim" id="scrim"></div>
+
+<script>
+'use strict';
+/* ================= data =================
+   [Z, symbol, name, mass(u), category, melting K, boiling K] — null = unknown */
+const DATA=[
+[1,"H","Hydrogen",1.008,"nonmetal",14,20.3],
+[2,"He","Helium",4.003,"noble",null,4.2],
+[3,"Li","Lithium",6.94,"alkali",453.6,1603],
+[4,"Be","Beryllium",9.012,"alkaline",1560,2742],
+[5,"B","Boron",10.81,"metalloid",2349,4200],
+[6,"C","Carbon",12.011,"nonmetal",3823,4098],
+[7,"N","Nitrogen",14.007,"nonmetal",63.2,77.4],
+[8,"O","Oxygen",15.999,"nonmetal",54.4,90.2],
+[9,"F","Fluorine",18.998,"halogen",53.5,85],
+[10,"Ne","Neon",20.18,"noble",24.6,27.1],
+[11,"Na","Sodium",22.99,"alkali",370.9,1156],
+[12,"Mg","Magnesium",24.305,"alkaline",923,1363],
+[13,"Al","Aluminium",26.982,"post",933.5,2743],
+[14,"Si","Silicon",28.085,"metalloid",1687,3538],
+[15,"P","Phosphorus",30.974,"nonmetal",317.3,553.7],
+[16,"S","Sulfur",32.06,"nonmetal",388.4,717.8],
+[17,"Cl","Chlorine",35.45,"halogen",171.6,239.1],
+[18,"Ar","Argon",39.95,"noble",83.8,87.3],
+[19,"K","Potassium",39.098,"alkali",336.7,1032],
+[20,"Ca","Calcium",40.078,"alkaline",1115,1757],
+[21,"Sc","Scandium",44.956,"transition",1814,3109],
+[22,"Ti","Titanium",47.867,"transition",1941,3560],
+[23,"V","Vanadium",50.942,"transition",2183,3680],
+[24,"Cr","Chromium",51.996,"transition",2180,2944],
+[25,"Mn","Manganese",54.938,"transition",1519,2334],
+[26,"Fe","Iron",55.845,"transition",1811,3134],
+[27,"Co","Cobalt",58.933,"transition",1768,3200],
+[28,"Ni","Nickel",58.693,"transition",1728,3186],
+[29,"Cu","Copper",63.546,"transition",1357.8,2835],
+[30,"Zn","Zinc",65.38,"transition",692.7,1180],
+[31,"Ga","Gallium",69.723,"post",302.9,2477],
+[32,"Ge","Germanium",72.63,"metalloid",1211.4,3106],
+[33,"As","Arsenic",74.922,"metalloid",1090,887],
+[34,"Se","Selenium",78.971,"nonmetal",494,958],
+[35,"Br","Bromine",79.904,"halogen",265.8,332],
+[36,"Kr","Krypton",83.798,"noble",115.8,119.9],
+[37,"Rb","Rubidium",85.468,"alkali",312.5,961],
+[38,"Sr","Strontium",87.62,"alkaline",1050,1655],
+[39,"Y","Yttrium",88.906,"transition",1799,3609],
+[40,"Zr","Zirconium",91.224,"transition",2128,4682],
+[41,"Nb","Niobium",92.906,"transition",2750,5017],
+[42,"Mo","Molybdenum",95.95,"transition",2896,4912],
+[43,"Tc","Technetium",98,"transition",2430,4538],
+[44,"Ru","Ruthenium",101.07,"transition",2607,4423],
+[45,"Rh","Rhodium",102.91,"transition",2237,3968],
+[46,"Pd","Palladium",106.42,"transition",1828.1,3236],
+[47,"Ag","Silver",107.87,"transition",1234.9,2435],
+[48,"Cd","Cadmium",112.41,"transition",594.2,1040],
+[49,"In","Indium",114.82,"post",429.7,2345],
+[50,"Sn","Tin",118.71,"post",505.1,2875],
+[51,"Sb","Antimony",121.76,"metalloid",903.8,1908],
+[52,"Te","Tellurium",127.6,"metalloid",722.7,1261],
+[53,"I","Iodine",126.9,"halogen",386.9,457.4],
+[54,"Xe","Xenon",131.29,"noble",161.4,165.1],
+[55,"Cs","Caesium",132.91,"alkali",301.7,944],
+[56,"Ba","Barium",137.33,"alkaline",1000,2118],
+[57,"La","Lanthanum",138.91,"lanthanide",1193,3737],
+[58,"Ce","Cerium",140.12,"lanthanide",1068,3716],
+[59,"Pr","Praseodymium",140.91,"lanthanide",1208,3793],
+[60,"Nd","Neodymium",144.24,"lanthanide",1297,3347],
+[61,"Pm","Promethium",145,"lanthanide",1315,3273],
+[62,"Sm","Samarium",150.36,"lanthanide",1345,2067],
+[63,"Eu","Europium",151.96,"lanthanide",1099,1802],
+[64,"Gd","Gadolinium",157.25,"lanthanide",1585,3546],
+[65,"Tb","Terbium",158.93,"lanthanide",1629,3503],
+[66,"Dy","Dysprosium",162.5,"lanthanide",1680,2840],
+[67,"Ho","Holmium",164.93,"lanthanide",1734,2993],
+[68,"Er","Erbium",167.26,"lanthanide",1802,3141],
+[69,"Tm","Thulium",168.93,"lanthanide",1818,2223],
+[70,"Yb","Ytterbium",173.05,"lanthanide",1097,1469],
+[71,"Lu","Lutetium",174.97,"lanthanide",1925,3675],
+[72,"Hf","Hafnium",178.49,"transition",2506,4694],
+[73,"Ta","Tantalum",180.95,"transition",3290,5731],
+[74,"W","Tungsten",183.84,"transition",3695,5828],
+[75,"Re","Rhenium",186.21,"transition",3459,5869],
+[76,"Os","Osmium",190.23,"transition",3306,5285],
+[77,"Ir","Iridium",192.22,"transition",2719,4403],
+[78,"Pt","Platinum",195.08,"transition",2041.4,4098],
+[79,"Au","Gold",196.97,"transition",1337.3,3129],
+[80,"Hg","Mercury",200.59,"transition",234.3,630],
+[81,"Tl","Thallium",204.38,"post",577,1746],
+[82,"Pb","Lead",207.2,"post",600.6,2022],
+[83,"Bi","Bismuth",208.98,"post",544.7,1837],
+[84,"Po","Polonium",209,"post",527,1235],
+[85,"At","Astatine",210,"halogen",575,610],
+[86,"Rn","Radon",222,"noble",202,211.5],
+[87,"Fr","Francium",223,"alkali",300,950],
+[88,"Ra","Radium",226,"alkaline",973,2010],
+[89,"Ac","Actinium",227,"actinide",1500,3500],
+[90,"Th","Thorium",232.04,"actinide",2023,5061],
+[91,"Pa","Protactinium",231.04,"actinide",1841,4300],
+[92,"U","Uranium",238.03,"actinide",1405.3,4404],
+[93,"Np","Neptunium",237,"actinide",917,4273],
+[94,"Pu","Plutonium",244,"actinide",912.5,3501],
+[95,"Am","Americium",243,"actinide",1449,2880],
+[96,"Cm","Curium",247,"actinide",1618,3383],
+[97,"Bk","Berkelium",247,"actinide",1259,2900],
+[98,"Cf","Californium",251,"actinide",1173,1743],
+[99,"Es","Einsteinium",252,"actinide",1133,1269],
+[100,"Fm","Fermium",257,"actinide",1800,null],
+[101,"Md","Mendelevium",258,"actinide",1100,null],
+[102,"No","Nobelium",259,"actinide",1100,null],
+[103,"Lr","Lawrencium",266,"actinide",1900,null],
+[104,"Rf","Rutherfordium",267,"transition",2400,null],
+[105,"Db","Dubnium",268,"unknown",null,null],
+[106,"Sg","Seaborgium",269,"unknown",null,null],
+[107,"Bh","Bohrium",270,"unknown",null,null],
+[108,"Hs","Hassium",269,"unknown",null,null],
+[109,"Mt","Meitnerium",278,"unknown",null,null],
+[110,"Ds","Darmstadtium",281,"unknown",null,null],
+[111,"Rg","Roentgenium",282,"unknown",null,null],
+[112,"Cn","Copernicium",285,"unknown",null,null],
+[113,"Nh","Nihonium",286,"unknown",700,null],
+[114,"Fl","Flerovium",289,"unknown",200,null],
+[115,"Mc","Moscovium",290,"unknown",700,null],
+[116,"Lv","Livermorium",293,"unknown",700,null],
+[117,"Ts","Tennessine",294,"unknown",723,null],
+[118,"Og","Oganesson",294,"unknown",325,null]
+];
+const CATS={
+  alkali:{label:"Alkali metal",color:"#c98a7a"},
+  alkaline:{label:"Alkaline earth",color:"#d4b483"},
+  transition:{label:"Transition metal",color:"#8fa3b8"},
+  post:{label:"Post-transition",color:"#9bb0a5"},
+  metalloid:{label:"Metalloid",color:"#b8a1c9"},
+  nonmetal:{label:"Reactive nonmetal",color:"#7fb5a6"},
+  halogen:{label:"Halogen",color:"#c9c07a"},
+  noble:{label:"Noble gas",color:"#a38ec2"},
+  lanthanide:{label:"Lanthanide",color:"#d69ea8"},
+  actinide:{label:"Actinide",color:"#c48bb0"},
+  unknown:{label:"Unknown properties",color:"#6f7580"}
+};
+const STATES={
+  solid:{label:"Solid",color:"#8fa3b8"},
+  liquid:{label:"Liquid",color:"#5aa7e0"},
+  gas:{label:"Gas",color:"#f0b46a"}
+};
+
+const elements=DATA.map(d=>({Z:d[0],sym:d[1],name:d[2],mass:d[3],cat:d[4],melt:d[5],boil:d[6]}));
+const byZ=new Map(elements.map(e=>[e.Z,e]));
+
+/* classic long-form placement from atomic number */
+function posOf(Z){
+  if(Z===1)return[1,1];
+  if(Z===2)return[1,18];
+  if(Z<=4)return[2,Z-2];
+  if(Z<=10)return[2,Z+8];
+  if(Z<=12)return[3,Z-10];
+  if(Z<=18)return[3,Z];
+  if(Z<=36)return[4,Z-18];
+  if(Z<=54)return[5,Z-36];
+  if(Z<=56)return[6,Z-54];
+  if(Z<=71)return[9,Z-54];      /* lanthanides under cols 3–17 */
+  if(Z<=88)return[7,Z-86];
+  if(Z<=103)return[10,Z-86];    /* actinides under cols 3–17  */
+  return[7,Z-100];
+}
+
+/* simple 2/8/18/32/32/18/8 shell fill */
+const CAPS=[2,8,18,32,32,18,8];
+function shells(Z){const s=[];let r=Z;for(const c of CAPS){if(r<=0)break;const n=Math.min(c,r);s.push(n);r-=n;}return s;}
+
+function stateOf(e,T){
+  const m=e.melt==null?Infinity:e.melt;
+  const b=e.boil==null?Infinity:e.boil;
+  if(T>=b)return"gas";
+  if(T>=m)return"liquid";
+  return"solid";
+}
+const fmtK=v=>v==null?null:Math.round(v).toLocaleString("en-US")+" K";
+
+/* ================= DOM ================= */
+const $=id=>document.getElementById(id);
+const table=$("table"),legendEl=$("legend"),countEl=$("count"),qEl=$("q"),
+      tempEl=$("temp"),tempOut=$("tempOut"),modeCatBtn=$("modeCat"),modeStateBtn=$("modeState"),
+      scrim=$("scrim"),card=$("card"),bohrSvg=$("bohr");
+const NS="http://www.w3.org/2000/svg";
+const mqPhone=matchMedia("(max-width:900px)");
+
+let mode="cat",tempK=293,pinned=null,hovered=null,selected=null;
+const counts={solid:0,liquid:0,gas:0};
+
+/* ---- tiles ---- */
+for(const e of elements){
+  const[row,col]=posOf(e.Z);
+  const b=document.createElement("button");
+  b.className="tile";
+  b.style.setProperty("--row",row);
+  b.style.setProperty("--col",col);
+  b.style.setProperty("--c",CATS[e.cat].color);
+  b.setAttribute("aria-label",e.name+", atomic number "+e.Z);
+  b.innerHTML='<span class="num">'+e.Z+'</span><span class="sym">'+e.sym+'</span><span class="nm">'+e.name+'</span>';
+  b.addEventListener("click",()=>select(e));
+  table.appendChild(b);
+  e.el=b;e.color=CATS[e.cat].color;e.state="solid";
+}
+function placeholder(row,col,label){
+  const d=document.createElement("div");
+  d.className="placeholder";
+  d.style.setProperty("--row",row);d.style.setProperty("--col",col);
+  d.textContent=label;
+  table.appendChild(d);
+}
+placeholder(6,3,"57–71");
+placeholder(7,3,"89–103");
+
+/* ---- legend chips ---- */
+const catChips={},stateChips={};
+for(const k of Object.keys(CATS)){
+  const c=document.createElement("button");
+  c.className="chip";c.style.setProperty("--c",CATS[k].color);
+  c.setAttribute("aria-pressed","false");
+  c.innerHTML='<i></i><span>'+CATS[k].label+'</span>';
+  c.addEventListener("mouseenter",()=>{hovered=k;applyView();});
+  c.addEventListener("mouseleave",()=>{hovered=null;applyView();});
+  c.addEventListener("focus",()=>{hovered=k;applyView();});
+  c.addEventListener("blur",()=>{hovered=null;applyView();});
+  c.addEventListener("click",()=>{pinned=pinned===k?null:k;applyView();});
+  legendEl.appendChild(c);catChips[k]=c;
+}
+for(const k of Object.keys(STATES)){
+  const c=document.createElement("button");
+  c.className="chip";c.style.setProperty("--c",STATES[k].color);
+  c.setAttribute("aria-disabled","true");c.style.cursor="default";
+  c.innerHTML='<i></i><span>'+STATES[k].label+'</span><b>0</b>';
+  legendEl.appendChild(c);stateChips[k]=c;
+}
+
+/* ---- Bohr model ---- */
+function buildBohr(Z){
+  bohrSvg.textContent="";
+  const defs=document.createElementNS(NS,"defs");
+  const grad=document.createElementNS(NS,"radialGradient");
+  grad.setAttribute("id","nucGrad");
+  grad.innerHTML='<stop offset="0%" stop-color="var(--c)" stop-opacity="1"/>'+
+                 '<stop offset="100%" stop-color="var(--c)" stop-opacity=".28"/>';
+  defs.appendChild(grad);bohrSvg.appendChild(defs);
+  const sh=shells(Z),span=sh.length>1?sh.length-1:1;
+  sh.forEach((n,i)=>{
+    const r=18+(74/span)*i;
+    const g=document.createElementNS(NS,"g");
+    g.setAttribute("class","shells");
+    g.style.setProperty("--d",(6+3.5*i)+"s");
+    g.style.setProperty("--dir",i%2===1?"reverse":"normal");
+    const ring=document.createElementNS(NS,"circle");
+    ring.setAttribute("class","shell");
+    ring.setAttribute("cx",100);ring.setAttribute("cy",100);ring.setAttribute("r",r);
+    g.appendChild(ring);
+    for(let j=0;j<n;j++){
+      const el=document.createElementNS(NS,"circle");
+      el.setAttribute("class","e");
+      const a=(j/n)*Math.PI*2-Math.PI/2;
+      el.setAttribute("cx",(100+r*Math.cos(a)).toFixed(2));
+      el.setAttribute("cy",(100+r*Math.sin(a)).toFixed(2));
+      el.setAttribute("r",1.7);
+      g.appendChild(el);
+    }
+    bohrSvg.appendChild(g);
+  });
+  const nuc=document.createElementNS(NS,"circle");
+  nuc.setAttribute("cx",100);nuc.setAttribute("cy",100);nuc.setAttribute("r",9);
+  nuc.setAttribute("fill","url(#nucGrad)");
+  nuc.style.filter="drop-shadow(0 0 8px var(--c))";
+  bohrSvg.appendChild(nuc);
+}
+
+/* ---- detail card ---- */
+function fillCard(){
+  if(!selected)return;
+  const e=selected;
+  const color=mode==="state"?STATES[e.state].color:e.color;
+  card.style.setProperty("--c",color);
+  $("cardSym").textContent=e.sym;
+  $("cardName").textContent=e.name;
+  $("cardNum").textContent="atomic number "+e.Z;
+  $("cardCat").textContent=CATS[e.cat].label;
+  $("dMass").textContent=e.mass+" u";
+  const sh=shells(e.Z);
+  $("dElectrons").textContent=e.Z+" · "+sh.join(", ");
+  $("dMelt").textContent=fmtK(e.melt)||"unknown";
+  $("dBoil").textContent=fmtK(e.boil)||"unknown";
+  $("dTempT").textContent=tempK.toLocaleString("en-US")+" K";
+  $("stateName").textContent=STATES[e.state].label;
+  $("stateDot").style.setProperty("--sc",STATES[e.state].color);
+  buildBohr(e.Z);
+}
+function select(e){
+  if(selected&&selected.el)selected.el.classList.remove("selected");
+  selected=e;
+  e.el.classList.add("selected");
+  fillCard();
+  if(mqPhone.matches){card.classList.add("open");scrim.classList.add("show");}
+}
+scrim.addEventListener("click",()=>{card.classList.remove("open");scrim.classList.remove("show");});
+mqPhone.addEventListener("change",ev=>{
+  if(ev.matches&&selected){card.classList.add("open");scrim.classList.add("show");}
+  if(!ev.matches){card.classList.remove("open");scrim.classList.remove("show");}
+});
+
+/* ---- view: search + pin/hover + colour mode ---- */
+function recomputeStates(){
+  counts.solid=counts.liquid=counts.gas=0;
+  for(const e of elements){e.state=stateOf(e,tempK);counts[e.state]++;}
+}
+function repaintTiles(){
+  for(const e of elements)
+    e.el.style.setProperty("--c",mode==="state"?STATES[e.state].color:e.color);
+}
+function applyView(){
+  const raw=qEl.value.trim(),query=raw.toLowerCase();
+  let shown=0;
+  const filter=hovered||pinned;
+  for(const e of elements){
+    const sym=query?e.sym.toLowerCase():"";
+    const match=!query||e.name.toLowerCase().includes(query)||sym===query||sym.startsWith(query)||String(e.Z)===query;
+    e.el.classList.toggle("dim",!match);
+    e.el.classList.toggle("faded",match&&!!filter&&e.cat!==filter);
+    if(match)shown++;
+  }
+  countEl.textContent=raw
+    ?shown+" of 118 elements matching “"+raw+"”"
+    :"Showing all 118 elements";
+  for(const k in catChips){
+    catChips[k].setAttribute("aria-pressed",pinned===k?"true":"false");
+    catChips[k].style.display=mode==="cat"?"":"none";
+  }
+  for(const k in stateChips){
+    stateChips[k].style.display=mode==="state"?"":"none";
+    stateChips[k].querySelector("b").textContent=counts[k];
+  }
+}
+qEl.addEventListener("input",applyView);
+tempEl.addEventListener("input",()=>{
+  tempK=+tempEl.value;
+  tempOut.textContent=tempK.toLocaleString("en-US")+" K";
+  if(mode!=="state")setMode("state");      /* touching the range switches modes */
+  recomputeStates();repaintTiles();applyView();fillCard();
+});
+function setMode(m){
+  mode=m;
+  modeCatBtn.setAttribute("aria-pressed",m==="cat"?"true":"false");
+  modeStateBtn.setAttribute("aria-pressed",m==="state"?"true":"false");
+  recomputeStates();repaintTiles();applyView();fillCard();
+}
+modeCatBtn.addEventListener("click",()=>setMode("cat"));
+modeStateBtn.addEventListener("click",()=>setMode("state"));
+
+/* ---- init ---- */
+tempOut.textContent="293 K";
+setMode("cat");
+select(byZ.get(1));
+card.classList.remove("open");scrim.classList.remove("show"); /* keep sheet hidden until tapped */
+</script>
+</body>
+</html>

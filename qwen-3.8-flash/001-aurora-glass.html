@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumen — ambient light OS</title>
+<style>
+/* ---------- tokens ---------- */
+:root{
+  --sky:#070a1c;
+  --sky-lift:#101a48;
+  --violet:#8b7dff;
+  --teal:#4ee6c7;
+  --rose:#ff7ab6;
+  --amber:#ffc46b;
+  --ink:#eef0ff;
+  --ink-62:rgba(238,240,255,.62);
+  --ink-38:rgba(238,240,255,.38);
+  --glass-fill:rgba(255,255,255,.07);
+  --glass-fill-2:rgba(255,255,255,.055);
+  --glass-border:rgba(255,255,255,.14);
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI","Helvetica Neue",Arial,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--sans);
+  color:var(--ink);
+  background:var(--sky);
+  min-height:100vh;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:rgba(139,125,255,.45);color:#fff}
+
+/* ---------- sky / aurora / stars ---------- */
+.sky{
+  position:fixed;inset:0;z-index:-5;
+  background:
+    radial-gradient(140% 90% at 50% 118%, var(--sky-lift) 0%, rgba(16,26,72,.55) 38%, transparent 65%),
+    var(--sky);
+}
+.aurora{
+  position:fixed;z-index:-4;pointer-events:none;
+  mix-blend-mode:screen;
+  will-change:transform,filter;
+}
+/* ribbon 1: huge conic disc with transparent gaps */
+.a1{
+  width:150vmax;height:150vmax;left:50%;top:-70vmax;margin:-75vmax 0 0 -75vmax;
+  border-radius:50%;
+  background:conic-gradient(from 20deg,
+    transparent 0% 6%,
+    rgba(139,125,255,.55) 9% 16%,
+    transparent 20% 29%,
+    rgba(78,230,199,.5) 33% 44%,
+    transparent 48% 58%,
+    rgba(255,122,182,.42) 62% 69%,
+    transparent 73% 84%,
+    rgba(139,125,255,.35) 88% 96%,
+    transparent 98% 100%);
+  filter:blur(66px);
+  opacity:.46;
+  animation:disc-spin 48s linear infinite;
+}
+@keyframes disc-spin{to{transform:rotate(360deg)}}
+/* ribbon 2: radial cloud, translates+rotates back and forth, hue cycling */
+.a2{
+  width:88vmax;height:48vmax;left:-16vmax;top:8vmax;border-radius:50%;
+  background:
+    radial-gradient(60% 80% at 30% 45%, rgba(139,125,255,.75), transparent 70%),
+    radial-gradient(55% 90% at 62% 55%, rgba(78,230,199,.55), transparent 72%),
+    radial-gradient(45% 70% at 85% 40%, rgba(255,122,182,.4), transparent 70%);
+  filter:blur(64px);
+  opacity:.5;
+  animation:cloud-drift 62s ease-in-out infinite alternate;
+}
+@keyframes cloud-drift{
+  0%  {transform:translate(-4vw,2vh) rotate(-6deg);  filter:blur(64px) hue-rotate(0deg)}
+  50% {transform:translate(9vw,-4vh) rotate(5deg);   filter:blur(68px) hue-rotate(180deg)}
+  100%{transform:translate(-2vw,5vh) rotate(-3deg);  filter:blur(70px) hue-rotate(360deg)}
+}
+/* ribbon 3: elongated amber→rose streak */
+.a3{
+  width:72vw;height:11vh;left:34vw;top:34vh;border-radius:999px;
+  background:linear-gradient(90deg,transparent 0%,rgba(255,196,107,.85) 24%,rgba(255,122,182,.9) 62%,transparent 100%);
+  filter:blur(62px);
+  opacity:.4;
+  transform:rotate(-9deg);
+  animation:streak-drift 55s ease-in-out infinite alternate;
+}
+@keyframes streak-drift{
+  0%  {transform:rotate(-9deg) translateX(-6vw) scaleX(1)}
+  100%{transform:rotate(-6deg) translateX(8vw)  scaleX(1.15)}
+}
+/* static starfield of tiny radial dots, twinkling by opacity */
+.stars{
+  position:fixed;inset:0;z-index:-3;pointer-events:none;
+  background-repeat:repeat;
+  background-size:520px 520px,740px 740px;
+  background-image:
+    radial-gradient(1.2px 1.2px at 34px 88px,   rgba(238,240,255,.9),transparent 60%),
+    radial-gradient(1px 1px     at 168px 212px, rgba(238,240,255,.65),transparent 60%),
+    radial-gradient(1.6px 1.6px at 305px 57px,  rgba(207,214,255,.85),transparent 60%),
+    radial-gradient(1px 1px     at 421px 336px, rgba(238,240,255,.55),transparent 60%),
+    radial-gradient(1.3px 1.3px at 96px 402px,  rgba(238,240,255,.8),transparent 60%),
+    radial-gradient(1px 1px     at 486px 148px, rgba(238,240,255,.5),transparent 60%),
+    radial-gradient(1.4px 1.4px at 240px 468px, rgba(255,222,189,.75),transparent 60%),
+    radial-gradient(1px 1px     at 611px 512px, rgba(238,240,255,.6),transparent 60%),
+    radial-gradient(1.5px 1.5px at 690px 74px,  rgba(214,224,255,.8),transparent 60%),
+    radial-gradient(1px 1px     at 702px 386px, rgba(238,240,255,.5),transparent 60%);
+  animation:twinkle 3.6s ease-in-out infinite alternate;
+}
+.stars.b{
+  background-size:610px 610px;
+  background-image:
+    radial-gradient(1.2px 1.2px at 88px 522px,  rgba(238,240,255,.7),transparent 60%),
+    radial-gradient(1px 1px     at 342px 122px, rgba(238,240,255,.5),transparent 60%),
+    radial-gradient(1.6px 1.6px at 552px 310px, rgba(238,240,255,.85),transparent 60%),
+    radial-gradient(1px 1px     at 190px 66px,  rgba(255,222,189,.6),transparent 60%),
+    radial-gradient(1.2px 1.2px at 466px 476px, rgba(214,224,255,.7),transparent 60%),
+    radial-gradient(1px 1px     at 44px 258px,  rgba(238,240,255,.45),transparent 60%);
+  animation:twinkle 5.2s ease-in-out -2.1s infinite alternate-reverse;
+}
+@keyframes twinkle{from{opacity:.35}to{opacity:.95}}
+/* faint SVG feTurbulence grain */
+.grain{
+  position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.06;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- shell ---------- */
+.shell{max-width:1240px;margin-inline:auto;padding-inline:clamp(18px,4vw,40px)}
+@media (min-width:1800px){.shell{max-width:1480px}}
+
+.glass{
+  background:var(--glass-fill);
+  border:1px solid var(--glass-border);
+  -webkit-backdrop-filter:blur(20px) saturate(150%);
+  backdrop-filter:blur(20px) saturate(150%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.22);
+}
+
+/* ---------- nav ---------- */
+.nav{
+  position:relative;z-index:20;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding-block:26px;
+}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-weight:600;letter-spacing:-.01em;font-size:17px}
+.brand svg{display:block;filter:drop-shadow(0 0 10px rgba(139,125,255,.5))}
+.nav-links{
+  display:flex;gap:4px;padding:6px;border-radius:999px;
+  background:rgba(255,255,255,.055);
+  border:1px solid rgba(255,255,255,.12);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
+  backdrop-filter:blur(18px) saturate(140%);
+}
+.nav-links a{
+  color:var(--ink-62);text-decoration:none;font-size:14px;font-weight:500;
+  padding:8px 16px;border-radius:999px;transition:color .25s,background .25s;
+}
+.nav-links a:hover,.nav-links a:focus-visible{color:var(--ink);background:rgba(255,255,255,.09)}
+.nav-cta{
+  color:var(--ink);text-decoration:none;font-size:14px;font-weight:600;
+  padding:10px 20px;border-radius:999px;
+  border:1px solid rgba(238,240,255,.4);
+  transition:border-color .25s,background .25s,box-shadow .25s;
+}
+.nav-cta:hover,.nav-cta:focus-visible{
+  border-color:rgba(238,240,255,.75);
+  background:rgba(255,255,255,.06);
+  box-shadow:0 0 24px rgba(139,125,255,.35);
+}
+@media (max-width:640px){.nav-links{display:none}}
+
+/* ---------- hero ---------- */
+.hero{
+  display:grid;grid-template-columns:1.04fr .96fr;gap:clamp(30px,5vw,72px);
+  align-items:center;padding-block:clamp(38px,6vh,84px) clamp(60px,10vh,120px);
+}
+@media (max-width:960px){.hero{grid-template-columns:1fr}}
+
+.eyebrow{
+  display:inline-flex;align-items:center;gap:9px;
+  font-size:13px;font-weight:500;color:var(--ink-62);letter-spacing:.01em;
+  padding:7px 14px 7px 12px;border-radius:999px;
+  background:rgba(255,255,255,.055);
+  border:1px solid rgba(255,255,255,.13);
+  -webkit-backdrop-filter:blur(18px) saturate(150%);
+  backdrop-filter:blur(18px) saturate(150%);
+}
+.led{
+  width:8px;height:8px;border-radius:50%;background:var(--teal);
+  box-shadow:0 0 0 0 rgba(78,230,199,.55),0 0 10px rgba(78,230,199,.9);
+  animation:pulse 2.4s ease-out infinite;
+}
+@keyframes pulse{
+  0%{box-shadow:0 0 0 0 rgba(78,230,199,.5),0 0 10px rgba(78,230,199,.9)}
+  70%{box-shadow:0 0 0 9px rgba(78,230,199,0),0 0 10px rgba(78,230,199,.9)}
+  100%{box-shadow:0 0 0 0 rgba(78,230,199,0),0 0 10px rgba(78,230,199,.9)}
+}
+h1{
+  margin-top:26px;
+  font-size:clamp(42px,6.4vw,88px);
+  font-weight:600;letter-spacing:-.035em;line-height:.98;
+}
+.shine{
+  background:linear-gradient(100deg,#ffffff 0%,#ffffff 22%,var(--violet) 40%,var(--teal) 58%,var(--rose) 74%,#ffffff 92%);
+  background-size:280% 100%;
+  -webkit-background-clip:text;background-clip:text;
+  color:transparent;
+  animation:shimmer 6.5s linear infinite;
+}
+@keyframes shimmer{to{background-position:-280% 0}}
+.lede{
+  margin-top:26px;max-width:54ch;
+  font-size:clamp(16px,1.35vw,19px);line-height:1.62;color:var(--ink-62);
+}
+.ctas{display:flex;flex-wrap:wrap;gap:14px;margin-top:36px}
+.btn{
+  display:inline-flex;align-items:center;gap:10px;
+  font:inherit;font-size:15px;font-weight:600;letter-spacing:-.005em;
+  padding:14px 26px;border-radius:999px;border:0;cursor:pointer;
+  text-decoration:none;position:relative;
+}
+.btn:focus-visible{outline:2px solid var(--teal);outline-offset:3px}
+.btn-primary{
+  color:#0a0c1e;
+  background:linear-gradient(96deg,var(--violet),var(--teal));
+  z-index:1;
+  transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s;
+  box-shadow:0 6px 22px rgba(78,230,199,.18);
+}
+.btn-primary::after{
+  content:"";position:absolute;inset:-2px;z-index:-1;border-radius:999px;
+  background:linear-gradient(96deg,var(--violet),var(--teal));
+  filter:blur(16px);opacity:.45;transition:opacity .3s;
+}
+.btn-primary:hover{transform:translateY(-2px)}
+.btn-primary:hover::after{opacity:.8}
+.btn-ghost{
+  color:var(--ink);
+  background:rgba(255,255,255,.055);
+  border:1px solid rgba(255,255,255,.14);
+  -webkit-backdrop-filter:blur(18px) saturate(150%);
+  backdrop-filter:blur(18px) saturate(150%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
+  transition:background .3s,border-color .3s;
+}
+.btn-ghost:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.24)}
+.btn-ghost .arr{display:inline-block;transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+.btn-ghost:hover .arr{transform:translateX(5px)}
+.hero-meta{display:flex;gap:22px;margin-top:34px;font-size:13px;color:var(--ink-38)}
+.hero-meta span b{color:var(--ink-62);font-weight:600}
+
+/* ---------- stage / floating panels ---------- */
+.stage{position:relative;min-height:560px}
+@media (max-width:960px){.stage{min-height:600px;margin-top:26px}}
+@media (max-width:420px){.stage{min-height:760px}}
+.panel{
+  position:absolute;border-radius:20px;
+  background:var(--glass-fill);
+  border:1px solid var(--glass-border);
+  -webkit-backdrop-filter:blur(22px) saturate(160%);
+  backdrop-filter:blur(22px) saturate(160%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 18px 46px rgba(4,6,18,.5);
+  padding:18px 20px;
+  will-change:transform;
+}
+.panel h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--ink-38)}
+.p-now{left:2%;top:4%;width:min(330px,84%)}
+.p-now .row{display:flex;align-items:center;gap:16px;margin-top:14px}
+.ring{
+  width:64px;height:64px;border-radius:50%;flex:none;position:relative;
+  background:conic-gradient(from 0deg,var(--violet),var(--teal),var(--amber),var(--rose),var(--violet));
+  animation:ring-spin 24s linear infinite;
+  box-shadow:0 0 26px rgba(139,125,255,.35);
+}
+.ring::after{content:"";position:absolute;inset:7px;border-radius:50%;background:#0b0f26;border:1px solid rgba(255,255,255,.12)}
+.ring::before{content:"";position:absolute;inset:16px;border-radius:50%;background:radial-gradient(circle at 34% 30%,rgba(255,255,255,.3),transparent 60%);z-index:1}
+@keyframes ring-spin{to{transform:rotate(360deg)}}
+.now-name{font-size:17px;font-weight:600;letter-spacing:-.01em}
+.now-sub{font-size:12.5px;color:var(--ink-38);margin-top:3px}
+.progress{height:3px;border-radius:99px;background:rgba(255,255,255,.12);margin-top:16px;overflow:hidden}
+.progress i{display:block;height:100%;width:62%;border-radius:99px;background:linear-gradient(90deg,var(--violet),var(--teal))}
+.p-kelvin{right:0;top:0;width:min(236px,62%)}
+.kelvin-val{font-size:30px;font-weight:600;letter-spacing:-.02em;margin-top:10px;font-variant-numeric:tabular-nums}
+.kelvin-val small{font-size:14px;color:var(--ink-38);font-weight:500}
+.kbar{position:relative;height:8px;border-radius:99px;margin-top:14px;
+  background:linear-gradient(90deg,#ffc46b,#ffe9c9 45%,#cfe0ff 70%,#9fc4ff);
+}
+.kthumb{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:#fff;
+  transform:translate(-50%,-50%);box-shadow:0 1px 8px rgba(4,6,18,.6),0 0 0 3px rgba(255,255,255,.25);
+  transition:left 1.2s cubic-bezier(.2,.8,.2,1)}
+.klabels{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-38);margin-top:8px}
+.p-sched{left:6%;bottom:2%;width:min(300px,80%)}
+.p-sched ol{list-style:none;margin-top:12px;display:grid;gap:9px}
+.p-sched li{display:flex;align-items:baseline;gap:12px;font-size:13.5px}
+.p-sched time{font-variant-numeric:tabular-nums;color:var(--ink-38);font-size:12px;width:48px;flex:none}
+.p-sched i{width:7px;height:7px;border-radius:50%;flex:none;position:relative;top:-1px}
+.p-sched .nm{color:var(--ink-62)}
+.p-orb{
+  left:52%;top:58%;width:120px;height:120px;padding:0;border:0;background:transparent;box-shadow:none;
+  border-radius:50%;
+  background:radial-gradient(circle at 34% 30%,#7ff5dd 0%,var(--teal) 26%,var(--violet) 62%,#2a1f6e 100%);
+  box-shadow:0 0 54px rgba(78,230,199,.4),0 0 130px rgba(139,125,255,.4);
+  animation:orb-float 9s ease-in-out infinite alternate;
+}
+@keyframes orb-float{from{margin-top:0}to{margin-top:-24px}}
+@media (max-width:420px){
+  .p-now{left:0;top:0}
+  .p-kelvin{right:0;top:200px;width:70%}
+  .p-sched{bottom:auto;top:330px;left:0}
+  .p-orb{left:auto;right:0;top:560px;width:90px;height:90px}
+}
+
+/* ---------- features ---------- */
+.features{padding-block:clamp(50px,9vh,110px)}
+.features h2{
+  font-size:clamp(26px,3.2vw,44px);font-weight:600;letter-spacing:-.03em;line-height:1.05;
+}
+.feat-lede{margin-top:14px;color:var(--ink-62);max-width:56ch;line-height:1.6;font-size:16px}
+.cards{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:44px;
+}
+@media (max-width:960px){.cards{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:620px){.cards{grid-template-columns:1fr}}
+.card{
+  position:relative;overflow:hidden;border-radius:22px;padding:26px 26px 28px;
+  background:var(--glass-fill-2);
+  border:1px solid var(--glass-border);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
+  backdrop-filter:blur(18px) saturate(140%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
+}
+.card::before{ /* cursor-following radial spotlight */
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(340px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.11),transparent 60%);
+  opacity:0;transition:opacity .4s;
+}
+.card:hover::before,.card:focus-within::before{opacity:1}
+.card .tag{
+  position:absolute;top:20px;right:22px;
+  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-38);
+}
+.icon-tile{
+  width:52px;height:52px;border-radius:16px;display:grid;place-items:center;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2);
+  transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s;
+}
+.card:hover .icon-tile{transform:translateY(-4px) rotate(-4deg);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 12px 26px rgba(4,6,18,.45)}
+.icon-tile svg{display:block}
+.card h3{margin-top:20px;font-size:19px;font-weight:600;letter-spacing:-.015em}
+.card p{margin-top:10px;font-size:14.5px;line-height:1.62;color:var(--ink-62)}
+
+/* ---------- footer ---------- */
+.foot{
+  border-top:1px solid rgba(255,255,255,.09);
+  padding-block:26px;margin-top:30px;
+  display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;
+  font-size:13px;color:var(--ink-38);
+}
+.foot .live{display:inline-flex;align-items:center;gap:9px}
+.foot .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);box-shadow:0 0 8px rgba(78,230,199,.9);animation:pulse 2.4s ease-out infinite}
+.foot b{color:var(--ink-62);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.001s !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.001s !important;
+  }
+  html{scroll-behavior:auto}
+  .a1{opacity:.24}
+  .a2{opacity:.26}
+  .a3{opacity:.22}
+  .stars,.stars.b{opacity:.6}
+}
+</style>
+</head>
+<body>
+<div class="sky" aria-hidden="true"></div>
+<div class="aurora a1" aria-hidden="true"></div>
+<div class="aurora a2" aria-hidden="true"></div>
+<div class="aurora a3" aria-hidden="true"></div>
+<div class="stars" aria-hidden="true"></div>
+<div class="stars b" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<div class="shell">
+  <nav class="nav" aria-label="Primary">
+    <a class="brand" href="#" aria-label="Lumen home">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+        <defs>
+          <radialGradient id="lumen-core" cx="38%" cy="34%" r="80%">
+            <stop offset="0%" stop-color="#fff6dd"/>
+            <stop offset="45%" stop-color="#ffc46b"/>
+            <stop offset="100%" stop-color="#8b7dff"/>
+          </radialGradient>
+        </defs>
+        <circle cx="13" cy="13" r="6" fill="url(#lumen-core)"/>
+        <g stroke="#eef0ff" stroke-width="1.6" stroke-linecap="round" opacity=".8">
+          <path d="M13 1.6v3.2M13 21.2v3.2M1.6 13h3.2M21.2 13h3.2"/>
+          <path d="M4.9 4.9l2.3 2.3M18.8 18.8l2.3 2.3M4.9 21.1l2.3-2.3M18.8 7.2l2.3-2.3" opacity=".65"/>
+        </g>
+      </svg>
+      Lumen
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#features">Scenes</a>
+      <a href="#features">Hardware</a>
+      <a href="#features">Journal</a>
+    </div>
+    <a class="nav-cta" href="#">Request access</a>
+  </nav>
+
+  <header class="hero">
+    <div class="copy">
+      <span class="eyebrow"><span class="led" aria-hidden="true"></span>Lumen OS 3 · Now in private beta</span>
+      <h1>Light that <span class="shine">listens</span> to&nbsp;the&nbsp;room.</h1>
+      <p class="lede">Lumen reads the sky outside, the hour, and the way you actually live — then tunes every lamp in the house to the light your body expects. No app to open, no schedule to babysit. Just the right temperature of day, arriving exactly when you need it.</p>
+      <div class="ctas">
+        <a class="btn btn-primary" href="#">Request beta access</a>
+        <a class="btn btn-ghost" href="#features">See how it works <span class="arr" aria-hidden="true">→</span></a>
+      </div>
+      <div class="hero-meta">
+        <span><b>0.4&nbsp;s</b> room-to-room handoff</span>
+        <span><b>1,900–6,500&nbsp;K</b> tunable range</span>
+        <span><b>100%</b> on-device</span>
+      </div>
+    </div>
+
+    <div class="stage" aria-hidden="true">
+      <div class="panel p-now" data-depth="26">
+        <h3>Now playing · Living room</h3>
+        <div class="row">
+          <span class="ring"></span>
+          <div>
+            <div class="now-name">Evening Drift</div>
+            <div class="now-sub">4 rooms · fading toward candlelight</div>
+          </div>
+        </div>
+        <div class="progress"><i></i></div>
+      </div>
+
+      <div class="panel p-kelvin" data-depth="46">
+        <h3>Colour temperature</h3>
+        <div class="kelvin-val" id="kelvin-card">3,750 <small>K</small></div>
+        <div class="kbar"><span class="kthumb" id="kthumb" style="left:50%"></span></div>
+        <div class="klabels"><span>Warm 1,900K</span><span>Cool 5,600K</span></div>
+      </div>
+
+      <div class="panel p-sched" data-depth="38">
+        <h3>Tonight</h3>
+        <ol>
+          <li><time>19:40</time><i style="background:#ffc46b"></i><span class="nm">Dusk Descent — 2,900&nbsp;K</span></li>
+          <li><time>21:15</time><i style="background:#ff7ab6"></i><span class="nm">Candlelight — 1,900&nbsp;K</span></li>
+          <li><time>23:30</time><i style="background:#8b7dff"></i><span class="nm">Blackout Fade — 0&nbsp;%</span></li>
+        </ol>
+      </div>
+
+      <div class="panel p-orb" data-depth="62"></div>
+    </div>
+  </header>
+
+  <section class="features" id="features">
+    <h2>Three ideas behind Lumen</h2>
+    <p class="feat-lede">Everything Lumen does grows out of three commitments about what light in a home is actually for.</p>
+    <div class="cards">
+      <article class="card" data-spot>
+        <span class="tag">Circadian</span>
+        <div class="icon-tile">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4ee6c7" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.4"/>
+            <path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.2 5.2l1.9 1.9M16.9 16.9l1.9 1.9M5.2 18.8l1.9-1.9M16.9 7.1l1.9-1.9" opacity=".6"/>
+          </svg>
+        </div>
+        <h3>Circadian by default</h3>
+        <p>Every scene is anchored to your sunrise and your bedtime — not a timer. Brightness and temperature drift together from 5,600&nbsp;K noon to 1,900&nbsp;K embers, so the house tells your clock the truth.</p>
+      </article>
+      <article class="card" data-spot>
+        <span class="tag">Blend</span>
+        <div class="icon-tile">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="9" cy="12" r="6" stroke="#8b7dff" stroke-width="1.7"/>
+            <circle cx="15" cy="12" r="6" stroke="#ff7ab6" stroke-width="1.7" opacity=".85"/>
+            <path d="M12 6.8a6 6 0 0 1 0 10.4" stroke="#ffc46b" stroke-width="1.7" opacity=".7"/>
+          </svg>
+        </div>
+        <h3>Scenes that blend</h3>
+        <p>Light crosses thresholds the way sound does. Walk from kitchen to living room and the two scenes cross-fade over the doorway — no seams, no snapshots, no room that forgot what time it is.</p>
+      </article>
+      <article class="card" data-spot>
+        <span class="tag">Local</span>
+        <div class="icon-tile">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4ee6c7" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2.8 4.8 5.6v5.2c0 4.6 3.1 8.2 7.2 9.6 4.1-1.4 7.2-5 7.2-9.6V5.6L12 2.8Z"/>
+            <rect x="9.4" y="11" width="5.2" height="4.4" rx="1.1"/>
+            <path d="M10.4 11V9.7a1.6 1.6 0 0 1 3.2 0V11" opacity=".7"/>
+          </svg>
+        </div>
+        <h3>Local, silent, yours</h3>
+        <p>Lumen runs entirely on the hub in your hallway. No cloud round-trips, no accounts listening in, no telemetry leaving the house. Your routines are the most intimate data you own — they stay home.</p>
+      </article>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>© 2026 Lumen Light Works · Made for the hours between dusk and dawn</span>
+    <span class="live"><span class="dot" aria-hidden="true"></span>Local light: <b id="kelvin-foot">3,750 K</b></span>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var coarse  = window.matchMedia("(pointer: coarse)").matches;
+
+  /* ----- live Kelvin curve: peaks 5,600 K near 13:00, bottoms 1,900 K near 23:00 ----- */
+  function kelvinNow(){
+    var now = new Date();
+    var t = now.getHours() + now.getMinutes()/60 + now.getSeconds()/3600;
+    // cos peaks at t=13, trough at t=23 → half-period 10h
+    var k = 3750 + 1850 * Math.cos(Math.PI * (t - 13) / 10);
+    return Math.max(1900, Math.min(5600, k));
+  }
+  function renderKelvin(){
+    var k = kelvinNow();
+    var rounded = Math.round(k/10)*10;
+    var txt = rounded.toLocaleString("en-US");
+    document.getElementById("kelvin-card").innerHTML = txt + ' <small>K</small>';
+    document.getElementById("kelvin-foot").textContent = txt + " K";
+    var pct = (k - 1900) / (5600 - 1900) * 100;
+    document.getElementById("kthumb").style.left = pct.toFixed(1) + "%";
+  }
+  renderKelvin();
+  setInterval(renderKelvin, 15000);
+
+  /* ----- layered parallax on stage panels (lerp 0.08, rAF) ----- */
+  if(!reduced && !coarse){
+    var panels = Array.prototype.map.call(
+      document.querySelectorAll(".stage .panel[data-depth]"),
+      function(el){ return {el:el, depth:+el.dataset.depth||20, x:0, y:0, tx:0, ty:0}; }
+    );
+    var active = false;
+    window.addEventListener("pointermove", function(e){
+      if(e.pointerType !== "mouse") return;
+      var nx = e.clientX / window.innerWidth  - .5;
+      var ny = e.clientY / window.innerHeight - .5;
+      panels.forEach(function(p){ p.tx = -nx * p.depth * 1.5; p.ty = -ny * p.depth * 1.5; });
+      if(!active){ active = true; requestAnimationFrame(tick); }
+    }, {passive:true});
+    function tick(){
+      var settled = true;
+      panels.forEach(function(p){
+        p.x += (p.tx - p.x) * .08;
+        p.y += (p.ty - p.y) * .08;
+        if(Math.abs(p.tx - p.x) > .05 || Math.abs(p.ty - p.y) > .05) settled = false;
+        p.el.style.transform = "translate3d(" + p.x.toFixed(2) + "px," + p.y.toFixed(2) + "px,0)";
+      });
+      if(settled){ active = false; return; }
+      requestAnimationFrame(tick);
+    }
+  }
+
+  /* ----- card cursor spotlight via --mx/--my ----- */
+  document.querySelectorAll(".card[data-spot]").forEach(function(card){
+    card.addEventListener("pointermove", function(e){
+      var r = card.getBoundingClientRect();
+      card.style.setProperty("--mx", (e.clientX - r.left) + "px");
+      card.style.setProperty("--my", (e.clientY - r.top) + "px");
+    }, {passive:true});
+  });
+})();
+</script>
+</body>
+</html>

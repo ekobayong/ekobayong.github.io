@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vellmar Metro — Live Network Map</title>
+<style>
+  :root{
+    --bg:#f5f2ea; --panel:#ebe7dc; --ink:#1b1e24; --sub:#5a5f6b; --rule:#d5d0c4;
+    --river:#cfe3ec; --disc:#ffffff; --disc-stroke:#1b1e24; --halo:#f5f2ea;
+    --good:#1e9e5a; --delay:#f0a020;
+    --sans: ui-sans-serif, system-ui, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SF Mono, Menlo, Consolas, 'Courier New', monospace;
+  }
+  body.night{
+    --bg:#0f1318; --panel:#151a21; --ink:#e9ecf1; --sub:#9aa3b2; --rule:#252c36;
+    --river:#17232e; --disc:#151a21; --disc-stroke:#e9ecf1; --halo:#151a21;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; min-height:100%; }
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:var(--sans); font-weight:500; font-size:14px;
+    transition: background .5s, color .5s;
+  }
+  header{
+    display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+    padding:14px 22px; border-bottom:1px solid var(--rule);
+    transition:border-color .5s;
+  }
+  .wordmark{ font-weight:700; font-size:16px; letter-spacing:.06em; white-space:nowrap; }
+  .wordmark small{ display:block; font-weight:500; font-size:9px; letter-spacing:.28em;
+    text-transform:uppercase; color:var(--sub); margin-top:2px; }
+  nav.legend{ display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; }
+  .lg{
+    display:flex; align-items:center; gap:6px; font-size:11px; color:var(--sub);
+    border:1px solid var(--rule); border-radius:999px; padding:4px 10px 4px 6px;
+    background:transparent; cursor:default; transition:border-color .5s, color .2s;
+    font-family:var(--sans); font-weight:500;
+  }
+  .lg:hover{ color:var(--ink); }
+  .lg i{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .pill{
+    font-family:var(--sans); font-weight:500; font-size:11px; letter-spacing:.06em;
+    border:1px solid var(--rule); background:transparent; color:var(--ink);
+    border-radius:999px; padding:6px 14px; cursor:pointer; transition:background .2s, border-color .5s, color .5s;
+  }
+  .pill:hover{ background:var(--rule); }
+  main{
+    display:grid; grid-template-columns: 1fr 320px; gap:18px;
+    padding:18px 22px 28px; max-width:1480px; margin:0 auto;
+  }
+  .mapwrap{
+    position:relative; background:var(--panel); border:1px solid var(--rule);
+    border-radius:10px; overflow:hidden; transition:background .5s, border-color .5s;
+  }
+  svg#map{ display:block; width:100%; height:auto; }
+  .clock{
+    position:absolute; top:12px; right:16px; font-family:var(--mono); font-size:13px;
+    font-variant-numeric:tabular-nums; color:var(--sub); letter-spacing:.04em;
+  }
+  aside{ display:flex; flex-direction:column; gap:16px; }
+  .card{
+    background:var(--panel); border:1px solid var(--rule); border-radius:10px;
+    padding:14px 16px 16px; transition:background .5s, border-color .5s;
+  }
+  .card h2{
+    margin:0 0 10px; font-size:9.5px; font-weight:500; text-transform:uppercase;
+    letter-spacing:.28em; color:var(--sub);
+  }
+  #arrTitle{ font-size:15px; font-weight:700; margin:0 0 8px; }
+  #arrPips{ display:flex; gap:5px; margin:0 0 12px; }
+  #arrPips i{ width:11px; height:11px; border-radius:50%; }
+  .arr-row{
+    display:grid; grid-template-columns:14px 1fr auto; gap:8px; align-items:baseline;
+    padding:6px 0; border-top:1px solid var(--rule); font-size:12.5px;
+    transition:border-color .5s;
+  }
+  .arr-row .sw{ width:10px; height:10px; border-radius:50%; align-self:center; }
+  .arr-row .dest{ color:var(--ink); }
+  .arr-row .dest em{ font-style:normal; color:var(--sub); }
+  .arr-row .eta{ font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:12px; white-space:nowrap; }
+  .arr-row .eta.due{ color:var(--good); font-weight:700; }
+  .arr-row .late{ display:block; font-size:10px; color:var(--delay); letter-spacing:.05em; }
+  .idle{ color:var(--sub); font-size:12px; line-height:1.55; }
+  .st-row{
+    display:grid; grid-template-columns:14px 1fr auto; gap:8px; align-items:center;
+    padding:7px 0; border-top:1px solid var(--rule); font-size:12.5px; cursor:default;
+    transition:border-color .5s;
+  }
+  .st-row:first-of-type{ border-top:none; }
+  .st-row .sw{ width:12px; height:12px; border-radius:3px; }
+  .badge{
+    font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:500;
+    padding:3px 9px; border-radius:999px; color:#fff; white-space:nowrap;
+  }
+  .badge.good{ background:var(--good); }
+  .badge.bad{ background:var(--delay); color:#3a2604; }
+  body:not(.reduced) .badge.bad{ animation: pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse{ 50%{ opacity:.45; } }
+
+  /* SVG theming */
+  .gridline{ stroke:var(--rule); stroke-width:1; opacity:.55; transition:stroke .5s; }
+  .river{ fill:var(--river); opacity:.85; transition:fill .5s; }
+  .caption{ fill:var(--sub); font-family:var(--sans); font-size:10px; letter-spacing:.2em; text-transform:uppercase; transition:fill .5s; }
+  .line-path{ fill:none; stroke-width:9; stroke-linejoin:round; stroke-linecap:round; transition:opacity .25s, stroke-width .2s; }
+  .hit-path{ fill:none; stroke:transparent; stroke-width:26; cursor:pointer; }
+  .grp{ transition:opacity .25s; }
+  .grp.dim{ opacity:.13; }
+  .grp.hl .line-path{ stroke-width:11.5; }
+  .st{ cursor:pointer; outline:none; transition:opacity .25s; }
+  .st.dim{ opacity:.13; }
+  .st text{
+    font-family:var(--sans); font-weight:500; font-size:11.5px; fill:var(--ink);
+    paint-order:stroke fill; stroke:var(--halo); stroke-width:3.4px; stroke-linejoin:round;
+    transition:fill .5s, stroke .5s; pointer-events:none;
+  }
+  .st.selected text{ font-weight:700; }
+  .st .disc-ic{ fill:var(--disc); stroke:var(--disc-stroke); stroke-width:3.5; transition:fill .5s, stroke .5s; }
+  .st .tick{ stroke:var(--disc-stroke); stroke-width:2.6; transition:stroke .5s; }
+  .st .bar{ stroke:var(--disc-stroke); stroke-width:3; transition:stroke .5s; }
+  .st .disc-term{ fill:var(--disc); stroke:var(--disc-stroke); stroke-width:2.4; transition:fill .5s, stroke .5s; }
+  .st .selring{ fill:none; stroke:var(--delay); stroke-width:3; opacity:0; }
+  .st.selected .selring{ opacity:1; }
+  .st:focus-visible .selring{ opacity:.85; }
+  .tr-halo{ opacity:.22; }
+  .tr-core{ stroke:var(--disc); stroke-width:2; }
+  @media (max-width:860px){
+    main{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wordmark">VELLMAR METRO<small>Live network map</small></div>
+  <nav class="legend" id="legend" aria-label="line legend"></nav>
+  <button class="pill" id="nightBtn" aria-pressed="false">Night mode</button>
+</header>
+<main>
+  <div class="mapwrap">
+    <svg id="map" viewBox="0 0 1000 740" role="img" aria-label="Vellmar metro network diagram">
+      <g id="gGrid"></g>
+      <path id="gRiver" class="river"></path>
+      <g id="gLines"></g>
+      <g id="gStations"></g>
+      <g id="gTrains"></g>
+      <text class="caption" x="24" y="716">Vellmar Metro · Network Diagram · 2026</text>
+    </svg>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+  <aside>
+    <section class="card" aria-live="polite">
+      <h2>Next arrivals</h2>
+      <p id="arrTitle" class="idle" style="font-weight:500">Select a station on the map</p>
+      <div id="arrPips"></div>
+      <div id="arrList"><p class="idle">Click any station disc to see live departure boards, rebuilt from train positions four times a second.</p></div>
+    </section>
+    <section class="card">
+      <h2>Service status</h2>
+      <div id="statusList"></div>
+    </section>
+  </aside>
+</main>
+<script>
+(function(){
+'use strict';
+var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (reduce) document.body.classList.add('reduced');
+if (window.matchMedia('(prefers-color-scheme: dark)').matches) setNight(true);
+
+var LINES = [
+  { id:'crimson', name:'Crimson Line', color:'#d9363e',
+    pts:[[100,240,'WQ'],[190,240,'MB'],[280,240,'KR'],[360,240],[400,280,'CQ'],[480,360,'CV'],[620,360,'OTG'],[690,360,'AR'],[760,360,'BG'],[820,420],[850,450,'KH'],[880,480],[880,520,'SM']] },
+  { id:'cobalt', name:'Cobalt Line', color:'#1f6fd6',
+    pts:[[640,80,'NGV'],[640,140,'KWN'],[640,200,'AP'],[560,280,'SR'],[480,360,'CV'],[560,440],[560,480,'RS'],[600,520,'IM'],[640,560],[640,590,'SWK'],[640,620,'PG']] },
+  { id:'emerald', name:'Emerald Line', color:'#1e9e5a',
+    pts:[[120,340,'AV'],[160,380,'TS'],[200,420,'FS'],[280,420,'WR'],[320,420],[350,450,'DC'],[380,480,'LC'],[470,480,'MQ'],[560,480,'RS'],[560,540],[590,570,'VFS'],[620,600],[640,620,'PG'],[670,650,'OH'],[700,680],[780,680,'FL']] },
+  { id:'amber', name:'Amber Line', color:'#f0a020',
+    pts:[[80,120,'HM'],[200,120,'CF'],[280,120],[280,240,'KR'],[280,420],[310,450,'GH'],[340,480],[380,480,'LC'],[420,520],[560,520,'GL'],[640,520,'WF'],[720,520,'BLH'],[800,520,'MEN'],[880,520,'SM']] },
+  { id:'violet', name:'Violet Line', color:'#7b4fbf',
+    pts:[[140,560,'OD'],[140,480,'SDG'],[200,420,'FS'],[260,360],[480,360,'CV'],[480,330,'NW'],[480,300],[510,270,'PW'],[540,240],[640,240],[640,200,'AP'],[760,200,'HF'],[880,200,'ET']] },
+  { id:'slate', name:'Slate Line', color:'#3a8c96',
+    pts:[[140,680,'SLP'],[140,620,'CTW'],[140,560,'OD'],[200,620,'CHW'],[320,620,'MS'],[390,550,'TW'],[460,480],[560,480,'RS'],[620,420],[660,420,'FNL'],[700,420],[760,360,'BG'],[760,240,'ELT'],[760,120,'LH']] }
+];
+
+var ST = {
+  WQ:{n:'Westgate Quay',x:100,y:240,lx:-13,ly:4,a:'end'},
+  MB:{n:'Marlow Bridge',x:190,y:240,lx:0,ly:-13,a:'middle'},
+  KR:{n:'Kingsrow',x:280,y:240,lx:13,ly:-11,a:'start'},
+  CQ:{n:'Cathedral Quarter',x:400,y:280,lx:13,ly:4,a:'start'},
+  CV:{n:'Central Vellmar',x:480,y:360,lx:15,ly:5,a:'start'},
+  OTG:{n:'Old Town Gate',x:620,y:360,lx:0,ly:-13,a:'middle'},
+  AR:{n:'Alumni Row',x:690,y:360,lx:0,ly:20,a:'middle'},
+  BG:{n:'Botanic Gardens',x:760,y:360,lx:15,ly:5,a:'start'},
+  KH:{n:'Kestrel Hill',x:850,y:450,lx:13,ly:4,a:'start'},
+  SM:{n:'Saltmarsh',x:880,y:520,lx:15,ly:5,a:'start'},
+  NGV:{n:'Northgate Vale',x:640,y:80,lx:0,ly:-15,a:'middle'},
+  KWN:{n:'Kingsway North',x:640,y:140,lx:13,ly:4,a:'start'},
+  AP:{n:'Aurora Park',x:640,y:200,lx:13,ly:-11,a:'start'},
+  SR:{n:'Sable Row',x:560,y:280,lx:-13,ly:4,a:'end'},
+  RS:{n:'Riverside',x:560,y:480,lx:0,ly:-15,a:'middle'},
+  IM:{n:'Ironmarket',x:600,y:520,lx:0,ly:21,a:'middle'},
+  SWK:{n:'Serpentine Walk',x:640,y:590,lx:13,ly:4,a:'start'},
+  PG:{n:'Priory Gate',x:640,y:620,lx:15,ly:9,a:'start'},
+  AV:{n:'Ashcombe Vale',x:120,y:340,lx:-13,ly:-11,a:'end'},
+  TS:{n:'Tannery Steps',x:160,y:380,lx:-13,ly:4,a:'end'},
+  FS:{n:'Foundry Square',x:200,y:420,lx:-15,ly:4,a:'end'},
+  WR:{n:"Weaver's Row",x:280,y:420,lx:0,ly:-13,a:'middle'},
+  DC:{n:'Dovecote',x:350,y:450,lx:-13,ly:4,a:'end'},
+  LC:{n:'Lantern Court',x:380,y:480,lx:0,ly:22,a:'middle'},
+  MQ:{n:'Museum Quarter',x:470,y:480,lx:0,ly:-13,a:'middle'},
+  VFS:{n:'Vinefold Street',x:590,y:570,lx:-13,ly:4,a:'end'},
+  OH:{n:'Old Harbor',x:670,y:650,lx:13,ly:-3,a:'start'},
+  FL:{n:'Ferry Landing',x:780,y:680,lx:12,ly:18,a:'start'},
+  HM:{n:'Harbor Mills',x:80,y:120,lx:-13,ly:4,a:'end'},
+  CF:{n:'Copperfield',x:200,y:120,lx:0,ly:-13,a:'middle'},
+  GH:{n:'Granary Hill',x:310,y:450,lx:-13,ly:4,a:'end'},
+  GL:{n:'Glasshouse Lane',x:560,y:520,lx:0,ly:-13,a:'middle'},
+  WF:{n:'Whitfield',x:640,y:520,lx:0,ly:21,a:'middle'},
+  BLH:{n:'Bellhouse',x:720,y:520,lx:0,ly:-13,a:'middle'},
+  MEN:{n:'Marsh End',x:800,y:520,lx:0,ly:-13,a:'middle'},
+  OD:{n:'Old Docks',x:140,y:560,lx:-15,ly:4,a:'end'},
+  SDG:{n:'Sundial Green',x:140,y:480,lx:13,ly:4,a:'start'},
+  NW:{n:'Norfolk Walk',x:480,y:330,lx:-13,ly:4,a:'end'},
+  PW:{n:'Printworks',x:510,y:270,lx:-13,ly:4,a:'end'},
+  HF:{n:'Highfield',x:760,y:200,lx:0,ly:-13,a:'middle'},
+  ET:{n:'Eastmoor Terminal',x:880,y:200,lx:13,ly:4,a:'start'},
+  SLP:{n:'Saltpan',x:140,y:680,lx:-13,ly:4,a:'end'},
+  CTW:{n:'Clocktower Wharf',x:140,y:620,lx:13,ly:4,a:'start'},
+  CHW:{n:"Chandler's Way",x:200,y:620,lx:0,ly:20,a:'middle'},
+  MS:{n:'Millstone',x:320,y:620,lx:0,ly:20,a:'middle'},
+  TW:{n:'Tannery Wharf',x:390,y:550,lx:13,ly:4,a:'start'},
+  FNL:{n:'Foundry Lane',x:660,y:420,lx:0,ly:-13,a:'middle'},
+  ELT:{n:'Elmtree',x:760,y:240,lx:13,ly:4,a:'start'},
+  LH:{n:'Larkspur Heights',x:760,y:120,lx:0,ly:-15,a:'middle'}
+};
+
+var SVGNS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent){
+  var e = document.createElementNS(SVGNS, tag);
+  for (var k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+/* ---- grid + river ---- */
+var gGrid = document.getElementById('gGrid');
+for (var gx = 100; gx < 1000; gx += 100) el('line', {x1:gx, y1:0, x2:gx, y2:740, 'class':'gridline'}, gGrid);
+for (var gy = 100; gy < 740; gy += 100) el('line', {x1:0, y1:gy, x2:1000, y2:gy, 'class':'gridline'}, gGrid);
+document.getElementById('gRiver').setAttribute('d',
+  'M -20 505 C 130 455, 260 545, 420 520 C 560 498, 640 455, 780 470 C 890 482, 950 520, 1020 505 ' +
+  'L 1020 549 C 950 564, 890 526, 780 514 C 640 500, 560 542, 420 563 C 260 588, 130 498, -20 548 Z');
+
+/* ---- derive station meta ---- */
+LINES.forEach(function(line, li){
+  line.stIds = line.pts.filter(function(p){ return p[2]; }).map(function(p){ return p[2]; });
+  line.first = line.stIds[0]; line.last = line.stIds[line.stIds.length-1];
+  line.stIds.forEach(function(id){
+    (ST[id].lines = ST[id].lines || []).push(line.id);
+  });
+});
+for (var id in ST){
+  var s = ST[id];
+  s.kind = s.lines.length > 1 ? 'ic'
+    : LINES.some(function(L){ return L.first === id || L.last === id; }) ? 'term' : 'minor';
+  s.linePts = {}; /* lineId -> index in pts for direction */
+}
+LINES.forEach(function(line){
+  line.pts.forEach(function(p, i){
+    if (p[2]) ST[p[2]].linePts[line.id] = i;
+  });
+});
+
+/* ---- line paths + hit paths ---- */
+var gLines = document.getElementById('gLines');
+var gTrains = document.getElementById('gTrains');
+LINES.forEach(function(line){
+  var d = line.pts.map(function(p, i){ return (i ? 'L' : 'M') + p[0] + ' ' + p[1]; }).join(' ');
+  var grp = el('g', {'class':'grp', 'data-line':line.id}, gLines);
+  el('path', {d:d, 'class':'hit-path', 'data-line':line.id}, grp);
+  line.path = el('path', {d:d, stroke:line.color, 'class':'line-path'}, grp);
+  line.grp = grp;
+  line.L = line.path.getTotalLength();
+  /* pre-compute station arc positions by nearest-point search */
+  line.sts = line.stIds.map(function(sid){
+    var t = ST[sid], best = 1e9, bs = 0, s, pt;
+    for (s = 0; s <= line.L; s += 4){
+      pt = line.path.getPointAtLength(s);
+      var dd = (pt.x - t.x) * (pt.x - t.x) + (pt.y - t.y) * (pt.y - t.y);
+      if (dd < best){ best = dd; bs = s; }
+    }
+    for (var r2 = bs - 4; r2 <= bs + 4; r2 += 1){
+      if (r2 < 0 || r2 > line.L) continue;
+      pt = line.path.getPointAtLength(r2);
+      var d2 = (pt.x - t.x) * (pt.x - t.x) + (pt.y - t.y) * (pt.y - t.y);
+      if (d2 < best){ best = d2; bs = r2; }
+    }
+    return { id: sid, d: bs, term: (sid === line.first || sid === line.last) };
+  });
+  /* trains: 4 per line, two per direction */
+  line.trains = [
+    { s: line.L*0.12, dir:  1, dwell: 0 },
+    { s: line.L*0.62, dir:  1, dwell: 0 },
+    { s: line.L*0.88, dir: -1, dwell: 0 },
+    { s: line.L*0.38, dir: -1, dwell: 0 }
+  ];
+  var tgrp = el('g', {'class':'grp'}, gTrains);
+  line.trains.forEach(function(tr){
+    tr.halo = el('circle', {r:10.5, fill:line.color, 'class':'tr-halo'}, tgrp);
+    tr.core = el('circle', {r:5, fill:line.color, 'class':'tr-core'}, tgrp);
+  });
+  line.trainGrp = tgrp;
+  line.delayed = false;
+});
+
+/* ---- stations + labels ---- */
+var gStations = document.getElementById('gStations');
+for (var sid in ST){
+  (function(sid){
+    var st = ST[sid];
+    var g = el('g', {'class':'st', 'data-id':sid, 'data-lines':st.lines.join(' '),
+      tabindex:0, role:'button', 'aria-label': st.n}, gStations);
+    var dx = 0, dy = 0;
+    if (st.lines.length){
+      var L0 = LINES.filter(function(L){ return L.id === st.lines[0]; })[0];
+      var i = st.linePts[L0.id];
+      var a = L0.pts[Math.max(0, i-1)], b = L0.pts[Math.min(L0.pts.length-1, i+1)];
+      var vx = b[0]-a[0], vy = b[1]-a[1];
+      var m = Math.hypot(vx, vy) || 1;
+      dx = -vy/m; dy = vx/m;                          /* perpendicular unit */
+      if (dx*st.lx + dy*st.ly < 0){ dx = -dx; dy = -dy; }  /* label side */
+    }
+    if (st.kind === 'ic'){
+      el('circle', {cx:st.x, cy:st.y, r:11, 'class':'selring'}, g);
+      el('circle', {cx:st.x, cy:st.y, r:7.5, 'class':'disc-ic'}, g);
+    } else if (st.kind === 'term'){
+      el('circle', {cx:st.x, cy:st.y, r:13, 'class':'selring'}, g);
+      el('line', {x1:st.x-dx*11, y1:st.y-dy*11, x2:st.x+dx*11, y2:st.y+dy*11, 'class':'bar'}, g);
+      el('circle', {cx:st.x, cy:st.y, r:4.6, 'class':'disc-term'}, g);
+    } else {
+      el('circle', {cx:st.x, cy:st.y, r:12, 'class':'selring'}, g);
+      el('line', {x1:st.x+dx*5.5, y1:st.y+dy*5.5, x2:st.x+dx*12.5, y2:st.y+dy*12.5, 'class':'tick'}, g);
+    }
+    var t = el('text', {x:st.x+st.lx, y:st.y+st.ly+4, 'text-anchor':st.a}, g);
+    t.textContent = st.n;
+    el('circle', {cx:st.x, cy:st.y, r:15, fill:'transparent'}, g);
+    st.node = g;
+    g.addEventListener('click', function(ev){ ev.stopPropagation(); selectStation(sid); });
+    g.addEventListener('keydown', function(ev){
+      if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); selectStation(sid); }
+    });
+  })(sid);
+}
+
+/* ---- hover highlight ---- */
+function setHighlight(lineId){
+  LINES.forEach(function(L){
+    L.grp.classList.toggle('dim', !!lineId && L.id !== lineId);
+    L.grp.classList.toggle('hl', L.id === lineId);
+    L.trainGrp.classList.toggle('dim', !!lineId && L.id !== lineId);
+  });
+  for (var s in ST){
+    var share = lineId && ST[s].lines.indexOf(lineId) >= 0;
+    ST[s].node.classList.toggle('dim', !!lineId && !share);
+  }
+}
+function bindHover(node, lineId){
+  node.addEventListener('mouseenter', function(){ setHighlight(lineId); });
+  node.addEventListener('mouseleave', function(){ setHighlight(null); });
+}
+LINES.forEach(function(L){
+  bindHover(L.grp.querySelector('.hit-path'), L.id);
+});
+
+/* ---- legend + status list ---- */
+var legend = document.getElementById('legend');
+var statusList = document.getElementById('statusList');
+LINES.forEach(function(L){
+  var chip = document.createElement('button');
+  chip.className = 'lg';
+  chip.style.borderLeftColor = L.color;
+  chip.innerHTML = '<i style="background:' + L.color + '"></i>' + L.name;
+  legend.appendChild(chip);
+  bindHover(chip, L.id);
+
+  var row = document.createElement('div');
+  row.className = 'st-row';
+  row.innerHTML = '<span class="sw" style="background:' + L.color + '"></span>' +
+    '<span>' + L.name + '</span><span></span>';
+  L.badge = row.lastElementChild;
+  L.badge.innerHTML = '<span class="badge good">Good service</span>';
+  statusList.appendChild(row);
+  bindHover(row, L.id);
+});
+function refreshBadges(){
+  LINES.forEach(function(L){
+    L.badge.innerHTML = L.delayed
+      ? '<span class="badge bad">Minor delays</span>'
+      : '<span class="badge good">Good service</span>';
+  });
+}
+function scheduleGlitch(){
+  setTimeout(function(){
+    var L = LINES[Math.floor(Math.random() * LINES.length)];
+    L.delayed = true; refreshBadges();
+    setTimeout(function(){ L.delayed = false; refreshBadges(); },
+      (14 + Math.random() * 16) * 1000);
+    scheduleGlitch();
+  }, (18 + Math.random() * 22) * 1000);
+}
+scheduleGlitch();
+
+/* ---- selection + arrivals ---- */
+var selected = null;
+var arrTitle = document.getElementById('arrTitle'), arrList = document.getElementById('arrList'),
+    arrPips = document.getElementById('arrPips');
+function selectStation(sid){
+  if (selected && ST[selected]) ST[selected].node.classList.remove('selected');
+  selected = sid;
+  var st = ST[sid];
+  st.node.classList.add('selected');
+  arrTitle.textContent = st.n;
+  arrTitle.className = '';
+  arrPips.innerHTML = st.lines.map(function(id){
+    var L = LINES.filter(function(x){ return x.id === id; })[0];
+    return '<i title="' + L.name + '" style="background:' + L.color + '"></i>';
+  }).join('');
+  updateArrivals();
+}
+function fmtEta(sec){
+  if (sec < 3) return 'Due';
+  if (sec < 60) return Math.round(sec) + 's';
+  return Math.floor(sec / 60) + ':' + String(Math.round(sec % 60)).padStart(2, '0');
+}
+function trainEta(L, tr, dTarget){
+  var sp = 62 * (L.delayed ? 0.45 : 1) * (reduce ? 0.65 : 1);
+  var dw = 1.6 * (L.delayed ? 2 : 1);
+  var eta = tr.dwell > 0 ? tr.dwell : 0;
+  if (tr.dir > 0){
+    if (tr.s > dTarget) return Infinity;
+    eta += (dTarget - tr.s) / sp;
+  } else {
+    if (tr.s < dTarget) return Infinity;
+    eta += (tr.s - dTarget) / sp;
+  }
+  L.sts.forEach(function(st){
+    var between = tr.dir > 0 ? (st.d > tr.s && st.d < dTarget) : (st.d < tr.s && st.d > dTarget);
+    if (between) eta += dw;
+  });
+  return eta;
+}
+function updateArrivals(){
+  if (!selected) return;
+  var st = ST[selected], rows = [];
+  LINES.forEach(function(L){
+    var me = L.sts.filter(function(x){ return x.id === selected; })[0];
+    if (!me) return;
+    L.trains.forEach(function(tr){
+      var eta = trainEta(L, tr, me.d);
+      if (!isFinite(eta)) return;
+      var dest = tr.dir > 0 ? L.last : L.first;
+      rows.push({ L: L, eta: eta, dest: dest, terminates: dest === selected });
+    });
+  });
+  rows.sort(function(a, b){ return a.eta - b.eta; });
+  rows = rows.slice(0, 6);
+  if (!rows.length){
+    arrList.innerHTML = '<p class="idle">No trains currently heading to this station — next call coming shortly.</p>';
+    return;
+  }
+  arrList.innerHTML = rows.map(function(r){
+    var f = fmtEta(r.eta);
+    return '<div class="arr-row"><span class="sw" style="background:' + r.L.color + '"></span>' +
+      '<span class="dest">' + (r.terminates ? 'Terminates here' : 'towards ' + ST[r.dest].n) +
+      (r.L.delayed ? '<span class="late">· minor delays</span>' : '') + '</span>' +
+      '<span class="eta' + (f === 'Due' ? ' due' : '') + '">' + f + '</span></div>';
+  }).join('');
+}
+setInterval(updateArrivals, 250);
+
+/* ---- train simulation ---- */
+var lastT = performance.now();
+function sim(now){
+  requestAnimationFrame(sim);
+  var dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  LINES.forEach(function(L){
+    var sp = 62 * (L.delayed ? 0.45 : 1) * (reduce ? 0.65 : 1);
+    var dw = 1.6 * (L.delayed ? 2 : 1);
+    L.trains.forEach(function(tr){
+      if (tr.dwell > 0){
+        tr.dwell -= dt;
+        if (tr.dwell <= 0){
+          var at = L.sts.filter(function(x){ return Math.abs(x.d - tr.s) < 1; })[0];
+          if (at && at.term) tr.dir *= -1;
+        }
+        return;
+      }
+      var next = null;
+      L.sts.forEach(function(x){
+        if (tr.dir > 0 && x.d > tr.s + 0.001){ if (!next || x.d < next.d) next = x; }
+        else if (tr.dir < 0 && x.d < tr.s - 0.001){ if (!next || x.d > next.d) next = x; }
+      });
+      tr.s += sp * dt * tr.dir;
+      if (tr.s < 0){ tr.s = 0; tr.dir = 1; }
+      if (tr.s > L.L){ tr.s = L.L; tr.dir = -1; }
+      if (next){
+        var crossed = tr.dir > 0 ? tr.s >= next.d : tr.s <= next.d;
+        if (crossed){
+          tr.s = next.d;
+          tr.dwell = next.term ? dw * 2 : dw;
+        }
+      }
+    });
+    L.trains.forEach(function(tr){
+      var pt = L.path.getPointAtLength(tr.s);
+      tr.halo.setAttribute('cx', pt.x); tr.halo.setAttribute('cy', pt.y);
+      tr.core.setAttribute('cx', pt.x); tr.core.setAttribute('cy', pt.y);
+    });
+  });
+}
+requestAnimationFrame(sim);
+
+/* ---- clock ---- */
+function tickClock(){
+  var d = new Date();
+  document.getElementById('clock').textContent =
+    String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') +
+    ':' + String(d.getSeconds()).padStart(2,'0');
+}
+tickClock(); setInterval(tickClock, 1000);
+
+/* ---- night mode ---- */
+function setNight(on){
+  document.body.classList.toggle('night', on);
+  var b = document.getElementById('nightBtn');
+  if (b){ b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.textContent = on ? 'Day mode' : 'Night mode'; }
+}
+document.getElementById('nightBtn').addEventListener('click', function(){
+  setNight(!document.body.classList.contains('night'));
+});
+if (window.matchMedia('(prefers-color-scheme: dark)').matches) setNight(true);
+
+/* background click clears selection */
+document.getElementById('map').addEventListener('click', function(){
+  if (selected){ ST[selected].node.classList.remove('selected'); selected = null; }
+  arrTitle.className = 'idle'; arrTitle.textContent = 'Select a station on the map';
+  arrPips.innerHTML = '';
+  arrList.innerHTML = '<p class="idle">Click any station disc to see live departure boards, rebuilt from train positions four times a second.</p>';
+});
+})();
+</script>
+</body>
+</html>

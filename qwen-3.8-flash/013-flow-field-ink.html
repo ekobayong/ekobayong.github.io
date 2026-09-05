@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sumi Field — Generative Flow-Field Ink</title>
+<style>
+  :root{
+    --paper:#faf7f0;
+    --ink:#16161a;
+    --hair:rgba(22,22,26,0.12);
+    --label:#55555c;
+    --seal:#b8321e;
+    --serif:Georgia,"Iowan Old Style",Palatino,"Book Antiqua",ui-serif,serif;
+    --sans:ui-sans-serif,system-ui,"Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--serif);
+    color:var(--ink);
+    background:var(--paper);
+    overflow:hidden;
+  }
+  .app{
+    display:grid;
+    grid-template-columns:300px 1fr;
+    height:100vh;
+    height:100dvh;
+  }
+  /* ============ sidebar ============ */
+  .side{
+    position:relative;
+    background:var(--paper);
+    padding:30px 26px 24px;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:22px;
+    z-index:2;
+  }
+  .side::after{ /* hairline rule, faded at both ends */
+    content:"";
+    position:absolute;
+    top:0;right:0;bottom:0;width:1px;
+    background:linear-gradient(to bottom,transparent,var(--hair) 10%,var(--hair) 90%,transparent);
+    pointer-events:none;
+  }
+  h1{
+    font-size:34px;
+    font-weight:400;
+    letter-spacing:0.01em;
+    line-height:1.05;
+  }
+  h1 .rule{
+    display:block;
+    width:34px;height:2px;
+    background:var(--ink);
+    margin-top:10px;
+  }
+  .lede{
+    font-style:italic;
+    font-size:14.5px;
+    line-height:1.55;
+    color:#3a3a40;
+    margin-top:-8px;
+  }
+  .lbl{
+    font-family:var(--sans);
+    font-size:10px;
+    letter-spacing:0.28em;
+    text-transform:uppercase;
+    color:var(--label);
+    display:block;
+    margin-bottom:9px;
+  }
+  .group{display:flex;flex-direction:column}
+  /* seed */
+  .seed-row{display:flex;align-items:baseline;gap:10px}
+  #seed{
+    font-family:var(--serif);
+    font-variant-numeric:tabular-nums;
+    font-size:40px;
+    line-height:1;
+    letter-spacing:0.045em;
+    color:var(--ink);
+    background:transparent;
+    border:none;
+    border-bottom:1px solid var(--hair);
+    width:8ch;
+    padding:2px 0 6px;
+    outline:none;
+    transition:color .15s,border-color .15s;
+    cursor:text;
+  }
+  #seed:focus{ color:var(--seal); border-color:var(--seal); }
+  .seed-hint{ font-family:var(--sans); font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--label); }
+  /* palette tiles */
+  .pals{display:flex;gap:10px}
+  .pal{flex:1;position:relative;cursor:pointer}
+  .pal input{position:absolute;opacity:0;pointer-events:none}
+  .pal .tile{
+    display:block;
+    height:46px;
+    border-radius:3px;
+    transition:transform .16s ease, box-shadow .16s ease;
+    box-shadow:0 1px 2px rgba(22,22,26,.14);
+  }
+  .pal:nth-child(1) .tile{background:linear-gradient(135deg,#16161a,#4a4a52)}
+  .pal:nth-child(2) .tile{background:linear-gradient(135deg,#1b2a5e,#4a63b8)}
+  .pal:nth-child(3) .tile{background:linear-gradient(135deg,#7a1e10,#d94a2a)}
+  .pal:hover .tile{transform:translateY(-2px);box-shadow:0 4px 8px rgba(22,22,26,.16)}
+  .pal input:checked + .tile{
+    box-shadow:0 0 0 2px var(--paper),0 0 0 3.5px var(--ink),0 0 0 5px var(--paper),0 0 0 6.5px rgba(22,22,26,.55);
+  }
+  .pal .pname{
+    font-family:var(--sans);font-size:9px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--label);display:block;margin-top:7px;text-align:center;
+  }
+  /* turbulence slider */
+  .turb-line{display:flex;justify-content:space-between;align-items:baseline}
+  #turboVal{font-family:var(--serif);font-variant-numeric:tabular-nums;font-size:14px}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;
+    width:100%;height:18px;background:transparent;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:1px;background:rgba(22,22,26,.35)}
+  input[type=range]::-moz-range-track{height:1px;background:rgba(22,22,26,.35)}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:14px;height:14px;border-radius:50%;
+    background:var(--paper);border:1.5px solid var(--ink);
+    margin-top:-6.5px;transition:transform .12s;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:12px;height:12px;border-radius:50%;
+    background:var(--paper);border:1.5px solid var(--ink);
+  }
+  input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.12)}
+  /* buttons */
+  .btns{display:flex;flex-direction:column;gap:10px}
+  .btn2{
+    position:relative;overflow:hidden;
+    font-family:var(--sans);
+    font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--ink);
+    background:transparent;
+    border:1px solid rgba(22,22,26,.55);
+    border-radius:2px;
+    padding:11px 14px;
+    cursor:pointer;
+    text-align:center;
+  }
+  .btn2 span{position:relative;z-index:1;transition:color .22s}
+  .btn2::before{
+    content:"";position:absolute;left:0;right:0;bottom:0;height:100%;
+    background:var(--ink);
+    transform:scaleY(0);transform-origin:bottom;
+    transition:transform .26s cubic-bezier(.4,0,.2,1);
+  }
+  .btn2:hover::before{transform:scaleY(1)}
+  .btn2:hover span{color:var(--paper)}
+  .btn2.wide{width:100%}
+  .btn2.on{border-color:var(--ink)}
+  .btn2.on::before{transform:scaleY(1)}
+  .btn2.on span{color:var(--paper)}
+  /* status + prose */
+  #status{
+    font-family:var(--sans);
+    font-size:10.5px;letter-spacing:.08em;
+    color:var(--label);
+    border-top:1px solid var(--hair);
+    padding-top:14px;
+    min-height:16px;
+  }
+  #status b{color:var(--ink);font-weight:600}
+  .prose{font-size:13px;line-height:1.65;color:#45454c}
+  .prose em{font-style:italic}
+  .about{
+    margin-top:auto;
+    font-family:var(--sans);
+    font-size:10px;line-height:1.7;letter-spacing:.03em;
+    color:var(--label);
+    border-top:1px solid var(--hair);
+    padding-top:14px;
+  }
+  /* ============ stage ============ */
+  .stage{
+    position:relative;
+    background:#e9e4d8;
+    overflow:hidden;
+  }
+  #prog{
+    position:absolute;top:0;left:0;height:2px;width:0;
+    background:var(--seal);
+    z-index:5;
+    transition:width .12s linear, opacity .5s .35s;
+  }
+  #prog.done{opacity:0}
+  #cv{position:absolute;inset:0;display:block;width:100%;height:100%}
+  /* seal */
+  .seal{
+    position:absolute;
+    right:26px;bottom:26px;
+    z-index:4;
+    width:38px;
+    padding:9px 0 10px;
+    background:var(--seal);
+    mix-blend-mode:multiply;
+    transform:rotate(-2deg);
+    border-radius:2px;
+    box-shadow:0 2px 10px rgba(22,22,26,.25);
+  }
+  .seal::before{
+    content:"";position:absolute;inset:4px;
+    border:1.5px solid rgba(255,252,248,.9);
+    border-radius:1px;
+    pointer-events:none;
+  }
+  .seal .txt{
+    display:block;
+    writing-mode:vertical-rl;
+    text-orientation:upright;
+    margin:5px auto 0;
+    font-family:var(--serif);
+    font-size:15px;
+    line-height:1;
+    letter-spacing:.12em;
+    color:#fffdf8;
+    text-shadow:0 0 4px rgba(0,0,0,.25);
+  }
+  @keyframes stamp{
+    0%{transform:rotate(-2deg) scale(2.6);opacity:0}
+    55%{opacity:1}
+    72%{transform:rotate(-2deg) scale(.88);opacity:1}
+    86%{transform:rotate(-2deg) scale(1.06)}
+    100%{transform:rotate(-2deg) scale(1);opacity:1}
+  }
+  .seal.stamping{animation:stamp .55s cubic-bezier(.34,1.56,.64,1) both}
+  .stage.verm .seal{background:#16161a}
+  /* ============ narrow layout ============ */
+  @media (max-width:760px){
+    .app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+    .side{
+      flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px 18px;
+      padding:14px 16px;
+    }
+    .side::after{
+      top:auto;left:0;right:0;bottom:0;width:auto;height:1px;
+      background:linear-gradient(to right,transparent,var(--hair) 10%,var(--hair) 90%,transparent);
+    }
+    h1{font-size:22px}
+    h1 .rule{display:none}
+    .lede,.prose,.about,.seed-hint{display:none}
+    #seed{font-size:24px;width:7ch}
+    .pal .tile{height:30px}
+    .btns{flex-direction:row}
+    .btn2{padding:8px 12px;font-size:10px}
+    #status{border-top:none;padding-top:0;flex-basis:100%}
+    .seal{right:14px;bottom:14px;width:30px}
+    .seal .txt{font-size:12px}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .btn2::before,.pal .tile,.btn2 span,#seed,#prog,.seal{transition:none !important}
+    .seal.stamping{animation:none}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <h1>Sumi Field<span class="rule"></span></h1>
+    <p class="lede">A field of quiet current. Ink follows what the wind remembers — one seed, three washes, and a great deal of patience.</p>
+
+    <div class="group">
+      <span class="lbl">Seed</span>
+      <div class="seed-row">
+        <input id="seed" inputmode="numeric" maxlength="6" autocomplete="off" spellcheck="false" aria-label="seed number, press Enter to apply">
+        <span class="seed-hint">enter<br>to&nbsp;apply</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <span class="lbl">Palette</span>
+      <div class="pals" role="radiogroup" aria-label="palette">
+        <label class="pal"><input type="radio" name="pal" value="ink" checked><span class="tile"></span><span class="pname">Ink</span></label>
+        <label class="pal"><input type="radio" name="pal" value="indigo"><span class="tile"></span><span class="pname">Indigo</span></label>
+        <label class="pal"><input type="radio" name="pal" value="verm"><span class="tile"></span><span class="pname">Vermil.</span></label>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="turb-line"><span class="lbl" style="margin-bottom:0">Turbulence</span><span id="turboVal">2.4</span></div>
+      <input type="range" id="turb" min="0.6" max="5" step="0.1" value="2.4" aria-label="turbulence">
+    </div>
+
+    <div class="btns">
+      <button class="btn2" id="regen"><span>Regenerate</span></button>
+      <button class="btn2" id="save"><span>Save PNG</span></button>
+      <button class="btn2 wide" id="flow" aria-pressed="false"><span>Flow · live particles</span></button>
+    </div>
+
+    <div id="status" role="status">idle</div>
+
+    <p class="prose">
+      Each painting begins from a six-digit seed. The seed selects a point in a two-octave
+      noise field; the angle of the current at every drop of ink is drawn from it. Three passes
+      follow — first the pale wide washes, then the mid strokes, and finally the fine hairs —
+      each one dry-brushing its way toward the tip of the stroke, the way a real brush runs
+      out of ink.
+    </p>
+
+    <p class="about">
+      Sumi Field · a generative sumi-e studio.<br>
+      mulberry32 · 2D simplex flow · canvas 2D.<br>
+      <em>R</em> regenerates · <em>F</em> toggles flow.
+    </p>
+  </aside>
+
+  <main class="stage" id="stage">
+    <div id="prog"></div>
+    <canvas id="cv" aria-label="generative ink painting"></canvas>
+    <div class="seal" id="seal" aria-hidden="true"><span class="txt" id="sealTxt">000000</span></div>
+  </main>
+</div>
+
+<script>
+'use strict';
+/* ================= prng + noise ================= */
+function mulberry32(a){
+  return function(){
+    a|=0; a=(a+0x6D2B79F5)|0;
+    let t=Math.imul(a^(a>>>15),1|a);
+    t=(t+Math.imul(t^(t>>>7),61|t))^t;
+    return ((t^(t>>>14))>>>0)/4294967296;
+  };
+}
+function makeSimplex(rng){
+  const perm=new Uint8Array(512), p=new Uint8Array(256);
+  for(let i=0;i<256;i++)p[i]=i;
+  for(let i=255;i>0;i--){const j=(rng()*(i+1))|0;const t=p[i];p[i]=p[j];p[j]=t;}
+  for(let i=0;i<512;i++)perm[i]=p[i&255];
+  const g2=[[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+  const F2=0.5*(Math.sqrt(3)-1), G2=(3-Math.sqrt(3))/6;
+  return function(xin,yin){
+    const s=(xin+yin)*F2;
+    let i=Math.floor(xin+s), j=Math.floor(yin+s);
+    const t=(i+j)*G2;
+    const x0=xin-(i-t), y0=yin-(j-t);
+    let i1,j1;
+    if(x0>y0){i1=1;j1=0;}else{i1=0;j1=1;}
+    const x1=x0-i1+G2, y1=y0-j1+G2;
+    const x2=x0-1+2*G2, y2=y0-1+2*G2;
+    i&=255; j&=255;
+    let n0=0,n1=0,n2=0;
+    let t0=0.5-x0*x0-y0*y0;
+    if(t0>0){const gi=g2[perm[i+perm[j]]&7];t0*=t0;n0=t0*t0*(gi[0]*x0+gi[1]*y0);}
+    let t1=0.5-x1*x1-y1*y1;
+    if(t1>0){const gi=g2[perm[i+i1+perm[j+j1]]&7];t1*=t1;n1=t1*t1*(gi[0]*x1+gi[1]*y1);}
+    let t2=0.5-x2*x2-y2*y2;
+    if(t2>0){const gi=g2[perm[i+1+perm[j+1]]&7];t2*=t2;n2=t2*t2*(gi[0]*x2+gi[1]*y2);}
+    return 70*(n0+n1+n2);
+  };
+}
+/* ================= palettes / state ================= */
+const PALETTES={
+  ink:{paper:'#f3eee3',tones:['#16161a','#2a2a30','#3d3d45'],wash:'#6f6f77',seal:'#b8321e'},
+  indigo:{paper:'#eef0ec',tones:['#1b2a5e','#2c3f7c','#4a63b8'],wash:'#7f92bd',seal:'#b8321e'},
+  verm:{paper:'#f7f1e6',tones:['#7a1e10','#a63419','#d94a2a'],wash:'#cf8f70',seal:'#b8321e'}
+};
+const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+const stage=document.getElementById('stage');
+const prog=document.getElementById('prog');
+const statusEl=document.getElementById('status');
+const seedInput=document.getElementById('seed');
+const turbInput=document.getElementById('turb');
+const turboVal=document.getElementById('turboVal');
+const flowBtn=document.getElementById('flow');
+const seal=document.getElementById('seal');
+const sealTxt=document.getElementById('sealTxt');
+
+let seed=(Math.random()*999999|0);
+seedInput.value=String(seed).padStart(6,'0');
+let paletteKey='ink', turb=2.4;
+let W=0,H=0,DPR=1;
+let noise2=null, paperRng=null;
+let painting=false;
+let flowOn=false, particles=[];
+let raf=null, dirty=false;
+
+function pal(){return PALETTES[paletteKey];}
+/* angle of the field at a css-pixel point */
+function fieldAngle(x,y){
+  const k=0.0021;
+  const n1=noise2(x*k,y*k);
+  const n2=noise2(x*k*2.3,y*k*2.3);
+  return (0.7*n1+0.3*n2)*Math.PI*turb;
+}
+/* ================= paper ================= */
+function hexRgb(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function drawPaper(){
+  const base=hexRgb(pal().paper);
+  const img=ctx.createImageData(cv.width,cv.height);
+  const d=img.data, pw=cv.width, ph=cv.height;
+  const rng=paperRng;
+  for(let y=0;y<ph;y++){
+    for(let x=0;x<pw;x++){
+      const g=(rng()*18-9)|0; /* ±9 levels of grain */
+      const i=(y*pw+x)*4;
+      d[i]=base[0]+g; d[i+1]=base[1]+g; d[i+2]=base[2]+g; d[i+3]=255;
+    }
+  }
+  ctx.putImageData(img,0,0);
+  ctx.save();
+  ctx.scale(DPR,DPR);
+  /* faint fibres */
+  const fibres=Math.round((W*H)/1400);
+  ctx.lineCap='round';
+  for(let i=0;i<fibres;i++){
+    const x=rng()*W, y=rng()*H;
+    const a=rng()*Math.PI, len=3+rng()*16;
+    ctx.strokeStyle=rng()<0.5?'rgba(120,110,90,0.05)':'rgba(255,252,244,0.07)';
+    ctx.lineWidth=0.5+rng()*0.7;
+    ctx.beginPath();
+    ctx.moveTo(x,y);
+    ctx.lineTo(x+Math.cos(a)*len,y+Math.sin(a)*len);
+    ctx.stroke();
+  }
+  /* soft warm vignette */
+  const g=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.32,W/2,H/2,Math.max(W,H)*0.78);
+  g.addColorStop(0,'rgba(0,0,0,0)');
+  g.addColorStop(1,'rgba(96,72,36,0.10)');
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,W,H);
+  ctx.restore();
+}
+/* ================= stroke model ================= */
+/* one stroke walks the field; tapers to 15% width, fades to 45% alpha,
+   skips segments with increasing probability toward the tip (dry brush). */
+function makeStroke(r,type,areaF){
+  const x0=r()*W, y0=r()*H;
+  const step=4+r()*3.5;
+  let len, wmin,wmax, amin,amax, dry, toneIdx;
+  if(type==='wash'){ len=140+r()*160; wmin=7; wmax=16; amin=0.025; amax=0.06; dry=0.30; }
+  else if(type==='mid'){ len=90+r()*120; wmin=1.4; wmax=4; amin=0.12; amax=0.30; dry=0.62; }
+  else{ len=50+r()*90; wmin=0.35; wmax=1.1; amin=0.30; amax=0.70; dry=0.80; }
+  len*=Math.sqrt(areaF);
+  return {
+    r,type,x0,y0,step,
+    steps:Math.max(4,Math.round(len/step)),
+    w:wmin+r()*(wmax-wmin),
+    a:amin+r()*(amax-amin),
+    dry,
+    tone:type==='wash'?pal().wash:pal().tones[(r()*3)|0],
+    curve:(r()-0.5)*0.5
+  };
+}
+function strokeColor(hex,a){
+  const c=hexRgb(hex);
+  return 'rgba('+c[0]+','+c[1]+','+c[2]+','+a.toFixed(3)+')';
+}
+function drawStroke(s,r){
+  let x=s.x0,y=s.y0,ang=fieldAngle(x,y)+s.curve;
+  ctx.lineCap='round';
+  for(let i=0;i<s.steps;i++){
+    const u=i/s.steps;
+    /* dry-brush skipping grows toward the tip */
+    if(i>0 && r()<s.dry*Math.pow(u,1.8)*0.85){
+      x+=Math.cos(ang)*s.step; y+=Math.sin(ang)*s.step;
+      ang+=fieldAngle(x,y)-ang;
+      continue;
+    }
+    const w=s.w*(1-0.85*u)*(0.85+r()*0.3);        /* taper to 15%, jitter width */
+    const a=s.a*(1-0.55*u);                        /* fade to 45% alpha */
+    const nx=x+Math.cos(ang)*s.step, ny=y+Math.sin(ang)*s.step;
+    ctx.strokeStyle=strokeColor(s.tone,a);
+    ctx.lineWidth=Math.max(0.2,w);
+    ctx.beginPath();
+    ctx.moveTo(x,y);
+    ctx.lineTo(nx,ny);
+    ctx.stroke();
+    x=nx; y=ny;
+    ang=fieldAngle(x,y)+s.curve*0.4;
+    if(x<-30||y<-30||x>W+30||y>H+30)break;
+  }
+}
+let replay=null, replayPass=0, replayI=0, replayTotal=0, replayDoneAll=0;
+function newPaint(reseed){
+  if(reseed){ seed=(Math.random()*999999|0); seedInput.value=String(seed).padStart(6,'0'); }
+  const master=mulberry32(seed);
+  paperRng=mulberry32((seed^0x9e3779b9)>>>0);
+  noise2=makeSimplex(mulberry32((master()*0xffffffff)>>>0));
+  const rs=(master()*0xffffffff)>>>0;
+  drawPaper();
+  const r=mulberry32(rs);
+  const areaF=Math.max(0.45,Math.min(2,(W*H)/(1600*1000)));
+  replay={r,areaF,specs:[['wash',Math.round(260*areaF)],['mid',Math.round(1400*areaF)],['fine',Math.round(2600*areaF)]]};
+  replayPass=0;replayI=0;
+  replayTotal=replay.specs.reduce((a,s)=>a+s[1],0);
+  replayDoneAll=0;
+  painting=true;
+  prog.classList.remove('done');
+  prog.style.width='0';
+  sealTxt.textContent=String(seed).padStart(6,'0');
+  seal.classList.remove('stamping');
+  void seal.offsetWidth;
+  seal.classList.add('stamping');
+  /* respawn flow particles for the new field */
+  particles=particles.slice(0,480);
+  if(flowOn&&particles.length<480)spawnParticles(480-particles.length);
+  setStatus();
+  if(reduceMotion){
+    paintAllSync();
+    painting=false;
+    prog.style.width='100%';prog.classList.add('done');
+    setStatus();
+    startLoop(); /* keeps flow running if on; idles otherwise */
+  }else{
+    startLoop();
+  }
+}
+function paintAllSync(){
+  ctx.save();ctx.scale(DPR,DPR);
+  while(replayPass<replay.specs.length){
+    const [type,count]=replay.specs[replayPass];
+    for(;replayI<count;replayI++){drawStroke(makeStroke(replay.r,type,replay.areaF),replay.r);}
+    replayPass++;replayI=0;
+  }
+  ctx.restore();
+}
+function setStatus(){
+  const palName={ink:'Ink',indigo:'Indigo',verm:'Vermilion'}[paletteKey];
+  if(painting){
+    const [t]=replay.specs[replayPass]||['',0];
+    const pct=Math.round(replayDoneAll/replayTotal*100);
+    statusEl.innerHTML='<b>'+pct+'%</b> · pass '+(replayPass+1)+' of 3 · '+(t==='wash'?'washes':t==='mid'?'mid strokes':'fine hairs')+' — '+replayDoneAll+'/'+replayTotal+' strokes';
+  }else if(flowOn){
+    statusEl.innerHTML='<b>flowing</b> · seed '+String(seed).padStart(6,'0')+' · '+palName+' · '+turb.toFixed(1)+'× turbulence · 480 particles';
+  }else{
+    statusEl.innerHTML='<b>ready</b> · seed '+String(seed).padStart(6,'0')+' · '+palName+' · '+turb.toFixed(1)+'× turbulence';
+  }
+}
+/* ================= main loop ================= */
+function startLoop(){
+  if(raf==null)raf=requestAnimationFrame(frame);
+}
+function frame(){
+  raf=null;
+  let more=false;
+  if(painting){
+    ctx.save();ctx.scale(DPR,DPR);
+    let budget=1800;
+    while(budget>0&&replayPass<replay.specs.length){
+      const [type,count]=replay.specs[replayPass];
+      const n=Math.min(budget,count-replayI);
+      for(let k=0;k<n;k++){drawStroke(makeStroke(replay.r,type,replay.areaF),replay.r);}
+      replayI+=n;budget-=n;replayDoneAll+=n;
+      if(replayI>=count){replayPass++;replayI=0;}
+    }
+    ctx.restore();
+    prog.style.width=(replayDoneAll/replayTotal*100)+'%';
+    setStatus();
+    if(replayPass>=replay.specs.length){
+      painting=false;
+      prog.classList.add('done');
+      setStatus();
+    }
+    more=painting;
+  }
+  if(flowOn&&!painting){
+    ctx.save();ctx.scale(DPR,DPR);
+    stepParticles();
+    ctx.restore();
+    more=true;
+  }
+  if(more||flowOn)raf=requestAnimationFrame(frame);
+  else dirty=false;
+}
+/* ================= flow mode ================= */
+function spawnParticles(n){
+  const r=Math.random;
+  for(let i=0;i<n;i++){
+    particles.push({
+      x:r()*W,y:r()*H,
+      life:80+r()*220,
+      a:0.05+r()*0.16,
+      w:0.3+r()*0.75,
+      sp:1.6+r()*1.9
+    });
+  }
+}
+function stepParticles(){
+  const tones=pal().tones;
+  for(let i=0;i<particles.length;i++){
+    const p=particles[i];
+    for(let s=0;s<2;s++){ /* two segments per frame */
+      const ang=fieldAngle(p.x,p.y);
+      const nx=p.x+Math.cos(ang)*p.sp, ny=p.y+Math.sin(ang)*p.sp;
+      ctx.strokeStyle=strokeColor(tones[(i%3)],p.a);
+      ctx.lineWidth=p.w;
+      ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(nx,ny);ctx.stroke();
+      p.x=nx;p.y=ny;p.life-=1;
+      if(p.life<=0||p.x<-5||p.y<-5||p.x>W+5||p.y>H+5){
+        p.x=Math.random()*W;p.y=Math.random()*H;
+        p.life=80+Math.random()*220;
+        p.a=0.05+Math.random()*0.16;
+        p.w=0.3+Math.random()*0.75;
+        break;
+      }
+    }
+  }
+}
+function toggleFlow(force){
+  flowOn=force!=null?force:!flowOn;
+  flowBtn.classList.toggle('on',flowOn);
+  flowBtn.setAttribute('aria-pressed',String(flowOn));
+  if(flowOn){
+    if(particles.length===0)spawnParticles(480);
+    startLoop();
+  }
+  setStatus();
+}
+/* ================= sizing ================= */
+function resize(){
+  const r=stage.getBoundingClientRect();
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  const w=Math.max(80,Math.round(r.width)), h=Math.max(80,Math.round(r.height));
+  if(w===W&&h===H&&cv.width>0)return false;
+  W=w;H=h;
+  cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);
+  return true;
+}
+let resizeTimer=null;
+function onResize(){
+  clearTimeout(resizeTimer);
+  resizeTimer=setTimeout(()=>{
+    if(resize()){
+      /* repaint the same seed, synchronously on resize */
+      const master=mulberry32(seed);
+      paperRng=mulberry32((seed^0x9e3779b9)>>>0);
+      noise2=makeSimplex(mulberry32((master()*0xffffffff)>>>0));
+      const rs=(master()*0xffffffff)>>>0;
+      drawPaper();
+      const r=mulberry32(rs);
+      const areaF=Math.max(0.45,Math.min(2,(W*H)/(1600*1000)));
+      ctx.save();ctx.scale(DPR,DPR);
+      [['wash',Math.round(260*areaF)],['mid',Math.round(1400*areaF)],['fine',Math.round(2600*areaF)]].forEach(([t,c])=>{
+        for(let i=0;i<c;i++)drawStroke(makeStroke(r,t,areaF),r);
+      });
+      ctx.restore();
+      painting=false;
+      prog.style.width='100%';
+      prog.classList.add('done');
+      setStatus();
+    }
+  },140);
+}
+window.addEventListener('resize',onResize);
+/* ================= ui wiring ================= */
+function currentSeedFromInput(){
+  const v=(seedInput.value.replace(/\D/g,'')||'0').slice(0,6);
+  return parseInt(v,10)||0;
+}
+seedInput.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    e.preventDefault();
+    seed=currentSeedFromInput();
+    seedInput.value=String(seed).padStart(6,'0');
+    newPaint(false);
+  }
+});
+seedInput.addEventListener('blur',()=>{
+  seed=currentSeedFromInput();
+  seedInput.value=String(seed).padStart(6,'0');
+});
+document.querySelectorAll('input[name=pal]').forEach(el=>{
+  el.addEventListener('change',()=>{
+    paletteKey=el.value;
+    stage.classList.toggle('verm',paletteKey==='verm');
+    document.documentElement.style.setProperty('--seal',paletteKey==='verm'?'#16161a':'#b8321e');
+    newPaint(false);
+  });
+});
+turbInput.addEventListener('input',()=>{
+  turb=parseFloat(turbInput.value);
+  turboVal.textContent=turb.toFixed(1);
+  setStatus();
+  if(flowOn)startLoop();
+});
+turbInput.addEventListener('change',()=>newPaint(false));
+document.getElementById('regen').addEventListener('click',()=>newPaint(true));
+document.getElementById('save').addEventListener('click',()=>{
+  const a=document.createElement('a');
+  a.download='sumi-field-'+String(seed).padStart(6,'0')+'.png';
+  a.href=cv.toDataURL('image/png');
+  a.click();
+});
+flowBtn.addEventListener('click',()=>toggleFlow());
+window.addEventListener('keydown',e=>{
+  if(e.target===seedInput||e.metaKey||e.ctrlKey||e.altKey)return;
+  const k=e.key.toLowerCase();
+  if(k==='r'){e.preventDefault();newPaint(true);}
+  else if(k==='f'){e.preventDefault();toggleFlow();}
+});
+/* ================= boot ================= */
+resize();
+newPaint(false);
+</script>
+</body>
+</html>

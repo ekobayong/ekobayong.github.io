@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Halden & Voss — Built Works</title>
+<style>
+  :root {
+    --c1: #17181a; --c2: #2a2b2d; --c3: #3b3d40;
+    --steel: #8b96a3; --steel-hi: #c3cad2;
+    --amber: #e39b3a; --amber-deep: #b86f1c;
+    --paperw: #efe9df;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: ui-sans-serif, system-ui, "Helvetica Neue", Arial, sans-serif;
+    color: var(--paperw);
+    background: linear-gradient(180deg, #101113 0%, var(--c2) 46%, #1c1d1f 78%, var(--c1) 100%);
+    user-select: none; -webkit-user-select: none; touch-action: none;
+  }
+  /* grain + ambient light */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: .5;
+    mix-blend-mode: overlay;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/></filter><rect width="240" height="240" filter="url(%23g)" opacity="0.42"/></svg>');
+  }
+  #ambient {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(620px 520px at var(--ambx, 50%) var(--amby, 40%), var(--ambc, rgba(227, 155, 58, 0.16)), transparent 62%);
+    transition: background 0.8s linear;
+  }
+
+  /* ---------- header ---------- */
+  header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 30px; pointer-events: none;
+  }
+  .brand { display: flex; align-items: center; gap: 13px; pointer-events: auto; }
+  .mark { width: 26px; height: 26px; transform: rotate(45deg); border: 2px solid var(--paperw); position: relative; }
+  .mark::after { content: ""; position: absolute; inset: 5px; border: 2px solid var(--amber); }
+  .brand h2 { font-family: var(--serif); font-weight: 400; font-size: 19px; letter-spacing: 0.16em; }
+  .brand small { display: block; font-size: 9px; letter-spacing: 0.34em; text-transform: uppercase; color: var(--steel); margin-top: 3px; }
+  nav { display: flex; gap: 26px; pointer-events: auto; }
+  nav a {
+    position: relative; color: var(--paperw); text-decoration: none;
+    font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; padding-bottom: 3px; opacity: .8;
+  }
+  nav a::after {
+    content: ""; position: absolute; left: 0; bottom: 0; height: 1px; width: 0; background: var(--amber);
+    transition: width .35s cubic-bezier(.34, 1.3, .64, 1);
+  }
+  nav a:hover { opacity: 1; } nav a:hover::after { width: 100%; }
+
+  /* ---------- stage / prism ---------- */
+  #stage { position: fixed; inset: 0; z-index: 5; cursor: grab; }
+  #stage.dragging { cursor: grabbing; }
+  .scene {
+    position: absolute; left: 50%; top: 44%;
+    transform: translate(-50%, -50%);
+    perspective: 1700px; perspective-origin: 50% 42%;
+  }
+  .prism { position: relative; transform-style: preserve-3d; will-change: transform; }
+  .face { position: absolute; inset: 0; transform-style: preserve-3d; backface-visibility: hidden; }
+  .face .shade {
+    position: absolute; inset: 0; background: #050507; pointer-events: none;
+    opacity: 0; transition: none;
+  }
+
+  /* ---------- posters ---------- */
+  .poster {
+    position: absolute; inset: 0; overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 3px;
+    box-shadow: inset 0 0 0 6px rgba(0, 0, 0, 0.06);
+    display: flex; flex-direction: column; justify-content: flex-end;
+    padding: 7% 7% 8%;
+  }
+  .num {
+    position: absolute; top: 4%; left: 6%;
+    font-family: var(--serif); font-weight: 700; line-height: 0.8;
+    font-size: 0.62 * var(--fw, 340px); opacity: 0.9;
+  }
+  .poster h3 { font-family: var(--serif); font-weight: 400; font-size: clamp(17px, 3vh, 25px); line-height: 1.12; letter-spacing: 0.01em; }
+  .poster h3 i { font-style: italic; }
+  .poster .meta { margin-top: 9px; font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase; }
+  .poster .type { margin-top: 4px; font-family: var(--serif); font-style: italic; font-size: 12px; }
+  .poster .art { position: absolute; inset: 0; pointer-events: none; }
+
+  /* individual poster artworks, all pure CSS gradients / pseudo shapes */
+  .p1 { background: linear-gradient(165deg, #1e2126, #101216 65%); color: var(--paperw); }
+  .p1 .art { background: radial-gradient(circle at 50% 34%, transparent 0 27%, var(--amber) 27.2% 29.4%, transparent 29.6%) ; }
+  .p1 .art::after { content: ""; position: absolute; left: 50%; top: 34%; width: 34%; height: 48%;
+    transform: translate(-50%, -50%); border-radius: 50%;
+    background: conic-gradient(from 210deg, transparent 0 60%, rgba(227, 155, 58, 0.5) 78%, transparent 82%); }
+
+  .p2 { background: linear-gradient(200deg, #cfd5db, var(--steel-hi) 55%, #aab3bd); color: #17181a; }
+  .p2 .art { background: linear-gradient(115deg, transparent 55%, #17181a 55.2%); }
+  .p2 .art::after { content: ""; position: absolute; right: -18%; bottom: 12%; width: 46%; height: 52%;
+    background: #17181a; clip-path: polygon(100% 0, 100% 100%, 0 100%); opacity: .85; }
+
+  .p3 { background: linear-gradient(160deg, #23262b, #14161a 70%); color: var(--paperw); }
+  .p3 .art { background: linear-gradient(112deg, transparent 42%, rgba(239, 233, 223, 0.16) 43%, rgba(239, 233, 223, 0.5) 48%, rgba(239, 233, 223, 0.16) 53%, transparent 54%); }
+  .p3 .art::after { content: ""; position: absolute; left: 58%; top: 20%; width: 22%; height: 15.5%;
+    border-radius: 50%; background: radial-gradient(circle at 34% 30%, #f7f2e8, #d9d2c2 60%, #a49c88);
+    box-shadow: -18px 26px 34px rgba(0, 0, 0, 0.45); }
+
+  .p4 { background: #1d1f23; color: var(--paperw); }
+  .p4 .art {
+    background:
+      repeating-linear-gradient(0deg, transparent 0 31px, rgba(139, 150, 163, 0.55) 31px 32px),
+      repeating-linear-gradient(90deg, transparent 0 31px, rgba(139, 150, 163, 0.55) 31px 32px);
+    -webkit-mask: radial-gradient(120% 100% at 50% 40%, #000 45%, transparent 78%);
+            mask: radial-gradient(120% 100% at 50% 40%, #000 45%, transparent 78%);
+  }
+  .p4 .art::after { content: ""; position: absolute; left: 34%; top: 36%; width: 26%; height: 18%;
+    background: linear-gradient(145deg, var(--amber), var(--amber-deep)); box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+
+  .p5 { background: radial-gradient(115% 90% at 28% 18%, #f0a24f, #d0701e 32%, #7e3a12 62%, #33160a 88%); color: #221208; }
+  .p5 .art::before, .p5 .art::after { content: ""; position: absolute; }
+  .p5 .art::before { right: 8%; top: 10%; width: 56%; height: 62%; border: 3px solid rgba(34, 18, 8, 0.85); }
+  .p5 .art::after { right: 15%; top: 17%; width: 56%; height: 62%; background: rgba(244, 214, 180, 0.24);
+    border: 3px solid rgba(34, 18, 8, 0.85); }
+
+  .p6 { background: linear-gradient(178deg, #efe9df 0%, #e3dccd 62%, #d6cdbc 100%); color: #17181a; }
+  .p6 .art::before { content: ""; position: absolute; left: 16%; right: 16%; bottom: 34%; height: 30%;
+    background: #17181a; clip-path: polygon(0 38%, 50% 0, 100% 38%, 100% 100%, 0 100%); }
+  .p6 .art::after { content: ""; position: absolute; left: 50%; bottom: 55%; width: 3px; height: 17%;
+    background: linear-gradient(180deg, var(--amber), #8a5410); transform: translateX(-50%); }
+  .p6 .num { color: #17181a; }
+  .p2 .num, .p6 .num { color: #17181a; }
+  .p5 .num { color: #241105; }
+
+  /* reflection */
+  #mirror { position: absolute; left: 50%; top: 44%;
+    transform: translate(-50%, -50%); perspective: 1700px; perspective-origin: 50% 42%;
+    pointer-events: none; z-index: 4; }
+  #mirror .scene2 { transform-style: preserve-3d; }
+  #mirror .prism { transform-origin: 50% -4px; }
+  #mirror .wrap2 {
+    position: relative; transform: scaleY(-1) translateY(calc(var(--fh) * -1 - 26px));
+    -webkit-mask: linear-gradient(180deg, transparent 52%, rgba(0,0,0,.34) 100%);
+            mask: linear-gradient(180deg, transparent 52%, rgba(0,0,0,.34) 100%);
+    filter: blur(2.6px) saturate(0.55) brightness(0.8);
+    opacity: 0.42;
+    transform-style: preserve-3d;
+  }
+
+  /* ---------- info panel ---------- */
+  #info {
+    position: fixed; left: 34px; bottom: 34px; z-index: 30; width: min(390px, 34vw);
+    padding: 20px 22px; border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(16, 17, 19, 0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .clip { overflow: hidden; }
+  #info .swap { transform: translateY(0); opacity: 1; transition: transform .5s cubic-bezier(.3,1.2,.4,1), opacity .4s ease; }
+  #info.leaving .swap { transform: translateY(-104%); opacity: 0; }
+  #info.entering .swap { transform: translateY(104%); opacity: 0; transition: none; }
+  #info .kick { font-size: 9.5px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--amber); margin-bottom: 8px; }
+  #info h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 3.4vw, 40px); line-height: 1.06; }
+  #info h1 i { font-style: italic; color: var(--steel-hi); }
+  #info p { margin: 11px 0 0; font-size: 12.5px; line-height: 1.62; color: #b9bfc7; }
+  #info .facts { margin-top: 14px; border-top: 1px solid rgba(255,255,255,.1); display: grid; grid-template-columns: 1fr 1fr 1fr; }
+  #info .facts div { padding: 8px 8px 2px; }
+  #info .facts div + div { border-left: 1px solid rgba(255,255,255,.08); }
+  #info .facts b { display: block; font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--steel); margin-bottom: 3px; font-weight: 600; }
+  #info .facts span { font-size: 11px; }
+
+  /* ---------- counter + dots ---------- */
+  #counter {
+    position: fixed; right: 34px; top: 50%; transform: translateY(-50%); z-index: 30;
+    writing-mode: vertical-rl; font-family: var(--mono); font-size: 13px; letter-spacing: 0.4em; color: var(--steel-hi);
+    font-variant-numeric: tabular-nums;
+  }
+  #counter b { color: var(--amber); font-weight: 600; }
+  #dots { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 30; display: flex; gap: 12px; align-items: center; }
+  #dots button { width: 26px; height: 2px; border: 0; padding: 0; background: rgba(195, 202, 210, 0.35); cursor: pointer;
+    transition: width .4s cubic-bezier(.34, 1.4, .64, 1), background .3s; }
+  #dots button:hover { background: rgba(195, 202, 210, 0.8); }
+  #dots button.on { width: 52px; background: var(--amber); }
+
+  #hint { position: fixed; right: 34px; bottom: 30px; z-index: 30; font-family: var(--mono); font-size: 10px;
+    letter-spacing: .12em; color: rgba(139, 150, 163, 0.75); text-align: right; }
+
+  @media (max-width: 760px) {
+    nav { display: none; }
+    #info { width: auto; left: 16px; right: 16px; bottom: 76px; }
+    #info p { display: none; }
+    #counter { top: auto; bottom: 116px; transform: none; writing-mode: horizontal-tb; }
+    #dots { bottom: 24px; }
+    #hint { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #info .swap { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="ambient"></div>
+
+<header>
+  <div class="brand">
+    <div class="mark"></div>
+    <h2>Halden &amp; Voss<small>Architecture · Est. 1998</small></h2>
+  </div>
+  <nav>
+    <a href="#">Works</a><a href="#">Studio</a><a href="#">Journal</a><a href="#">Contact</a>
+  </nav>
+</header>
+
+<div id="stage">
+  <div class="scene" id="scene">
+    <div class="prism" id="prism"></div>
+  </div>
+</div>
+<div id="mirror"><div class="wrap2"><div class="prism" id="prism-mirror"></div></div></div>
+
+<aside id="info">
+  <div class="clip"><div class="swap" id="swap">
+    <div class="kick" id="i-kick"></div>
+    <h1 id="i-title"></h1>
+    <p id="i-desc"></p>
+    <div class="facts">
+      <div><b>Client</b><span id="i-client"></span></div>
+      <div><b>Material</b><span id="i-mat"></span></div>
+      <div><b>Status</b><span id="i-status"></span></div>
+    </div>
+  </div></div>
+</aside>
+
+<div id="counter"><b id="c-num">01</b> / 06</div>
+<div id="dots" role="tablist" aria-label="Projects"></div>
+<div id="hint">Drag · ← → · 1–6 · Click a face</div>
+
+<script>
+'use strict';
+var REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+var PROJECTS = [
+  { p: 'p1', num: '01', kick: 'Civic · Sacred',   title: 'Kelda <i>Chapel</i>',        city: 'Reykjavík', year: '2019',
+    type: 'Chapel & gathering hall', accent: 'rgba(227, 155, 58, 0.16)',
+    desc: 'A ring of basalt columns holds a copper oculus above a black-timber nave; at midwinter the sun traces the full circle of the floor in a single slow hour of amber light.',
+    client: 'Diocese of Kelda', material: 'Basalt, copper, pine', status: 'Completed 2019' },
+  { p: 'p2', num: '02', kick: 'Civic · Water',    title: 'Vantage <i>Baths</i>',       city: 'Oslo', year: '2021',
+    type: 'Public bath & sauna', accent: 'rgba(195, 202, 210, 0.14)',
+    desc: 'A folded deck of pale concrete cantilevers over the fjord; cold water, hot air and the horizontal sea negotiate three levels of threshold between the city and the north.',
+    client: 'City of Oslo', material: 'White concrete, glass, larch', status: 'Completed 2021' },
+  { p: 'p3', num: '03', kick: 'Rural · Craft',    title: 'Sable <i>Winery</i>',        city: 'Sonoma', year: '2022',
+    type: 'Winery & tasting barn', accent: 'rgba(239, 233, 223, 0.10)',
+    desc: 'Gravity does the work: a slot of a roof rakes the barrels downhill from crush to cellar, and one narrow blade of daylight marks the hour along the oak heads.',
+    client: 'Sable Family', material: 'Rammed earth, steel, oak', status: 'Completed 2022' },
+  { p: 'p4', num: '04', kick: 'Culture · Shore',  title: 'Iron Pier <i>Museum</i>',     city: 'Helsinki', year: '2018',
+    type: 'Maritime museum', accent: 'rgba(139, 150, 163, 0.16)',
+    desc: 'Built on and around a nineteenth-century pier of riveted iron, the grid of the old quay is left exposed as the armature of the new — every gallery floats on history.',
+    client: 'Harbour Trust', material: 'Riveted iron, Baltic pine', status: 'Completed 2018' },
+  { p: 'p5', num: '05', kick: 'Archive · Object', title: 'Cobalt <i>Archive</i>',      city: 'Antwerp', year: '2023',
+    type: 'Municipal records hall', accent: 'rgba(240, 162, 79, 0.15)',
+    desc: 'A nested box of copper reading rooms, set one inside the other like reliquaries, keeps four centuries of ledgers at exactly the temperature of a steady hand.',
+    client: 'City of Antwerp', material: 'Molten-copper cladding, brick', status: 'Completed 2023' },
+  { p: 'p6', num: '06', kick: 'Domestic · Quiet', title: 'Hollow <i>House</i>',        city: 'Kyoto', year: '2020',
+    type: 'Private dwelling', accent: 'rgba(227, 155, 58, 0.12)',
+    desc: 'A dark timber silhouette wrapped around an empty square of moss and sky; the house says nothing to the lane and everything to the garden at its centre.',
+    client: 'Private', material: 'Charred cedar, washi, stone', status: 'Completed 2020' }
+];
+
+var prism = document.getElementById('prism');
+var faceW = 340;
+
+function sizeFaces() {
+  var vw = innerWidth, vh = innerHeight;
+  faceW = Math.max(180, Math.min(vh * 0.46, vw * 0.42, 380));
+  if (vw < 760) faceW = Math.max(150, Math.min(vw * 0.56, vh * 0.38));
+  var faceH = faceW * 1.42;
+  document.documentElement.style.setProperty('--fw', faceW + 'px');
+  document.documentElement.style.setProperty('--fh', faceH + 'px');
+  [prism, document.getElementById('prism-mirror')].forEach(function (p) {
+    p.style.width = faceW + 'px'; p.style.height = faceH + 'px';
+    p.style.marginLeft = (-faceW / 2) + 'px'; p.style.marginTop = (-faceH / 2) + 'px';
+    var faces = p.children;
+    for (var i = 0; i < faces.length; i++) {
+      var apothem = faceW * 0.866;
+      faces[i].style.transform = 'rotateY(' + (i * 60) + 'deg) translateZ(' + apothem + 'px)';
+    }
+  });
+  document.getElementById('mirror').style.top = '44%';
+}
+
+function posterHTML(pr, i) {
+  return '<div class="face" data-i="' + i + '">' +
+    '<div class="poster ' + pr.p + '">' +
+      '<div class="art"></div>' +
+      '<div class="num">' + pr.num + '</div>' +
+      '<h3>' + pr.title + '</h3>' +
+      '<div class="meta">' + pr.city + ' · ' + pr.year + '</div>' +
+      '<div class="type">' + pr.type + '</div>' +
+    '</div>' +
+    '<div class="shade"></div></div>';
+}
+PROJECTS.forEach(function (pr, i) { prism.insertAdjacentHTML('beforeend', posterHTML(pr, i)); });
+
+/* reflection: clone prism by JS */
+var mirrorPrism = document.getElementById('prism-mirror');
+mirrorPrism.innerHTML = prism.innerHTML;
+mirrorPrism.style.transform = ''; // rotation driven in step() along with main
+var mirrorFaces = mirrorPrism.children;
+
+var faces = prism.children;
+var shades = [], mShades = [];
+for (var i = 0; i < faces.length; i++) { shades.push(faces[i].querySelector('.shade')); mShades.push(mirrorFaces[i].querySelector('.shade')); }
+
+/* ---------- spring rotation (k 42, d 9.5) ---------- */
+function Spring(v, k, d) { this.x = v; this.v = 0; this.t = v; this.k = k; this.d = d; }
+Spring.prototype.step = function (dt) {
+  if (REDUCED) { this.x = this.t; this.v = 0; return false; }
+  if (this.x === this.t && this.v === 0) return false;
+  this.v += (-this.k * (this.x - this.t) - this.d * this.v) * dt;
+  this.x += this.v * dt;
+  if (Math.abs(this.x - this.t) < 0.01 && Math.abs(this.v) < 0.03) { this.x = this.t; this.v = 0; }
+  return true;
+};
+var rot = new Spring(0, 42, 9.5);
+
+var current = 0;
+function norm(a) { a = (a + 180) % 360; if (a < 0) a += 360; return a - 180; }
+function indexAt(angle) { var i = Math.round(-angle / 60) % 6; return (i + 6) % 6; }
+
+function frontTarget(i) { // bring face i front from nearest wrap of current angle
+  var t = -i * 60;
+  while (t - rot.x > 180) t -= 360;
+  while (t - rot.x < -180) t += 360;
+  return t;
+}
+function goTo(i) { rot.t = frontTarget(i); }
+
+var ambient = document.getElementById('ambient');
+function render() {
+  var a = rot.x;
+  prism.style.transform = 'rotateY(' + a + 'deg)';
+  mirrorPrism.style.transform = 'rotateY(' + a + 'deg)';
+  var rad;
+  for (var i = 0; i < 6; i++) {
+    rad = (a + i * 60) * Math.PI / 180;
+    var sh = (1 - Math.cos(rad)) / 2 * 0.74;
+    shades[i].style.opacity = sh.toFixed(3);
+    mShades[i].style.opacity = sh.toFixed(3);
+  }
+  var ar = a * Math.PI / 180;
+  ambient.style.setProperty('--ambx', (50 + Math.sin(ar) * 22).toFixed(1) + '%');
+  ambient.style.setProperty('--amby', (40 + Math.cos(2 * ar) * 12).toFixed(1) + '%');
+  var idx = indexAt(a);
+  if (idx !== current) setActive(idx);
+}
+
+/* ---------- info panel ---------- */
+var info = document.getElementById('info');
+var swap = document.getElementById('swap');
+var dots = document.getElementById('dots');
+PROJECTS.forEach(function (pr, i) {
+  var b = document.createElement('button');
+  b.setAttribute('role', 'tab'); b.setAttribute('aria-label', pr.title.replace(/<[^>]+>/g, ''));
+  b.addEventListener('click', function () { goTo(i); });
+  dots.appendChild(b);
+});
+function fill(i) {
+  var pr = PROJECTS[i];
+  document.getElementById('i-kick').textContent = pr.kick;
+  document.getElementById('i-title').innerHTML = pr.title;
+  document.getElementById('i-desc').textContent = pr.desc;
+  document.getElementById('i-client').textContent = pr.client;
+  document.getElementById('i-mat').textContent = pr.material;
+  document.getElementById('i-status').textContent = pr.status;
+  document.getElementById('c-num').textContent = pr.num;
+  ambient.style.setProperty('--ambc', pr.accent);
+  for (var d = 0; d < dots.children.length; d++) dots.children[d].classList.toggle('on', d === i);
+}
+var swapTimer = null;
+function setActive(i) {
+  current = i;
+  if (REDUCED) { fill(i); return; }
+  clearTimeout(swapTimer);
+  info.classList.remove('entering');
+  info.classList.add('leaving');
+  swapTimer = setTimeout(function () {
+    fill(i);
+    info.classList.remove('leaving');
+    info.classList.add('entering');
+    void swap.offsetWidth;
+    requestAnimationFrame(function () {
+      info.classList.remove('entering');
+    });
+  }, 260);
+}
+fill(0);
+
+/* ---------- drag / click / wheel / keys ---------- */
+var stage = document.getElementById('stage');
+var dragging = false, pid = null, lastX = 0, lastT = 0, vel = 0, moved = 0;
+stage.addEventListener('pointerdown', function (e) {
+  dragging = true; pid = e.pointerId; lastX = e.clientX; lastT = performance.now();
+  vel = 0; moved = 0;
+  stage.classList.add('dragging');
+  stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener('pointermove', function (e) {
+  if (!dragging || e.pointerId !== pid) return;
+  var dx = e.clientX - lastX, now = performance.now();
+  var dt = Math.max(1, now - lastT);
+  rot.x -= dx * 0.35; rot.v = -dx * 0.35 / (dt / 1000); rot.t = rot.x;
+  vel = (-dx * 0.35) / (dt / 1000);
+  lastX = e.clientX; lastT = now;
+  moved += Math.abs(dx);
+  render();
+});
+function endDrag(e) {
+  if (!dragging) return;
+  dragging = false; stage.classList.remove('dragging');
+  if (moved < 5 && e) { // treat as click: face under pointer comes to front
+    var t = e.target.closest ? e.target.closest('.face') : null;
+    if (t) { goTo(+t.dataset.i); return; }
+  }
+  var projected = Math.max(-150, Math.min(150, vel * 0.16));   // ±2.5 faces max
+  rot.t = Math.round((rot.x + projected) / 60) * 60;
+  if (REDUCED) { rot.x = rot.t; render(); }
+}
+stage.addEventListener('pointerup', endDrag);
+stage.addEventListener('pointercancel', function () { endDrag(null); });
+
+addEventListener('keydown', function (e) {
+  if (e.key === 'ArrowRight') { goTo((current + 1) % 6); }
+  else if (e.key === 'ArrowLeft') { goTo((current + 5) % 6); }
+  else if (e.key >= '1' && e.key <= '6') { goTo(+e.key - 1); }
+});
+var wheelCool = 0, wheelAcc = 0;
+addEventListener('wheel', function (e) {
+  var dx = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : 0;
+  if (!dx) return;
+  var now = performance.now();
+  if (now - wheelCool < 220) { wheelAcc += dx; return; }
+  if (Math.abs(dx) < 8) return;
+  wheelCool = now;
+  goTo((current + (dx > 0 ? 1 : 5)) % 6);
+}, { passive: true });
+
+/* ---------- engine ---------- */
+var last = performance.now();
+(function frame(now) {
+  var dt = Math.min(0.045, (now - last) / 1000); last = now;
+  if (dragging) rot.t = rot.x;
+  rot.step(dt);
+  render();
+  requestAnimationFrame(frame);
+})(performance.now());
+
+sizeFaces();
+addEventListener('resize', sizeFaces);
+</script>
+</body>
+</html>

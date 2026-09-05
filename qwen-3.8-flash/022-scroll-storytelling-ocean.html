@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Descent — From the Surface to the Challenger Deep</title>
+<style>
+  :root{
+    --ink:#eaf6ff;
+    --accent:#9be7ff;
+    --rays:1;
+    --serif:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif;
+    --mono:ui-monospace,'Cascadia Mono','Courier New',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:auto}
+  body{
+    font-family:var(--serif);
+    color:var(--ink);
+    background:#000104;
+    overflow-x:hidden;
+  }
+
+  /* ============ fixed world ============ */
+  #world{position:fixed;inset:0;z-index:0;overflow:hidden}
+  #bg{position:absolute;inset:0;background:linear-gradient(180deg,#7fe0ef,#1f8fb8)}
+
+  /* surface band */
+  .surface{
+    position:absolute;left:-5%;right:-5%;top:-34px;height:96px;
+    background:linear-gradient(180deg,rgba(240,255,255,.85),rgba(160,235,255,.35) 55%,rgba(120,220,255,0));
+    filter:blur(14px);
+    opacity:var(--rays);
+    animation:sheen 7s ease-in-out infinite alternate;
+  }
+  @keyframes sheen{from{transform:translateY(0) scaleY(1);opacity:calc(var(--rays)*.9)}to{transform:translateY(8px) scaleY(1.25);opacity:calc(var(--rays)*.6)}}
+
+  /* god rays */
+  .rays{position:absolute;inset:0;mix-blend-mode:soft-light;opacity:var(--rays);pointer-events:none}
+  .ray{
+    position:absolute;top:-8%;height:120%;width:120px;
+    background:linear-gradient(180deg,rgba(235,252,255,.75),rgba(210,245,255,.18) 55%,rgba(190,240,255,0) 85%);
+    filter:blur(6px);
+    transform-origin:top center;
+    animation:sway 14s ease-in-out infinite alternate;
+  }
+  .ray:nth-child(1){left:12%;transform:skewX(-14deg);animation-delay:0s}
+  .ray:nth-child(2){left:34%;width:80px;transform:skewX(-10deg);animation-delay:-3.5s;opacity:.8}
+  .ray:nth-child(3){left:58%;width:150px;transform:skewX(-18deg);animation-delay:-7s;opacity:.65}
+  .ray:nth-child(4){left:79%;width:70px;transform:skewX(-8deg);animation-delay:-10.5s;opacity:.75}
+  @keyframes sway{
+    from{transform:skewX(-16deg) translateX(0) scaleX(1);opacity:.55}
+    to{transform:skewX(-6deg) translateX(46px) scaleX(1.18);opacity:1}
+  }
+
+  /* caustic pools */
+  .caustics{position:absolute;inset:0 0 auto 0;height:64%;opacity:calc(var(--rays)*.8);pointer-events:none;filter:blur(10px)}
+  .pool{
+    position:absolute;border-radius:50%;
+    background:radial-gradient(closest-side,rgba(210,250,255,.30),rgba(180,240,255,.08) 60%,transparent);
+    animation:drift 18s ease-in-out infinite alternate;
+  }
+  .pool:nth-child(1){left:8%;top:2%;width:340px;height:120px}
+  .pool:nth-child(2){left:44%;top:-2%;width:460px;height:150px;animation-duration:23s;animation-delay:-6s}
+  .pool:nth-child(3){left:72%;top:6%;width:280px;height:110px;animation-duration:20s;animation-delay:-12s}
+  @keyframes drift{from{transform:translateX(-34px) scaleX(.9);opacity:.55}to{transform:translateX(44px) scaleX(1.25);opacity:1}}
+
+  /* creature stage */
+  #stage{position:absolute;inset:0;pointer-events:none}
+  .creature{position:absolute;left:var(--x);will-change:transform,opacity;opacity:0}
+  .creature svg{display:block;width:var(--w);height:auto;filter:drop-shadow(0 8px 24px rgba(0,0,0,.35))}
+  .sway-a{animation:crSway 6.2s ease-in-out infinite alternate;transform-origin:50% 40%}
+  .sway-b{animation:crSway 4.4s ease-in-out infinite alternate;transform-origin:50% 50%}
+  .bob{animation:crBob 7.5s ease-in-out infinite alternate;transform-origin:50% 50%}
+  .bob-rot{animation:crBobRot 9s ease-in-out infinite alternate;transform-origin:50% 50%}
+  .pulse{animation:crPulse 3.2s ease-in-out infinite alternate;transform-origin:50% 30%}
+  .pulse-fast{animation:crPulse 1.6s ease-in-out infinite alternate}
+  @keyframes crSway{from{transform:translateX(-14px) rotate(-2deg)}to{transform:translateX(16px) rotate(2.4deg)}}
+  @keyframes crBob{from{transform:translateY(-16px)}to{transform:translateY(14px)}}
+  @keyframes crBobRot{from{transform:translateY(-12px) rotate(-3deg)}to{transform:translateY(16px) rotate(2.5deg)}}
+  @keyframes crPulse{from{transform:scale(.96);opacity:.75}to{transform:scale(1.05);opacity:1}}
+  .photophore{animation:phor 1.9s ease-in-out infinite alternate}
+  .photophore.p2{animation-delay:-.6s}
+  .photophore.p3{animation-delay:-1.2s}
+  @keyframes phor{from{opacity:.25}to{opacity:1}}
+
+  /* bioluminescence canvas */
+  #bio{position:absolute;inset:0;width:100%;height:100%;opacity:0}
+
+  /* ============ HUD ============ */
+  #hud{position:fixed;inset:0;z-index:40;pointer-events:none;font-family:var(--mono)}
+  .meter{
+    position:absolute;left:26px;top:12vh;bottom:12vh;width:2px;
+    background:linear-gradient(180deg,rgba(155,231,255,.5),rgba(155,231,255,.12));
+    border-radius:1px;
+  }
+  .meter .tick{position:absolute;left:0;width:14px;height:1px;background:rgba(155,231,255,.55)}
+  .meter .tick b{
+    position:absolute;left:20px;top:-6px;font-weight:400;font-size:10px;letter-spacing:.08em;
+    color:rgba(234,246,255,.55);white-space:nowrap;
+  }
+  .meter .marker{
+    position:absolute;left:50%;width:13px;height:13px;border-radius:50%;
+    background:radial-gradient(circle at 38% 34%,#fff,#9be7ff 55%,#189fd0);
+    box-shadow:0 0 14px 4px rgba(155,231,255,.75),0 0 34px 10px rgba(155,231,255,.28);
+    transform:translate(-50%,-50%);top:0;
+  }
+  .readout{
+    position:absolute;top:24px;right:28px;text-align:right;line-height:1.45;
+  }
+  .readout .depth{font-size:34px;font-weight:600;color:var(--ink);letter-spacing:.02em;text-shadow:0 2px 14px rgba(0,40,80,.6)}
+  .readout .depth small{font-size:14px;color:rgba(234,246,255,.6);margin-left:3px}
+  .readout .row{font-size:11px;color:rgba(234,246,255,.66);letter-spacing:.06em}
+  .readout .row b{color:var(--accent);font-weight:600}
+  .zone-label{
+    position:absolute;left:50%;bottom:34px;transform:translateX(-50%);
+    font-size:11px;letter-spacing:.34em;text-transform:uppercase;color:var(--accent);
+    text-shadow:0 0 18px rgba(155,231,255,.5);white-space:nowrap;
+  }
+  .hint{
+    position:absolute;left:50%;bottom:64px;transform:translateX(-50%);
+    display:flex;flex-direction:column;align-items:center;gap:10px;
+    font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:rgba(234,246,255,.7);
+    transition:opacity .8s ease;
+  }
+  .hint.gone{opacity:0}
+  .hint i{display:block;width:1px;height:44px;position:relative;overflow:hidden;
+    background:linear-gradient(180deg,rgba(155,231,255,0),rgba(155,231,255,.14))}
+  .hint i::after{
+    content:"";position:absolute;left:0;top:-50%;width:1px;height:50%;
+    background:linear-gradient(180deg,rgba(155,231,255,0),#9be7ff);
+    animation:fall 1.9s cubic-bezier(.5,0,.5,1) infinite;
+  }
+  @keyframes fall{from{top:-50%}to{top:110%}}
+
+  /* ============ scroll document ============ */
+  #doc{position:relative;z-index:10}
+  section{min-height:160vh;display:flex;align-items:center;justify-content:center;padding:10vh 24px}
+  section.hero,section.finale{min-height:110vh}
+
+  .caption{
+    width:min(560px,92vw);
+    background:rgba(2,10,24,.38);
+    border-radius:18px;
+    border:1px solid rgba(255,255,255,.16);
+    -webkit-backdrop-filter:blur(14px);
+    backdrop-filter:blur(14px);
+    padding:34px 38px 30px;
+    box-shadow:0 30px 80px rgba(0,4,12,.45);
+    opacity:0;transform:translateY(46px);
+    transition:opacity .9s ease,transform .9s cubic-bezier(.2,.8,.2,1);
+  }
+  .caption.shown{opacity:1;transform:none}
+  .caption .tag{font-family:var(--mono);font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
+  .caption h2{font-size:clamp(26px,4vw,38px);font-weight:500;letter-spacing:.01em;margin-bottom:16px}
+  .caption h2 span{font-style:italic;color:rgba(234,246,255,.75)}
+  .caption p{font-size:15.5px;line-height:1.75;color:rgba(234,246,255,.86);margin-bottom:13px}
+  .facts{
+    display:flex;gap:26px;flex-wrap:wrap;margin-top:18px;padding-top:16px;
+    border-top:1px solid rgba(155,231,255,.18);
+    font-family:var(--mono);
+  }
+  .facts div{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:rgba(234,246,255,.5)}
+  .facts b{display:block;font-size:15px;font-weight:600;letter-spacing:.02em;color:var(--ink);margin-top:4px;text-transform:none}
+
+  /* hero */
+  .hero .caption,.finale .caption{background:transparent;border-color:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none;text-align:center}
+  .hero h1{
+    font-size:clamp(56px,12vw,150px);font-weight:500;letter-spacing:.02em;line-height:1;
+    text-shadow:0 6px 60px rgba(4,40,80,.55);
+  }
+  .hero .sub{margin-top:22px;font-size:clamp(15px,2.2vw,19px);font-style:italic;color:rgba(234,246,255,.85)}
+  .hero .sub b{font-family:var(--mono);font-style:normal;font-weight:600;color:var(--accent)}
+  .hero .tag{display:block;margin-bottom:26px;font-family:var(--mono);font-size:10px;letter-spacing:.36em;text-transform:uppercase;color:var(--accent)}
+
+  .finale .caption{font-size:clamp(19px,3vw,26px);font-style:italic;line-height:1.7;color:rgba(234,246,255,.92);max-width:620px}
+  .finale .tag{display:block;margin-bottom:26px;font-family:var(--mono);font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--accent)}
+  .finale .endmark{margin-top:30px;font-family:var(--mono);font-size:10px;letter-spacing:.4em;text-transform:uppercase;color:rgba(234,246,255,.4)}
+
+  @media (max-width:640px){
+    .meter .tick b{display:none}
+    .zone-label{display:none}
+    .meter{left:14px}
+    .readout{top:16px;right:14px}
+    .readout .depth{font-size:26px}
+    .caption{padding:26px 22px 22px}
+    .facts{gap:16px}
+  }
+  @media (min-width:2200px){
+    section{min-height:170vh}
+    .caption{width:min(640px,80vw)}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .surface,.ray,.pool,.sway-a,.sway-b,.bob,.bob-rot,.pulse,.pulse-fast,.photophore,.hint i::after{animation:none !important}
+    .caption{transition:opacity .3s ease;transform:none}
+  }
+</style>
+</head>
+<body>
+
+<div id="world" aria-hidden="true">
+  <div id="bg"></div>
+  <div class="caustics"><div class="pool"></div><div class="pool"></div><div class="pool"></div></div>
+  <div class="rays"><div class="ray"></div><div class="ray"></div><div class="ray"></div><div class="ray"></div></div>
+  <div class="surface"></div>
+  <canvas id="bio"></canvas>
+  <div id="stage">
+
+    <!-- sardine school -->
+    <div class="creature" data-y="1.76" data-s="0.9" style="--x:14%;--w:280px">
+      <svg viewBox="0 0 280 160" class="sway-a"><g fill="rgba(18,52,84,.72)">
+        <path d="M20 40 q16-8 30 0 q-14 8-30 0 M50 40 l8-6 v12z"/>
+        <path d="M70 24 q16-8 30 0 q-14 8-30 0 M100 24 l8-6 v12z"/>
+        <path d="M110 44 q16-8 30 0 q-14 8-30 0 M140 44 l8-6 v12z"/>
+        <path d="M46 70 q16-8 30 0 q-14 8-30 0 M76 70 l8-6 v12z"/>
+        <path d="M96 86 q16-8 30 0 q-14 8-30 0 M126 86 l8-6 v12z"/>
+        <path d="M150 26 q16-8 30 0 q-14 8-30 0 M180 26 l8-6 v12z"/>
+        <path d="M178 62 q16-8 30 0 q-14 8-30 0 M208 62 l8-6 v12z"/>
+        <path d="M140 112 q16-8 30 0 q-14 8-30 0 M170 112 l8-6 v12z"/>
+        <path d="M206 96 q16-8 30 0 q-14 8-30 0 M236 96 l8-6 v12z"/>
+        <path d="M226 40 q16-8 30 0 q-14 8-30 0 M256 40 l8-6 v12z"/>
+      </g></svg>
+    </div>
+
+    <!-- sea turtle -->
+    <div class="creature" data-y="2.03" data-s="0.85" style="--x:64%;--w:200px">
+      <svg viewBox="0 0 200 170" class="bob-rot">
+        <g fill="rgba(14,44,60,.82)">
+          <ellipse cx="96" cy="92" rx="52" ry="42"/>
+          <path d="M96 50 q10-26 30-30 q-4 20-18 32z"/>
+          <path d="M60 60 q-30-18-48-8 q14 18 38 24z"/>
+          <path d="M56 122 q-28 14-44 6 q10-18 34-22z"/>
+          <path d="M136 118 q22 22 40 20 q-6-20-30-32z"/>
+          <circle cx="146" cy="66" r="15"/>
+          <path d="M158 62 q7-2 8 3 q-6 3-8-3z" fill="rgba(200,240,250,.6)"/>
+          <path d="M120 74 q14 16 14 36 q-18-8-26-28z" fill="rgba(8,28,42,.7)"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- manta ray -->
+    <div class="creature" data-y="2.39" data-s="0.9" style="--x:28%;--w:260px">
+      <svg viewBox="0 0 260 150" class="sway-b">
+        <path fill="rgba(12,34,58,.8)" d="M130 34 C 96 24 40 18 8 62 C 52 66 84 78 104 96 C 116 108 124 118 130 126 C 136 118 144 108 156 96 C 176 78 208 66 252 62 C 220 18 164 24 130 34 Z"/>
+        <path fill="rgba(12,34,58,.8)" d="M124 30 h12 l-2 14 h-8z"/>
+        <path fill="none" stroke="rgba(12,34,58,.75)" stroke-width="3" d="M130 126 C 132 134 130 142 126 149"/>
+        <circle cx="112" cy="46" r="3" fill="rgba(180,225,245,.5)"/>
+        <circle cx="148" cy="46" r="3" fill="rgba(180,225,245,.5)"/>
+      </svg>
+    </div>
+
+    <!-- glowing jellyfish -->
+    <div class="creature" data-y="2.53" data-s="0.7" style="--x:74%;--w:150px">
+      <svg viewBox="0 0 150 210" class="pulse">
+        <defs>
+          <radialGradient id="jg" cx="50%" cy="38%" r="70%">
+            <stop offset="0" stop-color="rgba(190,255,255,.95)"/>
+            <stop offset=".55" stop-color="rgba(80,200,235,.7)"/>
+            <stop offset="1" stop-color="rgba(30,90,160,.25)"/>
+          </radialGradient>
+        </defs>
+        <path fill="url(#jg)" d="M20 88 C 20 40 48 16 75 16 C 102 16 130 40 130 88 C 118 80 112 90 104 86 C 96 82 92 90 84 86 C 76 82 68 92 60 86 C 52 80 42 92 34 86 C 30 84 25 90 20 88 Z"/>
+        <g fill="none" stroke="rgba(150,235,255,.65)" stroke-width="2">
+          <path d="M40 92 C 34 130 46 150 38 196"/>
+          <path d="M62 94 C 58 136 68 158 60 204"/>
+          <path d="M88 94 C 92 136 82 158 90 202"/>
+          <path d="M110 92 C 116 128 104 152 112 190"/>
+        </g>
+        <circle cx="75" cy="52" r="9" fill="rgba(240,255,255,.8)"/>
+      </svg>
+    </div>
+
+    <!-- lanternfish -->
+    <div class="creature" data-y="2.71" data-s="0.65" style="--x:16%;--w:190px">
+      <svg viewBox="0 0 190 90" class="sway-a">
+        <path fill="rgba(10,26,48,.9)" d="M14 46 C 44 18 118 18 158 40 C 170 28 178 24 184 22 C 182 36 184 48 190 56 C 178 54 168 56 158 52 C 118 72 44 74 14 46 Z"/>
+        <circle cx="46" cy="42" r="6" fill="rgba(190,230,250,.85)"/>
+        <g fill="#8ef3ff">
+          <circle class="photophore" cx="60" cy="58" r="3"/>
+          <circle class="photophore p2" cx="82" cy="62" r="3"/>
+          <circle class="photophore p3" cx="104" cy="62" r="3"/>
+          <circle class="photophore p2" cx="126" cy="58" r="2.6"/>
+          <circle class="photophore" cx="146" cy="52" r="2.4"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- sperm whale (640px) -->
+    <div class="creature" data-y="2.81" data-s="0.55" style="--x:50%;--w:640px;margin-left:-320px">
+      <svg viewBox="0 0 640 260" class="bob">
+        <path fill="rgba(8,20,40,.88)" d="M12 92 C 60 58 140 44 210 48 C 330 54 470 84 560 118 C 590 130 612 124 634 96 C 628 140 610 156 580 158 C 500 196 380 220 260 218 C 170 216 90 200 30 172 C 14 164 8 152 10 138 C 24 140 40 136 46 128 C 34 120 20 108 12 92 Z"/>
+        <path fill="rgba(8,20,40,.88)" d="M210 190 C 200 220 186 240 168 252 C 186 244 208 226 224 200 Z"/>
+        <circle cx="72" cy="128" r="5" fill="rgba(150,210,240,.4)"/>
+        <path stroke="rgba(150,200,240,.14)" fill="none" stroke-width="2" d="M240 60 C 360 80 460 104 540 128"/>
+      </svg>
+    </div>
+
+    <!-- anglerfish -->
+    <div class="creature" data-y="3.5" data-s="0.6" style="--x:68%;--w:240px">
+      <svg viewBox="0 0 240 170" class="sway-b">
+        <defs>
+          <radialGradient id="lure"><stop offset="0" stop-color="#fffbe0"/><stop offset=".4" stop-color="#ffe98a"/><stop offset="1" stop-color="rgba(255,220,90,0)"/></radialGradient>
+        </defs>
+        <circle cx="196" cy="30" r="26" fill="url(#lure)" class="pulse-fast"/>
+        <circle cx="196" cy="30" r="5" fill="#fff6c9"/>
+        <path d="M60 74 C 110 42 170 46 196 62" fill="none" stroke="rgba(14,30,52,.95)" stroke-width="4"/>
+        <path fill="rgba(14,30,52,.95)" d="M196 62 C 216 84 212 118 186 134 C 152 154 92 148 58 126 C 82 122 96 114 100 106 C 78 104 62 96 56 84 C 40 90 26 90 14 82 C 32 74 46 64 60 74 Z"/>
+        <path fill="rgba(235,245,255,.9)" d="M70 116 l7 12 7-12z M90 122 l7 12 7-12z M110 124 l7 12 7-12z M28 84 l9 6 -9 6z"/>
+        <circle cx="150" cy="88" r="7" fill="rgba(210,235,250,.9)"/>
+        <circle cx="151" cy="88" r="3" fill="rgba(8,16,30,.95)"/>
+      </svg>
+    </div>
+
+    <!-- Atolla jelly -->
+    <div class="creature" data-y="3.55" data-s="0.5" style="--x:26%;--w:220px">
+      <svg viewBox="0 0 220 260" class="pulse">
+        <path fill="rgba(158,18,34,.8)" d="M18 96 C 18 48 52 26 110 26 C 168 26 202 48 202 96 C 186 88 176 98 162 92 C 148 86 140 96 126 92 C 112 88 100 98 86 92 C 72 86 58 98 44 92 C 34 88 26 92 18 96 Z"/>
+        <path fill="none" stroke="rgba(255,90,110,.6)" stroke-width="1.6" d="M56 100 C 50 140 60 170 52 200 M92 100 C 96 148 86 180 94 210 M138 98 C 132 146 144 176 136 204 M172 96 C 178 136 168 166 176 194"/>
+        <path fill="none" stroke="rgba(255,120,140,.85)" stroke-width="2.4" d="M112 96 C 120 150 104 200 118 254"/>
+        <circle cx="110" cy="60" r="7" fill="rgba(255,170,190,.75)" class="pulse-fast"/>
+      </svg>
+    </div>
+
+    <!-- snailfish -->
+    <div class="creature" data-y="3.97" data-s="0.45" style="--x:58%;--w:150px">
+      <svg viewBox="0 0 150 90" class="sway-a">
+        <path fill="rgba(226,224,235,.78)" d="M10 44 C 34 24 76 22 104 34 C 116 24 126 18 140 14 C 134 30 136 44 144 56 C 128 54 118 52 108 48 C 76 62 34 64 10 44 Z"/>
+        <path fill="rgba(250,250,255,.5)" d="M10 44 C 30 52 56 56 78 54 C 56 60 28 56 10 44 Z"/>
+        <circle cx="36" cy="40" r="3.4" fill="rgba(40,40,60,.85)"/>
+      </svg>
+    </div>
+
+  </div>
+</div>
+
+<div id="hud">
+  <div class="meter" id="meter">
+    <div class="marker" id="marker"></div>
+  </div>
+  <div class="readout">
+    <div class="depth"><span id="rDepth">0</span><small>m</small></div>
+    <div class="row">PRESSURE <b id="rPress">1.0</b> atm</div>
+    <div class="row">TEMP <b id="rTemp">24.0</b> °C</div>
+    <div class="row">SUNLIGHT <b id="rSun">100</b> %</div>
+  </div>
+  <div class="zone-label" id="zoneLabel">Surface — Pacific Frontier</div>
+  <div class="hint" id="hint"><span>Scroll to descend</span><i></i></div>
+</div>
+
+<main id="doc">
+  <section class="hero" data-d0="0" data-d1="80">
+    <div class="caption">
+      <span class="tag">0 m · 1 atm · 24 °C</span>
+      <h1>Descent</h1>
+      <p class="sub">A single continuous dive from the sunlit surface of the sea to the floor of the Challenger Deep — <b>10,935 metres</b> below. The ocean keeps everything below the waterline in darkness; nearly all of it, in cold.</p>
+    </div>
+  </section>
+
+  <section data-d0="80" data-d1="200">
+    <div class="caption">
+      <p class="tag">Zone I · 0 – 200 m</p>
+      <h2>Epipelagic <span>— the sunlight zone</span></h2>
+      <p>This thin lens of lit water is the ocean's whole engine room. Enough light reaches the top two hundred metres for photosynthesis, and almost every food web in the sea — down to the last hadal amphipod — runs on the energy fixed here, by phytoplankton that together produce roughly half the oxygen you will ever breathe.</p>
+      <p>It is also the warmest and most crowded layer: tuna, turtles, mantas and sardine schools live their entire lives within it. Schools flash and fold like weather; a hawksbill turtle will spend eighty years never knowing a deeper place than this.</p>
+      <div class="facts">
+        <div>Light<b>100 → 1 %</b></div>
+        <div>Temperature<b>24 – 20 °C</b></div>
+        <div>Pressure<b>1 – 21 atm</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-d0="200" data-d1="1000">
+    <div class="caption">
+      <p class="tag">Zone II · 200 – 1,000 m</p>
+      <h2>Mesopelagic <span>— the twilight zone</span></h2>
+      <p>Below the last useful photon, colour drains away: red light is gone by fifteen metres, orange by forty, and everything that remains is blue. The twilight zone is lit instead by animals — nearly every creature here makes its own light, from rows of photophores along a lanternfish's belly to the counter-illuminations that erase a silhouette against the faint glow above.</p>
+      <p>Every night this zone empties upward: billions of tonnes of fish, squid and krill rise to feed under darkness in the diel vertical migration, the largest coordinated movement of animals on the planet — and one of the largest carbon transfers, pumping carbon to the deep like a slow biological conveyor.</p>
+      <div class="facts">
+        <div>Light<b>1 % → none</b></div>
+        <div>Temperature<b>20 → 4 °C</b></div>
+        <div>Pressure<b>21 – 101 atm</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-d0="1000" data-d1="4000">
+    <div class="caption">
+      <p class="tag">Zone III · 1,000 – 4,000 m</p>
+      <h2>Bathypelagic <span>— the midnight zone</span></h2>
+      <p>Total darkness, near-freezing water, and a food economy based entirely on rain: the dead things, scales, mucus and pellets that fall from the sunlit world above, nicknamed marine snow. An anglerfish waits in it, dangling a bulb of bacterial light; a sperm whale dives through it, hunting giant squid by sonar in pressure that crushes air spaces to nothing.</p>
+      <p>About every few decades a whale dies in this zone and lands on the abyssal floor below — a whale fall that can feed an entire local ecosystem for half a century, its own sun in the dark.</p>
+      <div class="facts">
+        <div>Light<b>biological only</b></div>
+        <div>Temperature<b>4 °C</b></div>
+        <div>Pressure<b>101 – 401 atm</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-d0="4000" data-d1="6000">
+    <div class="caption">
+      <p class="tag">Zone IV · 4,000 – 6,000 m</p>
+      <h2>Abyssopelagic <span>— the abyss</span></h2>
+      <p>The abyssal plains cover more than half the planet's surface and are its least explored terrain. The water here is a uniform, motionless 2–3 °C — the deep ocean's common room, stirred only by slow currents older than the ice ages. An Atolla jelly rings itself with a burgundy alarm display: when attacked, it fires a wheel of bioluminescence to attract something bigger to eat the attacker.</p>
+      <p>On the floor below, sea cucumbers walk the sediment like vacuum cleaners, tripod fish stand on stilted fins facing the current, and life is sparse, patient, and evenly distributed — everywhere, barely.</p>
+      <div class="facts">
+        <div>Light<b>none</b></div>
+        <div>Temperature<b>2 – 3 °C</b></div>
+        <div>Pressure<b>401 – 601 atm</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-d0="6000" data-d1="10935">
+    <div class="caption">
+      <p class="tag">Zone V · 6,000 – 10,935 m</p>
+      <h2>Hadal <span>— the trenches</span></h2>
+      <p>Named for Hades, the hadal zone exists only in the ocean's subduction trenches — narrow scars where one plate slides beneath another. It is a world of steep walls and freezing sediment. In 2017 a translucent, smiling snailfish was filmed at 8,336 metres in the Izu-Ogasawara Trench, breaking its own record as the deepest fish ever seen; snailfish have been found beyond 8,000 m in five separate trench systems.</p>
+      <p>At the bottom of the Mariana Trench, the water column presses down at over a thousand atmospheres — the weight of a hundred elephants standing on a postage stamp — and life persists anyway: amphipods swarm a fallen whale bone in minutes, and the sediment teems with foraminifera the size of fists.</p>
+      <div class="facts">
+        <div>Light<b>none</b></div>
+        <div>Temperature<b>1 – 4 °C</b></div>
+        <div>Pressure<b>601 – 1,094 atm</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="finale" data-d0="10935" data-d1="10935">
+    <div class="caption">
+      <span class="tag">Challenger Deep · 10,935 m</span>
+      <p>"It is cold, and it is dark, and it is quiet, and it is alive."</p>
+      <p class="endmark">— end of descent —</p>
+    </div>
+  </section>
+</main>
+
+<script>
+(function(){
+  const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = id => document.getElementById(id);
+  const bg=$('bg'), marker=$('marker'), meter=$('meter'),
+        rDepth=$('rDepth'), rPress=$('rPress'), rTemp=$('rTemp'), rSun=$('rSun'),
+        zoneLabel=$('zoneLabel'), hint=$('hint'), world=document.documentElement;
+
+  /* ---------- depth-meter ticks ---------- */
+  const MAXD=10935;
+  [0,200,1000,4000,6000,10935].forEach(d=>{
+    const t=document.createElement('div');
+    t.className='tick';
+    t.style.top=(d/MAXD*100)+'%';
+    t.innerHTML='<b>'+d.toLocaleString('en-US')+' m</b>';
+    if(d===0) t.style.top='0%', t.querySelector('b').style.top='-4px';
+    meter.appendChild(t);
+  });
+
+  /* ---------- colour interpolation across depth stops ---------- */
+  const STOPS=[
+    {d:0,     top:[127,224,239], bot:[31,143,184]},
+    {d:200,   top:[26,127,176],  bot:[13,63,120]},
+    {d:1000,  top:[11,42,94],    bot:[6,18,52]},
+    {d:4000,  top:[5,10,30],     bot:[2,4,14]},
+    {d:6000,  top:[2,3,10],      bot:[0,1,4]},
+    {d:10935, top:[0,0,0],       bot:[0,0,0]}
+  ];
+  function lerp(a,b,t){return a+(b-a)*t}
+  function mixRGB(a,b,t){return [lerp(a[0],b[0],t),lerp(a[1],b[1],t),lerp(a[2],b[2],t)]}
+  function rgb(c){return 'rgb('+(c[0]|0)+','+(c[1]|0)+','+(c[2]|0)+')'}
+  function bgAt(d){
+    let i=0; while(i<STOPS.length-2 && d>STOPS[i+1].d) i++;
+    const a=STOPS[i],b=STOPS[i+1];
+    const t=Math.min(Math.max((d-a.d)/(b.d-a.d),0),1);
+    return [rgb(mixRGB(a.top,b.top,t)),rgb(mixRGB(a.bot,b.bot,t))];
+  }
+
+  /* ---------- temp piecewise ---------- */
+  const TEMPS=[[0,24],[200,12],[1000,4],[4000,2],[6000,1.6],[10935,1.1]];
+  function tempAt(d){
+    for(let i=0;i<TEMPS.length-1;i++){
+      const [d0,t0]=TEMPS[i],[d1,t1]=TEMPS[i+1];
+      if(d<=d1) return t0+(t1-t0)*(d-d0)/(d1-d0);
+    }
+    return 1.1;
+  }
+
+  /* ---------- zone names ---------- */
+  const ZONES=[[200,'Epipelagic — Sunlight Zone'],[1000,'Mesopelagic — Twilight Zone'],
+               [4000,'Bathypelagic — Midnight Zone'],[6000,'Abyssopelagic — The Abyss'],
+               [1e9,'Hadalpelagic — The Trenches']];
+  function zoneAt(d){
+    if(d<5) return 'Surface — Pacific Frontier';
+    for(const [lim,name] of ZONES) if(d<lim) return name;
+    return 'Challenger Deep — Floor';
+  }
+
+  /* ---------- sections ---------- */
+  const sections=[...document.querySelectorAll('#doc section')].map(s=>({
+    el:s, d0:+s.dataset.d0, d1:+s.dataset.d1
+  }));
+  function smoothstep(t){return t*t*(3-2*t)}
+  function targetDepth(scrollY){
+    const c=scrollY+innerHeight/2;
+    let top=0;
+    for(const s of sections){
+      const h=s.el.offsetHeight;
+      if(c>=top && c<top+h){
+        const t=Math.min(Math.max((c-top)/h,0),1);
+        return s.d0+(s.d1-s.d0)*smoothstep(t);
+      }
+      top+=h;
+    }
+    return c<=innerHeight/2 ? 0 : MAXD;
+  }
+
+  /* ---------- creatures ---------- */
+  const creatures=[...document.querySelectorAll('.creature')].map(el=>({
+    el, y:+el.dataset.y, s:+el.dataset.s, h:0
+  }));
+
+  /* ---------- bioluminescent canvas ---------- */
+  const cv=$('bio'), ctx=cv.getContext('2d');
+  let motes=[], vw=0, vh=0, dpr=1;
+  function seed(){
+    const n=Math.round(Math.min(220, Math.max(60, vw*vh/11000)));
+    motes=[];
+    for(let i=0;i<n;i++){
+      const magenta=Math.random()<0.16;
+      const hue=magenta ? 320+Math.random()*20 : 175+Math.random()*30;
+      motes.push({
+        x:Math.random()*vw, y:Math.random()*vh,
+        r:0.5+Math.random()*2.4,
+        sp:5+Math.random()*13,
+        ph:Math.random()*Math.PI*2,
+        tw:0.4+Math.random()*1.4,
+        hue, sat:magenta?85:80
+      });
+    }
+  }
+  function resize(){
+    dpr=Math.min(2,devicePixelRatio||1);
+    vw=innerWidth; vh=innerHeight;
+    cv.width=vw*dpr; cv.height=vh*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    seed();
+  }
+  addEventListener('resize',resize); resize();
+
+  /* ---------- scroll-to-descend hint ---------- */
+  let scrolled=false;
+
+  /* ---------- main loop ---------- */
+  let depth=0, last=performance.now();
+  function fmt(n,d){return n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d})}
+  function frame(now){
+    const dt=Math.min(0.05,(now-last)/1000); last=now;
+    const sy=window.scrollY;
+
+    const target=targetDepth(sy);
+    depth = REDUCED ? target : depth + (target-depth)*Math.min(1,dt*9);
+
+    /* background + rays */
+    const [top,bot]=bgAt(depth);
+    bg.style.background='linear-gradient(180deg,'+top+','+bot+')';
+    const rays=Math.min(Math.max(1-(depth-90)/130,0),1);
+    world.style.setProperty('--rays',rays.toFixed(3));
+
+    /* HUD */
+    rDepth.textContent=Math.round(depth).toLocaleString('en-US');
+    rPress.textContent=fmt(1+depth/10,1);
+    rTemp.textContent=fmt(tempAt(depth),1);
+    const sunPct=100*Math.exp(-depth/32);
+    rSun.textContent = sunPct>=1 ? fmt(sunPct,1) : (sunPct>=0.001 ? sunPct.toFixed(3) : '<0.001');
+    zoneLabel.textContent=zoneAt(depth);
+    marker.style.top=(depth/MAXD*100)+'%';
+    if(!scrolled && sy>80){scrolled=true; hint.classList.add('gone');}
+
+    /* creatures */
+    for(const c of creatures){
+      if(!c.h) c.h=c.el.firstElementChild.getBoundingClientRect().height;
+      const y=c.y*vh - sy*c.s;
+      const out=Math.max(-400-c.h-y, y-vh-400, 0);
+      const op=Math.max(0,1-out/300);
+      c.el.style.transform='translateY('+y.toFixed(1)+'px)';
+      c.el.style.opacity=op.toFixed(3);
+    }
+
+    /* motes */
+    const bioA = Math.min(Math.max((depth-700)/800,0),1);
+    cv.style.opacity=bioA.toFixed(3);
+    ctx.clearRect(0,0,vw,vh);
+    if(bioA>0.01){
+      ctx.globalCompositeOperation='lighter';
+      for(const m of motes){
+        m.y-=m.sp*dt;
+        m.x+=Math.sin(now/1600+m.ph)*0.08;
+        if(m.y<-14){m.y=vh+14;m.x=Math.random()*vw;}
+        const tw=0.55+0.45*Math.sin(now/560*m.tw+m.ph);
+        const a=tw*0.9;
+        if(m.r>1.7){
+          const g=ctx.createRadialGradient(m.x,m.y,0,m.x,m.y,m.r*7);
+          g.addColorStop(0,'hsla('+m.hue+','+m.sat+'%,78%,'+(a*0.6)+')');
+          g.addColorStop(1,'hsla('+m.hue+','+m.sat+'%,78%,0)');
+          ctx.fillStyle=g;
+          ctx.beginPath();ctx.arc(m.x,m.y,m.r*7,0,7);ctx.fill();
+        }
+        ctx.fillStyle='hsla('+m.hue+','+m.sat+'%,86%,'+a+')';
+        ctx.beginPath();ctx.arc(m.x,m.y,m.r,0,7);ctx.fill();
+      }
+      ctx.globalCompositeOperation='source-over';
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  /* ---------- caption reveal ---------- */
+  const io=new IntersectionObserver(es=>{
+    es.forEach(e=>{ if(e.isIntersecting) e.target.classList.add('shown'); });
+  },{threshold:0.3});
+  document.querySelectorAll('.caption').forEach(c=>io.observe(c));
+})();
+</script>
+</body>
+</html>

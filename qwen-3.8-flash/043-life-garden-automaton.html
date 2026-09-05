@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Garden Automaton — Cellular Horticulture, Plate XIV</title>
+<style>
+  :root{
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+    --cream: #EFE6D0;
+    --cream-dim: rgba(239,230,208,0.55);
+    --gold: #E7B95A;
+    --moss: #7FB069;
+    --coral: #F28E7B;
+    --violet: #A687D1;
+    --ease: 0.35s cubic-bezier(.2,.8,.2,1);
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    overflow:hidden; font-family:var(--serif); color:var(--cream);
+    background: radial-gradient(ellipse 120% 100% at 50% 42%, #241911 0%, #16100B 48%, #0C0805 100%);
+    -webkit-user-select:none; user-select:none;
+  }
+  #bed{ position:fixed; inset:0; display:block; cursor:crosshair; touch-action:none; }
+  #vignette{
+    position:fixed; inset:0; pointer-events:none; z-index:3;
+    background: radial-gradient(ellipse 96% 90% at 50% 46%, rgba(0,0,0,0) 42%, rgba(6,4,2,0.55) 78%, rgba(4,2,1,0.88) 100%);
+  }
+  #grain{
+    position:fixed; inset:0; pointer-events:none; z-index:4; opacity:0.08;
+    mix-blend-mode:overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+    background-size:160px 160px;
+  }
+  .plate{ position:fixed; z-index:5; pointer-events:none; }
+
+  /* header — the journal plate */
+  #head{ top:34px; left:40px; max-width:min(52ch, 62vw); }
+  #kicker{
+    font-family:var(--mono); font-size:9.5px; letter-spacing:0.34em; text-transform:uppercase;
+    color:rgba(239,230,208,0.45); margin-bottom:10px;
+  }
+  h1{
+    font-weight:400; font-size:clamp(24px, 4.2vw, 40px); line-height:1.06; color:#F2EAD8;
+    text-shadow:0 2px 22px rgba(0,0,0,0.6);
+  }
+  h1 em{ font-style:italic; color:var(--gold); text-shadow:0 0 18px rgba(231,185,90,0.35); }
+  #caption{
+    margin-top:12px; font-style:italic; font-size:13px; line-height:1.62;
+    color:var(--cream-dim); max-width:46ch;
+  }
+
+  /* counters */
+  #counters{ top:34px; right:40px; text-align:right; }
+  .counter .lbl{
+    font-family:var(--mono); font-size:9px; letter-spacing:0.3em; text-transform:uppercase;
+    color:rgba(239,230,208,0.45); margin-bottom:3px;
+  }
+  .counter .num{
+    font-family:var(--mono); font-variant-numeric:tabular-nums;
+    font-size:clamp(20px, 2.6vw, 30px); color:#F2EAD8; text-shadow:0 0 16px rgba(0,0,0,0.7);
+  }
+  .counter .unit{ font-style:italic; font-size:12px; color:var(--cream-dim); margin-left:5px; }
+  .counter{ margin-bottom:16px; }
+
+  /* legend */
+  #legend{ left:40px; bottom:34px; font-style:italic; font-size:12.5px; line-height:2; color:var(--cream-dim); }
+  #legend .dot{
+    display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:9px; vertical-align:1px;
+  }
+  #legend .d1{ background:var(--moss);   box-shadow:0 0 8px 1px rgba(127,176,105,0.75); }
+  #legend .d2{ background:var(--coral);  box-shadow:0 0 8px 1px rgba(242,142,123,0.75); }
+  #legend .d3{ background:var(--violet); box-shadow:0 0 8px 1px rgba(166,135,209,0.75); }
+  #legend .d4{ background:var(--gold);   box-shadow:0 0 8px 1px rgba(231,185,90,0.75); }
+  #legend b{ font-weight:400; font-style:normal; font-family:var(--mono); font-size:10px; letter-spacing:0.08em; color:rgba(239,230,208,0.65); }
+
+  /* controls */
+  #controls{
+    right:40px; bottom:34px; pointer-events:auto;
+    display:flex; flex-direction:column; align-items:flex-end; gap:12px;
+  }
+  #tempo-row{ display:flex; align-items:center; gap:12px; }
+  #tempo-lbl{ font-family:var(--mono); font-size:9px; letter-spacing:0.26em; text-transform:uppercase; color:rgba(239,230,208,0.5); }
+  #tempo{
+    -webkit-appearance:none; appearance:none; width:170px; height:20px; background:transparent; cursor:pointer;
+  }
+  #tempo::-webkit-slider-runnable-track{
+    height:3px; border-radius:2px;
+    background:linear-gradient(90deg, rgba(231,185,90,0.7), rgba(231,185,90,0.25));
+  }
+  #tempo::-webkit-slider-thumb{
+    -webkit-appearance:none; width:15px; height:15px; border-radius:50%; margin-top:-6px;
+    background: radial-gradient(circle at 38% 32%, #FFE9B8, var(--gold) 60%, #9a7a2e);
+    box-shadow:0 0 12px 2px rgba(231,185,90,0.65);
+    border:1px solid rgba(255,235,180,0.6);
+  }
+  #tempo::-moz-range-track{ height:3px; border-radius:2px; background:rgba(231,185,90,0.45); }
+  #tempo::-moz-range-thumb{
+    width:14px; height:14px; border-radius:50%; border:1px solid rgba(255,235,180,0.6);
+    background: radial-gradient(circle at 38% 32%, #FFE9B8, var(--gold) 60%, #9a7a2e);
+    box-shadow:0 0 12px 2px rgba(231,185,90,0.65);
+  }
+  #tempo-num{ font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:11px; color:var(--gold); min-width:4.5ch; }
+  #btn-row{ display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+  .pill{
+    font-family:var(--serif); font-size:12.5px; letter-spacing:0.06em;
+    color:var(--cream); padding:8px 17px; border-radius:999px; cursor:pointer;
+    background:rgba(30,20,12,0.55);
+    border:1px solid rgba(239,230,208,0.22);
+    -webkit-backdrop-filter:blur(7px); backdrop-filter:blur(7px);
+    transition:border-color var(--ease), box-shadow var(--ease), color var(--ease), transform var(--ease);
+  }
+  .pill:hover{
+    color:#FFF3D9; border-color:rgba(231,185,90,0.6); transform:translateY(-1px);
+    box-shadow:0 4px 16px rgba(0,0,0,0.45), 0 0 12px rgba(231,185,90,0.18);
+  }
+  .pill:focus-visible{ outline:1px solid var(--gold); outline-offset:2px; }
+  .pill:active{ transform:translateY(0); }
+
+  /* seed drawer */
+  #drawer{
+    position:fixed; right:40px; bottom:118px; z-index:6;
+    width:min(380px, calc(100vw - 80px));
+    padding:20px 20px 16px; border-radius:18px;
+    background:rgba(28,19,11,0.66);
+    border:1px solid rgba(239,230,208,0.18);
+    -webkit-backdrop-filter:blur(14px) saturate(1.2); backdrop-filter:blur(14px) saturate(1.2);
+    box-shadow:0 26px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,240,210,0.12);
+    transform-origin:100% 100%; transform:scale(0.06); opacity:0; pointer-events:none;
+    transition:transform var(--ease), opacity 0.22s ease;
+  }
+  #drawer.open{ transform:scale(1); opacity:1; pointer-events:auto; }
+  #drawer h3{
+    font-weight:400; font-size:13px; letter-spacing:0.24em; text-transform:uppercase;
+    font-family:var(--mono); color:rgba(239,230,208,0.55); margin-bottom:14px;
+  }
+  #packets{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .packet{
+    text-align:left; cursor:pointer; padding:12px 14px; border-radius:10px;
+    background:rgba(239,230,208,0.045);
+    border:1px dashed rgba(239,230,208,0.35);
+    color:var(--cream); transition:border-color var(--ease), background var(--ease), transform var(--ease);
+  }
+  .packet:hover{ border-color:var(--gold); background:rgba(231,185,90,0.08); transform:translateY(-2px); }
+  .packet:focus-visible{ outline:1px solid var(--gold); outline-offset:2px; }
+  .packet .nm{ font-family:var(--serif); font-size:14.5px; }
+  .packet .tg{ font-family:var(--serif); font-style:italic; font-size:11px; color:var(--cream-dim); margin-top:3px; line-height:1.4; }
+
+  @media (max-width:720px){
+    #head{ top:20px; left:20px; }
+    #counters{ top:20px; right:20px; }
+    #legend{ display:none; }
+    #controls{ right:16px; bottom:16px; }
+    #drawer{ right:16px; left:16px; width:auto; bottom:126px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    :root{ --ease: 0.001s linear; }
+    .pill:hover{ transform:none; }
+    .packet:hover{ transform:none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="bed"></canvas>
+<div id="vignette"></div>
+<div id="grain"></div>
+
+<header class="plate" id="head">
+  <div id="kicker">Plate XIV · Cellular Horticulture</div>
+  <h1>The Garden <em>Automaton</em></h1>
+  <p id="caption">Three laws govern this bed, as they govern every wilder one: a bloom lost to
+    loneliness withers; in quiet company it thrives and ages in colour; and crowding — always
+    crowding — is death. Plant a square, or let the drawer do it.</p>
+</header>
+
+<aside class="plate" id="counters" aria-live="off">
+  <div class="counter">
+    <div class="lbl">Generation</div>
+    <span class="num" id="gen-num">0</span>
+  </div>
+  <div class="counter">
+    <div class="lbl">Population</div>
+    <span class="num" id="pop-num">0</span><span class="unit">blooms</span>
+  </div>
+</aside>
+
+<footer class="plate" id="legend">
+  <div><span class="dot d1"></span><b>i–ii</b> &nbsp;seedling moss — new shoots</div>
+  <div><span class="dot d2"></span><b>viii</b> &nbsp;coral in second year</div>
+  <div><span class="dot d3"></span><b>xx</b> &nbsp;violet of the middle age</div>
+  <div><span class="dot d4"></span><b>xlv+</b> elder gold, heavy with petals</div>
+</footer>
+
+<section id="controls" class="plate" aria-label="garden controls">
+  <div id="tempo-row">
+    <span id="tempo-lbl">Tempo</span>
+    <input type="range" id="tempo" min="1" max="30" step="1" value="8" aria-label="Tempo, generations per second">
+    <span id="tempo-num">8/s</span>
+  </div>
+  <div id="btn-row">
+    <button class="pill" id="btn-grow" aria-pressed="true">Pause</button>
+    <button class="pill" id="btn-step">Step</button>
+    <button class="pill" id="btn-clear">Clear bed</button>
+    <button class="pill" id="btn-drawer" aria-expanded="false">Seed drawer</button>
+  </div>
+</section>
+
+<section id="drawer" aria-label="seed drawer">
+  <h3>Seed Drawer</h3>
+  <div id="packets"></div>
+</section>
+
+<script>
+(() => {
+"use strict";
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const canvas = document.getElementById("bed");
+const ctx = canvas.getContext("2d");
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+/* ---------------- grid state: Uint16 ages, swapped each generation ---------- */
+let cell = 16, W = 0, H = 0, gw = 0, gh = 0;
+let ages = null, agesNext = null, born = null, stain = null;
+
+function pickCell(){
+  const side = Math.max(window.innerWidth, window.innerHeight);
+  if (side < 500) return 11;
+  if (side < 900) return 13;
+  if (side < 1500) return 15;
+  if (side < 2300) return 16;
+  return 18;
+}
+function makeArrays(){
+  ages = new Uint16Array(gw*gh); agesNext = new Uint16Array(gw*gh);
+  born = new Uint8Array(gw*gh);  stain  = new Float32Array(gw*gh);
+}
+function resize(){
+  const newCell = pickCell();
+  const nW = window.innerWidth, nH = window.innerHeight;
+  const ngw = Math.max(4, Math.ceil(nW/newCell)), ngh = Math.max(4, Math.ceil(nH/newCell));
+  const old = { gw, gh, ages, stain };
+  cell = newCell; W = nW; H = nH; gw = ngw; gh = ngh;
+  canvas.width = Math.round(W*DPR); canvas.height = Math.round(H*DPR);
+  canvas.style.width = W+"px"; canvas.style.height = H+"px";
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  makeArrays();
+  if (old.ages){                                   // preserve the bed across resizes
+    for (let y=0;y<gh;y++) for (let x=0;x<gw;x++){
+      const ox = Math.min(old.gw-1, Math.floor(x*old.gw/gw));
+      const oy = Math.min(old.gh-1, Math.floor(y*old.gh/gh));
+      const oi = oy*old.gw+ox, ni = y*gw+x;
+      ages[ni] = old.ages[oi]; stain[ni] = old.stain[oi];
+    }
+  }
+  buildSprites();
+}
+window.addEventListener("resize", resize);
+
+/* ---------------- age → colour, sprites ------------------------------------ */
+const STOPS = [ [2,[127,176,105]], [8,[242,142,123]], [20,[166,135,209]], [45,[231,185,90]] ];
+const MAXAGE_SPR = 60;
+function ageColor(a){
+  if (a <= STOPS[0][0]) return STOPS[0][1];
+  for (let i=1;i<STOPS.length;i++){
+    if (a <= STOPS[i][0]){
+      const [t0,c0] = STOPS[i-1], [t1,c1] = STOPS[i];
+      const u = (a-t0)/(t1-t0);
+      return [c0[0]+(c1[0]-c0[0])*u, c0[1]+(c1[1]-c0[1])*u, c0[2]+(c1[2]-c0[2])*u].map(v=>v|0);
+    }
+  }
+  return STOPS[STOPS.length-1][1];
+}
+let sprites = [];                                  // index = min(age, MAXAGE)
+function buildSprites(){
+  sprites = [];
+  const S = Math.ceil(cell*3.4);                  // generous glow margin
+  for (let a=1;a<=MAXAGE_SPR;a++){
+    const c = ageColor(a);
+    const cv = document.createElement("canvas"); cv.width = cv.height = S;
+    const g = cv.getContext("2d");
+    const cx = S/2, body = cell*0.36;
+    /* wide low-alpha radial glow */
+    let gr = g.createRadialGradient(cx,cx,0,cx,cx,S*0.48);
+    gr.addColorStop(0,  `rgba(${c[0]},${c[1]},${c[2]},0.30)`);
+    gr.addColorStop(0.6,`rgba(${c[0]},${c[1]},${c[2]},0.09)`);
+    gr.addColorStop(1,  `rgba(${c[0]},${c[1]},${c[2]},0)`);
+    g.fillStyle = gr; g.fillRect(0,0,S,S);
+    /* five faint petal discs beyond age eight */
+    if (a > 8){
+      g.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},0.20)`;
+      for (let k=0;k<5;k++){
+        const th = k*(Math.PI*2/5) + a*0.13;
+        g.beginPath();
+        g.arc(cx+Math.cos(th)*body*1.5, cx+Math.sin(th)*body*1.5, body*0.9, 0, 7);
+        g.fill();
+      }
+    }
+    /* filled body */
+    gr = g.createRadialGradient(cx-body*0.3,cx-body*0.35,body*0.15,cx,cx,body);
+    gr.addColorStop(0, `rgba(${Math.min(255,c[0]+55)},${Math.min(255,c[1]+55)},${Math.min(255,c[2]+55)},0.95)`);
+    gr.addColorStop(1, `rgba(${c[0]},${c[1]},${c[2]},0.88)`);
+    g.fillStyle = gr; g.beginPath(); g.arc(cx,cx,body,0,7); g.fill();
+    /* small white specular */
+    g.fillStyle = "rgba(255,255,250,0.75)";
+    g.beginPath(); g.arc(cx-body*0.32,cx-body*0.36,body*0.18,0,7); g.fill();
+    sprites.push(cv);
+  }
+}
+
+/* ---------------- toroidal step --------------------------------------------- */
+let gen = 0, pop = 0;
+function step(){
+  let p = 0;
+  born.fill(0);
+  for (let y=0;y<gh;y++){
+    const ym = ((y-1)+gh)%gh*gw, yc = y*gw, yp = ((y+1)%gh)*gw;
+    for (let x=0;x<gw;x++){
+      const xm = (x-1+gw)%gw, xp = (x+1)%gw;
+      const n = (ages[ym+xm]>0)+(ages[ym+x]>0)+(ages[ym+xp]>0)
+              + (ages[yc+xm]>0)+(ages[yc+xp]>0)
+              + (ages[yp+xm]>0)+(ages[yp+x]>0)+(ages[yp+xp]>0);
+      const a = ages[yc+x];
+      const i = yc+x;
+      if (a > 0){
+        if (n===2 || n===3){ agesNext[i] = Math.min(a+1, 4095); p++; }
+        else { agesNext[i] = 0; stain[i] = 1; }               // death leaves a brown stain
+      } else {
+        if (n===3){ agesNext[i] = 1; born[i] = 1; p++; }
+        else agesNext[i] = 0;
+      }
+    }
+  }
+  const t = ages; ages = agesNext; agesNext = t;              // swap grids
+  gen++; pop = p;
+}
+
+/* ---------------- rendering -------------------------------------------------- */
+function render(){
+  ctx.clearRect(0,0,W,H);
+  /* decay & draw death stains (normal compositing) */
+  ctx.fillStyle = "rgba(120,80,60,1)";
+  for (let y=0;y<gh;y++) for (let x=0;x<gw;x++){
+    const i = y*gw+x;
+    const s = stain[i];
+    if (s > 0.02){
+      ctx.globalAlpha = s*0.20;
+      ctx.beginPath();
+      ctx.arc(x*cell+cell/2, y*cell+cell/2, cell*0.42, 0, 7);
+      ctx.fill();
+      stain[i] = s*0.93;                                      // −7 % per frame
+    } else stain[i] = 0;
+  }
+  ctx.globalAlpha = 1;
+  /* blooms — additive, neighbours bleed light */
+  ctx.globalCompositeOperation = "lighter";
+  for (let y=0;y<gh;y++) for (let x=0;x<gw;x++){
+    const i = y*gw+x, a = ages[i];
+    if (!a) continue;
+    const spr = sprites[Math.min(a, MAXAGE_SPR)-1];
+    const bornThisStep = born[i];
+    const k = bornThisStep ? 0.7 : 1;                         // one-frame sprout at 70 %
+    const sz = spr.width;                                     // built for the current cell size
+    ctx.drawImage(spr, x*cell+cell/2 - sz*k/2, y*cell+cell/2 - sz*k/2, sz*k, sz*k);
+  }
+  ctx.globalCompositeOperation = "source-over";
+  born.fill(0);
+}
+
+
+/* ---------------- hover ring + painting -------------------------------------- */
+let hover = { x:-1, y:-1, on:false };
+let painting = false, paintVal = 1;
+function cellAt(e){
+  const r = canvas.getBoundingClientRect();
+  return { x: Math.floor((e.clientX-r.left)/cell), y: Math.floor((e.clientY-r.top)/cell) };
+}
+function setCell(x,y,alive){
+  if (x<0||y<0||x>=gw||y>=gh) return;
+  const i = y*gw+x;
+  if (alive){ if (!ages[i]){ ages[i]=1; stain[i]=0; pop++; } }
+  else if (ages[i]){ ages[i]=0; stain[i]=1; pop--; }
+}
+canvas.addEventListener("pointermove", e => {
+  const c = cellAt(e);
+  hover.x=c.x; hover.y=c.y; hover.on=true;
+  if (painting) setCell(c.x, c.y, paintVal);
+});
+canvas.addEventListener("pointerleave", () => hover.on=false);
+canvas.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  const c = cellAt(e);
+  painting = true;
+  const alive = ages[c.y*gw+c.x] > 0;
+  paintVal = alive ? 0 : 1;                                   // click toggles…
+  setCell(c.x, c.y, paintVal);
+  if (!paintVal) painting = false;                            // …drag paints living cells
+  canvas.setPointerCapture(e.pointerId);
+});
+window.addEventListener("pointerup", () => painting = false);
+
+/* ---------------- tempo, fixed-step accumulator ------------------------------ */
+let tempo = REDUCED ? 4 : 8, growing = true, acc = 0, last = null;
+const $gen = document.getElementById("gen-num"), $pop = document.getElementById("pop-num");
+const $tempo = document.getElementById("tempo"), $tempoNum = document.getElementById("tempo-num");
+$tempo.value = tempo; $tempoNum.textContent = tempo+"/s";
+$tempo.addEventListener("input", () => {
+  tempo = +$tempo.value; $tempoNum.textContent = tempo+"/s";
+});
+function loop(now){
+  const dt = last===null ? 0 : Math.min(0.25, (now-last)/1000);
+  last = now;
+  if (growing){
+    acc += dt;
+    const iv = 1/tempo;
+    let guard = 0;
+    while (acc >= iv && guard < 6){ step(); acc -= iv; guard++; }
+    if (acc > iv) acc = 0;
+  } else acc = 0;
+  render();
+  if (hover.on){                                              // thin cream ring follows the cursor
+    ctx.strokeStyle = "rgba(239,230,208,0.55)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(hover.x*cell+cell/2, hover.y*cell+cell/2, cell*0.68, 0, 7);
+    ctx.stroke();
+  }
+  $gen.textContent = gen.toLocaleString("en-US");
+  $pop.textContent = pop.toLocaleString("en-US");
+  requestAnimationFrame(loop);
+}
+
+/* ---------------- controls ---------------------------------------------------- */
+const $grow = document.getElementById("btn-grow");
+function setGrowing(on){
+  growing = on;
+  $grow.textContent = on ? "Pause" : "Grow";
+  $grow.setAttribute("aria-pressed", String(on));
+}
+$grow.addEventListener("click", () => setGrowing(!growing));
+document.getElementById("btn-step").addEventListener("click", () => { setGrowing(false); step(); });
+document.getElementById("btn-clear").addEventListener("click", clearBed);
+function clearBed(){ ages.fill(0); born.fill(0); gen = 0; pop = 0; }
+
+const $drawer = document.getElementById("drawer");
+const $drawerBtn = document.getElementById("btn-drawer");
+function setDrawer(open){
+  $drawer.classList.toggle("open", open);
+  $drawerBtn.setAttribute("aria-expanded", String(open));
+}
+$drawerBtn.addEventListener("click", () => setDrawer(!$drawer.classList.contains("open")));
+
+/* ---------------- seed patterns ---------------------------------------------- */
+function parse(rows){ const cells=[]; rows.forEach((r,y)=>{ for (let x=0;x<r.length;x++) if (r[x]==="O") cells.push([x,y]); }); return cells; }
+const GUN = parse([
+"........................O...........",
+"......................O.O...........",
+"............OO......OO............OO",
+"...........O...O....OO............OO",
+"OO........O.....O...OO..............",
+"OO........O...O.OO....O.O...........",
+"..........O.....O.......O...........",
+"...........O...O....................",
+"............OO......................"]);
+const PULSAR = parse([
+"......O......",".....O.O.....","....O.O.O....","....O.O.O....",
+"..OO.OOO.OO..",".O..O...O..O.","O.OOO...OOO.O",".O..O...O..O.",
+"..OO.OOO.OO..","....O.O.O....","....O.O.O....",".....O.O.....","......O......"]);
+const RPENT  = parse([".OO","OO.",".O."]);
+const ACORN  = parse([".O.....","...O...","OO..OOO"]);
+const DIEHARD= parse(["O....OOO","OO......","......O."]);
+const PACKETS = [
+  { nm:"Gosper's glider gun", tg:"a perpetual fountain of small silver ships", cells:GUN, gun:true },
+  { nm:"Pulsar",              tg:"the thirteen-by-thirteen heart, breathing in threes", cells:PULSAR },
+  { nm:"R-pentomino",         tg:"five cells of magnificent disorder", cells:RPENT },
+  { nm:"Acorn",               tg:"seven seeds that wander for five thousand years", cells:ACORN },
+  { nm:"Wild garden",         tg:"thirty percent chance in every square; trust the soil", wild:0.3 },
+  { nm:"Diehard",             tg:"clings stubbornly to life, then nothing at all", cells:DIEHARD },
+];
+function stamp(pk){
+  clearBed();
+  if (pk.wild){
+    for (let i=0;i<ages.length;i++) if (Math.random() < pk.wild){ ages[i]=1; pop++; }
+  } else {
+    const xs = pk.cells.map(c=>c[0]), ys = pk.cells.map(c=>c[1]);
+    const w = Math.max(...xs)+1, h = Math.max(...ys)+1;
+    let ox = pk.gun ? (gw-w)/2 - w*0.35 : (gw-w)/2;      // gun sits up and to the left
+    let oy = pk.gun ? (gh-h)/2 - h*1.4  : (gh-h)/2;
+    ox = Math.max(1, Math.round(ox)); oy = Math.max(1, Math.round(oy));
+    for (const [x,y] of pk.cells){ ages[((y+oy)%gh)*gw + ((x+ox)%gw)] = 1; pop++; }
+  }
+  setDrawer(false);
+  setGrowing(true);
+}
+const $packets = document.getElementById("packets");
+PACKETS.forEach(pk => {
+  const b = document.createElement("button");
+  b.className = "packet";
+  b.innerHTML = `<div class="nm"></div><div class="tg"></div>`;
+  b.querySelector(".nm").textContent = pk.nm;
+  b.querySelector(".tg").textContent = pk.tg;
+  b.addEventListener("click", () => stamp(pk));
+  $packets.appendChild(b);
+});
+
+/* ---------------- keyboard ---------------------------------------------------- */
+window.addEventListener("keydown", e => {
+  if (e.code === "Space" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement)){
+    e.preventDefault(); setGrowing(!growing);
+  }
+  if (e.key === "Escape") setDrawer(false);
+});
+
+/* ---------------- start: a small sown row so the plate is never bare ---------- */
+resize();
+{
+  const seed = ACORN.map(([x,y])=>[x+Math.floor(gw/2)-3, y+Math.floor(gh/2)-1]);
+  for (const [x,y] of seed){ ages[(y%gh)*gw + x] = 1; pop++; }
+  /* plus a lone survivor cluster to age toward gold */
+  const bx = Math.floor(gw*0.62), by = Math.floor(gh*0.58);
+  [[0,0],[1,0],[0,1],[1,1]].forEach(([x,y])=>{ ages[(by+y)*gw+bx+x] = 26; pop++; });
+}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

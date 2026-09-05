@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MERCURY — Liquid Metal Metaballs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    cursor: default;
+    user-select: none;
+  }
+  #bg {
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(125% 95% at 50% 36%, #232428 0%, #1b1c1f 55%, #101113 100%);
+  }
+  #bg::after {
+    content: "";
+    position: absolute; inset: 62% 0 0 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.42) 100%);
+  }
+  #stage {
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 180px 180px;
+    opacity: 0.07;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+  }
+  canvas#field {
+    position: fixed; inset: 0;
+    display: block;
+  }
+  .ui {
+    position: fixed; inset: 0;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: 26px clamp(18px, 3.2vw, 44px);
+    pointer-events: none;
+    z-index: 3;
+  }
+  .top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .label {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    white-space: nowrap;
+  }
+  .mid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+  }
+  #title {
+    font-weight: 200;
+    font-size: clamp(48px, 13.5vw, 300px);
+    letter-spacing: 0.05em;
+    line-height: 1;
+    color: #fff;
+    mix-blend-mode: difference;
+    margin-right: -0.05em; /* optically centre tracked text */
+    white-space: nowrap;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    #title { animation: entrance 2.4s cubic-bezier(0.22, 0.61, 0.21, 1) both; }
+    @keyframes entrance {
+      from { opacity: 0; letter-spacing: 0.24em; filter: blur(18px); }
+      to   { opacity: 1; letter-spacing: 0.05em; filter: blur(0); }
+    }
+  }
+  .bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 28px;
+  }
+  #desc {
+    max-width: 34ch;
+    font-size: 11.5px;
+    line-height: 1.7;
+    letter-spacing: 0.01em;
+    color: rgba(255,255,255,0.42);
+  }
+  #stats {
+    text-align: right;
+    line-height: 1.9;
+    color: rgba(255,255,255,0.55);
+    font-variant-numeric: tabular-nums;
+  }
+  #hint {
+    position: fixed;
+    left: 50%; bottom: 15%;
+    transform: translateX(-50%);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.5);
+    pointer-events: none;
+    z-index: 4;
+    transition: opacity 1.2s ease;
+  }
+  #hint.gone { opacity: 0; }
+  @media (max-width: 640px) {
+    .label.second { display: none; }
+    .bottom { flex-direction: column; align-items: flex-start; gap: 14px; }
+    #stats { text-align: left; }
+  }
+</style>
+</head>
+<body>
+  <div id="bg"></div>
+  <canvas id="field"></canvas>
+  <div id="stage"></div>
+  <div class="ui">
+    <div class="top">
+      <span class="label">Liquid metal study · 05</span>
+      <span class="label second">Metaball field · environment mapped</span>
+    </div>
+    <div class="mid"><h1 id="title">MERCURY</h1></div>
+    <div class="bottom">
+      <p id="desc">A real-time metaball renderer: seven mercury bodies sharing one scalar field, shaded against a procedural studio horizon. Edges merge where fields overlap; normals bend to the surface like polished silver.</p>
+      <p id="stats" class="label">—</p>
+    </div>
+  </div>
+  <div id="hint">Move to attract · click to add</div>
+<script>
+(function () {
+  'use strict';
+  var REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var canvas = document.getElementById('field');
+  var ctx = canvas.getContext('2d');
+  var statsEl = document.getElementById('stats');
+  var hintEl = document.getElementById('hint');
+
+  var cssW = 1, cssH = 1, minSide = 1, dpr = 1;
+  var bufScale = 0.5, bw = 0, bh = 0;
+  var off = document.createElement('canvas');
+  var octx = off.getContext('2d');
+  var img = null, data32 = null, fx = null, gx = null, gy = null;
+
+  var MAXPx = 420000;
+  var MAXBODIES = 12;
+
+  var bodies = [];
+  var clock = 0;             // simulation seconds
+  var paused = false;
+  var hintGone = false;
+
+  var pointerCss = null;     // {x, y} in CSS px
+  var pointerIn = false;
+  var attractS = 0;
+
+  /* ---------- environment LUT (256 entries, RGB) ---------- */
+  var LUT = new Uint8Array(256 * 3);
+  (function buildLUT() {
+    function smoothstep(e0, e1, x) {
+      var t = (x - e0) / (e1 - e0);
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      return t * t * (3 - 2 * t);
+    }
+    function mixHex(a, b, t) {
+      return [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t
+      ];
+    }
+    var stops = [
+      [0.000, [0x0e, 0x0f, 0x12]],
+      [0.220, [0x28, 0x2a, 0x30]],
+      [0.420, [0x58, 0x5a, 0x60]],
+      [0.480, mixHex([0x58, 0x5a, 0x60], [0xd2, 0xd0, 0xcc], smoothstep(0.42, 0.495, 0.480))],
+      [0.495, [0xd2, 0xd0, 0xcc]],
+      [0.505, [0xfa, 0xfa, 0xfc]],
+      [0.545, [0xbe, 0xc4, 0xce]],
+      [0.700, [0x80, 0x89, 0x96]],
+      [0.850, [0x48, 0x4e, 0x5a]],
+      [1.000, [0x1a, 0x1c, 0x22]]
+    ];
+    for (var i = 0; i < 256; i++) {
+      var t = i / 255;
+      var j = 0;
+      while (j < stops.length - 2 && t > stops[j + 1][0]) j++;
+      var a = stops[j], b = stops[j + 1];
+      var f = smoothstep(a[0], b[0], t);
+      LUT[i * 3]     = a[1][0] + (b[1][0] - a[1][0]) * f;
+      LUT[i * 3 + 1] = a[1][1] + (b[1][1] - a[1][1]) * f;
+      LUT[i * 3 + 2] = a[1][2] + (b[1][2] - a[1][2]) * f;
+    }
+  })();
+
+  /* ---------- key light ---------- */
+  var LX = -0.45, LY = -0.62, LZ = 0.64;
+  (function () { var l = Math.hypot(LX, LY, LZ); LX /= l; LY /= l; LZ /= l; })();
+  var HX = LX, HY = LY, HZ = LZ + 1;
+  (function () { var l = Math.hypot(HX, HY, HZ); HX /= l; HY /= l; HZ /= l; })();
+
+  /* ---------- helpers ---------- */
+  function smoothstep(t) { t = t < 0 ? 0 : t > 1 ? 1 : t; return t * t * (3 - 2 * t); }
+  function rand(a, b) { return a + Math.random() * (b - a); }
+
+  function makeBody(x, y, born) {
+    return {
+      x: x, y: y,
+      vx: rand(-22, 22), vy: rand(-16, 16),
+      baseR: rand(0.09, 0.19) * minSide,
+      seed: Math.random() * 100,
+      born: born
+    };
+  }
+  function currentRadius(b) {
+    var s = (b.born == null) ? 1 : smoothstep((clock - b.born) / 0.9);
+    return b.baseR * s;
+  }
+  function reseed() {
+    var n = cssW < 600 ? 5 : 7;
+    bodies = [];
+    for (var i = 0; i < n; i++) {
+      bodies.push(makeBody(
+        rand(0.15, 0.85) * cssW,
+        rand(0.2, 0.8) * cssH,
+        null
+      ));
+    }
+  }
+
+  /* ---------- sizing ---------- */
+  function clampScale() {
+    var maxS = 0.6;
+    var area = cssW * cssH;
+    if (area > 0 && Math.pow(bufScale, 2) * area > MAXPx) {
+      maxS = Math.min(0.6, Math.sqrt(MAXPx / area));
+    }
+    bufScale = Math.min(Math.max(bufScale, 0.28), Math.max(0.28, maxS));
+  }
+  function allocBuffers() {
+    bw = Math.max(24, Math.round(cssW * bufScale));
+    bh = Math.max(24, Math.round(cssH * bufScale));
+    off.width = bw; off.height = bh;
+    img = octx.createImageData(bw, bh);
+    data32 = new Uint32Array(img.data.buffer);
+    fx = new Float32Array(bw * bh);
+    gx = new Float32Array(bw * bh);
+    gy = new Float32Array(bw * bh);
+  }
+  function resize() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    cssW = innerWidth; cssH = innerHeight;
+    minSide = Math.min(cssW, cssH);
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    canvas.style.width = cssW + 'px';
+    canvas.style.height = cssH + 'px';
+    clampScale();
+    allocBuffers();
+    for (var i = 0; i < bodies.length; i++) {
+      var b = bodies[i];
+      b.baseR = Math.min(Math.max(b.baseR / minSide, 0.09), 0.19) * minSide;
+      b.x = Math.min(Math.max(b.x, 0), cssW);
+      b.y = Math.min(Math.max(b.y, 0), cssH);
+    }
+    renderFrame();
+  }
+
+  /* ---------- physics ---------- */
+  function step(dt) {
+    var cx = cssW * 0.5, cy = cssH * 0.5;
+    attractS += ((pointerIn ? 1 : 0) - attractS) * (1 - Math.exp(-3.5 * dt));
+    var n = bodies.length, i, j;
+    for (i = 0; i < n; i++) {
+      var b = bodies[i];
+      var s = b.seed;
+      var t = clock;
+      var ax = Math.sin(t * 0.37 + s * 1.7) * 17 + Math.sin(t * 0.83 + s * 4.1) * 7;
+      var ay = Math.sin(t * 0.31 + s * 2.9) * 17 + Math.cos(t * 0.69 + s * 1.3) * 8;
+      ax += (cx - b.x) * 0.26;
+      ay += (cy - b.y) * 0.26;
+      if (pointerCss && attractS > 0.01) {
+        var dx = pointerCss.x - b.x, dy = pointerCss.y - b.y;
+        var d = Math.hypot(dx, dy) + 40;
+        var f = 26000 * attractS / (d * d);
+        ax += dx / d * f;
+        ay += dy / d * f;
+      }
+      b.vx += ax * dt;
+      b.vy += ay * dt;
+    }
+    for (i = 0; i < n; i++) for (j = i + 1; j < n; j++) {
+      var a = bodies[i], c = bodies[j];
+      var dx = c.x - a.x, dy = c.y - a.y;
+      var d = Math.hypot(dx, dy) || 0.001;
+      var lim = (currentRadius(a) + currentRadius(c)) * 0.85;
+      if (d < lim) {
+        var pen = (lim - d) / lim;
+        var f = pen * 760;
+        var ux = dx / d, uy = dy / d;
+        a.vx -= ux * f * dt; a.vy -= uy * f * dt;
+        c.vx += ux * f * dt; c.vy += uy * f * dt;
+      }
+    }
+    var damp = Math.pow(0.985, dt * 60);
+    for (i = 0; i < n; i++) {
+      var b = bodies[i];
+      b.vx *= damp; b.vy *= damp;
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      var r = currentRadius(b) * 0.5;
+      if (b.x < r) { b.x = r; b.vx = Math.abs(b.vx) * 0.7; }
+      if (b.x > cssW - r) { b.x = cssW - r; b.vx = -Math.abs(b.vx) * 0.7; }
+      if (b.y < r) { b.y = r; b.vy = Math.abs(b.vy) * 0.7; }
+      if (b.y > cssH - r) { b.y = cssH - r; b.vy = -Math.abs(b.vy) * 0.7; }
+    }
+    if (bodies.length > MAXBODIES) bodies.splice(0, bodies.length - MAXBODIES);
+  }
+
+  /* ---------- field + shading ---------- */
+  function computeField() {
+    fx.fill(0); gx.fill(0); gy.fill(0);
+    var sx = bw / cssW, sy = bh / cssH;
+    var rmax = Math.max(sx, sy);
+    for (var k = 0; k < bodies.length; k++) {
+      var b = bodies[k];
+      var rb = currentRadius(b) * rmax;          /* radius in buffer px */
+      var rb2 = rb * rb;
+      var bx = b.x * sx, by = b.y * sy;
+      var c1 = rb * 5, c2 = rb * 7 + 16;         /* soft fade band */
+      var c1_2 = c1 * c1, c2_2 = c2 * c2;
+      var x0 = Math.max(0, Math.floor(bx - c2)), x1 = Math.min(bw - 1, Math.ceil(bx + c2));
+      var y0 = Math.max(0, Math.floor(by - c2)), y1 = Math.min(bh - 1, Math.ceil(by + c2));
+      for (var y = y0; y <= y1; y++) {
+        var dy = y + 0.5 - by;
+        var dy2 = dy * dy;
+        var row = y * bw;
+        for (var x = x0; x <= x1; x++) {
+          var dx = x + 0.5 - bx;
+          var d2 = dx * dx + dy2 + 4;
+          if (d2 > c2_2) continue;
+          var w = rb2 / d2;
+          if (d2 > c1_2) {
+            var dd = Math.sqrt(d2);
+            var tt = (dd - c1) / (c2 - c1);
+            tt = tt < 0 ? 0 : tt > 1 ? 1 : tt;
+            w *= tt * tt * (3 - 2 * tt);
+          }
+          var g = -2 * w / d2;
+          var idx = row + x;
+          fx[idx] += w;
+          gx[idx] += g * dx;
+          gy[idx] += g * dy;
+        }
+      }
+    }
+  }
+
+  function renderChrome() {
+    computeField();
+    var len = bw * bh;
+    for (var i = 0; i < len; i++) {
+      var f = fx[i];
+      if (f < 0.28) { data32[i] = 0x00000000; continue; }
+      var dfx = gx[i], dfy = gy[i];
+      var gmag = Math.sqrt(dfx * dfx + dfy * dfy) + 1e-9;
+      var alpha = (f - 1) / gmag + 0.5;
+      if (alpha <= 0.004) { data32[i] = 0x00000000; continue; }
+      if (alpha > 1) alpha = 1;
+      var tilt = Math.pow(1 / f, 1.6);
+      if (tilt > 1) tilt = 1;
+      var nz = Math.sqrt(1 - tilt * tilt);
+      var nx = -dfx / gmag * tilt;
+      var ny = -dfy / gmag * tilt;
+      var rx = -2 * nx * nz;
+      var ry = -2 * ny * nz;
+      var ri = (ry * 127.5 + 127.5) | 0;
+      if (ri < 0) ri = 0; else if (ri > 255) ri = 255;
+      var li = ri * 3;
+      var fall = 1.045 - 0.105 * (rx * 0.5 + 0.5);
+      var col = LUT[li] * fall;
+      var cg = LUT[li + 1] * fall;
+      var cb = LUT[li + 2] * fall;
+      var nd = nx * HX + ny * HY + nz * HZ;
+      var spec = 0;
+      if (nd > 0) {
+        var p2 = nd * nd, p4 = p2 * p2, p8 = p4 * p4, p16 = p8 * p8;
+        spec = p16 * p16 * p16;
+      }
+      var dl = nx * LX + ny * LY + nz * LZ;
+      if (dl < 0) dl = 0;
+      var t3 = tilt * tilt * tilt;
+      col += t3 * 24 + spec * 255 + dl * 18;
+      cg += t3 * 31 + spec * 255 + dl * 20;
+      cb += t3 * 45 + spec * 255 + dl * 24;
+      if (col > 255) col = 255; if (col < 0) col = 0;
+      if (cg > 255) cg = 255; if (cg < 0) cg = 0;
+      if (cb > 255) cb = 255; if (cb < 0) cb = 0;
+      var a8 = (alpha * 255) | 0;
+      if (a8 > 255) a8 = 255;
+      data32[i] = (a8 << 24) |
+        ((cb | 0) << 16) | ((cg | 0) << 8) | (col | 0);
+    }
+    octx.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(off, 0, 0, cssW, cssH);
+  }
+
+  function renderFrame() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+    var fl = Math.max(cssH * 0.72, cssH - 130);
+    for (var i = 0; i < bodies.length; i++) {
+      var b = bodies[i];
+      var r = currentRadius(b);
+      var sy = Math.min(b.y + r * 0.86, fl);
+      var w = r * (1.12 - 0.08 * (sy - b.y) / Math.max(1, cssH - b.y));
+      var g = ctx.createRadialGradient(b.x, sy, 0, b.x, sy, w);
+      g.addColorStop(0, 'rgba(0,0,0,0.44)');
+      g.addColorStop(0.55, 'rgba(0,0,0,0.16)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.save();
+      ctx.translate(b.x, sy);
+      ctx.scale(1, 0.24);
+      ctx.translate(-b.x, -sy);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(b.x, sy, w, 0, 6.2832);
+      ctx.fill();
+      ctx.restore();
+    }
+    renderChrome();
+  }
+
+  function setStats(fps) {
+    statsEl.textContent = 'FPS ' + fps +
+      ' · BODIES ' + bodies.length +
+      ' · BUFFER ' + Math.round(bufScale * 100) + '%';
+  }
+
+  /* ---------- main loop ---------- */
+  var slow = 0, fast = 0, last = 0, acc = 0, frames = 0, fps = 60;
+  function loop(ts) {
+    if (!last) last = ts;
+    var ms = ts - last; last = ts;
+    var dt = Math.min(0.05, ms / 1000);
+    if (ms > 26) { slow++; fast = 0; } else if (ms < 14) { fast++; slow = 0; } else { slow = 0; fast = 0; }
+    if (slow >= 20) { slow = 0; bufScale *= 0.85; clampScale(); allocBuffers(); }
+    else if (fast >= 240) { fast = 0; bufScale *= 1.1; clampScale(); allocBuffers(); }
+    if (!paused) { clock += dt; step(dt); }
+    renderFrame();
+    acc += ms; frames++;
+    if (acc >= 480) {
+      fps = Math.round(frames * 1000 / acc);
+      acc = 0; frames = 0;
+      setStats(paused ? 0 : fps);
+    }
+    requestAnimationFrame(loop);
+  }
+
+  /* ---------- reduced-motion still composition ---------- */
+  function stillLoop() {
+    renderFrame();
+    setStats(0);
+  }
+
+  /* ---------- events ---------- */
+  function killHint() {
+    if (!hintGone) { hintGone = true; hintEl.classList.add('gone'); }
+  }
+  window.addEventListener('pointermove', function (e) {
+    pointerIn = true;
+    pointerCss = { x: e.clientX, y: e.clientY };
+    if (e.pointerType === 'mouse') {
+      var inside = e.clientY < innerHeight - 56;
+      document.body.style.cursor = inside ? 'crosshair' : 'default';
+    }
+    killHint();
+    if (REDUCED) stillLoop();
+  });
+  window.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0) return;
+    pointerIn = true;
+    pointerCss = { x: e.clientX, y: e.clientY };
+    bodies.push(makeBody(e.clientX, e.clientY, REDUCED ? null : clock));
+    killHint();
+    if (REDUCED) stillLoop();
+  });
+  window.addEventListener('pointerleave', function () { pointerIn = false; });
+  document.addEventListener('mouseleave', function () { pointerIn = false; });
+  window.addEventListener('keydown', function (e) {
+    if (e.code === 'KeyR') {
+      reseed();
+      if (REDUCED) { settleReduced(); stillLoop(); }
+    } else if (e.code === 'Space') {
+      e.preventDefault();
+      paused = !paused;
+      if (REDUCED) stillLoop();
+    }
+  });
+  window.addEventListener('resize', function () {
+    resize();
+    if (!REDUCED) setStats(fps);
+  });
+
+  function settleReduced() {
+    clock = 0;
+    reseed();
+    var dt = 1 / 60;
+    for (var s = 0; s < 240; s++) { clock += dt; step(dt); }
+    attractS = 0;
+  }
+
+  /* ---------- init ---------- */
+  resize();
+  if (REDUCED) {
+    settleReduced();
+    stillLoop();
+  } else {
+    reseed();
+    setStats(60);
+    requestAnimationFrame(loop);
+  }
+})();
+</script>
+</body>
+</html>

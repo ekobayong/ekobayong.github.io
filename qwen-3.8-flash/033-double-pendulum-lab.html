@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Double Pendulum Laboratory — Chaos Instrument No. 7</title>
+<style>
+  :root{
+    --bg:#1b1a18; --panel:#232220; --panel2:#2c2a27;
+    --brass:#b8955a; --brass-lt:#dcc08a;
+    --copper:#b86f43; --copper-lt:#d9925f;
+    --cream:#e9dfcb; --dim:#a89e8a;
+    --hair:rgba(184,149,90,.25);
+    --serif:'Iowan Old Style', Palatino, Georgia, ui-serif, serif;
+    --mono:ui-monospace, Menlo, 'Courier New', monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--cream);
+    font-family:var(--serif);
+    display:grid; grid-template-rows:auto 1fr;
+    min-height:100vh;
+  }
+
+  /* ============ header ============ */
+  header{
+    display:flex; align-items:flex-end; justify-content:space-between; gap:20px;
+    padding:22px 28px 16px;
+    border-bottom:1px solid var(--hair);
+    background:linear-gradient(180deg,#201f1c,var(--bg));
+  }
+  .titleblock h1{
+    font-size:clamp(22px,3.4vw,34px); font-weight:500; letter-spacing:.045em;
+    color:var(--brass-lt);
+    text-shadow:0 1px 0 rgba(0,0,0,.7);
+  }
+  .titleblock .subtitle{
+    font-style:italic; color:var(--dim); font-size:15px; margin-top:3px; letter-spacing:.05em;
+  }
+  .plate{
+    font-family:var(--serif);
+    font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--brass);
+    border:1px solid var(--hair); outline:1px solid rgba(184,149,90,.12); outline-offset:3px;
+    background:var(--panel);
+    padding:9px 16px; border-radius:2px;
+    box-shadow:0 2px 0 rgba(0,0,0,.55), inset 0 1px 0 rgba(220,192,138,.12);
+    white-space:nowrap;
+  }
+
+  /* ============ main grid ============ */
+  main{
+    display:grid; grid-template-columns:1fr 340px;
+    min-height:0;
+  }
+  #stage{
+    position:relative; min-height:60vh; overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 50% 18%, rgba(184,149,90,.06), transparent 60%),
+      var(--bg);
+  }
+  #stage canvas{position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:grab}
+  #stage canvas.dragging{cursor:grabbing}
+
+  #hud{
+    position:absolute; top:14px; left:16px; z-index:3;
+    font-family:var(--mono); font-size:12.5px; line-height:1.65;
+    color:var(--dim); pointer-events:none;
+    text-shadow:0 1px 2px #000;
+  }
+  #hud b{color:var(--brass-lt); font-weight:400}
+  #hud .div{color:var(--copper-lt)}
+
+  #controls{
+    position:absolute; top:14px; right:16px; z-index:3;
+    display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;
+  }
+  .btn{
+    font-family:var(--serif); font-size:13.5px; letter-spacing:.05em;
+    color:var(--cream); background:var(--panel2);
+    border:1px solid var(--brass);
+    padding:8px 16px; border-radius:2px; cursor:pointer;
+    box-shadow:2px 2px 0 rgba(0,0,0,.65);
+    transition:box-shadow .15s ease, transform .15s ease, background .15s ease;
+  }
+  .btn:hover{box-shadow:2px 2px 0 rgba(0,0,0,.65), 0 0 9px rgba(184,149,90,.55)}
+  .btn:active{transform:translate(1px,1px); box-shadow:1px 1px 0 rgba(0,0,0,.65)}
+  .btn:focus-visible{outline:1px solid var(--brass-lt); outline-offset:2px}
+  .btn--primary{
+    background:linear-gradient(180deg,#3a3428,#2c2a27);
+    color:var(--brass-lt);
+    border-color:var(--brass-lt);
+  }
+  .btn--copper{border-color:var(--copper); color:var(--copper-lt)}
+  .btn--copper:hover{box-shadow:2px 2px 0 rgba(0,0,0,.65), 0 0 9px rgba(184,111,67,.6)}
+
+  .stagefoot{
+    position:absolute; left:16px; bottom:12px; z-index:3;
+    font-style:italic; font-size:12px; color:rgba(168,158,138,.75);
+    pointer-events:none; text-shadow:0 1px 2px #000;
+  }
+
+  /* ============ sidebar ============ */
+  aside{
+    position:relative;
+    background:var(--panel);
+    padding:20px 18px 26px;
+    overflow-y:auto;
+    max-height:calc(100vh - 96px);
+  }
+  aside::before{
+    content:""; position:absolute; left:0; top:0; bottom:0; width:1px;
+    background:linear-gradient(180deg, transparent, var(--brass) 18%, var(--brass) 82%, transparent);
+    opacity:.35;
+  }
+  aside h2{
+    font-size:13px; font-weight:500; text-transform:uppercase; letter-spacing:.24em;
+    color:var(--brass);
+    border-bottom:1px solid var(--hair);
+    padding-bottom:7px; margin:26px 0 14px;
+  }
+  aside h2:first-child{margin-top:0}
+
+  .param{margin-bottom:13px}
+  .param .row{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px}
+  .param label{font-style:italic; font-size:14.5px; color:var(--cream)}
+  .param output{font-family:var(--mono); font-size:12px; color:var(--brass-lt)}
+  input[type=range]{
+    -webkit-appearance:none; appearance:none;
+    width:100%; height:22px; background:transparent; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track{
+    height:4px; border-radius:2px;
+    background:linear-gradient(90deg,var(--copper),var(--brass));
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.6);
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:15px; height:15px; margin-top:-5.5px; border-radius:50%;
+    background:radial-gradient(circle at 32% 28%, var(--brass-lt), var(--brass) 55%, #6d5327);
+    border:1px solid #14130f;
+    box-shadow:1px 1px 0 rgba(0,0,0,.7);
+  }
+  input[type=range]::-moz-range-track{
+    height:4px; border-radius:2px;
+    background:linear-gradient(90deg,var(--copper),var(--brass));
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%;
+    background:radial-gradient(circle at 32% 28%, var(--brass-lt), var(--brass) 55%, #6d5327);
+    border:1px solid #14130f;
+  }
+  input[type=range]:focus-visible{outline:1px solid var(--brass-lt); outline-offset:3px}
+
+  #readout{
+    display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px;
+  }
+  .cell{
+    background:var(--panel2); border:1px solid var(--hair); border-radius:2px;
+    padding:7px 8px 6px; text-align:center;
+  }
+  .cell .k{display:block; font-style:italic; font-size:11.5px; color:var(--dim); margin-bottom:3px}
+  .cell .v{display:block; font-family:var(--mono); font-size:12px; color:var(--brass-lt); letter-spacing:-.02em}
+  .cell.copper .v{color:var(--copper-lt)}
+
+  /* ============ notebook ============ */
+  .notebook{
+    position:relative;
+    background:
+      linear-gradient(90deg, transparent 0 27px, rgba(184,111,67,.4) 27px 28px, transparent 28px),
+      repeating-linear-gradient(180deg, transparent 0 27px, rgba(184,149,90,.14) 27px 28px),
+      #26241f;
+    border:1px solid var(--hair); border-radius:2px;
+    padding:16px 14px 18px 42px;
+    font-size:14.5px; color:var(--cream);
+    box-shadow:inset 0 0 22px rgba(0,0,0,.45);
+  }
+  .notebook p{margin:0 0 4px; line-height:28px}
+  .notebook .sym{font-style:italic; color:var(--brass-lt)}
+  .notebook .where{font-style:italic; color:var(--dim); line-height:28px}
+  .notebook .note{
+    font-style:italic; color:var(--dim); font-size:13.5px; line-height:28px; margin-top:8px;
+    border-left:none;
+  }
+  .notebook .note .copper{color:var(--copper-lt); font-style:normal; font-family:var(--mono); font-size:12px}
+  .eq{display:flex; align-items:center; flex-wrap:wrap; gap:4px; padding:14px 0 16px; line-height:1.2}
+  .dot, .ddot{position:relative; display:inline-block}
+  .dot::before{
+    content:"·"; position:absolute; top:-.72em; left:50%; transform:translateX(-50%);
+    color:var(--brass-lt); font-size:.9em; line-height:1;
+  }
+  .ddot::before{
+    content:"··"; position:absolute; top:-.72em; left:50%; transform:translateX(-50%);
+    letter-spacing:.1em; color:var(--brass-lt); font-size:.8em; line-height:1;
+  }
+  .frac{display:inline-flex; flex-direction:column; align-items:center; vertical-align:middle; margin:0 3px; text-align:center}
+  .frac .num{padding:2px 8px; font-size:.94em}
+  .frac .den{padding:2px 8px; border-top:1px solid var(--brass); font-size:.94em}
+  .brk{color:var(--brass)}
+  sub{font-size:.68em} sup{font-size:.68em}
+
+  @media (max-width:900px){
+    main{grid-template-columns:1fr}
+    aside{max-height:none; border-top:1px solid var(--hair)}
+    aside::before{display:none}
+    #stage{min-height:60vh}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .btn{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="titleblock">
+    <h1>Double Pendulum Laboratory</h1>
+    <div class="subtitle">Chaos Instrument No.&nbsp;7</div>
+  </div>
+  <div class="plate">RK4 &middot; &Delta;t 1/240 s &middot; Lagrangian</div>
+</header>
+
+<main>
+  <section id="stage" aria-label="Simulation stage">
+    <canvas id="sim"></canvas>
+    <div id="hud">
+      <div>t&nbsp;&nbsp;=&nbsp;<b id="hudT">0.000</b> s</div>
+      <div>E&nbsp;&nbsp;=&nbsp;<b id="hudE">0.000</b> J</div>
+      <div id="hudDivRow" class="div" hidden>&Delta;bob&nbsp;=&nbsp;<span id="hudDiv">—</span></div>
+    </div>
+    <div id="controls">
+      <button class="btn btn--primary" id="btnPause" aria-pressed="false">Pause</button>
+      <button class="btn" id="btnReset">Reset</button>
+      <button class="btn btn--copper" id="btnTwin">Add pendulum</button>
+    </div>
+    <div class="stagefoot">drag a bob to reposition &middot; space to pause &middot; r to reset</div>
+  </section>
+
+  <aside aria-label="Laboratory sidebar">
+    <h2>Parameters</h2>
+    <div class="param"><div class="row"><label for="m1">mass m<sub>1</sub></label><output id="m1o">1.50 kg</output></div>
+      <input type="range" id="m1" min="0.2" max="4" step="0.05" value="1.5"></div>
+    <div class="param"><div class="row"><label for="m2">mass m<sub>2</sub></label><output id="m2o">1.00 kg</output></div>
+      <input type="range" id="m2" min="0.2" max="4" step="0.05" value="1"></div>
+    <div class="param"><div class="row"><label for="l1">length &ell;<sub>1</sub></label><output id="l1o">1.00 m</output></div>
+      <input type="range" id="l1" min="0.3" max="1.6" step="0.01" value="1"></div>
+    <div class="param"><div class="row"><label for="l2">length &ell;<sub>2</sub></label><output id="l2o">0.80 m</output></div>
+      <input type="range" id="l2" min="0.3" max="1.6" step="0.01" value="0.8"></div>
+    <div class="param"><div class="row"><label for="g">gravity g</label><output id="go">9.81 m/s²</output></div>
+      <input type="range" id="g" min="0.5" max="25" step="0.01" value="9.81"></div>
+    <div class="param"><div class="row"><label for="damp">damping &gamma;</label><output id="dampo">0.020 s⁻¹</output></div>
+      <input type="range" id="damp" min="0" max="0.5" step="0.005" value="0.02"></div>
+    <div class="param"><div class="row"><label for="trail">trail length</label><output id="trailo">900 pts</output></div>
+      <input type="range" id="trail" min="50" max="2000" step="10" value="900"></div>
+
+    <h2>Readout</h2>
+    <div id="readout">
+      <div class="cell"><span class="k">&theta;<sub>1</sub></span><span class="v" id="rT1">—</span></div>
+      <div class="cell"><span class="k">&theta;<sub>2</sub></span><span class="v" id="rT2">—</span></div>
+      <div class="cell"><span class="k">&omega;<sub>1</sub></span><span class="v" id="rW1">—</span></div>
+      <div class="cell"><span class="k">&omega;<sub>2</sub></span><span class="v" id="rW2">—</span></div>
+      <div class="cell"><span class="k">Steps</span><span class="v" id="rSteps">0</span></div>
+      <div class="cell copper"><span class="k">Divergence</span><span class="v" id="rDiv">—</span></div>
+    </div>
+
+    <h2>Notebook</h2>
+    <div class="notebook">
+      <p class="eq">
+        <span class="ddot sym">&theta;</span><sub class="sym">1</sub><span>&nbsp;=</span>
+        <span class="frac">
+          <span class="num">&minus;g(2m<sub>1</sub>+m<sub>2</sub>)sin&thinsp;<span class="sym">&theta;</span><sub>1</sub> &minus; m<sub>2</sub>g&thinsp;sin(<span class="sym">&theta;</span><sub>1</sub>&minus;2<span class="sym">&theta;</span><sub>2</sub>) &minus; 2sin&Delta;&thinsp;m<sub>2</sub>(<span class="dot sym">&omega;</span><sub>2</sub><sup>2</sup>&ell;<sub>2</sub> + <span class="dot sym">&omega;</span><sub>1</sub><sup>2</sup>&ell;<sub>1</sub>cos&Delta;)</span>
+          <span class="den">&ell;<sub>1</sub>&thinsp;<span class="brk">(</span>2m<sub>1</sub> + m<sub>2</sub> &minus; m<sub>2</sub>cos&thinsp;2&Delta;<span class="brk">)</span></span>
+        </span>
+        <span>&minus;&thinsp;&gamma;<span class="dot sym">&theta;</span><sub>1</sub></span>
+      </p>
+      <p class="eq">
+        <span class="ddot sym">&theta;</span><sub class="sym">2</sub><span>&nbsp;=</span>
+        <span class="frac">
+          <span class="num">2&thinsp;sin&Delta;&thinsp;<span class="brk">(</span><span class="dot sym">&omega;</span><sub>1</sub><sup>2</sup>&ell;<sub>1</sub>(m<sub>1</sub>+m<sub>2</sub>) + g(m<sub>1</sub>+m<sub>2</sub>)cos&thinsp;<span class="sym">&theta;</span><sub>1</sub> + <span class="dot sym">&omega;</span><sub>2</sub><sup>2</sup>&ell;<sub>2</sub>m<sub>2</sub>cos&Delta;<span class="brk">)</span></span>
+          <span class="den">&ell;<sub>2</sub>&thinsp;<span class="brk">(</span>2m<sub>1</sub> + m<sub>2</sub> &minus; m<sub>2</sub>cos&thinsp;2&Delta;<span class="brk">)</span></span>
+        </span>
+        <span>&minus;&thinsp;&gamma;<span class="dot sym">&theta;</span><sub>2</sub></span>
+      </p>
+      <p class="where">where <span class="sym">&Delta;</span> = <span class="sym">&theta;</span><sub>1</sub> &minus; <span class="sym">&theta;</span><sub>2</sub>, angles measured from the downward vertical.</p>
+      <p class="eq">
+        <span class="sym">y</span><sub>n+1</sub> = <span class="sym">y</span><sub>n</sub> +
+        <span class="frac"><span class="num">&Delta;t</span><span class="den">6</span></span>
+        <span class="brk">(</span>k<sub>1</sub> + 2k<sub>2</sub> + 2k<sub>3</sub> + k<sub>4</sub><span class="brk">)</span>
+      </p>
+      <p class="note">Two identical instruments, started <span class="copper">0.001&nbsp;rad</span> apart, will trace the same arc for a few heartbeats — then diverge exponentially. Deterministic, yet unknowable: this is what the ancients might have called chaos, had they owned a computer.</p>
+    </div>
+  </aside>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const canvas = document.getElementById('sim');
+  const ctx = canvas.getContext('2d');
+  const stage = document.getElementById('stage');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  // ---------- parameters ----------
+  const P = { m1:1.5, m2:1.0, l1:1.0, l2:0.8, g:9.81, damp:0.02, trail:900 };
+  const DT = 1/240;
+  const TH1_0 = 2.1, TH2_0 = 2.7;
+
+  // ---------- state ----------
+  function newSys(th1off = 0){
+    return {
+      th1: TH1_0 + th1off, th2: TH2_0, w1: 0, w2: 0,
+      trail: [], hue0: 0
+    };
+  }
+  let primary = newSys();
+  let twin = null;
+  let t = 0, steps = 0, acc = 0, running = true;
+  let dragging = false;
+
+  if (reduced.matches) {
+    P.trail = 200;
+    document.getElementById('trail').value = 200;
+    document.getElementById('trailo').textContent = '200 pts';
+  }
+
+  // ---------- physics ----------
+  function derivs(s){ // returns [w1, a1, w2, a2] pieces: dth, dw
+    const {m1,m2,l1,l2,g,damp} = P;
+    const d = s.th1 - s.th2;
+    const cd = Math.cos(d), sd = Math.sin(d);
+    const den = 2*m1 + m2 - m2*Math.cos(2*d);
+    const a1 = (-g*(2*m1+m2)*Math.sin(s.th1) - m2*g*Math.sin(s.th1-2*s.th2)
+                - 2*sd*m2*(s.w2*s.w2*l2 + s.w1*s.w1*l1*cd)) / (l1*den) - damp*s.w1;
+    const a2 = (2*sd*(s.w1*s.w1*l1*(m1+m2) + g*(m1+m2)*Math.cos(s.th1)
+                + s.w2*s.w2*l2*m2*cd)) / (l2*den) - damp*s.w2;
+    return [s.w1, a1, s.w2, a2];
+  }
+  function rk4(s, dt){
+    const y0 = [s.th1, s.w1, s.th2, s.w2];
+    const f = (y) => {
+      const d = derivs({th1:y[0], w1:y[1], th2:y[2], w2:y[3]});
+      return [d[0], d[1], d[2], d[3]];
+    };
+    const add = (y, k, h) => y.map((v,i)=>v + k[i]*h);
+    const k1 = f(y0);
+    const k2 = f(add(y0, k1, dt/2));
+    const k3 = f(add(y0, k2, dt/2));
+    const k4 = f(add(y0, k3, dt));
+    s.th1 = y0[0] + dt/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]);
+    s.w1  = y0[1] + dt/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1]);
+    s.th2 = y0[2] + dt/6*(k1[2]+2*k2[2]+2*k3[2]+k4[2]);
+    s.w2  = y0[3] + dt/6*(k1[3]+2*k2[3]+2*k3[3]+k4[3]);
+  }
+  function energy(s){
+    const {m1,m2,l1,l2,g} = P;
+    const T = 0.5*m1*l1*l1*s.w1*s.w1
+            + 0.5*m2*(l1*l1*s.w1*s.w1 + l2*l2*s.w2*s.w2
+                      + 2*l1*l2*s.w1*s.w2*Math.cos(s.th1-s.th2));
+    const V = -(m1+m2)*g*l1*Math.cos(s.th1) - m2*g*l2*Math.cos(s.th2);
+    return T + V;
+  }
+  function bobPositions(s){ // metres, pivot at origin, y down
+    const x1 =  P.l1*Math.sin(s.th1),  y1 =  P.l1*Math.cos(s.th1);
+    const x2 = x1 + P.l2*Math.sin(s.th2), y2 = y1 + P.l2*Math.cos(s.th2);
+    return {x1,y1,x2,y2};
+  }
+
+  // ---------- canvas fit ----------
+  let W=0, H=0, DPR=1;
+  function fit(){
+    DPR = Math.min(window.devicePixelRatio || 1, 3);
+    const r = stage.getBoundingClientRect();
+    W = Math.max(1, r.width); H = Math.max(1, r.height);
+    canvas.width = Math.round(W*DPR);
+    canvas.height = Math.round(H*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  new ResizeObserver(fit).observe(stage);
+  window.addEventListener('resize', fit);
+  fit();
+
+  function metrics(){
+    const px = W*0.5, py = H*0.24;
+    const span = P.l1 + P.l2;
+    const S = Math.min((H - py - 28) / span, (W*0.5 - 40) / span);
+    return {px, py, S};
+  }
+
+  // ---------- drawing ----------
+  function drawCeiling(px, py){
+    ctx.save();
+    ctx.strokeStyle = 'rgba(184,149,90,.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px - 70, py); ctx.lineTo(px + 70, py); ctx.stroke();
+    ctx.strokeStyle = 'rgba(184,149,90,.28)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = -66; x <= 70; x += 9){
+      ctx.moveTo(px + x, py - 1);
+      ctx.lineTo(px + x - 8, py - 11);
+    }
+    ctx.stroke();
+    // pivot mount
+    ctx.fillStyle = '#b8955a';
+    ctx.beginPath(); ctx.arc(px, py, 4.5, 0, 7); ctx.fill();
+    ctx.fillStyle = '#232220';
+    ctx.beginPath(); ctx.arc(px, py, 1.8, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+  function drawGuides(px, py, S){
+    ctx.save();
+    ctx.setLineDash([3, 7]);
+    ctx.strokeStyle = 'rgba(184,149,90,.16)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(px, py, P.l1*S, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.arc(px, py, (P.l1+P.l2)*S, 0, 7); ctx.stroke();
+    ctx.restore();
+  }
+  function metalDisc(x, y, r, c){
+    const [hi, mid, lo] = c;
+    const gr = ctx.createRadialGradient(x - r*0.38, y - r*0.38, r*0.15, x, y, r);
+    gr.addColorStop(0, hi);
+    gr.addColorStop(0.55, mid);
+    gr.addColorStop(1, lo);
+    ctx.fillStyle = gr;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.55)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  const BRASS_C = ['#dcc08a', '#b8955a', '#4a3a1d'];
+  const COPPER_C = ['#d9925f', '#b86f43', '#4d2a15'];
+
+  function drawTrail(s, hueShift){
+    const {px, py, S} = metrics();
+    const pts = s.trail;
+    const n = pts.length;
+    if (n < 2) return;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let i = 1; i < n; i++){
+      const f = i / (n - 1);
+      const p0 = pts[i-1], p1 = pts[i];
+      const hue = (p1.h + hueShift) % 360;
+      ctx.strokeStyle = `hsla(${hue},80%,62%,${(f*f*0.85).toFixed(3)})`;
+      ctx.lineWidth = 0.6 + f * 3.2;
+      ctx.beginPath();
+      ctx.moveTo(px + p0.x*S, py + p0.y*S);
+      ctx.lineTo(px + p1.x*S, py + p1.y*S);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawSystem(s, colors, rodA){
+    const {px, py, S} = metrics();
+    const b = bobPositions(s);
+    const X1 = px + b.x1*S, Y1 = py + b.y1*S;
+    const X2 = px + b.x2*S, Y2 = py + b.y2*S;
+    // rods
+    ctx.save();
+    ctx.strokeStyle = rodA;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(X1, Y1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X1, Y1); ctx.lineTo(X2, Y2); ctx.stroke();
+    ctx.restore();
+    const r1 = 8 + Math.sqrt(P.m1) * 7;
+    const r2 = 8 + Math.sqrt(P.m2) * 7;
+    metalDisc(X1, Y1, r1, colors);
+    metalDisc(X2, Y2, r2, colors);
+  }
+
+  function render(){
+    ctx.clearRect(0, 0, W, H);
+    const {px, py, S} = metrics();
+    drawGuides(px, py, S);
+    if (twin){ drawTrail(twin, 180); }
+    drawTrail(primary, 0);
+    drawCeiling(px, py);
+    if (twin) drawSystem(twin, COPPER_C, 'rgba(184,111,67,.85)');
+    drawSystem(primary, BRASS_C, 'rgba(190,160,105,.9)');
+  }
+
+  // ---------- divergence ----------
+  function divergence(){
+    if (!twin) return null;
+    const a = bobPositions(primary), b = bobPositions(twin);
+    const dx = a.x2 - b.x2, dy = a.y2 - b.y2;
+    return Math.sqrt(dx*dx + dy*dy);
+  }
+  function fmtDiv(d){
+    if (d === null) return '—';
+    if (d < 1e-3) return d.toExponential(2) + ' m';
+    return d.toFixed(4) + ' m';
+  }
+
+  // ---------- HUD / readout ----------
+  const el = id => document.getElementById(id);
+  function updateReadouts(){
+    el('hudT').textContent = t.toFixed(3);
+    el('hudE').textContent = energy(primary).toFixed(3);
+    const d = divergence();
+    el('hudDivRow').hidden = d === null;
+    el('hudDiv').textContent = fmtDiv(d);
+    el('rT1').textContent = primary.th1.toFixed(2);
+    el('rT2').textContent = primary.th2.toFixed(2);
+    el('rW1').textContent = primary.w1.toFixed(2);
+    el('rW2').textContent = primary.w2.toFixed(2);
+    el('rSteps').textContent = steps.toLocaleString('en-US');
+    el('rDiv').textContent = fmtDiv(d);
+  }
+
+  // ---------- trail recording ----------
+  function record(s){
+    const b = bobPositions(s);
+    s.trail.push({x:b.x2, y:b.y2, h:(t*40) % 360});
+    while (s.trail.length > P.trail) s.trail.shift();
+  }
+
+  // ---------- main loop ----------
+  let last = performance.now();
+  function loop(now){
+    const frame = Math.min((now - last)/1000, 0.1);
+    last = now;
+    if (running && !dragging){
+      acc += frame;
+      while (acc >= DT){
+        rk4(primary, DT);
+        if (twin) rk4(twin, DT);
+        t += DT; steps++; acc -= DT;
+        record(primary);
+        if (twin) record(twin);
+      }
+    }
+    render();
+    updateReadouts();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // ---------- controls ----------
+  function setRunning(r){
+    running = r;
+    const btn = el('btnPause');
+    btn.textContent = r ? 'Pause' : 'Resume';
+    btn.setAttribute('aria-pressed', String(!r));
+  }
+  el('btnPause').addEventListener('click', () => setRunning(!running));
+  function reset(){
+    primary = newSys();
+    twin = twin ? newSys(0.001) : null;
+    t = 0; steps = 0; acc = 0;
+    setRunning(true);
+  }
+  el('btnReset').addEventListener('click', reset);
+  el('btnTwin').addEventListener('click', () => {
+    if (twin){ twin = null; }
+    else {
+      twin = {
+        th1: primary.th1 + 0.001, th2: primary.th2,
+        w1: primary.w1, w2: primary.w2,
+        trail: [], hue0: 0
+      };
+    }
+    el('btnTwin').textContent = twin ? 'Remove twin' : 'Add pendulum';
+  });
+  window.addEventListener('keydown', (e) => {
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+    if (e.code === 'Space'){ e.preventDefault(); setRunning(!running); }
+    else if (e.key === 'r' || e.key === 'R'){ reset(); }
+  });
+
+  // ---------- sliders ----------
+  function bind(id, key, fmt, after){
+    const inp = el(id), out = el(id + 'o');
+    const upd = () => {
+      P[key] = parseFloat(inp.value);
+      out.textContent = fmt(P[key]);
+      if (after) after();
+    };
+    inp.addEventListener('input', upd);
+    upd();
+  }
+  bind('m1','m1',  v => v.toFixed(2) + ' kg');
+  bind('m2','m2',  v => v.toFixed(2) + ' kg');
+  bind('l1','l1',  v => v.toFixed(2) + ' m');
+  bind('l2','l2',  v => v.toFixed(2) + ' m');
+  bind('g','g',    v => v.toFixed(2) + ' m/s²');
+  bind('damp','damp', v => v.toFixed(3) + ' s⁻¹');
+  bind('trail','trail', v => Math.round(v) + ' pts', () => {
+    while (primary.trail.length > P.trail) primary.trail.shift();
+    if (twin) while (twin.trail.length > P.trail) twin.trail.shift();
+  });
+
+  // ---------- dragging ----------
+  function bobScreenPos(s){
+    const {px, py, S} = metrics();
+    const b = bobPositions(s);
+    return {
+      b1:{x:px + b.x1*S, y:py + b.y1*S},
+      b2:{x:px + b.x2*S, y:py + b.y2*S},
+      px, py
+    };
+  }
+  canvas.addEventListener('pointerdown', (e) => {
+    const r = canvas.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    const p = bobScreenPos(primary);
+    const near = (pt) => Math.hypot(pt.x - mx, pt.y - my) < 30;
+    let which = null;
+    if (near(p.b2)) which = 2;
+    else if (near(p.b1)) which = 1;
+    if (!which) return;
+    dragging = true;
+    canvas.classList.add('dragging');
+    canvas.setPointerCapture(e.pointerId);
+    primary.w1 = primary.w2 = 0;
+    primary.trail.length = 0;
+    if (twin){ twin.w1 = twin.w2 = 0; twin.trail.length = 0; }
+    dragTo(which, mx, my);
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const r = canvas.getBoundingClientRect();
+    dragTo(draggingWhich, e.clientX - r.left, e.clientY - r.top);
+  });
+  let draggingWhich = null;
+  function dragTo(which, mx, my){
+    draggingWhich = which;
+    const {px, py, S} = metrics();
+    if (which === 1){
+      primary.th1 = Math.atan2(mx - px, my - py);
+      primary.w1 = primary.w2 = 0;
+    } else {
+      const b = bobPositions(primary);
+      const x1 = px + b.x1*S, y1 = py + b.y1*S;
+      primary.th2 = Math.atan2(mx - x1, my - y1);
+      primary.w1 = primary.w2 = 0;
+    }
+    if (twin){
+      twin.th1 = primary.th1 + 0.001;
+      twin.th2 = primary.th2;
+      twin.w1 = twin.w2 = 0;
+    }
+  }
+  function endDrag(e){
+    if (!dragging) return;
+    dragging = false;
+    draggingWhich = null;
+    canvas.classList.remove('dragging');
+    t = 0; acc = 0;
+    setRunning(true);
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Northern Lights — Lake Inari, 68.9° N</title>
+<style>
+  :root{
+    --fog: rgba(226,236,255,0.72);
+    --mint: #c8ffe4;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ height:100%; overflow:hidden; background:#02030a; }
+  body{
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--fog);
+    -webkit-font-smoothing: antialiased;
+  }
+  #scene{ position:fixed; inset:0; width:100%; height:100%; display:block; }
+  .vignette{
+    position:fixed; inset:0; pointer-events:none; z-index:5;
+    background: radial-gradient(120% 90% at 50% 42%, transparent 55%, rgba(0,0,0,0.55) 100%);
+  }
+  .ui{ position:fixed; inset:0; z-index:10; pointer-events:none; }
+  .ui > *{ pointer-events:auto; }
+
+  .mono{ font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+  /* top-left eyebrow */
+  .eyebrow{
+    position:absolute; top:22px; left:26px;
+    display:flex; align-items:center; gap:9px;
+    font-size:11px; letter-spacing:0.14em; text-transform:uppercase;
+    color: rgba(226,236,255,0.6);
+  }
+  .dot{
+    width:7px; height:7px; border-radius:50%;
+    background:#3cf5a0; box-shadow:0 0 8px #3cf5a0;
+    animation: pulse 2.6s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{ opacity:1; transform:scale(1); }
+    50%{ opacity:0.35; transform:scale(0.8); }
+  }
+
+  /* top-right clock */
+  .clock{
+    position:absolute; top:20px; right:26px;
+    font-size:15px; letter-spacing:0.08em; color: rgba(226,236,255,0.78);
+    text-shadow:0 0 12px rgba(120,160,255,0.25);
+  }
+  .clock small{ display:block; text-align:right; font-size:9px; letter-spacing:0.18em; text-transform:uppercase; color:rgba(226,236,255,0.4); margin-top:2px; }
+
+  /* caption block */
+  .caption{
+    position:absolute; left:26px; bottom:96px; max-width:430px;
+    opacity:0; transform:translateY(14px);
+    animation: rise 1.6s cubic-bezier(.2,.7,.2,1) 0.4s forwards;
+  }
+  @keyframes rise{ to{ opacity:1; transform:translateY(0); } }
+  .caption h1{
+    font-family: Georgia, "Iowan Old Style", Palatino, "Times New Roman", serif;
+    font-weight:400; font-size:clamp(24px, 3.4vw, 34px); line-height:1.22;
+    color: rgba(232,240,255,0.9);
+    text-shadow:0 2px 24px rgba(0,0,0,0.6);
+    margin-bottom:12px;
+  }
+  .caption h1 em{ color: var(--mint); font-style:italic; }
+  .caption p{
+    font-family: Georgia, "Iowan Old Style", Palatino, serif;
+    font-size:13.5px; line-height:1.62; color: rgba(226,236,255,0.62);
+    margin-bottom:12px; max-width:40ch;
+  }
+  .caption .meta{
+    font-size:10px; letter-spacing:0.1em; color: rgba(226,236,255,0.42);
+    display:flex; gap:14px; flex-wrap:wrap;
+  }
+  .caption .meta b{ color: rgba(200,255,228,0.6); font-weight:400; }
+
+  /* control pill */
+  .controls{
+    position:absolute; left:26px; bottom:26px;
+    display:flex; align-items:center; gap:18px;
+    padding:12px 20px;
+    border-radius:999px;
+    background: rgba(8,14,26,0.55);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border:1px solid rgba(200,255,228,0.16);
+    box-shadow:0 8px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05);
+    transition: transform .25s ease, border-color .25s ease;
+  }
+  .controls:hover{ transform: translateY(-2px); border-color: rgba(200,255,228,0.3); }
+  .controls label.name{ font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:rgba(226,236,255,0.55); }
+  .slider-wrap{ display:flex; align-items:center; gap:10px; }
+  output{ font-size:12px; color:var(--mint); min-width:24px; text-align:center; }
+
+  input[type="range"]{
+    -webkit-appearance:none; appearance:none;
+    width:150px; height:4px; border-radius:2px; background:none; cursor:pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track{
+    height:4px; border-radius:2px;
+    background: linear-gradient(90deg,#c8ffe4,#3cf5a0 55%,#a86bff);
+  }
+  input[type="range"]::-moz-range-track{
+    height:4px; border-radius:2px;
+    background: linear-gradient(90deg,#c8ffe4,#3cf5a0 55%,#a86bff);
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:14px; height:14px; border-radius:50%; margin-top:-5px;
+    background:#ffffff; border:none;
+    box-shadow:0 0 10px rgba(255,255,255,0.9), 0 0 22px rgba(200,255,228,0.5);
+    transition: transform .18s cubic-bezier(.34,1.6,.5,1);
+  }
+  input[type="range"]::-moz-range-thumb{
+    width:14px; height:14px; border-radius:50%; background:#fff; border:none;
+    box-shadow:0 0 10px rgba(255,255,255,0.9), 0 0 22px rgba(200,255,228,0.5);
+    transition: transform .18s cubic-bezier(.34,1.6,.5,1);
+  }
+  input[type="range"]:active::-webkit-slider-thumb{ transform: scale(1.5); }
+  input[type="range"]:active::-moz-range-thumb{ transform: scale(1.5); }
+  input[type="range"]:focus-visible{ outline:1px solid rgba(200,255,228,0.7); outline-offset:6px; border-radius:2px; }
+
+  .sep{ width:1px; height:22px; background:rgba(226,236,255,0.12); }
+
+  .toggle{
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size:11px; letter-spacing:0.1em; text-transform:uppercase;
+    padding:7px 16px; border-radius:999px; cursor:pointer;
+    color: rgba(226,236,255,0.6);
+    background: rgba(255,255,255,0.04);
+    border:1px solid rgba(226,236,255,0.16);
+    transition: all .22s ease;
+  }
+  .toggle:hover{ border-color: rgba(200,255,228,0.4); color:var(--mint); }
+  .toggle[aria-pressed="true"]{
+    background: rgba(200,255,228,0.14);
+    border-color: rgba(200,255,228,0.55);
+    color: var(--mint);
+    box-shadow:0 0 14px rgba(200,255,228,0.25), inset 0 0 6px rgba(200,255,228,0.12);
+  }
+  .toggle:focus-visible{ outline:2px solid var(--mint); outline-offset:2px; }
+
+  /* wavelength legend */
+  .legend{
+    position:absolute; right:26px; bottom:30px; text-align:right;
+    font-size:9px; letter-spacing:0.08em; line-height:1.8; color:rgba(226,236,255,0.34);
+  }
+  .legend .w{ display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:6px; vertical-align:-1px; }
+  .legend .o{ background:#3cf5a0; box-shadow:0 0 8px #3cf5a0; }
+  .legend .n{ background:#a86bff; box-shadow:0 0 8px #a86bff; }
+
+  @media (max-width:720px){
+    .caption{ max-width:78vw; bottom:120px; }
+    .legend{ display:none; }
+    .controls{ gap:12px; padding:10px 14px; }
+    input[type="range"]{ width:100px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .dot{ animation:none; }
+    .caption{ animation:none; opacity:1; transform:none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="Animated aurora borealis over a frozen lake"></canvas>
+<div class="vignette"></div>
+
+<div class="ui">
+  <div class="eyebrow mono"><span class="dot"></span>Field observation · Kp 5</div>
+  <div class="clock mono" id="clock" aria-live="off">--:--:--<small id="tzline">local time</small></div>
+
+  <figure class="caption">
+    <h1>The sky <em>breathing</em> over Lake Inari</h1>
+    <p>Solar wind funnels down the field lines and strikes the upper atmosphere. At a hundred
+    kilometres, atomic oxygen releases a forbidden green line at 557.7&nbsp;nm; higher still,
+    above two hundred, the thin air glows violet from ionised nitrogen, and the curtains
+    fringe pink where the oxygen red band bleeds through.</p>
+    <div class="meta mono"><span>68.9° N <b>27.0° E</b></span><span>−23&nbsp;°C</span><span>wind calm</span><span>cloud <b>0/8</b></span></div>
+  </figure>
+
+  <div class="controls">
+    <div class="slider-wrap">
+      <label class="name" for="intensity">Intensity</label>
+      <input type="range" id="intensity" min="0" max="100" value="62" step="1" aria-label="Aurora intensity">
+      <output class="mono" id="intensityOut" for="intensity">62</output>
+    </div>
+    <div class="sep"></div>
+    <button class="toggle" id="snowBtn" aria-pressed="true">Snow</button>
+  </div>
+
+  <div class="legend mono">
+    <div><span class="w o"></span>Oxygen 557.7 nm</div>
+    <div><span class="w n"></span>Nitrogen 427.8 nm</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const canvas = document.getElementById("scene");
+  const ctx = canvas.getContext("2d");
+
+  // ---- sizing ----
+  let W = 0, H = 0, DPR = 1;          // css pixels
+  let horizonY = 0, lakeH = 0, skyH = 0;
+
+  // offscreen layers
+  const aw = document.createElement("canvas");   // aurora (low-res)
+  const actx = aw.getContext("2d");
+  const sky = document.createElement("canvas");  // sky gradient + stars + aurora composite
+  const sctx = sky.getContext("2d");
+  const tl = document.createElement("canvas");   // treeline (with transparent margin above)
+  const tctx = tl.getContext("2d");
+  let AW = 0, AH = 0, AHORIZON = 0;
+  let TL_MARGIN = 0;
+
+  // ---- 1-D value noise ----
+  const PERM = new Uint8Array(512);
+  (function seed(){
+    const p = new Uint8Array(256);
+    for (let i=0;i<256;i++) p[i]=i;
+    let s = 1337;
+    const rnd = () => (s = (s*1664525+1013904223)>>>0) / 4294967296;
+    for (let i=255;i>0;i--){ const j=(rnd()*(i+1))|0; const t=p[i]; p[i]=p[j]; p[j]=t; }
+    for (let i=0;i<512;i++) PERM[i]=p[i&255];
+  })();
+  function vhash(i, seedv){
+    let n = (i*374761393 + seedv*668265263) | 0;
+    n = (n ^ (n>>>13)) | 0;
+    n = (n * 1274126177) | 0;
+    n = (n ^ (n>>>16)) | 0;
+    return (n>>>0) / 4294967295;
+  }
+  function valueNoise1D(x, seedv){
+    const xi = Math.floor(x), t = x - xi;
+    const a = vhash(xi, seedv), b = vhash(xi+1, seedv);
+    const u = t*t*(3-2*t);
+    return a + (b-a)*u;
+  }
+  function fbm4(x, seedv){
+    let sum=0, amp=0.5, f=1;
+    for (let o=0;o<4;o++){ sum += amp * valueNoise1D(x*f, seedv+o*17); f*=2; amp*=0.5; }
+    return sum / 0.9375;
+  }
+
+  // ---- curtains ----
+  // hue, sat, drift speed(+dir), spatial frequency, height (fraction of AH), alpha, seed
+  const CURTAINS = [
+    { hue:150, sat:90, drift: 0.028, freq:0.045, height:0.58, alpha:0.62, seed:11 },
+    { hue:158, sat:88, drift:-0.040, freq:0.032, height:0.70, alpha:0.68, seed:29 },
+    { hue:285, sat:74, drift: 0.017, freq:0.058, height:0.50, alpha:0.34, seed:47 },
+    { hue:330, sat:70, drift:-0.022, freq:0.040, height:0.40, alpha:0.22, seed:71 },
+  ];
+  const BRIGHT = new Float32Array(4096);
+
+  let intensity = 62;
+
+  function renderAurora(t){
+    actx.globalCompositeOperation = "source-over";
+    actx.clearRect(0,0,AW,AH);
+    actx.globalCompositeOperation = "lighter";
+    const k = intensity / 100;
+    const bottomBase = AHORIZON * 0.72;
+    const w = AW;
+    for (let c = 0; c < CURTAINS.length; c++){
+      const cu = CURTAINS[c];
+      for (let x = 0; x < w; x++){
+        const nx = x * cu.freq + t * cu.drift;
+        let b = fbm4(nx, cu.seed);
+        b = b * (0.62 + 0.38 * Math.sin(x*0.013 + t*0.21*cu.drift*30 + c*2.1));
+        b = b * (0.72 + 0.28 * Math.sin(x*0.0045 - t*0.09 + c*1.4)); // slow ribbon
+        b = Math.max(0, b);
+        b = Math.pow(b, 1.8);
+        BRIGHT[x] = b;
+      }
+      // strokes: one vertical gradient line per column, widened slightly to fill
+      for (let x = 0; x < w; x++){
+        const b = BRIGHT[x];
+        if (b < 0.02) continue;
+        const bottom = bottomBase * (0.90 + 0.14 * valueNoise1D(x*0.02 + t*0.05, cu.seed+3));
+        const top = bottom - cu.height * AH * (0.35 + 1.05*b) * (0.5 + 0.5*k);
+        if (top >= bottom) continue;
+        const h = cu.hue + 7 * valueNoise1D(x*0.01, cu.seed+9) - 3;
+        const aBase = cu.alpha * (0.25 + 0.75*k) * Math.min(1, b*1.6);
+        const g = actx.createLinearGradient(0, top, 0, bottom);
+        g.addColorStop(0,    `hsla(${h},${cu.sat}%,72%,0)`);
+        g.addColorStop(0.28, `hsla(${h},${cu.sat}%,66%,${(aBase*0.30).toFixed(3)})`);
+        g.addColorStop(0.62, `hsla(${h},${cu.sat}%,60%,${(aBase*0.80).toFixed(3)})`);
+        g.addColorStop(0.86, `hsla(${h},${cu.sat}%,58%,${aBase.toFixed(3)})`);
+        g.addColorStop(1,    `hsla(${h},${cu.sat}%,50%,0)`);
+        actx.fillStyle = g;
+        actx.fillRect(x - 0.8, top, 1.6, bottom - top);
+      }
+    }
+    actx.globalCompositeOperation = "source-over";
+  }
+
+  // ---- stars ----
+  let stars = [];
+  function makeStars(){
+    const n = Math.round(W * H / 4300);
+    stars = [];
+    for (let i=0;i<n;i++){
+      const y = Math.pow(Math.random(), 1.25) * horizonY;
+      stars.push({
+        x: Math.random()*W, y,
+        r: 0.4 + Math.pow(Math.random(),2.2)*1.5,
+        big: Math.random() < 0.08,
+        warm: Math.random() < 0.20,
+        ph: Math.random()*Math.PI*2,
+        sp: 0.4 + Math.random()*1.4
+      });
+    }
+  }
+  function drawStars(sctx, t){
+    const k = intensity/100;
+    const dim = 1 - k*0.25;
+    for (const s of stars){
+      const tw = 0.55 + 0.45 * Math.sin(t*s.sp + s.ph);
+      const a = Math.min(1, (s.big?0.95:0.6) * tw * dim);
+      sctx.fillStyle = s.warm ? `rgba(255,231,196,${a.toFixed(3)})` : `rgba(223,233,255,${a.toFixed(3)})`;
+      const r = s.r * (s.big?1.7:1);
+      sctx.beginPath();
+      sctx.arc(s.x, s.y, r, 0, 6.2832);
+      sctx.fill();
+    }
+  }
+
+  // ---- shooting stars ----
+  let meteors = [];
+  let nextMeteor = 0;
+  function updateMeteors(t, dt){
+    if (t > nextMeteor){
+      nextMeteor = t + 4 + Math.random()*8;
+      const ang = (Math.random()<0.5 ? 1 : -1) * (0.12 + Math.random()*0.22);
+      meteors.push({
+        x: Math.random()*W, y: horizonY*(0.05 + Math.random()*0.35),
+        vx: Math.cos(ang)* (480+Math.random()*260) * (Math.random()<0.5?-1:1),
+        vy: Math.sin(ang)* (480+Math.random()*260) * (Math.random()<0.5?-1:1)*-1,
+        life: 0, max: 0.85 + Math.random()*0.35
+      });
+    }
+    for (const m of meteors){
+      m.x += m.vx*dt; m.y += m.vy*dt; m.life += dt;
+    }
+    meteors = meteors.filter(m => m.life < m.max);
+  }
+  function drawMeteors(sctx){
+    for (const m of meteors){
+      const p = m.life/m.max;
+      const a = p<0.25 ? p/0.25 : 1-(p-0.25)/0.75;
+      const len = 90;
+      const sp = Math.hypot(m.vx,m.vy) || 1;
+      const ux = m.vx/sp, uy = m.vy/sp;
+      const g = sctx.createLinearGradient(m.x, m.y, m.x-ux*len, m.y-uy*len);
+      g.addColorStop(0, `rgba(255,255,255,${(a*0.9).toFixed(3)})`);
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      sctx.strokeStyle = g; sctx.lineWidth = 1.4;
+      sctx.beginPath(); sctx.moveTo(m.x, m.y); sctx.lineTo(m.x-ux*len, m.y-uy*len); sctx.stroke();
+    }
+  }
+
+  // ---- treeline ----
+  let treeSeed = 5;
+  function stampPine(c, x, baseY, h){
+    const trunkW = Math.max(1, h*0.045);
+    c.fillRect(x - trunkW/2, baseY - h*0.16, trunkW, h*0.18);
+    for (let t=0;t<4;t++){
+      const f = 1 - t*0.22;                    // width factor
+      const ty = baseY - h*0.14 - t*h*0.21;    // triangle base y
+      const th = h*0.34;                       // triangle height
+      c.beginPath();
+      c.moveTo(x - h*0.19*f, ty);
+      c.lineTo(x + h*0.19*f, ty);
+      c.lineTo(x, ty - th);
+      c.closePath(); c.fill();
+    }
+  }
+  function buildTreeline(){
+    TL_MARGIN = Math.round(H * 0.085);
+    tl.width = Math.max(1, Math.round(W*DPR));
+    tl.height = Math.max(1, Math.round(TL_MARGIN*1.2*DPR));
+    tctx.setTransform(DPR,0,0,DPR,0,0);
+    tctx.clearRect(0,0,W,TL_MARGIN*1.2);
+    const groundY = tl.height/DPR;
+    for (const row of [{c:"#050a14", s:treeSeed+1,  hMin:14, hMax:34, step:9,  jx:2.0},
+                       {c:"#02040a", s:treeSeed,    hMin:22, hMax:56, step:12, jx:2.6}]){
+      tctx.fillStyle = row.c;
+      for (let x = -row.step; x < W + row.step; x += row.step + (valueNoise1D(x/row.step*0.8, row.s)*row.step)){
+        const nv = valueNoise1D(x*0.045, row.s);
+        const h = row.hMin + nv * (row.hMax - row.hMin);
+        const jx = (valueNoise1D(x*0.7, row.s+5) - 0.5) * row.jx;
+        stampPine(tctx, x + jx, groundY + 2, h);
+      }
+    }
+  }
+
+  // ---- snow ----
+  let flakes = [];
+  function makeSnow(){
+    const n = Math.round(W*H/16000);
+    flakes = [];
+    for (let i=0;i<n;i++) flakes.push(newFlake(Math.random()*H));
+  }
+  function newFlake(y){
+    return { x: Math.random()*W, y,
+      r: 0.6 + Math.random()*1.6,
+      sp: 12 + Math.random()*26,
+      ph: Math.random()*Math.PI*2,
+      am: 6 + Math.random()*16 };
+  }
+  function drawSnow(sctx, t){
+    sctx.fillStyle = "rgba(235,242,255,0.55)";
+    for (const f of flakes){
+      const x = f.x + Math.sin(t*0.6 + f.ph) * f.am;
+      sctx.beginPath(); sctx.arc(x, f.y, f.r, 0, 6.2832); sctx.fill();
+    }
+  }
+  function stepSnow(dt){
+    for (const f of flakes){
+      f.y += f.sp*dt;
+      if (f.y > H + 4) Object.assign(f, newFlake(-4));
+    }
+  }
+
+  // ---- resize ----
+  function resize(){
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W*DPR); canvas.height = Math.round(H*DPR);
+    canvas.style.width = W+"px"; canvas.style.height = H+"px";
+    sky.width = canvas.width; sky.height = canvas.height;
+    AW = Math.max(96, Math.round(W/3));
+    AH = Math.max(64, Math.round(AH * 0.9));
+    horizonY = H * 0.70; lakeH = H - horizonY; skyH = horizonY;
+    AH = Math.max(64, Math.round(horizonY * 0.86));
+    AHORIZON = AH; // aurora canvas bottom maps to 86% of sky height
+    aw.width = AW; aw.height = AH;
+    actx.imageSmoothingEnabled = true;
+    makeStars(); makeSnow(); buildTreeline();
+  }
+  let resizeTimer = 0;
+  addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { resize(); if (REDUCED) frame(0.0001, 0.033); }, 150);
+  });
+
+  // ---- main draw ----
+  function drawSky(t){
+    sctx.setTransform(DPR,0,0,DPR,0,0);
+    const g = sctx.createLinearGradient(0,0,0,horizonY);
+    g.addColorStop(0, "#02030a");
+    g.addColorStop(0.55, "#061021");
+    g.addColorStop(1, "#0b1a30");
+    sctx.fillStyle = g;
+    sctx.fillRect(0,0,W,horizonY+1);
+    drawStars(sctx, t);
+    if (!REDUCED) drawMeteors(sctx);
+    // composite aurora (screen)
+    sctx.save();
+    sctx.globalCompositeOperation = "screen";
+    sctx.imageSmoothingEnabled = true;
+    sctx.drawImage(aw, 0, 0, AW, AH, 0, horizonY - AH, W, AH);
+    // horizon glow band
+    const gg = sctx.createLinearGradient(0, horizonY, 0, horizonY - 130);
+    gg.addColorStop(0, `rgba(60,245,160,${(0.05 + intensity/100*0.06).toFixed(3)})`);
+    gg.addColorStop(1, "rgba(60,245,160,0)");
+    sctx.fillStyle = gg;
+    sctx.fillRect(0, horizonY-130, W, 130);
+    sctx.restore();
+  }
+
+  function drawLake(t){
+    const g = ctx.createLinearGradient(0, horizonY, 0, H);
+    g.addColorStop(0, "#08121f");
+    g.addColorStop(1, "#020409");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, horizonY, W, lakeH);
+
+    // reflected aurora: 4-px slices, mirrored, compressed 1.3x, wavy
+    const srcBottom = AH;
+    for (let d = 0; d < lakeH; d += 4){
+      const y = horizonY + d;
+      const depth = d / lakeH;
+      const sy = srcBottom - (d*1.3 + 2);
+      if (sy < 2) break;
+      const ox = Math.sin(y*0.045 + t*0.7) * (1.5 + depth*9)
+               + Math.sin(y*0.017 - t*0.34) * (0.8 + depth*6);
+      ctx.globalAlpha = (1 - depth) * 0.5;
+      ctx.drawImage(aw, 0, Math.max(0,sy-4), AW, 4, ox, y, W, 4.6);
+    }
+    ctx.globalAlpha = 1;
+
+    // reflected treeline (weaker wobble)
+    const tlScale = tl.width / DPR / W; // 1
+    for (let d = 0; d < Math.min(lakeH, TL_MARGIN*1.2); d += 4){
+      const y = horizonY + d;
+      const depth = d / Math.max(1, Math.min(lakeH, TL_MARGIN*1.2));
+      const sy = (TL_MARGIN*1.2 - d - 1) * DPR;
+      if (sy < 0) break;
+      const ox = Math.sin(y*0.05 + t*0.8) * (0.6 + depth*3.5)
+               + Math.sin(y*0.021 - t*0.4) * (0.4 + depth*2.2);
+      ctx.globalAlpha = (1-depth) * 0.35;
+      ctx.drawImage(tl, 0, sy, tl.width, 4*DPR, ox, y, W, 4.6);
+    }
+    ctx.globalAlpha = 1;
+
+    // ripple glints
+    ctx.strokeStyle = "rgba(190,220,255,0.10)";
+    ctx.lineWidth = 1;
+    for (let i=0;i<12;i++){
+      const yy = horizonY + (i+0.5)/12 * lakeH * 0.92;
+      const ph = i*2.4;
+      const x = W*0.5 + Math.sin(t*0.11 + ph) * W*0.42;
+      const len = 40 + 60*Math.abs(Math.sin(t*0.07 + ph*1.7));
+      ctx.beginPath();
+      ctx.moveTo(x-len/2, yy); ctx.lineTo(x+len/2, yy);
+      ctx.stroke();
+    }
+
+    // treeline itself
+    ctx.drawImage(tl, 0, (horizonY - TL_MARGIN*1.2), W, TL_MARGIN*1.2);
+  }
+
+  function frame(dt, t){
+    if (!REDUCED) updateMeteors(t, dt);
+    renderAurora(t);
+    // sky buffer
+    drawSky(t);
+    // composite
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.drawImage(sky, 0, 0);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    drawLake(t);
+    if (snowOn){
+      if (!REDUCED) stepSnow(dt);
+      drawSnow(ctx, t);
+    }
+  }
+
+  // ---- loop ----
+  let snowOn = !REDUCED;
+  let last = performance.now(), acc = 0, clockAcc = 0;
+  document.getElementById("snowBtn").setAttribute("aria-pressed", String(snowOn));
+  function loop(now){
+    let dt = Math.min(0.05, (now-last)/1000); last = now;
+    const t = now/1000;
+    acc += dt;
+    if (acc >= 1/30){
+      frame(acc, t);
+      acc = 0;
+    }
+    clockAcc += dt;
+    if (clockAcc > 0.5){ updateClock(); clockAcc = 0; }
+    requestAnimationFrame(loop);
+  }
+
+  // ---- UI ----
+  const slider = document.getElementById("intensity");
+  const out = document.getElementById("intensityOut");
+  slider.addEventListener("input", () => {
+    intensity = +slider.value; out.textContent = slider.value;
+    if (REDUCED) frame(0.0001, 0.033);
+  });
+  const snowBtn = document.getElementById("snowBtn");
+  snowBtn.addEventListener("click", () => {
+    snowOn = !snowOn;
+    snowBtn.setAttribute("aria-pressed", String(snowOn));
+    if (REDUCED) frame(0.0001, 0.033);
+  });
+  function updateClock(){
+    const d = new Date();
+    const hh = s => String(s).padStart(2,"0");
+    document.getElementById("clock").firstChild.textContent =
+      `${hh(d.getHours())}:${hh(d.getMinutes())}:${hh(d.getSeconds())}`;
+  }
+
+  // ---- go ----
+  resize();
+  updateClock();
+  if (REDUCED){
+    frame(0.0001, 0.033);
+  } else {
+    requestAnimationFrame(loop);
+  }
+})();
+</script>
+</body>
+</html>
